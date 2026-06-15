@@ -54,6 +54,20 @@ flutter test           # smoke-тесты
 выберите роль. Свайп вправо/вверх по вакансии → мэтч → чат → «Подтвердить
 смену» → раздел «Смены» → «Сформировать акт (PDF)».
 
+### С реальным backend
+
+Поднимите сервер (`backend/`, см. `backend/README.md`) и запустите клиент с
+флагами:
+
+```bash
+flutter run \
+  --dart-define=USE_BACKEND=true \
+  --dart-define=API_BASE_URL=http://10.0.2.2:8000
+```
+
+Слой интеграции: `lib/core/config/app_config.dart`, `lib/data/api/` (dio + JWT в
+`flutter_secure_storage`). Без флагов приложение работает на mock-данных.
+
 ## Переход на production-стек (по спецификации)
 
 Ключевые пакеты уже в `pubspec.yaml`. Интеграции, требующие ключей/платформенной

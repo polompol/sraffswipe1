@@ -44,15 +44,16 @@ dependencies:
   # Icons
   cupertino_icons: ^1.0.8
 
-  # NOTE: Per the spec these power the production integrations. They are listed
-  # here as the intended stack. Some require platform setup / API keys, so they
-  # are commented out to keep `flutter pub get` green out-of-the-box. Uncomment
-  # as you wire each integration.
+  # Backend integration (FastAPI). Активно при --dart-define=USE_BACKEND=true,
+  # иначе приложение работает на mock-данных.
+  dio: ^5.7.0
+  flutter_secure_storage: ^9.2.2
+
+  # NOTE: Per the spec these power the remaining production integrations. Some
+  # require platform setup / API keys, so they stay commented to keep
+  # `flutter pub get` green out-of-the-box. Uncomment as you wire each one.
   #
   # shadcn_ui: ^0.17.0                 # UI kit (this project ships a shadcn-inspired theme)
-  # dio: ^5.5.0                        # HTTP client for FastAPI backend
-  # flutter_secure_storage: ^9.2.2     # JWT/session storage
-  # riverpod: ^2.5.1
   # yandex_mapkit: ^4.0.1              # Яндекс.Карты
   # geolocator: ^12.0.0               # геолокация
   # flutter_chat_ui: ^1.6.15           # готовый UI чата
