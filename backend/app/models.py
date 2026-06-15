@@ -1,0 +1,139 @@
+"""Модели БД — соответствуют разделу 5 спецификации StaffSwipe."""
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .db import Base
+
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+class User(Base):
+    """Соискатель (коллекция users)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    phone: Mapped[str] = mapped_column(String, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String, default="")
+    birth_date: Mapped[str] = mapped_column(String, default="")  # ISO yyyy-mm-dd
+    city: Mapped[str] = mapped_column(String, default="")
+    district: Mapped[str] = mapped_column(String, default="")
+    lat: Mapped[float] = mapped_column(Float, default=0.0)
+    lng: Mapped[float] = mapped_column(Float, default=0.0)
+    roles: Mapped[str] = mapped_column(String, default="")  # csv: waiter,barista
+    med_book: Mapped[str] = mapped_column(String, default="no")  # yes|no|expired
+    self_employed: Mapped[bool] = mapped_column(Boolean, default=False)
+    inn: Mapped[str | None] = mapped_column(String, nullable=True)
+    experience_tags: Mapped[str] = mapped_column(String, default="")
+    rating: Mapped[float] = mapped_column(Float, default=0.0)
+    photo_urls: Mapped[str] = mapped_column(Text, default="")  # csv
+    about: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Employer(Base):
+    """Работодатель (коллекция employers)."""
+
+    __tablename__ = "employers"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    phone: Mapped[str] = mapped_column(String, unique=True, index=True)
+    company_name: Mapped[str] = mapped_column(String, default="")
+    inn: Mapped[str] = mapped_column(String, default="")
+    ogrn: Mapped[str] = mapped_column(String, default="")
+    address: Mapped[str] = mapped_column(String, default="")
+    lat: Mapped[float] = mapped_column(Float, default=0.0)
+    lng: Mapped[float] = mapped_column(Float, default=0.0)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    contact_phone: Mapped[str] = mapped_column(String, default="")
+    photo_url: Mapped[str] = mapped_column(String, default="")
+    rating: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    vacancies: Mapped[list["Vacancy"]] = relationship(back_populates="employer")
+
+
+class Vacancy(Base):
+    """Вакансия/смена (коллекция vacancies)."""
+
+    __tablename__ = "vacancies"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    employer_id: Mapped[str] = mapped_column(ForeignKey("employers.id"))
+    role: Mapped[str] = mapped_column(String)
+    date: Mapped[str] = mapped_column(String)  # ISO yyyy-mm-dd
+    start_time: Mapped[int] = mapped_column(Integer)  # минуты от полуночи
+    end_time: Mapped[int] = mapped_column(Integer)
+    rate: Mapped[int] = mapped_column(Integer)
+    rate_type: Mapped[str] = mapped_column(String, default="perHour")
+    description: Mapped[str] = mapped_column(Text, default="")
+    require_med_book: Mapped[bool] = mapped_column(Boolean, default=False)
+    require_experience: Mapped[bool] = mapped_column(Boolean, default=False)
+    lat: Mapped[float] = mapped_column(Float, default=0.0)
+    lng: Mapped[float] = mapped_column(Float, default=0.0)
+    address: Mapped[str] = mapped_column(String, default="")
+    interior_photo_url: Mapped[str] = mapped_column(String, default="")
+    status: Mapped[str] = mapped_column(String, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    employer: Mapped[Employer] = relationship(back_populates="vacancies")
+
+
+class Swipe(Base):
+    """Свайп (коллекция swipes). Уникальность пары swiper→target."""
+
+    __tablename__ = "swipes"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    swiper_id: Mapped[str] = mapped_column(String, index=True)
+    target_id: Mapped[str] = mapped_column(String, index=True)
+    target_type: Mapped[str] = mapped_column(String)  # vacancy|user
+    direction: Mapped[str] = mapped_column(String)  # like|superlike|dislike
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Match(Base):
+    """Мэтч (коллекция matches)."""
+
+    __tablename__ = "matches"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    employer_id: Mapped[str] = mapped_column(String, index=True)
+    vacancy_id: Mapped[str] = mapped_column(String, index=True)
+    status: Mapped[str] = mapped_column(String, default="matched")
+    confirmed_by_seeker: Mapped[bool] = mapped_column(Boolean, default=False)
+    confirmed_by_employer: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Message(Base):
+    """Сообщение чата (коллекция messages)."""
+
+    __tablename__ = "messages"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    match_id: Mapped[str] = mapped_column(String, index=True)
+    sender_id: Mapped[str] = mapped_column(String)
+    text: Mapped[str] = mapped_column(Text)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class PhoneCode(Base):
+    """Одноразовый код подтверждения телефона."""
+
+    __tablename__ = "phone_codes"
+
+    phone: Mapped[str] = mapped_column(String, primary_key=True)
+    code: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

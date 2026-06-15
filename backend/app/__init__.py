@@ -1,0 +1,1 @@
+"""StaffSwipe backend (FastAPI)."""
