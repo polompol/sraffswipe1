@@ -10,24 +10,31 @@ void main() {
     await initializeDateFormatting('ru', null);
   });
 
-  testWidgets('Запуск показывает экран входа по телефону',
-      (WidgetTester tester) async {
+  testWidgets('Старт показывает онбординг', (WidgetTester tester) async {
     await tester.pumpWidget(const ProviderScope(child: StaffSwipeApp()));
     await tester.pump();
 
-    expect(find.text('Вход по телефону'), findsOneWidget);
-    expect(find.text('Получить код'), findsOneWidget);
+    expect(find.text('Смены рядом — за один свайп'), findsOneWidget);
+    expect(find.text('Пропустить'), findsOneWidget);
   });
 
-  testWidgets('Кнопка получения кода активируется после ввода телефона',
+  testWidgets('Пропуск онбординга ведёт на вход по телефону',
       (WidgetTester tester) async {
     await tester.pumpWidget(const ProviderScope(child: StaffSwipeApp()));
     await tester.pump();
 
-    await tester.enterText(find.byType(TextField), '+7 999 123 45 67');
+    await tester.tap(find.text('Пропустить'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Вход по телефону'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, '+7 999 123 45 67');
     await tester.pump();
 
-    final button = tester.widget<FilledButton>(find.byType(FilledButton));
+    final button = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Получить код'),
+    );
     expect(button.onPressed, isNotNull);
   });
 }
