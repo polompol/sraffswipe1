@@ -44,10 +44,14 @@ lib/
 
 ## Запуск
 
+Репозиторий хранит только `lib/` + `pubspec.yaml`. Платформенные папки
+(`android/`, `ios/`, `web/`) сгенерируйте один раз командой `flutter create`:
+
 ```bash
+flutter create . --project-name staffswipe --org ru.staffswipe   # создаст android/ios/web
 flutter pub get
 flutter run            # выберите устройство/эмулятор
-flutter test           # smoke-тесты
+flutter test           # юнит- и виджет-тесты
 ```
 
 Демо-подсказки: на экране кода введите **любые 4 цифры**; после авторизации
