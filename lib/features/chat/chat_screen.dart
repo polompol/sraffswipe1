@@ -151,17 +151,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     Vacancy vacancy,
     bool isSeeker,
   ) async {
+    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await ConfirmShiftSheet.show(context, vacancy: vacancy);
     if (confirmed != true) return;
     ref
         .read(matchesProvider.notifier)
         .confirmShift(match.id, bySeeker: isSeeker);
     _scrollToBottom();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вы подтвердили смену')),
-      );
-    }
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Вы подтвердили смену')),
+    );
   }
 }
 
