@@ -92,7 +92,7 @@ class ShiftActPdf {
               pw.Text(
                 'Документ сформирован в приложении StaffSwipe. '
                 'Не является заменой чеку из «Мой налог».',
-                style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
               ),
             ],
           );
@@ -115,7 +115,7 @@ class ShiftActPdf {
           pw.SizedBox(
             width: 170,
             child: pw.Text('$k:',
-                style: pw.TextStyle(color: PdfColors.grey700)),
+                style: const pw.TextStyle(color: PdfColors.grey700)),
           ),
           pw.Expanded(child: pw.Text(v)),
         ],

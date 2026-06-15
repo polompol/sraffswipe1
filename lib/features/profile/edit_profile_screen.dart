@@ -202,7 +202,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _selfEmployed,
-                  activeColor: AppColors.primary,
                   title: const Text('Я самозанятый (плательщик НПД)'),
                   onChanged: (v) => setState(() => _selfEmployed = v),
                 ),

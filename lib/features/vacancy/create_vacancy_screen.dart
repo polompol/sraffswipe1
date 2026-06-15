@@ -177,14 +177,12 @@ class _CreateVacancyScreenState extends ConsumerState<CreateVacancyScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _requireMedBook,
-                  activeColor: AppColors.primary,
                   title: const Text('Нужна медкнижка'),
                   onChanged: (v) => setState(() => _requireMedBook = v),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _requireExperience,
-                  activeColor: AppColors.primary,
                   title: const Text('Нужен опыт'),
                   onChanged: (v) => setState(() => _requireExperience = v),
                 ),

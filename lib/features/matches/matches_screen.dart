@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/enums.dart';
-import '../../data/models/match.dart';
 import '../../state/matches_provider.dart';
 import '../../widgets/app_widgets.dart';
 
