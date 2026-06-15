@@ -153,7 +153,7 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
-                  onPressed: () => _stub(context, 'Редактирование профиля'),
+                  onPressed: () => context.push('/profile/edit'),
                   icon: const Icon(Icons.edit_outlined),
                   label: const Text('Редактировать профиль'),
                 ),

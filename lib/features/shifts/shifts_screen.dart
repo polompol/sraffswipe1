@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../data/models/enums.dart';
 import '../../data/models/match.dart';
 import '../../data/mock/mock_data.dart';
 import '../../state/matches_provider.dart';

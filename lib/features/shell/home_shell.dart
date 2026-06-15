@@ -10,6 +10,7 @@ import '../feed/feed_screen.dart';
 import '../matches/matches_screen.dart';
 import '../profile/profile_screen.dart';
 import '../shifts/shifts_screen.dart';
+import '../vacancy/my_vacancies_screen.dart';
 
 /// Корневой экран с нижней навигацией. Набор вкладок зависит от роли.
 class HomeShell extends ConsumerStatefulWidget {
@@ -30,7 +31,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final tabs = <Widget>[
       const FeedScreen(),
       const MatchesScreen(),
-      const ShiftsScreen(),
+      isEmployer ? const MyVacanciesScreen() : const ShiftsScreen(),
       const ProfileScreen(),
     ];
 
@@ -59,10 +60,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             selectedIcon: _badge(const Icon(Icons.favorite), matchCount),
             label: 'Мэтчи',
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.calendar_today_outlined),
-            selectedIcon: Icon(Icons.calendar_today),
-            label: 'Смены',
+          NavigationDestination(
+            icon: Icon(isEmployer
+                ? Icons.work_outline_rounded
+                : Icons.calendar_today_outlined),
+            selectedIcon: Icon(
+                isEmployer ? Icons.work_rounded : Icons.calendar_today),
+            label: isEmployer ? 'Вакансии' : 'Смены',
           ),
           const NavigationDestination(
             icon: Icon(Icons.person_outline),

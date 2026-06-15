@@ -13,9 +13,6 @@ class MockData {
   // Центр Москвы — точка отсчёта для расчёта расстояний.
   static const GeoPoint currentLocation = GeoPoint(55.7558, 37.6173);
 
-  static const _avatar =
-      'https://images.unsplash.com/photo-1500000000000?w=600&q=80';
-
   static String _photo(String id) =>
       'https://images.unsplash.com/$id?w=900&q=80&auto=format&fit=crop';
 
