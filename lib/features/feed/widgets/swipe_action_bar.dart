@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 
-/// Круглые кнопки управления свайпом под колодой карточек.
+/// Круглые кнопки управления свайпом под колодой — в стилистике Tinder.
 class SwipeActionBar extends StatelessWidget {
   const SwipeActionBar({
     super.key,
@@ -24,29 +24,34 @@ class SwipeActionBar extends StatelessWidget {
       children: [
         _ActionButton(
           icon: Icons.replay_rounded,
-          color: AppColors.accentAmber,
-          size: 48,
+          color: AppColors.secondary,
+          size: 50,
+          tooltip: 'Вернуть',
           onTap: onUndo,
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 18),
         _ActionButton(
           icon: Icons.close_rounded,
           color: AppColors.dislike,
           size: 64,
+          tooltip: 'Пропустить',
           onTap: onDislike,
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 18),
         _ActionButton(
           icon: Icons.bolt_rounded,
           color: AppColors.superlike,
-          size: 52,
+          size: 54,
+          tooltip: 'Срочно',
           onTap: onSuperlike,
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 18),
         _ActionButton(
           icon: Icons.favorite_rounded,
-          color: AppColors.like,
+          color: AppColors.primary,
           size: 64,
+          filled: true,
+          tooltip: 'Хочу здесь работать',
           onTap: onLike,
         ),
       ],
@@ -60,29 +65,46 @@ class _ActionButton extends StatelessWidget {
     required this.color,
     required this.size,
     required this.onTap,
+    required this.tooltip,
+    this.filled = false,
   });
 
   final IconData icon;
   final Color color;
   final double size;
   final VoidCallback onTap;
+  final String tooltip;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      shape: CircleBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.5), width: 1.5),
-      ),
-      elevation: 2,
-      shadowColor: color.withValues(alpha: 0.3),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Icon(icon, color: color, size: size * 0.5),
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: filled ? color : Theme.of(context).colorScheme.surface,
+          shape: CircleBorder(
+            side: filled
+                ? BorderSide.none
+                : BorderSide(color: color.withValues(alpha: 0.45), width: 1.6),
+          ),
+          elevation: filled ? 6 : 3,
+          shadowColor: color.withValues(alpha: 0.4),
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Icon(
+                icon,
+                color: filled ? Colors.white : color,
+                size: size * 0.5,
+              ),
+            ),
+          ),
         ),
       ),
     );

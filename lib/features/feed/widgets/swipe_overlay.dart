@@ -49,7 +49,7 @@ class SwipeStamps extends StatelessWidget {
               alignment: Alignment.bottomCenter,
               child: _Stamp(
                 label: 'СРОЧНО',
-                color: AppColors.superlike,
+                color: AppColors.espresso,
                 angle: 0,
                 opacity: superOpacity,
               ),

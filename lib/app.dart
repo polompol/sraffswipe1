@@ -16,7 +16,7 @@ class StaffSwipeApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.dark, // тёмная тема по умолчанию
+      themeMode: ThemeMode.light, // молочная тема по умолчанию (тёмная — опц.)
       routerConfig: router,
     );
   }

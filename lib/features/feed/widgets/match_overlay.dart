@@ -1,16 +1,12 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/vacancy.dart';
 import '../../../widgets/app_widgets.dart';
 
-/// Полноэкранный оверлей мэтча: салют + рукопожатие.
-///
-/// В проде здесь живёт Lottie-анимация (`assets/lottie/match.json`).
-/// Реализация на flutter_animate, чтобы не тянуть бинарный ассет.
+/// Полноэкранный оверлей мэтча — сдержанный «золотой» reveal без детских эффектов.
 class MatchOverlay extends StatelessWidget {
   const MatchOverlay({
     super.key,
@@ -31,8 +27,8 @@ class MatchOverlay extends StatelessWidget {
     return showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.85),
-      transitionDuration: const Duration(milliseconds: 250),
+      barrierColor: AppColors.espresso.withValues(alpha: 0.92),
+      transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (ctx, _, __) => MatchOverlay(
         vacancy: vacancy,
         onChat: () {
@@ -50,53 +46,95 @@ class MatchOverlay extends StatelessWidget {
       type: MaterialType.transparency,
       child: Stack(
         children: [
-          const _Confetti(),
+          // Мягкое золотое свечение из центра.
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, -0.25),
+                  radius: 0.9,
+                  colors: [
+                    AppColors.accentGold.withValues(alpha: 0.28),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ).animate().fadeIn(duration: 500.ms),
+          ),
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ShaderMask(
-                    shaderCallback: (r) =>
-                        AppColors.brandGradient.createShader(r),
-                    child: const Text(
-                      'Это мэтч!',
-                      style: TextStyle(
-                        fontSize: 44,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
+                  Text(
+                    'Это мэтч',
+                    style: GoogleFonts.fraunces(
+                      fontSize: 46,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.accentGold,
+                      letterSpacing: -0.5,
                     ),
                   )
                       .animate()
                       .scale(
-                        begin: const Offset(0.6, 0.6),
+                        begin: const Offset(0.85, 0.85),
                         end: const Offset(1, 1),
                         duration: 450.ms,
-                        curve: Curves.elasticOut,
+                        curve: Curves.easeOutBack,
                       )
                       .fadeIn(),
-                  const SizedBox(height: 8),
-                  const Text('🤝', style: TextStyle(fontSize: 64))
-                      .animate(onPlay: (c) => c.repeat(reverse: true))
-                      .moveY(begin: 0, end: -10, duration: 900.ms),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 6),
                   Text(
-                    'Вы и «${vacancy.companyName}» понравились друг другу',
+                    'Вы и «${vacancy.companyName}» подходите друг другу',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                  const SizedBox(height: 24),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: SizedBox(
-                      width: 120,
-                      height: 120,
-                      child: AppImage(url: vacancy.interiorPhotoUrl),
+                    style: const TextStyle(
+                      color: Color(0xFFE9DFCF),
+                      fontSize: 15,
+                      height: 1.4,
                     ),
-                  ).animate().fadeIn(delay: 200.ms).scale(),
-                  const SizedBox(height: 28),
+                  ).animate().fadeIn(delay: 150.ms),
+                  const SizedBox(height: 32),
+                  // Две перекрывающиеся карточки-аватара.
+                  SizedBox(
+                    height: 132,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Transform.translate(
+                          offset: const Offset(-44, 0),
+                          child: _avatar(vacancy.interiorPhotoUrl)
+                              .animate()
+                              .moveX(begin: -30, end: -0, duration: 400.ms)
+                              .fadeIn(delay: 200.ms),
+                        ),
+                        Transform.translate(
+                          offset: const Offset(44, 0),
+                          child: _avatar(vacancy.companyPhotoUrl)
+                              .animate()
+                              .moveX(begin: 30, end: 0, duration: 400.ms)
+                              .fadeIn(delay: 200.ms),
+                        ),
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.brandGradient,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: AppColors.espresso, width: 3),
+                          ),
+                          child: const Icon(Icons.favorite_rounded,
+                              color: Colors.white, size: 22),
+                        ).animate().scale(
+                              delay: 420.ms,
+                              duration: 350.ms,
+                              curve: Curves.easeOutBack,
+                            ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -108,8 +146,10 @@ class MatchOverlay extends StatelessWidget {
                   const SizedBox(height: 10),
                   TextButton(
                     onPressed: onKeepSwiping,
-                    child: const Text('Продолжить листать',
-                        style: TextStyle(color: Colors.white70)),
+                    child: const Text(
+                      'Продолжить листать',
+                      style: TextStyle(color: Color(0xFFB3A18C)),
+                    ),
                   ),
                 ],
               ),
@@ -119,52 +159,24 @@ class MatchOverlay extends StatelessWidget {
       ),
     );
   }
-}
 
-/// Простейший «салют» из цветных частиц.
-class _Confetti extends StatelessWidget {
-  const _Confetti();
-
-  @override
-  Widget build(BuildContext context) {
-    final rnd = math.Random(7);
-    final colors = [
-      AppColors.primary,
-      AppColors.secondary,
-      AppColors.accentAmber,
-      AppColors.like,
-      AppColors.info,
-    ];
-    return IgnorePointer(
-      child: Stack(
-        children: List.generate(40, (i) {
-          final left = rnd.nextDouble();
-          final size = 6.0 + rnd.nextDouble() * 8;
-          final color = colors[i % colors.length];
-          final delay = (rnd.nextDouble() * 400).ms;
-          return Align(
-            alignment: Alignment(left * 2 - 1, -1),
-            child: Container(
-              margin: const EdgeInsets.only(top: 40),
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            )
-                .animate(onPlay: (c) => c.repeat())
-                .moveY(
-                  begin: -20,
-                  end: MediaQuery.of(context).size.height,
-                  duration: (1800 + rnd.nextInt(1200)).ms,
-                  delay: delay,
-                  curve: Curves.easeIn,
-                )
-                .rotate(begin: 0, end: rnd.nextDouble() * 2)
-                .fadeOut(begin: 1, delay: 1200.ms),
-          );
-        }),
+  Widget _avatar(String url) {
+    return Container(
+      width: 116,
+      height: 116,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.accentGold, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.accentGold.withValues(alpha: 0.3),
+            blurRadius: 24,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: AppImage(url: url),
       ),
     );
   }

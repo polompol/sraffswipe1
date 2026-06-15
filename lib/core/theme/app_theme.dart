@@ -54,16 +54,17 @@ class AppTheme {
       canvasColor: bg,
       splashFactory: InkSparkle.splashFactory,
       textTheme: baseText.copyWith(
-        displaySmall: GoogleFonts.inter(
+        // Крупные заголовки — характерный serif Fraunces (запоминаемость, премиум).
+        displaySmall: GoogleFonts.fraunces(
           fontWeight: FontWeight.w800,
           color: text,
           letterSpacing: -0.5,
         ),
-        headlineMedium: GoogleFonts.inter(
+        headlineMedium: GoogleFonts.fraunces(
           fontWeight: FontWeight.w800,
-          fontSize: 26,
+          fontSize: 27,
           color: text,
-          letterSpacing: -0.5,
+          letterSpacing: -0.3,
         ),
         titleLarge: GoogleFonts.inter(
           fontWeight: FontWeight.w700,
@@ -87,9 +88,9 @@ class AppTheme {
         centerTitle: false,
         systemOverlayStyle:
             isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-        titleTextStyle: GoogleFonts.inter(
-          fontWeight: FontWeight.w800,
-          fontSize: 20,
+        titleTextStyle: GoogleFonts.fraunces(
+          fontWeight: FontWeight.w700,
+          fontSize: 22,
           color: text,
         ),
         iconTheme: IconThemeData(color: text),
@@ -105,8 +106,8 @@ class AppTheme {
       ),
       dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
       chipTheme: ChipThemeData(
-        backgroundColor: isDark ? AppColors.darkSurface : const Color(0xFFF1F1F3),
-        selectedColor: AppColors.primary.withValues(alpha: 0.15),
+        backgroundColor: isDark ? AppColors.darkSurface : const Color(0xFFF3EBDF),
+        selectedColor: AppColors.primary.withValues(alpha: 0.18),
         side: BorderSide(color: border),
         labelStyle: GoogleFonts.inter(fontSize: 12.5, color: text),
         shape: RoundedRectangleBorder(
@@ -168,7 +169,7 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isDark ? AppColors.darkCard : const Color(0xFF1F2937),
+        backgroundColor: isDark ? AppColors.darkCard : AppColors.espresso,
         contentTextStyle: GoogleFonts.inter(color: Colors.white),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusSm),
