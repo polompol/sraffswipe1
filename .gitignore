@@ -1,0 +1,27 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.log
+
+# OS
+.DS_Store
+
+# Generated
+*.g.dart
+*.freezed.dart
+
+# Android/iOS local
+**/android/local.properties
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Pods/

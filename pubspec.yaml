@@ -1,0 +1,70 @@
+name: staffswipe
+description: "StaffSwipe — Tinder для поиска подработок в общепите РФ."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Utilities (firstOrNull и пр.)
+  collection: ^1.18.0
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Tinder-like swipe cards
+  flutter_card_swiper: ^7.0.0
+
+  # Images
+  cached_network_image: ^3.3.1
+
+  # Typography (Inter / SF-like)
+  google_fonts: ^6.2.1
+
+  # Micro-animations & effects
+  flutter_animate: ^4.5.0
+  lottie: ^3.1.2
+
+  # Formatting / dates / ids
+  intl: ^0.19.0
+  uuid: ^4.4.0
+
+  # PDF acts for self-employed
+  pdf: ^3.11.1
+  printing: ^5.13.1
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+  # NOTE: Per the spec these power the production integrations. They are listed
+  # here as the intended stack. Some require platform setup / API keys, so they
+  # are commented out to keep `flutter pub get` green out-of-the-box. Uncomment
+  # as you wire each integration.
+  #
+  # shadcn_ui: ^0.17.0                 # UI kit (this project ships a shadcn-inspired theme)
+  # dio: ^5.5.0                        # HTTP client for FastAPI backend
+  # flutter_secure_storage: ^9.2.2     # JWT/session storage
+  # riverpod: ^2.5.1
+  # yandex_mapkit: ^4.0.1              # Яндекс.Карты
+  # geolocator: ^12.0.0               # геолокация
+  # flutter_chat_ui: ^1.6.15           # готовый UI чата
+  # firebase_core: ^3.1.0             # push / опц. backend
+  # firebase_messaging: ^15.0.0       # FCM
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

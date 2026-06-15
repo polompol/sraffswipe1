@@ -1,2 +1,79 @@
-# sraffswipe1
-staffswipe1
+# StaffSwipe — Tinder для подработок в общепите 🇷🇺
+
+MVP-приложение на **Flutter**, где соискатели (официант, бариста, повар,
+посудомой, хостес, бармен) и работодатели (кафе, бар, ресторан, кофейня)
+свайпают карточки. При взаимном лайке — **мэтч → чат → подтверждение смены**
+→ календарь смен и **PDF-акт** для самозанятого.
+
+> Текущая сборка — рабочий **frontend-прототип с замоканными данными**.
+> Архитектура и модели соответствуют спецификации и готовы к подключению
+> backend (FastAPI + PostgreSQL/PostGIS + S3).
+
+## Что реализовано
+
+| Раздел | Файлы |
+| --- | --- |
+| Дизайн-система (тёмная тема, оранжево-красные акценты, Inter, радиус 16dp) | `lib/core/theme/` |
+| Авторизация по телефону + SMS-код + VK ID/Telegram (заглушки) | `lib/features/auth/` |
+| Выбор роли (соискатель / работодатель) | `lib/features/auth/role_screen.dart` |
+| **Свайп-лента** (`flutter_card_swiper`): лайк/супер-лайк/пропуск, штампы, кнопки | `lib/features/feed/` |
+| Анимация мэтча (салют + рукопожатие на `flutter_animate`) | `lib/features/feed/widgets/match_overlay.dart` |
+| Мэтчи и **чат** с кнопкой «Подтвердить смену» | `lib/features/matches/`, `lib/features/chat/` |
+| Создание вакансии за 2 минуты | `lib/features/vacancy/` |
+| Профиль (роли, медкнижка, доступность, ИНН/самозанятость) | `lib/features/profile/` |
+| **Мои смены + генерация PDF-акта** (`pdf` + `printing`) | `lib/features/shifts/` |
+| Состояние на **Riverpod**, навигация на **go_router** | `lib/state/`, `lib/core/router/` |
+
+## Структура проекта
+
+```
+lib/
+├── main.dart                 # точка входа (ProviderScope, локаль ru)
+├── app.dart                  # MaterialApp.router + темы
+├── core/
+│   ├── theme/                # AppColors, AppTheme (shadcn-inspired)
+│   └── router/app_router.dart
+├── data/
+│   ├── models/               # Seeker, Employer, Vacancy, Match, Message, enums, geo
+│   └── mock/mock_data.dart   # тестовые данные (структура из спеки, раздел 5)
+├── state/                    # Riverpod-провайдеры (session, feed, matches, employer)
+├── widgets/                  # переиспользуемые виджеты
+└── features/
+    ├── auth/  feed/  matches/  chat/  vacancy/  profile/  shifts/  shell/
+```
+
+## Запуск
+
+```bash
+flutter pub get
+flutter run            # выберите устройство/эмулятор
+flutter test           # smoke-тесты
+```
+
+Демо-подсказки: на экране кода введите **любые 4 цифры**; после авторизации
+выберите роль. Свайп вправо/вверх по вакансии → мэтч → чат → «Подтвердить
+смену» → раздел «Смены» → «Сформировать акт (PDF)».
+
+## Переход на production-стек (по спецификации)
+
+Ключевые пакеты уже в `pubspec.yaml`. Интеграции, требующие ключей/платформенной
+настройки, перечислены там же закомментированными — включайте по мере подключения:
+
+- **Backend**: FastAPI + PostgreSQL (PostGIS для гео) + Redis (WebSocket-чат),
+  хостинг в РФ (Яндекс.Облако / VK Cloud / Selectel / Timeweb).
+- **Авторизация**: свои JWT + SMS через МТС Exolve / SMSC.ru, вход через
+  `vkid_flutter`.
+- **Хранилище фото**: Yandex Object Storage (S3) через `minio`.
+- **Карты/гео**: `yandex_mapkit` + `geolocator` (сейчас — формула гаверсинуса в
+  `data/models/geo.dart`).
+- **Проверка ИНН/ОГРН и адресов**: DaData API.
+- **UI-кит**: проект использует собственную shadcn-вдохновлённую тему; для замены
+  на пакет `shadcn_ui` достаточно обернуть `MaterialApp` в `ShadApp`.
+- **Платежи** (монетизация): ЮKassa / CloudPayments.
+- **Push**: FCM / RuStore SDK.
+- **Публикация**: RuStore (обязательно), App Store, Google Play.
+
+## Модель данных
+
+Соответствует разделу 5 спецификации: `users`, `employers`, `vacancies`,
+`swipes`, `matches`, `chats`, `messages`, `sessions`. См. `lib/data/models/`.
