@@ -217,6 +217,18 @@ class Referral(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class Event(Base):
+    """Аналитическое событие воронки (open/swipe/match/confirm/purchase)."""
+
+    __tablename__ = "events"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String, index=True)
+    props: Mapped[str] = mapped_column(Text, default="")  # JSON-строка
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 class Review(Base):
     """Отзыв после смены: оценка одной стороны другой (1..5)."""
 

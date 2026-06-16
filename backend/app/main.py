@@ -8,10 +8,12 @@ from .config import settings
 from .db import init_db
 from .routers import (
     acts,
+    analytics,
     auth,
     billing,
     candidates,
     chat,
+    dadata,
     matches,
     social,
     swipes,
@@ -59,6 +61,8 @@ app.include_router(chat.router)
 app.include_router(acts.router)
 app.include_router(billing.router)
 app.include_router(social.router)
+app.include_router(dadata.router)
+app.include_router(analytics.router)
 
 
 @app.get("/health", tags=["meta"])

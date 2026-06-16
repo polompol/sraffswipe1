@@ -220,7 +220,37 @@ def yookassa_payment(
     item = CATALOG.get(body.sku)
     if item is None or item["provider"] != "yookassa":
         raise HTTPException(status_code=400, detail="Неизвестный SKU")
-    # В проде: создаём платёж через ЮKassa API и возвращаем confirmation_url.
-    # Без ключей — возвращаем демо-ссылку (фронт откроет webview).
+    # В проде: создаём платёж через ЮKassa API с metadata={owner_id, sku}
+    # и возвращаем confirmation_url. Без ключей — демо-ссылка (webview).
     base = settings.payment_return_url or "https://example.com/pay"
     return PaymentOut(url=f"{base}?sku={body.sku}&owner={principal['id']}")
+
+
+@router.post("/yookassa/webhook")
+def yookassa_webhook(
+    payload: dict,
+    db: Session = Depends(get_db),
+    secret: str = "",
+):
+    """Вебхук ЮKassa. ЮKassa не подписывает запросы (рекомендует IP-allowlist),
+    поэтому защищаемся общим секретом в query `?secret=`."""
+    _require_internal(secret)
+    if payload.get("event") != "payment.succeeded":
+        return {"ok": True, "ignored": True}
+    obj = payload.get("object", {})
+    meta = obj.get("metadata", {})
+    owner_id, sku = meta.get("owner_id"), meta.get("sku")
+    if not owner_id or sku not in CATALOG:
+        raise HTTPException(status_code=400, detail="Некорректные metadata")
+    charge_id = obj.get("id")
+    if charge_id and db.query(Purchase).filter(
+        Purchase.provider_charge_id == charge_id
+    ).first():
+        return {"ok": True, "duplicate": True}
+    db.add(Purchase(
+        owner_id=owner_id, sku=sku, provider="yookassa",
+        amount=int(CATALOG[sku].get("rub") or 0), currency="RUB",
+        status="paid", provider_charge_id=charge_id,
+    ))
+    _apply_effect(db, owner_id, sku)
+    return {"ok": True}

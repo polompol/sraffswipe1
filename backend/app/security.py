@@ -48,3 +48,12 @@ def current_principal(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен"
         )
     return principal
+
+
+def optional_principal(
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+) -> dict | None:
+    """Принципал, если токен есть и валиден; иначе None (без ошибки)."""
+    if creds is None:
+        return None
+    return decode_token(creds.credentials)
