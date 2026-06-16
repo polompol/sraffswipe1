@@ -70,7 +70,9 @@ async def on_paid(message: Message) -> None:
                 "charge_id": sp.telegram_payment_charge_id,
             },
         )
-    await message.answer("Оплата прошла ✅ Права начислены. Возвращайтесь в приложение.")
+    await message.answer(
+        "Оплата прошла ✅ Права начислены. Возвращайтесь в приложение."
+    )
 
 
 async def notify(bot: Bot, tg_id: int, text: str) -> None:
