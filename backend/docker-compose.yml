@@ -26,11 +26,37 @@ services:
       DATABASE_URL: postgresql+psycopg://staffswipe:staffswipe@db:5432/staffswipe
       JWT_SECRET: change-me-in-prod
       DEV_MODE: "true"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      MINI_APP_URL: ${MINI_APP_URL:-}
+      ALLOW_INSECURE_TELEGRAM_AUTH: ${ALLOW_INSECURE_TELEGRAM_AUTH:-true}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+
+  # Телеграм-бот (уведомления + платежи Stars). Запускается при наличии токена.
+  bot:
+    image: python:3.12-slim
+    working_dir: /bot
+    volumes:
+      - ./bot:/bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      MINI_APP_URL: ${MINI_APP_URL:-}
+      API_BASE_URL: http://api:8000
+    command: sh -c "pip install -q -r requirements.txt && python main.py"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Статика Telegram Mini App (nginx). В проде раздаётся по HTTPS.
+  tma:
+    build: ../tma
+    ports:
+      - "8080:80"
 
 volumes:
   pgdata:

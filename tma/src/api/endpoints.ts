@@ -26,11 +26,7 @@ export async function authTelegram(
 ): Promise<AuthResult> {
   if (!USE_BACKEND) return mock.authTelegram(role);
   const { data } = await api.post("/auth/telegram", { init_data: initData, role });
-  return {
-    accessToken: data.access_token,
-    role: data.role,
-    userId: data.user_id,
-  };
+  return { accessToken: data.accessToken, role: data.role, userId: data.userId };
 }
 
 export async function fetchFeed(role: AppRole): Promise<Vacancy[] | Seeker[]> {
@@ -45,7 +41,7 @@ export async function fetchFeed(role: AppRole): Promise<Vacancy[] | Seeker[]> {
 
 export interface SwipeResult {
   matched: boolean;
-  match?: MatchModel;
+  matchId?: string;
 }
 
 export async function sendSwipe(
@@ -59,7 +55,7 @@ export async function sendSwipe(
     target_type: targetType,
     direction,
   });
-  return data;
+  return { matched: Boolean(data.matched), matchId: data.matchId ?? undefined };
 }
 
 export async function fetchMatches(): Promise<MatchModel[]> {

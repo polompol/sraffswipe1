@@ -184,7 +184,7 @@ export function sendSwipe(
       timestamp: new Date().toISOString(),
     },
   ];
-  return Promise.resolve({ matched: true, match });
+  return Promise.resolve({ matched: true, matchId: match.id });
 }
 
 export function fetchMatches(): Promise<MatchModel[]> {

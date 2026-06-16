@@ -24,7 +24,21 @@ export function FeedPage() {
   async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection) {
     const targetType = isSeeker ? "vacancy" : "user";
     const res = await sendSwipe(item.id, targetType, dir);
-    if (res.matched && res.match && isSeeker) setMatch(res.match);
+    if (res.matched && res.matchId && isSeeker) {
+      const v = item as Vacancy;
+      setMatch({
+        id: res.matchId,
+        seekerId: "me",
+        employerId: v.employerId,
+        vacancyId: v.id,
+        status: "matched",
+        confirmedBySeeker: false,
+        confirmedByEmployer: false,
+        companyName: v.companyName,
+        companyPhotoUrl: v.companyPhotoUrl,
+        role: v.role,
+      });
+    }
   }
 
   return (

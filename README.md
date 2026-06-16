@@ -9,6 +9,33 @@ MVP-приложение на **Flutter**, где соискатели (офиц
 > Архитектура и модели соответствуют спецификации и готовы к подключению
 > backend (FastAPI + PostgreSQL/PostGIS + S3).
 
+## 🚀 Telegram Mini App (основной продукт) — `tma/`
+
+Помимо Flutter-приложения, проект включает **Telegram Mini App** на актуальном
+стеке: **React + TypeScript + Vite + @telegram-apps/sdk-react**. Это основной
+канал запуска: вход через Telegram (без SMS), нативные кнопки/хаптика, оплата
+внутри Telegram. См. [`tma/README.md`](tma/README.md).
+
+```bash
+cd tma && npm install && npm run build   # tsc + vite build (зелёные)
+npm run dev                              # локальный запуск
+```
+
+### Монетизация (гибридная модель)
+
+| Источник | Что | Платёж |
+| --- | --- | --- |
+| Подписки работодателей | Free / Pro (1 990 ₽/мес) / Business (4 990 ₽/мес) | ЮKassa |
+| Boost вакансии | поднятие в топ ленты на 24ч/3д | Telegram Stars |
+| Супер-лайки «Срочно» | пакеты 5/20/50 | Telegram Stars |
+| Premium соискателя | «кто меня лайкнул», приоритет | Telegram Stars |
+| Верификация заведения | бейдж «Проверен» (DaData) | ЮKassa |
+
+Правило: цифровые микро-фичи внутри Telegram — через **Stars** (требование
+Telegram), B2B-подписки/верификация — через **ЮKassa** (рубли). Backend ведёт
+права (`entitlements`), начисление — идемпотентно через `/billing/fulfill`.
+Бот (`backend/bot/`, aiogram 3) открывает Mini App и обрабатывает оплату Stars.
+
 ## Что реализовано
 
 | Раздел | Файлы |

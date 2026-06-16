@@ -24,4 +24,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Backend отдаёт snake_case — нормализуем в camelCase для фронта.
+function toCamel(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(toCamel);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      const ck = k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+      out[ck] = toCamel(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+api.interceptors.response.use((response) => {
+  response.data = toCamel(response.data);
+  return response;
+});
+
 export { baseURL };
