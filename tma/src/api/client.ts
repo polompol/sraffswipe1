@@ -1,4 +1,5 @@
 import axios from "axios";
+import { reportError } from "@/lib/report";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -44,8 +45,13 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    const status = error?.response?.status;
+    // 5xx и сетевые ошибки — в репорт (4xx ожидаемы: лимиты, валидация).
+    if (!status || status >= 500) {
+      reportError(error, `http ${error?.config?.url ?? ""}`);
+    }
     // Истёкший/невалидный JWT — сбрасываем сессию и уводим на онбординг.
-    if (error?.response?.status === 401) {
+    if (status === 401) {
       setToken(null);
       localStorage.removeItem("ss_role");
       localStorage.removeItem("ss_uid");

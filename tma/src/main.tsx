@@ -7,6 +7,7 @@ import "./theme/theme.css";
 import "./index.css";
 import { initTelegram } from "./telegram/sdk";
 import { track } from "./api/endpoints";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { App } from "./App";
 
 const queryClient = new QueryClient({
@@ -18,10 +19,12 @@ track("open");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <HashRouter>
-        <App />
-      </HashRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <HashRouter>
+          <App />
+        </HashRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

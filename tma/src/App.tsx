@@ -1,17 +1,39 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "@/store/session";
+import { Loading } from "@/components/States";
+// Стартовый путь грузим сразу, остальное — по требованию (code-splitting).
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { RolePage } from "@/features/auth/RolePage";
 import { FeedPage } from "@/features/feed/FeedPage";
-import { MatchesPage } from "@/features/matches/MatchesPage";
-import { ChatPage } from "@/features/chat/ChatPage";
-import { ProfilePage } from "@/features/profile/ProfilePage";
-import { EditProfilePage } from "@/features/profile/EditProfilePage";
-import { CreateVacancyPage } from "@/features/vacancy/CreateVacancyPage";
-import { MyVacanciesPage } from "@/features/vacancy/MyVacanciesPage";
-import { ShiftsPage } from "@/features/shifts/ShiftsPage";
-import { PricingPage } from "@/features/billing/PricingPage";
-import { FunnelPage } from "@/features/analytics/FunnelPage";
+
+const MatchesPage = lazy(() =>
+  import("@/features/matches/MatchesPage").then((m) => ({ default: m.MatchesPage })),
+);
+const ChatPage = lazy(() =>
+  import("@/features/chat/ChatPage").then((m) => ({ default: m.ChatPage })),
+);
+const ProfilePage = lazy(() =>
+  import("@/features/profile/ProfilePage").then((m) => ({ default: m.ProfilePage })),
+);
+const EditProfilePage = lazy(() =>
+  import("@/features/profile/EditProfilePage").then((m) => ({ default: m.EditProfilePage })),
+);
+const CreateVacancyPage = lazy(() =>
+  import("@/features/vacancy/CreateVacancyPage").then((m) => ({ default: m.CreateVacancyPage })),
+);
+const MyVacanciesPage = lazy(() =>
+  import("@/features/vacancy/MyVacanciesPage").then((m) => ({ default: m.MyVacanciesPage })),
+);
+const ShiftsPage = lazy(() =>
+  import("@/features/shifts/ShiftsPage").then((m) => ({ default: m.ShiftsPage })),
+);
+const PricingPage = lazy(() =>
+  import("@/features/billing/PricingPage").then((m) => ({ default: m.PricingPage })),
+);
+const FunnelPage = lazy(() =>
+  import("@/features/analytics/FunnelPage").then((m) => ({ default: m.FunnelPage })),
+);
 
 function TabBar() {
   const { role } = useSession();
@@ -61,6 +83,7 @@ export function App() {
   const ready = authenticated && role;
 
   return (
+    <Suspense fallback={<div className="app"><div className="page"><Loading /></div></div>}>
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/role" element={<RolePage />} />
@@ -97,5 +120,6 @@ export function App() {
         element={<Navigate to={ready ? "/feed" : "/onboarding"} />}
       />
     </Routes>
+    </Suspense>
   );
 }
