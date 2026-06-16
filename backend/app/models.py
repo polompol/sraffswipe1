@@ -23,6 +23,10 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     phone: Mapped[str] = mapped_column(String, unique=True, index=True)
+    tg_id: Mapped[int | None] = mapped_column(
+        Integer, unique=True, index=True, nullable=True
+    )
+    tg_username: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, default="")
     birth_date: Mapped[str] = mapped_column(String, default="")  # ISO yyyy-mm-dd
     city: Mapped[str] = mapped_column(String, default="")
@@ -47,6 +51,10 @@ class Employer(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     phone: Mapped[str] = mapped_column(String, unique=True, index=True)
+    tg_id: Mapped[int | None] = mapped_column(
+        Integer, unique=True, index=True, nullable=True
+    )
+    tg_username: Mapped[str | None] = mapped_column(String, nullable=True)
     company_name: Mapped[str] = mapped_column(String, default="")
     inn: Mapped[str] = mapped_column(String, default="")
     ogrn: Mapped[str] = mapped_column(String, default="")
@@ -136,4 +144,62 @@ class PhoneCode(Base):
 
     phone: Mapped[str] = mapped_column(String, primary_key=True)
     code: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+# ---- Монетизация / entitlements ----
+
+
+class Subscription(Base):
+    """Подписка работодателя (ЮKassa). Активный тариф и срок."""
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, index=True)  # employer.id
+    plan: Mapped[str] = mapped_column(String, default="free")  # free|pro|business
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    renews_at: Mapped[str | None] = mapped_column(String, nullable=True)  # ISO
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Entitlement(Base):
+    """Баланс прав пользователя: супер-лайки, boost, premium, верификация."""
+
+    __tablename__ = "entitlements"
+
+    owner_id: Mapped[str] = mapped_column(String, primary_key=True)
+    superlike_balance: Mapped[int] = mapped_column(Integer, default=1)
+    boost_balance: Mapped[int] = mapped_column(Integer, default=0)
+    seeker_premium: Mapped[bool] = mapped_column(Boolean, default=False)
+    employer_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Purchase(Base):
+    """Журнал покупок (Stars/ЮKassa). Идемпотентность по provider_charge_id."""
+
+    __tablename__ = "purchases"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, index=True)
+    sku: Mapped[str] = mapped_column(String)
+    provider: Mapped[str] = mapped_column(String)  # stars|yookassa
+    amount: Mapped[int] = mapped_column(Integer, default=0)
+    currency: Mapped[str] = mapped_column(String, default="XTR")
+    # pending|paid|failed
+    status: Mapped[str] = mapped_column(String, default="pending")
+    provider_charge_id: Mapped[str | None] = mapped_column(
+        String, unique=True, index=True, nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Boost(Base):
+    """Активный boost вакансии: поднятие в ленте до момента expires_at."""
+
+    __tablename__ = "boosts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    vacancy_id: Mapped[str] = mapped_column(String, index=True)
+    expires_at: Mapped[str] = mapped_column(String)  # ISO
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

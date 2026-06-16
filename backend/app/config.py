@@ -24,5 +24,20 @@ class Settings(BaseSettings):
     dadata_token: str = ""
     dadata_secret: str = ""
 
+    # --- Telegram ---
+    # Токен бота (BotFather). Нужен для валидации initData и платежей Stars.
+    telegram_bot_token: str = ""
+    # Публичный URL Mini App (для кнопки запуска и реф-ссылок).
+    mini_app_url: str = ""
+    # Разрешать вход без валидной подписи initData (только для локальной отладки).
+    allow_insecure_telegram_auth: bool = True
+
+    # --- Платежи ---
+    # ЮKassa (рубли): shop_id + секретный ключ.
+    yookassa_shop_id: str = ""
+    yookassa_secret_key: str = ""
+    # Базовый URL для возврата после оплаты ЮKassa.
+    payment_return_url: str = ""
+
 
 settings = Settings()
