@@ -100,7 +100,13 @@ def profile():
     rr(d,[16,184,W-16,272],16,fill=CARD,outline=BORDER); T(d,(30,202),"Тариф: Free",F(15,True),TEXT)
     bw=d.textlength("Улучшить",font=F(13,True))+24; rr(d,[W-30-bw,200,W-30,232],9,outline=GOLD,width=1); T(d,(W-30-bw/2,216),"Улучшить",F(13,True),GOLD,"mm")
     T(d,(30,244),"⚡ Супер-лайки: 1   🔥 Boost: 0",F(13),MUTED)
-    rr(d,[16,288,W-16,338],12,outline=BORDER,width=1); T(d,(W/2,313),"✏️ Редактировать профиль",F(15,True),TEXT,"mm")
+    # Реферальный блок
+    rr(d,[16,288,W-16,392],16,fill=CARD,outline=BORDER)
+    T(d,(30,306),"Пригласить друзей",F(15,True),TEXT)
+    T(d,(30,330),"За каждого по ссылке — 3 супер-лайка.",F(11.5),MUTED)
+    T(d,(30,348),"Уже пришло: 2",F(11.5),MUTED)
+    rr(d,[30,364,W-30,392],8,fill=GOLD); T(d,(W/2,378),"🎁 Поделиться приглашением",F(13,True),WHITE,"mm")
+    rr(d,[16,406,W-16,452],12,outline=BORDER,width=1); T(d,(W/2,429),"✏️ Редактировать профиль",F(14,True),TEXT,"mm")
     d.line([0,H-58,W,H-58],fill=BORDER)
     for i,(ic,lb,act) in enumerate([("🃏","Лента",0),("🔥","Мэтчи",0),("📅","Смены",0),("👤","Профиль",1)]):
         cx=W/8+i*W/4; T(d,(cx,H-40),ic,F(17),GOLD if act else MUTED,"mm"); T(d,(cx,H-20),lb,F(10),GOLD if act else MUTED,"mm")
