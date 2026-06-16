@@ -2,15 +2,19 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppRole } from "@/types/domain";
 import { useSession } from "@/store/session";
-import { authTelegram } from "@/api/endpoints";
+import { authTelegram, track } from "@/api/endpoints";
 import { rawInitData, haptic } from "@/telegram/sdk";
 
 export function RolePage() {
   const nav = useNavigate();
   const setAuth = useSession((s) => s.setAuth);
   const [busy, setBusy] = useState<AppRole | null>(null);
+  const [consent, setConsent] = useState(
+    localStorage.getItem("ss_consent") === "1",
+  );
 
   async function choose(role: AppRole) {
+    if (!consent) return;
     setBusy(role);
     haptic("light");
     try {
@@ -22,13 +26,41 @@ export function RolePage() {
     }
   }
 
+  function acceptConsent(v: boolean) {
+    setConsent(v);
+    if (v) {
+      localStorage.setItem("ss_consent", "1");
+      track("consent");
+    } else {
+      localStorage.removeItem("ss_consent");
+    }
+  }
+
   return (
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginTop: 24 }}>Кто вы?</h1>
         <p className="muted">Это можно будет поменять позже</p>
 
-        <div style={{ marginTop: 24, display: "grid", gap: 16 }}>
+        <label
+          className="card row"
+          style={{ marginTop: 16, gap: 10, cursor: "pointer", alignItems: "flex-start" }}
+        >
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => acceptConsent(e.target.checked)}
+            style={{ marginTop: 3 }}
+          />
+          <span className="muted" style={{ fontSize: 13 }}>
+            Мне есть 18 лет. Принимаю{" "}
+            <a href="https://example.com/offer" target="_blank" rel="noreferrer">оферту</a>,{" "}
+            <a href="https://example.com/privacy" target="_blank" rel="noreferrer">политику обработки ПДн (152-ФЗ)</a>{" "}
+            и даю согласие на обработку персональных данных.
+          </span>
+        </label>
+
+        <div style={{ marginTop: 16, display: "grid", gap: 16, opacity: consent ? 1 : 0.5, pointerEvents: consent ? "auto" : "none" }}>
           <RoleCard
             emoji="💼"
             grad="linear-gradient(135deg,#d9a441,#b07a47)"
