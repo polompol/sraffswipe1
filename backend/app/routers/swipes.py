@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..entitlements import get_or_create
 from ..models import Match, Message, Swipe, Vacancy
 from ..schemas import SwipeIn, SwipeOut
 from ..security import current_principal
@@ -47,6 +48,17 @@ def swipe(
     principal: dict = Depends(current_principal),
 ):
     me = principal["id"]
+
+    # Супер-лайк «Срочно» — платная фича: списываем с баланса.
+    if body.direction == "superlike":
+        ent = get_or_create(db, me)
+        if ent.superlike_balance < 1:
+            raise HTTPException(
+                status_code=402,
+                detail="Закончились супер-лайки. Купите пакет «Срочно».",
+            )
+        ent.superlike_balance -= 1
+
     db.add(
         Swipe(
             swiper_id=me,

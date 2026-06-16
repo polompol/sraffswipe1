@@ -1,17 +1,28 @@
 """Лента вакансий и их создание."""
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..entitlements import (
+    PLAN_VACANCY_LIMIT,
+    active_boost_vacancy_ids,
+    active_vacancy_count,
+    get_or_create,
+    plan_of,
+)
 from ..geo import distance_km
-from ..models import Employer, Vacancy
+from ..models import Boost, Employer, Vacancy
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
 
-def _to_out(v: Vacancy, emp: Employer | None, dist: float | None) -> VacancyOut:
+def _to_out(
+    v: Vacancy, emp: Employer | None, dist: float | None, boosted: bool = False
+) -> VacancyOut:
     return VacancyOut(
         id=v.id,
         employer_id=v.employer_id,
@@ -33,6 +44,7 @@ def _to_out(v: Vacancy, emp: Employer | None, dist: float | None) -> VacancyOut:
         interior_photo_url=v.interior_photo_url,
         status=v.status,
         distance_km=round(dist, 1) if dist is not None else None,
+        boosted=boosted,
     )
 
 
@@ -43,7 +55,8 @@ def list_vacancies(
     radius_km: float = 25.0,
     db: Session = Depends(get_db),
 ):
-    """Активные вакансии. При заданных lat/lng — фильтр по радиусу и сортировка."""
+    """Активные вакансии. Сначала boost-вакансии, затем по расстоянию."""
+    boosted_ids = active_boost_vacancy_ids(db)
     query = db.query(Vacancy).filter(Vacancy.status == "active")
     result: list[VacancyOut] = []
     for v in query.all():
@@ -53,9 +66,12 @@ def list_vacancies(
             dist = distance_km(lat, lng, v.lat, v.lng)
             if dist > radius_km:
                 continue
-        result.append(_to_out(v, emp, dist))
-    if lat is not None and lng is not None:
-        result.sort(key=lambda x: x.distance_km or 1e9)
+        result.append(_to_out(v, emp, dist, boosted=v.id in boosted_ids))
+    # Boost всегда наверху; внутри группы — по расстоянию (если задано).
+    def _rank(x: VacancyOut) -> tuple[bool, float]:
+        return (not x.boosted, x.distance_km if x.distance_km is not None else 1e9)
+
+    result.sort(key=_rank)
     return result
 
 
@@ -70,8 +86,39 @@ def create_vacancy(
     emp = db.get(Employer, principal["id"])
     if emp is None:
         raise HTTPException(status_code=404, detail="Работодатель не найден")
+
+    # Лимит тарифа Free на число активных вакансий.
+    limit = PLAN_VACANCY_LIMIT.get(plan_of(db, emp.id))
+    if limit is not None and active_vacancy_count(db, emp.id) >= limit:
+        raise HTTPException(
+            status_code=402,
+            detail="Лимит тарифа Free. Оформите Pro для большего числа вакансий.",
+        )
+
     v = Vacancy(employer_id=emp.id, **body.model_dump())
     db.add(v)
     db.commit()
     db.refresh(v)
     return _to_out(v, emp, None)
+
+
+@router.post("/{vacancy_id}/boost")
+def boost_vacancy(
+    vacancy_id: str,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Поднять вакансию в топ ленты на 24 часа, списав 1 boost с баланса."""
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    v = db.get(Vacancy, vacancy_id)
+    if v is None or v.employer_id != principal["id"]:
+        raise HTTPException(status_code=404, detail="Вакансия не найдена")
+    ent = get_or_create(db, principal["id"])
+    if ent.boost_balance < 1:
+        raise HTTPException(status_code=402, detail="Нет boost на балансе")
+    ent.boost_balance -= 1
+    expires = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
+    db.add(Boost(vacancy_id=vacancy_id, expires_at=expires))
+    db.commit()
+    return {"ok": True, "boostBalance": ent.boost_balance, "expiresAt": expires}

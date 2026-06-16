@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Entitlement, Purchase, Subscription
+from ..entitlements import get_or_create
+from ..models import Purchase, Subscription
 from ..security import current_principal
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -70,20 +71,10 @@ class SkuIn(BaseModel):
     sku: str
 
 
-def _ent(db: Session, owner_id: str) -> Entitlement:
-    ent = db.get(Entitlement, owner_id)
-    if ent is None:
-        ent = Entitlement(owner_id=owner_id)
-        db.add(ent)
-        db.commit()
-        db.refresh(ent)
-    return ent
-
-
 def _apply_effect(db: Session, owner_id: str, sku: str) -> None:
     """Применяет эффект SKU к правам пользователя."""
     effect = CATALOG[sku]["effect"]
-    ent = _ent(db, owner_id)
+    ent = get_or_create(db, owner_id)
     if "superlike" in effect:
         ent.superlike_balance += int(effect["superlike"])
     if "boost" in effect:
@@ -113,7 +104,7 @@ def _apply_effect(db: Session, owner_id: str, sku: str) -> None:
 def get_entitlements(
     principal: dict = Depends(current_principal), db: Session = Depends(get_db)
 ):
-    ent = _ent(db, principal["id"])
+    ent = get_or_create(db, principal["id"])
     sub = (
         db.query(Subscription)
         .filter(Subscription.owner_id == principal["id"])

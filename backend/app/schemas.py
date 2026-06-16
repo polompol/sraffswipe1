@@ -64,6 +64,7 @@ class VacancyOut(BaseModel):
     interior_photo_url: str
     status: str
     distance_km: float | None = None
+    boosted: bool = False
 
 
 # ---- swipes / matches ----

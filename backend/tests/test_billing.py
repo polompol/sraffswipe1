@@ -111,6 +111,58 @@ def test_fulfill_requires_internal_secret(client):
     assert wrong.status_code == 401
 
 
+def _new_vacancy(client, headers, role="barista"):
+    payload = {
+        "role": role, "date": "2026-06-20", "start_time": 600, "end_time": 1080,
+        "rate": 350, "rate_type": "perHour", "lat": 55.75, "lng": 37.61,
+        "address": "Тест",
+    }
+    return client.post("/vacancies", json=payload, headers=headers)
+
+
+def test_free_plan_vacancy_limit(client):
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert _new_vacancy(client, headers).status_code == 201
+    # Вторая вакансия на Free — запрещена (402).
+    assert _new_vacancy(client, headers).status_code == 402
+
+
+def test_boost_moves_vacancy_to_top(client):
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    token = r.json()["access_token"]
+    owner = r.json()["user_id"]
+    headers = {"Authorization": f"Bearer {token}"}
+    # Pro-подписка снимает лимит и даёт boost-баланс.
+    client.post("/billing/fulfill", headers=INTERNAL, json={
+        "owner_id": owner, "sku": "sub_pro_month", "provider": "yookassa",
+        "charge_id": "yk_b",
+    })
+    _new_vacancy(client, headers, role="waiter")
+    second = _new_vacancy(client, headers, role="bartender").json()
+
+    boost = client.post(f"/vacancies/{second['id']}/boost", headers=headers)
+    assert boost.status_code == 200
+
+    feed = client.get("/vacancies").json()
+    assert feed[0]["id"] == second["id"]
+    assert feed[0]["boosted"] is True
+
+
+def test_superlike_consumes_balance(client):
+    # Работодатель создаёт вакансию-цель.
+    e = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eh = {"Authorization": f"Bearer {e.json()['access_token']}"}
+    vac = _new_vacancy(client, eh).json()
+
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    body = {"target_id": vac["id"], "target_type": "vacancy", "direction": "superlike"}
+    # Стартовый баланс = 1: первый супер-лайк проходит, второй — 402.
+    assert client.post("/swipes", json=body, headers=headers).status_code == 200
+    assert client.post("/swipes", json=body, headers=headers).status_code == 402
+
+
 def test_act_pdf_requires_ownership(client):
     # Чужой/без токена → 401/403/404 (не 200).
     r = client.get("/matches/nonexistent/act.pdf")
