@@ -8,4 +8,5 @@ python-multipart==0.0.20
 fpdf2==2.8.2
 httpx==0.28.1
 psycopg[binary]==3.2.3
+boto3==1.35.99
 

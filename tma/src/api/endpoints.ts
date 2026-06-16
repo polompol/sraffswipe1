@@ -1,3 +1,4 @@
+import axios from "axios";
 import { api } from "./client";
 import * as mock from "./mock";
 import type {
@@ -137,6 +138,7 @@ export interface MeUpdate {
   self_employed?: boolean;
   inn?: string;
   about?: string;
+  photo_url?: string;
   company_name?: string;
 }
 
@@ -217,6 +219,22 @@ export async function verifyEmployer(inn: string): Promise<VerifyResult> {
   if (!USE_BACKEND) return mock.verifyEmployer(inn);
   const { data } = await api.post<VerifyResult>("/employer/verify", { inn });
   return data;
+}
+
+/** Загрузка фото: presigned URL → прямой PUT в S3 → публичный URL. */
+export async function uploadPhoto(file: File): Promise<string> {
+  if (!USE_BACKEND) {
+    throw new Error("Загрузка фото доступна только с backend");
+  }
+  const { data } = await api.post<{ upload_url: string; public_url: string }>(
+    "/uploads/photo-url",
+    { content_type: file.type },
+  );
+  // Прямой PUT в S3 — без наших интерсепторов/JWT.
+  await axios.put(data.upload_url, file, {
+    headers: { "Content-Type": file.type },
+  });
+  return data.public_url;
 }
 
 export interface PaymentUrl {

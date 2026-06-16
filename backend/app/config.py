@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     # Telegram-id админов (csv) — доступ к аналитике/админ-экранам.
     admin_tg_ids: str = ""
 
+    # Хранилище фото (S3-совместимое, напр. Yandex Object Storage).
+    s3_endpoint: str = ""
+    s3_bucket: str = ""
+    s3_key: str = ""
+    s3_secret: str = ""
+    s3_public_base: str = ""  # публичный базовый URL для GET (CDN/бакет)
+
+    @property
+    def s3_ready(self) -> bool:
+        return bool(self.s3_endpoint and self.s3_bucket and self.s3_key)
+
     @property
     def yookassa_ready(self) -> bool:
         return bool(self.yookassa_shop_id and self.yookassa_secret_key)

@@ -86,6 +86,17 @@ def test_employer_verify_without_dadata(client):
     assert forbidden.status_code == 403
 
 
+def test_photo_upload_without_s3(client):
+    token, _ = _auth(client)
+    r = client.post(
+        "/uploads/photo-url",
+        headers=_hdr(token),
+        json={"content_type": "image/jpeg"},
+    )
+    # Без ключей S3 — 503 (фронт мягко деградирует).
+    assert r.status_code == 503
+
+
 def test_dadata_without_token_is_empty(client):
     token, _ = _auth(client)
     # Без DADATA_TOKEN — graceful: пустой список / found=false.

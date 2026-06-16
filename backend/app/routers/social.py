@@ -147,6 +147,7 @@ class MeUpdateIn(BaseModel):
     self_employed: bool | None = None
     inn: str | None = None
     about: str | None = None
+    photo_url: str | None = None
     company_name: str | None = None
 
 
@@ -201,6 +202,8 @@ def update_me(
         u.inn = body.inn
     if body.about is not None:
         u.about = body.about
+    if body.photo_url is not None:
+        u.photo_urls = body.photo_url
     db.commit()
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",

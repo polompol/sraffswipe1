@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { updateMe } from "@/api/endpoints";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
@@ -12,6 +13,7 @@ export function EditProfilePage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const [name, setName] = useState("Алексей");
+  const [photo, setPhoto] = useState<string>("");
   const [birthDate, setBirthDate] = useState("2000-04-12");
   const [city, setCity] = useState("Москва");
   const [inn, setInn] = useState("");
@@ -38,6 +40,7 @@ export function EditProfilePage() {
         roles,
         self_employed: selfEmployed,
         inn: selfEmployed ? inn : undefined,
+        photo_url: photo || undefined,
       });
       qc.invalidateQueries({ queryKey: ["me"] });
       haptic("success");
@@ -57,6 +60,8 @@ export function EditProfilePage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 16 }}>Профиль</h1>
+
+        <PhotoUpload label="Фото профиля" value={photo} onChange={setPhoto} />
 
         <label className="muted" htmlFor="name">Имя</label>
         <input id="name" className="input" style={{ marginBottom: 12 }} value={name} onChange={(e) => setName(e.target.value)} />
