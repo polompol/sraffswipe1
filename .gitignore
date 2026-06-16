@@ -25,3 +25,8 @@ pubspec.lock
 **/android/local.properties
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/Pods/
+
+# Мокапы: храним только обзорные, остальное генерится скриптами
+mockups/*.png
+!mockups/overview.png
+!mockups/tma_overview.png
