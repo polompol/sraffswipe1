@@ -54,11 +54,23 @@ def list_vacancies(
     lat: float | None = None,
     lng: float | None = None,
     radius_km: float = 25.0,
+    role: str | None = None,
+    min_rate: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     db: Session = Depends(get_db),
 ):
-    """Активные вакансии. Сначала boost-вакансии, затем по расстоянию."""
+    """Активные вакансии с фильтрами. Сначала boost, затем по расстоянию."""
     boosted_ids = active_boost_vacancy_ids(db)
     query = db.query(Vacancy).filter(Vacancy.status == "active")
+    if role:
+        query = query.filter(Vacancy.role == role)
+    if min_rate is not None:
+        query = query.filter(Vacancy.rate >= min_rate)
+    if date_from:
+        query = query.filter(Vacancy.date >= date_from)
+    if date_to:
+        query = query.filter(Vacancy.date <= date_to)
     result: list[VacancyOut] = []
     for v in query.all():
         emp = db.get(Employer, v.employer_id)

@@ -149,8 +149,16 @@ export function authTelegram(role: AppRole): Promise<AuthResult> {
   return Promise.resolve({ accessToken: "mock", role, userId: "me" });
 }
 
-export function fetchFeed(role: AppRole): Promise<Vacancy[] | Seeker[]> {
-  return Promise.resolve(role === "seeker" ? [...VACANCIES] : [...SEEKERS]);
+export function fetchFeed(
+  role: AppRole,
+  filters?: { role?: string; min_rate?: number; date_from?: string },
+): Promise<Vacancy[] | Seeker[]> {
+  if (role !== "seeker") return Promise.resolve([...SEEKERS]);
+  let list = [...VACANCIES];
+  if (filters?.role) list = list.filter((v) => v.role === filters.role);
+  if (filters?.min_rate != null) list = list.filter((v) => v.rate >= filters.min_rate!);
+  if (filters?.date_from) list = list.filter((v) => v.date >= filters.date_from!);
+  return Promise.resolve(list);
 }
 
 export function sendSwipe(

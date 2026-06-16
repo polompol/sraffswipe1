@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import type { MatchModel, Seeker, SwipeDirection, Vacancy } from "@/types/domain";
 import { useSession } from "@/store/session";
-import { fetchFeed, sendSwipe, track } from "@/api/endpoints";
+import { fetchFeed, sendSwipe, track, type FeedFilters } from "@/api/endpoints";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
+import { FilterSheet } from "./FilterSheet";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 
 export function FeedPage() {
@@ -15,11 +16,16 @@ export function FeedPage() {
   const nav = useNavigate();
   const [match, setMatch] = useState<MatchModel | null>(null);
   const [empty, setEmpty] = useState(false);
+  const [filters, setFilters] = useState<FeedFilters>({});
+  const [filterOpen, setFilterOpen] = useState(false);
   const controller = useRef<((dir: SwipeDirection) => void) | null>(null);
 
+  const activeFilterCount =
+    (filters.role ? 1 : 0) + (filters.min_rate ? 1 : 0) + (filters.date_from ? 1 : 0);
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["feed", role],
-    queryFn: () => fetchFeed(role),
+    queryKey: ["feed", role, filters],
+    queryFn: () => fetchFeed(role, filters),
   });
 
   async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection) {
@@ -51,6 +57,16 @@ export function FeedPage() {
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
         </h2>
         <span className="spacer" />
+        {isSeeker && (
+          <button
+            className="tab"
+            style={{ flex: "none", width: "auto", color: activeFilterCount ? "var(--gold)" : undefined }}
+            aria-label="Фильтры"
+            onClick={() => setFilterOpen(true)}
+          >
+            <span className="ico">⚙{activeFilterCount ? ` ${activeFilterCount}` : ""}</span>
+          </button>
+        )}
         <button className="tab" style={{ flex: "none", width: "auto" }} aria-label="Тарифы и буст" onClick={() => nav("/pricing")}>
           <span className="ico">⚡</span>
         </button>
@@ -113,6 +129,17 @@ export function FeedPage() {
       )}
 
       {match && <MatchOverlay match={match} onClose={() => setMatch(null)} />}
+      {filterOpen && (
+        <FilterSheet
+          value={filters}
+          onClose={() => setFilterOpen(false)}
+          onApply={(f) => {
+            setFilters(f);
+            setEmpty(false);
+            setFilterOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

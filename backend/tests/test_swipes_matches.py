@@ -30,6 +30,33 @@ def _vacancy(client, headers):
     }).json()
 
 
+def test_vacancy_filters(client):
+    e_token, owner = _auth(client, "employer")
+    eh = _hdr(e_token)
+    # Pro снимает лимит Free на число вакансий.
+    client.post("/billing/fulfill",
+                headers={"X-Internal-Token": "test-internal-secret"},
+                json={"owner_id": owner, "sku": "sub_pro_month",
+                      "provider": "yookassa", "charge_id": "f1"})
+    cheap = client.post("/vacancies", headers=eh, json={
+        "role": "dishwasher", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 250, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "A"}).json()
+    pricey = client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": "2026-06-25", "start_time": 600,
+        "end_time": 1080, "rate": 500, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "B"}).json()
+
+    by_role = client.get("/vacancies?role=barista").json()
+    assert {v["id"] for v in by_role} == {pricey["id"]}
+
+    by_rate = client.get("/vacancies?min_rate=400").json()
+    assert cheap["id"] not in {v["id"] for v in by_rate}
+
+    by_date = client.get("/vacancies?date_from=2026-06-23").json()
+    assert {v["id"] for v in by_date} == {pricey["id"]}
+
+
 def test_candidates_lists_users(client):
     _s_token, s_id = _auth(client, "seeker")  # создаёт пользователя
     e_token, _ = _auth(client, "employer")

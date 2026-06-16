@@ -29,10 +29,19 @@ export async function authTelegram(
   return { accessToken: data.accessToken, role: data.role, userId: data.userId };
 }
 
-export async function fetchFeed(role: AppRole): Promise<Vacancy[] | Seeker[]> {
-  if (!USE_BACKEND) return mock.fetchFeed(role);
+export interface FeedFilters {
+  role?: string;
+  min_rate?: number;
+  date_from?: string;
+}
+
+export async function fetchFeed(
+  role: AppRole,
+  filters?: FeedFilters,
+): Promise<Vacancy[] | Seeker[]> {
+  if (!USE_BACKEND) return mock.fetchFeed(role, filters);
   if (role === "seeker") {
-    const { data } = await api.get<Vacancy[]>("/vacancies");
+    const { data } = await api.get<Vacancy[]>("/vacancies", { params: filters });
     return data;
   }
   const { data } = await api.get<Seeker[]>("/candidates");
