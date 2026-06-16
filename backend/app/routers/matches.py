@@ -41,6 +41,9 @@ def confirm(
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
+    # Подтверждать может только участник мэтча.
+    if principal["id"] not in (m.user_id, m.employer_id):
+        raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
     if principal["role"] == "seeker":
         m.confirmed_by_seeker = True
     else:

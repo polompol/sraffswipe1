@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Match, Message, Swipe, Vacancy
+from ..models import Match, Message, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
@@ -62,7 +62,15 @@ def swipe(
 ):
     me = principal["id"]
 
-    # Супер-лайк «Срочно» — платная фича: списываем с баланса.
+    # Сначала валидируем цель — чтобы при 404 не «сжечь» супер-лайк/не писать свайп.
+    if body.target_type == "vacancy":
+        if db.get(Vacancy, body.target_id) is None:
+            raise HTTPException(status_code=404, detail="Вакансия не найдена")
+    elif body.target_type == "user":
+        if db.get(User, body.target_id) is None:
+            raise HTTPException(status_code=404, detail="Кандидат не найден")
+
+    # Супер-лайк «Срочно» — платная фича: списываем с баланса (после валидации).
     if body.direction == "superlike":
         ent = get_or_create(db, me)
         if ent.superlike_balance < 1:

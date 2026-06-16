@@ -15,7 +15,11 @@ const queryClient = new QueryClient({
 });
 
 void initTelegram();
-track("open");
+// «open» — один раз за сессию, чтобы не раздувать вершину воронки на перезапусках.
+if (!sessionStorage.getItem("ss_open")) {
+  sessionStorage.setItem("ss_open", "1");
+  track("open");
+}
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
