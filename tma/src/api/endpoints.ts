@@ -171,6 +171,16 @@ export function track(name: string, props?: Record<string, unknown>): void {
   api.post("/events", { name, props }).catch(() => {});
 }
 
+export type Funnel = Record<string, number>;
+
+export async function fetchFunnel(): Promise<Funnel> {
+  if (!USE_BACKEND) {
+    return { open: 1200, swipe: 940, match: 410, confirm: 180, purchase: 64 };
+  }
+  const { data } = await api.get<{ counts: Funnel }>("/analytics/funnel");
+  return data.counts;
+}
+
 export interface AddressSuggestion {
   value: string;
   lat?: number | null;

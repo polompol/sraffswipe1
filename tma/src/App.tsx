@@ -11,6 +11,7 @@ import { CreateVacancyPage } from "@/features/vacancy/CreateVacancyPage";
 import { MyVacanciesPage } from "@/features/vacancy/MyVacanciesPage";
 import { ShiftsPage } from "@/features/shifts/ShiftsPage";
 import { PricingPage } from "@/features/billing/PricingPage";
+import { FunnelPage } from "@/features/analytics/FunnelPage";
 
 function TabBar() {
   const { role } = useSession();
@@ -89,6 +90,7 @@ export function App() {
       <Route path="/vacancy/new" element={<CreateVacancyPage />} />
       <Route path="/chat/:matchId" element={<ChatPage />} />
       <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/funnel" element={<FunnelPage />} />
 
       <Route
         path="*"
