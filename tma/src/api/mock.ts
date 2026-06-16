@@ -16,6 +16,7 @@ import type {
   Me,
   ReferralInfo,
   SwipeResult,
+  VerifyResult,
 } from "./endpoints";
 
 const photo = (id: string) =>
@@ -281,6 +282,22 @@ export function boostVacancy(vacancyId: string): Promise<void> {
   const vac = VACANCIES.find((v) => v.id === vacancyId);
   if (vac) vac.boosted = true;
   return Promise.resolve();
+}
+
+export function verifyEmployer(inn: string): Promise<VerifyResult> {
+  const ok = /^\d{10,12}$/.test(inn);
+  return Promise.resolve({
+    found: ok,
+    verified: ok && entitlements.employerVerified,
+    name: ok ? "ООО «Кофейня Дрова»" : "",
+    ogrn: ok ? "1167746000000" : "",
+    address: ok ? "Москва, ул. Льва Толстого, 16" : "",
+    hint: ok
+      ? entitlements.employerVerified
+        ? ""
+        : "Данные подтянуты. Бейдж «Проверен» — после оплаты верификации."
+      : "Введите корректный ИНН (10–12 цифр).",
+  });
 }
 
 export function suggestAddress(q: string): Promise<AddressSuggestion[]> {

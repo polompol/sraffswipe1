@@ -62,8 +62,8 @@ class PartyOut(BaseModel):
     address: str = ""
 
 
-@router.get("/party", response_model=PartyOut)
-def check_party(inn: str, _p: dict = Depends(current_principal)):
+def lookup_party(inn: str) -> PartyOut:
+    """Проверка организации по ИНН через DaData. Переиспользуется верификацией."""
     if not settings.dadata_token:
         return PartyOut(found=False)
     try:
@@ -81,3 +81,8 @@ def check_party(inn: str, _p: dict = Depends(current_principal)):
         ogrn=d.get("ogrn", ""),
         address=(d.get("address") or {}).get("value", ""),
     )
+
+
+@router.get("/party", response_model=PartyOut)
+def check_party(inn: str, _p: dict = Depends(current_principal)):
+    return lookup_party(inn)

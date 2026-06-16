@@ -1,8 +1,64 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
-import { fetchEntitlements, fetchMe, fetchReferral } from "@/api/endpoints";
+import {
+  fetchEntitlements,
+  fetchMe,
+  fetchReferral,
+  verifyEmployer,
+  type VerifyResult,
+} from "@/api/endpoints";
 import { share, haptic } from "@/telegram/sdk";
+
+function EmployerVerify() {
+  const [inn, setInn] = useState("");
+  const [res, setRes] = useState<VerifyResult | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function run() {
+    setBusy(true);
+    try {
+      setRes(await verifyEmployer(inn));
+      haptic("success");
+    } catch {
+      haptic("error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <b>Подтвердить компанию (DaData)</b>
+      <div className="row" style={{ marginTop: 10, gap: 8 }}>
+        <input
+          className="input"
+          inputMode="numeric"
+          placeholder="ИНН"
+          value={inn}
+          onChange={(e) => setInn(e.target.value)}
+        />
+        <button className="btn" style={{ width: "auto", padding: "0 16px", height: 46 }} disabled={busy || inn.length < 10} onClick={run}>
+          {busy ? "…" : "Проверить"}
+        </button>
+      </div>
+      {res && (
+        <div className="muted" style={{ marginTop: 10 }}>
+          {res.found ? (
+            <>
+              {res.verified ? "✅ Проверен: " : "🔎 "}
+              <b style={{ color: "var(--text)" }}>{res.name}</b>
+              {res.ogrn && <> · ОГРН {res.ogrn}</>}
+              {res.address && <div>{res.address}</div>}
+            </>
+          ) : null}
+          {res.hint && <div style={{ marginTop: 4 }}>{res.hint}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const PLAN_LABEL: Record<string, string> = {
   free: "Free",
@@ -71,6 +127,8 @@ export function ProfilePage() {
           ⚡ Супер-лайки: {ent?.superlikeBalance ?? 0} · 🔥 Boost: {ent?.boostBalance ?? 0}
         </div>
       </div>
+
+      {role === "employer" && <EmployerVerify />}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <b>Пригласить друзей</b>

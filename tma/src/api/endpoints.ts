@@ -185,6 +185,21 @@ export async function suggestAddress(q: string): Promise<AddressSuggestion[]> {
   return data;
 }
 
+export interface VerifyResult {
+  found: boolean;
+  verified: boolean;
+  name: string;
+  ogrn: string;
+  address: string;
+  hint: string;
+}
+
+export async function verifyEmployer(inn: string): Promise<VerifyResult> {
+  if (!USE_BACKEND) return mock.verifyEmployer(inn);
+  const { data } = await api.post<VerifyResult>("/employer/verify", { inn });
+  return data;
+}
+
 export interface PaymentUrl {
   url: string;
 }

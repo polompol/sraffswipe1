@@ -14,6 +14,7 @@ from .routers import (
     candidates,
     chat,
     dadata,
+    employer,
     matches,
     social,
     swipes,
@@ -62,6 +63,7 @@ app.include_router(acts.router)
 app.include_router(billing.router)
 app.include_router(social.router)
 app.include_router(dadata.router)
+app.include_router(employer.router)
 app.include_router(analytics.router)
 
 

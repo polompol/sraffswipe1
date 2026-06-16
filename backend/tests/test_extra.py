@@ -56,6 +56,24 @@ def test_yookassa_webhook_grants_plan(client):
     assert boost == ent["boostBalance"]  # не удвоилось
 
 
+def test_employer_verify_without_dadata(client):
+    token, _ = _auth(client, "employer")
+    r = client.post("/employer/verify", headers=_hdr(token), json={"inn": "7707083893"})
+    assert r.status_code == 200
+    body = r.json()
+    # Без DADATA_TOKEN — не найдено, бейдж не выдан.
+    assert body["found"] is False
+    assert body["verified"] is False
+    assert body["hint"]
+
+    # Соискатель не может верифицировать компанию.
+    s_token, _ = _auth(client, "seeker")
+    forbidden = client.post(
+        "/employer/verify", headers=_hdr(s_token), json={"inn": "7707083893"}
+    )
+    assert forbidden.status_code == 403
+
+
 def test_dadata_without_token_is_empty(client):
     token, _ = _auth(client)
     # Без DADATA_TOKEN — graceful: пустой список / found=false.
