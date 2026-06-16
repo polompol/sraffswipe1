@@ -48,7 +48,22 @@ export function SwipeDeck<T>(props: Props<T>) {
       };
     });
     onSwipe(items[index], dir);
+    restack();
     if (gone.size === items.length) props.onEmpty?.();
+  }
+
+  // Пересобрать стопку: оставшиеся карты подрастают к фронту (живее).
+  function restack() {
+    let pos = 0;
+    apiRef.start((i) => {
+      if (gone.has(i)) return {};
+      const p = pos++;
+      return {
+        scale: Math.max(0.88, 1 - p * 0.04),
+        yStack: Math.min(p, VISIBLE) * 12,
+        config: { tension: 320, friction: 30 },
+      };
+    });
   }
 
   // Кнопки управляют верхней картой.

@@ -28,10 +28,23 @@ export function MatchOverlay({
           }}
         />
       ))}
-      <div style={{ fontSize: 44, fontWeight: 900, color: "var(--gold)" }}>
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          width: 320,
+          height: 320,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(217,164,65,0.45) 0%, rgba(217,164,65,0) 70%)",
+          filter: "blur(8px)",
+        }}
+        className="pulse"
+      />
+      <div style={{ fontSize: 44, fontWeight: 900, color: "var(--gold)", position: "relative" }}>
         Это мэтч!
       </div>
-      <div style={{ fontSize: 64, margin: "8px 0" }}>🤝</div>
+      <div style={{ fontSize: 64, margin: "8px 0", position: "relative" }}>🤝</div>
       <p style={{ color: "#e6dccd", maxWidth: 300 }}>
         Вы и «{match.companyName ?? "заведение"}» понравились друг другу
       </p>
