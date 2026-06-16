@@ -6,6 +6,7 @@ from ..db import get_db
 from ..entitlements import get_or_create
 from ..models import Match, Message, Swipe, Vacancy
 from ..notify import notify_owner
+from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
 from ..security import current_principal
 
@@ -49,7 +50,11 @@ def _on_match(db: Session, match: Match, created: bool) -> None:
     notify_owner(db, match.employer_id, "🔥 Новый отклик-мэтч в StaffSwipe!")
 
 
-@router.post("", response_model=SwipeOut)
+@router.post(
+    "",
+    response_model=SwipeOut,
+    dependencies=[Depends(rate_limit("swipe", 60, 60))],
+)
 def swipe(
     body: SwipeIn,
     db: Session = Depends(get_db),

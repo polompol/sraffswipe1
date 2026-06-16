@@ -14,6 +14,7 @@ from ..entitlements import (
 )
 from ..geo import distance_km
 from ..models import Boost, Employer, Vacancy
+from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal
 
@@ -75,7 +76,12 @@ def list_vacancies(
     return result
 
 
-@router.post("", response_model=VacancyOut, status_code=201)
+@router.post(
+    "",
+    response_model=VacancyOut,
+    status_code=201,
+    dependencies=[Depends(rate_limit("vacancy", 20, 60))],
+)
 def create_vacancy(
     body: VacancyIn,
     db: Session = Depends(get_db),

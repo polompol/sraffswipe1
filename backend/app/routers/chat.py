@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ..db import SessionLocal, get_db
 from ..models import Match, Message
 from ..notify import notify_owner
+from ..ratelimit import rate_limit
 from ..schemas import MessageIn, MessageOut
 from ..security import current_principal, decode_token
 
@@ -36,7 +37,11 @@ def history(
     return [_to_out(m) for m in rows]
 
 
-@router.post("/matches/{match_id}/messages", response_model=MessageOut)
+@router.post(
+    "/matches/{match_id}/messages",
+    response_model=MessageOut,
+    dependencies=[Depends(rate_limit("msg", 30, 60))],
+)
 async def send(
     match_id: str,
     body: MessageIn,
