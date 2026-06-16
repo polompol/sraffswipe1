@@ -1,0 +1,275 @@
+/* Утилитарные стили StaffSwipe TMA. */
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  flex: 1;
+  padding: 16px;
+  padding-bottom: 88px;
+}
+
+.h1 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin: 0 0 4px;
+}
+.h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.spacer {
+  flex: 1;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--gold);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 15px 18px;
+  cursor: pointer;
+}
+.btn:active {
+  opacity: 0.85;
+}
+.btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 13px 14px;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+}
+.input:focus {
+  border-color: var(--gold);
+}
+
+/* Нижняя навигация */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+}
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.tab.active {
+  color: var(--gold);
+}
+.tab .ico {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Колода свайпа */
+.deck {
+  position: relative;
+  height: 64vh;
+  min-height: 420px;
+}
+.swipe-card {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #2a1d14;
+  box-shadow: var(--shadow);
+  touch-action: pan-y;
+  will-change: transform;
+}
+.swipe-photo {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+.swipe-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(30, 20, 14, 0.55) 70%,
+    rgba(20, 14, 10, 0.92) 100%
+  );
+}
+.swipe-body {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 22px;
+  color: #fff;
+}
+.glass {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 700;
+  font-size: 13px;
+}
+.stamp {
+  position: absolute;
+  top: 28px;
+  padding: 6px 14px;
+  border: 4px solid;
+  border-radius: 12px;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+/* Кнопки действий свайпа */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+.act {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid;
+  font-size: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.act.sm {
+  width: 48px;
+  height: 48px;
+  font-size: 20px;
+}
+
+/* Чат */
+.bubble {
+  max-width: 76%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  margin: 4px 0;
+  font-size: 15px;
+}
+.bubble.mine {
+  margin-left: auto;
+  background: var(--gold);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.bubble.theirs {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+.bubble.system {
+  margin: 8px auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* Оверлей мэтча */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 14, 9, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  z-index: 50;
+  text-align: center;
+}
+.confetti {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  animation: fall linear forwards;
+}
+@keyframes fall {
+  to {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0;
+  }
+}

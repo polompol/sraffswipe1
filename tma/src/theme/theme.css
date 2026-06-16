@@ -1,0 +1,58 @@
+/* Дизайн-токены StaffSwipe. Базируемся на Telegram themeParams (--tg-theme-*),
+   поверх — фирменный молочно-шоколадно-золотой акцент. */
+
+:root {
+  /* Бренд */
+  --gold: #c9a227;
+  --gold-soft: #d9a441;
+  --caramel: #b07a47;
+  --espresso: #3b2a20;
+  --terracotta: #c2604a;
+  --like: #c9a227;
+  --dislike: #c2604a;
+  --super: #d9a441;
+
+  /* Поверхности — мягкий фолбэк, если Telegram не отдал тему */
+  --bg: var(--tg-theme-secondary-bg-color, #fbf6ee);
+  --surface: var(--tg-theme-bg-color, #ffffff);
+  --card: var(--tg-theme-bg-color, #fffdf9);
+  --text: var(--tg-theme-text-color, #2e2018);
+  --muted: var(--tg-theme-hint-color, #8a7866);
+  --border: #ece3d6;
+  --link: var(--tg-theme-link-color, var(--gold));
+
+  --radius: 16px;
+  --radius-lg: 24px;
+  --radius-sm: 12px;
+  --shadow: 0 12px 28px rgba(59, 42, 32, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
+    "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  overscroll-behavior: none;
+}
+
+a {
+  color: var(--link);
+}
+
+button {
+  font-family: inherit;
+}
