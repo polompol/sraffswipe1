@@ -9,6 +9,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_tmp.name}"
 os.environ["DEV_MODE"] = "true"
 os.environ["ALLOW_INSECURE_TELEGRAM_AUTH"] = "true"
 os.environ["INTERNAL_API_SECRET"] = "test-internal-secret"
+# insecure-логины дают tg_id=0 — делаем его админом для тестов аналитики.
+os.environ["ADMIN_TG_IDS"] = "0"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # Sentry DSN (наблюдаемость). Пусто — без отправки ошибок.
     sentry_dsn: str = ""
 
+    # Telegram-id админов (csv) — доступ к аналитике/админ-экранам.
+    admin_tg_ids: str = ""
+
     @property
     def yookassa_ready(self) -> bool:
         return bool(self.yookassa_shop_id and self.yookassa_secret_key)

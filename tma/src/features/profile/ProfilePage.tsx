@@ -144,12 +144,6 @@ export function ProfilePage() {
       <button className="btn secondary" onClick={() => nav("/profile/edit")}>
         ✏️ Редактировать профиль
       </button>
-
-      {role === "employer" && (
-        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => nav("/funnel")}>
-          📊 Воронка / аналитика
-        </button>
-      )}
     </div>
   );
 }

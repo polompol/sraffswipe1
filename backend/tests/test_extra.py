@@ -27,6 +27,18 @@ def test_events_and_funnel(client):
     assert f["purchase"] == 0
 
 
+def test_funnel_forbidden_for_non_admin(client):
+    # Пользователь по телефону (tg_id=None) не админ → 403.
+    code = client.post("/auth/request-code", json={"phone": "+79990001234"}).json()[
+        "dev_code"
+    ]
+    token = client.post(
+        "/auth/verify", json={"phone": "+79990001234", "code": code, "role": "seeker"}
+    ).json()["access_token"]
+    r = client.get("/analytics/funnel", headers=_hdr(token))
+    assert r.status_code == 403
+
+
 def test_yookassa_webhook_grants_plan(client):
     token, owner = _auth(client, "employer")
     payload = {
