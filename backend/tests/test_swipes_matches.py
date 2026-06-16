@@ -56,6 +56,14 @@ def test_vacancy_filters(client):
     by_date = client.get("/vacancies?date_from=2026-06-23").json()
     assert {v["id"] for v in by_date} == {pricey["id"]}
 
+    # Сортировка по ставке (по убыванию) — дорогая выше.
+    by_rate_sort = client.get("/vacancies?sort=rate").json()
+    assert by_rate_sort[0]["id"] == pricey["id"]
+
+    # Тип ставки и сортировка комбинируются.
+    per_hour = client.get("/vacancies?rate_type=perHour&sort=rate").json()
+    assert {v["id"] for v in per_hour} == {cheap["id"], pricey["id"]}
+
 
 def test_candidates_lists_users(client):
     _s_token, s_id = _auth(client, "seeker")  # создаёт пользователя

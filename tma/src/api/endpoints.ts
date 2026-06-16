@@ -34,6 +34,11 @@ export interface FeedFilters {
   role?: string;
   min_rate?: number;
   date_from?: string;
+  rate_type?: string;
+  no_med_book?: boolean;
+  no_experience?: boolean;
+  verified_only?: boolean;
+  sort?: string;
 }
 
 export async function fetchFeed(

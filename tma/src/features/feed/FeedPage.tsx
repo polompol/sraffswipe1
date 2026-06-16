@@ -21,7 +21,13 @@ export function FeedPage() {
   const controller = useRef<((dir: SwipeDirection) => void) | null>(null);
 
   const activeFilterCount =
-    (filters.role ? 1 : 0) + (filters.min_rate ? 1 : 0) + (filters.date_from ? 1 : 0);
+    (filters.role ? 1 : 0) +
+    (filters.min_rate ? 1 : 0) +
+    (filters.date_from ? 1 : 0) +
+    (filters.rate_type ? 1 : 0) +
+    (filters.no_med_book ? 1 : 0) +
+    (filters.no_experience ? 1 : 0) +
+    (filters.verified_only ? 1 : 0);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["feed", role, filters],

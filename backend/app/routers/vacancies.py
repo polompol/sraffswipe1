@@ -58,15 +58,26 @@ def list_vacancies(
     min_rate: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    rate_type: str | None = None,
+    no_med_book: bool = False,
+    no_experience: bool = False,
+    verified_only: bool = False,
+    sort: str = "distance",  # distance|rate|date
     db: Session = Depends(get_db),
 ):
-    """Активные вакансии с фильтрами. Сначала boost, затем по расстоянию."""
+    """Активные вакансии с фильтрами. Boost-вакансии всегда наверху."""
     boosted_ids = active_boost_vacancy_ids(db)
     query = db.query(Vacancy).filter(Vacancy.status == "active")
     if role:
         query = query.filter(Vacancy.role == role)
     if min_rate is not None:
         query = query.filter(Vacancy.rate >= min_rate)
+    if rate_type:
+        query = query.filter(Vacancy.rate_type == rate_type)
+    if no_med_book:
+        query = query.filter(Vacancy.require_med_book.is_(False))
+    if no_experience:
+        query = query.filter(Vacancy.require_experience.is_(False))
     if date_from:
         query = query.filter(Vacancy.date >= date_from)
     if date_to:
@@ -74,17 +85,24 @@ def list_vacancies(
     result: list[VacancyOut] = []
     for v in query.all():
         emp = db.get(Employer, v.employer_id)
+        if verified_only and not (emp and emp.verified):
+            continue
         dist = None
         if lat is not None and lng is not None:
             dist = distance_km(lat, lng, v.lat, v.lng)
             if dist > radius_km:
                 continue
         result.append(_to_out(v, emp, dist, boosted=v.id in boosted_ids))
-    # Boost всегда наверху; внутри группы — по расстоянию (если задано).
-    def _rank(x: VacancyOut) -> tuple[bool, float]:
+
+    # Boost всегда наверху; внутри группы — по выбранной сортировке.
+    def _key(x: VacancyOut):
+        if sort == "rate":
+            return (not x.boosted, -x.rate)
+        if sort == "date":
+            return (not x.boosted, x.date)
         return (not x.boosted, x.distance_km if x.distance_km is not None else 1e9)
 
-    result.sort(key=_rank)
+    result.sort(key=_key)
     return result
 
 

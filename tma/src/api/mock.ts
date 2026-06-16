@@ -151,13 +151,28 @@ export function authTelegram(role: AppRole): Promise<AuthResult> {
 
 export function fetchFeed(
   role: AppRole,
-  filters?: { role?: string; min_rate?: number; date_from?: string },
+  filters?: {
+    role?: string;
+    min_rate?: number;
+    date_from?: string;
+    rate_type?: string;
+    no_med_book?: boolean;
+    no_experience?: boolean;
+    verified_only?: boolean;
+    sort?: string;
+  },
 ): Promise<Vacancy[] | Seeker[]> {
   if (role !== "seeker") return Promise.resolve([...SEEKERS]);
   let list = [...VACANCIES];
   if (filters?.role) list = list.filter((v) => v.role === filters.role);
   if (filters?.min_rate != null) list = list.filter((v) => v.rate >= filters.min_rate!);
+  if (filters?.rate_type) list = list.filter((v) => v.rateType === filters.rate_type);
+  if (filters?.no_med_book) list = list.filter((v) => !v.requireMedBook);
+  if (filters?.no_experience) list = list.filter((v) => !v.requireExperience);
+  if (filters?.verified_only) list = list.filter((v) => v.employerVerified);
   if (filters?.date_from) list = list.filter((v) => v.date >= filters.date_from!);
+  if (filters?.sort === "rate") list.sort((a, b) => b.rate - a.rate);
+  else if (filters?.sort === "date") list.sort((a, b) => a.date.localeCompare(b.date));
   return Promise.resolve(list);
 }
 
