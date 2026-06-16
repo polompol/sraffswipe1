@@ -109,8 +109,13 @@ def test_full_match_flow(client):
     r = client.post(f"/matches/{match_id}/confirm", headers=_hdr(emp_token))
     assert r.json()["status"] == "confirmed"
 
-    # PDF-акт генерируется
-    r = client.get(f"/matches/{match_id}/act.pdf")
+    # PDF-акт генерируется (токен участника передаётся query-параметром)
+    r = client.get(f"/matches/{match_id}/act.pdf?token={seeker_token}")
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content[:4] == b"%PDF"
+
+    # Чужой токен к этому акту — запрещено
+    other_token, _ = _auth(client, "+79990009999", "seeker")
+    forbidden = client.get(f"/matches/{match_id}/act.pdf?token={other_token}")
+    assert forbidden.status_code == 403

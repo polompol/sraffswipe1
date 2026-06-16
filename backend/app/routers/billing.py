@@ -3,11 +3,12 @@
 Цифровые товары внутри Telegram — через Stars (требование Telegram).
 Подписки/верификация юрлиц — через ЮKassa.
 """
+import hmac
 import json
 import urllib.request
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -177,10 +178,22 @@ class FulfillIn(BaseModel):
     charge_id: str | None = None
 
 
+def _require_internal(token: str) -> None:
+    """Доступ только внутренним вызовам (бот / вебхук) по общему секрету."""
+    secret = settings.internal_api_secret
+    if not secret or not hmac.compare_digest(token or "", secret):
+        raise HTTPException(status_code=401, detail="Требуется внутренний токен")
+
+
 @router.post("/fulfill")
-def fulfill(body: FulfillIn, db: Session = Depends(get_db)):
+def fulfill(
+    body: FulfillIn,
+    db: Session = Depends(get_db),
+    x_internal_token: str = Header(default=""),
+):
     """Начисление прав после оплаты. Вызывается ботом (Stars) или вебхуком
-    ЮKassa. Идемпотентно по charge_id."""
+    ЮKassa с заголовком X-Internal-Token. Идемпотентно по charge_id."""
+    _require_internal(x_internal_token)
     if body.sku not in CATALOG:
         raise HTTPException(status_code=400, detail="Неизвестный SKU")
     if body.charge_id:

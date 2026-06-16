@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, Match, User, Vacancy
+from ..security import decode_token
 
 router = APIRouter(prefix="/matches", tags=["acts"])
 
@@ -14,10 +15,16 @@ def _fmt_time(minutes: int) -> str:
 
 
 @router.get("/{match_id}/act.pdf")
-def act_pdf(match_id: str, db: Session = Depends(get_db)):
+def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
+    # Браузер открывает PDF через window.open — токен передаётся как query-параметр.
+    principal = decode_token(token)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Нужен токен")
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["id"] not in (m.user_id, m.employer_id):
+        raise HTTPException(status_code=403, detail="Нет доступа к акту")
     vac = db.get(Vacancy, m.vacancy_id)
     emp = db.get(Employer, m.employer_id)
     user = db.get(User, m.user_id)

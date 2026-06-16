@@ -21,6 +21,20 @@ def create_token(subject_id: str, role: str) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_alg)
 
 
+def decode_token(token: str) -> dict | None:
+    """Декодирует JWT в принципала {id, role} или None. Без исключений —
+    удобно для query-токена (PDF, WebSocket)."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(
+            token, settings.jwt_secret, algorithms=[settings.jwt_alg]
+        )
+    except jwt.PyJWTError:
+        return None
+    return {"id": payload["sub"], "role": payload.get("role", "seeker")}
+
+
 def current_principal(
     creds: HTTPAuthorizationCredentials | None = Depends(bearer),
 ) -> dict:
@@ -28,14 +42,9 @@ def current_principal(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Нет токена"
         )
-    try:
-        payload = jwt.decode(
-            creds.credentials,
-            settings.jwt_secret,
-            algorithms=[settings.jwt_alg],
-        )
-    except jwt.PyJWTError as exc:
+    principal = decode_token(creds.credentials)
+    if principal is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен"
-        ) from exc
-    return {"id": payload["sub"], "role": payload.get("role", "seeker")}
+        )
+    return principal

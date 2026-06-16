@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ..db import SessionLocal, get_db
 from ..models import Match, Message
 from ..schemas import MessageIn, MessageOut
-from ..security import current_principal
+from ..security import current_principal, decode_token
 
 router = APIRouter(tags=["chat"])
 
@@ -73,17 +73,34 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws/chat/{match_id}")
-async def ws_chat(websocket: WebSocket, match_id: str):
+async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
+    # Аутентификация по query-токену; sender_id берём из токена, не от клиента.
+    principal = decode_token(token)
+    if principal is None:
+        await websocket.close(code=4401)
+        return
+    db = SessionLocal()
+    try:
+        match = db.get(Match, match_id)
+        if match is None or principal["id"] not in (
+            match.user_id,
+            match.employer_id,
+        ):
+            await websocket.close(code=4403)
+            return
+    finally:
+        db.close()
+
+    sender = principal["id"]
     await manager.connect(match_id, websocket)
     try:
         while True:
             data = await websocket.receive_json()
-            sender = data.get("sender_id", "unknown")
             text = data.get("text", "")
+            if not text:
+                continue
             db = SessionLocal()
             try:
-                if db.get(Match, match_id) is None:
-                    continue
                 msg = Message(match_id=match_id, sender_id=sender, text=text)
                 db.add(msg)
                 db.commit()

@@ -7,6 +7,8 @@ _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp.close()
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp.name}"
 os.environ["DEV_MODE"] = "true"
+os.environ["ALLOW_INSECURE_TELEGRAM_AUTH"] = "true"
+os.environ["INTERNAL_API_SECRET"] = "test-internal-secret"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

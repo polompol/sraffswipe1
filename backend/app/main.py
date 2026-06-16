@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .config import settings
 from .db import init_db
 from .routers import (
     acts,
@@ -31,9 +32,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+def _cors_origins() -> list[str]:
+    explicit = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+    if explicit:
+        return explicit
+    if settings.dev_mode:
+        return ["*"]
+    return [u for u in [settings.mini_app_url] if u]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

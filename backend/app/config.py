@@ -29,8 +29,14 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     # Публичный URL Mini App (для кнопки запуска и реф-ссылок).
     mini_app_url: str = ""
-    # Разрешать вход без валидной подписи initData (только для локальной отладки).
-    allow_insecure_telegram_auth: bool = True
+    # Разрешать вход без валидной подписи initData (ТОЛЬКО локальная отладка).
+    allow_insecure_telegram_auth: bool = False
+
+    # Секрет для внутренних вызовов (бот/вебхуки → /billing/fulfill).
+    internal_api_secret: str = ""
+
+    # Разрешённые источники CORS (csv). Пусто + dev_mode → "*"; иначе — mini_app_url.
+    allowed_origins: str = ""
 
     # --- Платежи ---
     # ЮKassa (рубли): shop_id + секретный ключ.

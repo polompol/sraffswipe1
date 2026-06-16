@@ -25,6 +25,7 @@ from aiogram.types import (
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://example.com")
 API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
+INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "")
 
 dp = Dispatcher()
 
@@ -63,6 +64,7 @@ async def on_paid(message: Message) -> None:
     async with httpx.AsyncClient(base_url=API_BASE, timeout=10) as client:
         await client.post(
             "/billing/fulfill",
+            headers={"X-Internal-Token": INTERNAL_SECRET},
             json={
                 "owner_id": owner_id,
                 "sku": sku,

@@ -29,6 +29,8 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       MINI_APP_URL: ${MINI_APP_URL:-}
       ALLOW_INSECURE_TELEGRAM_AUTH: ${ALLOW_INSECURE_TELEGRAM_AUTH:-true}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
       YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
     ports:
@@ -47,6 +49,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       MINI_APP_URL: ${MINI_APP_URL:-}
       API_BASE_URL: http://api:8000
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
     command: sh -c "pip install -q -r requirements.txt && python main.py"
     depends_on:
       - api
