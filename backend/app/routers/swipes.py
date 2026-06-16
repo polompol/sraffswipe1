@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..entitlements import get_or_create
 from ..models import Match, Message, Swipe, Vacancy
+from ..notify import notify_owner
 from ..schemas import SwipeIn, SwipeOut
 from ..security import current_principal
 
@@ -15,14 +16,14 @@ _POSITIVE = {"like", "superlike"}
 
 def _ensure_match(
     db: Session, user_id: str, employer_id: str, vacancy_id: str
-) -> Match:
+) -> tuple[Match, bool]:
     existing = (
         db.query(Match)
         .filter(Match.vacancy_id == vacancy_id, Match.user_id == user_id)
         .first()
     )
     if existing:
-        return existing
+        return existing, False
     match = Match(
         user_id=user_id, employer_id=employer_id, vacancy_id=vacancy_id
     )
@@ -38,7 +39,14 @@ def _ensure_match(
     )
     db.commit()
     db.refresh(match)
-    return match
+    return match, True
+
+
+def _on_match(db: Session, match: Match, created: bool) -> None:
+    if not created:
+        return
+    notify_owner(db, match.user_id, "🔥 У вас новый мэтч в StaffSwipe!")
+    notify_owner(db, match.employer_id, "🔥 Новый отклик-мэтч в StaffSwipe!")
 
 
 @router.post("", response_model=SwipeOut)
@@ -88,7 +96,8 @@ def swipe(
             .first()
         )
         if reciprocal:
-            match = _ensure_match(db, me, vac.employer_id, vac.id)
+            match, created = _ensure_match(db, me, vac.employer_id, vac.id)
+            _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
 
     # Работодатель лайкнул кандидата → ищем его лайк на любую нашу вакансию.
@@ -110,9 +119,10 @@ def swipe(
             .first()
         )
         if seeker_like:
-            match = _ensure_match(
+            match, created = _ensure_match(
                 db, body.target_id, me, seeker_like.target_id
             )
+            _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
 
     return SwipeOut(recorded=True, matched=False)

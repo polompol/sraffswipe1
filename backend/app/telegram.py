@@ -41,3 +41,10 @@ def parse_user(init_data: str) -> dict | None:
         return json.loads(raw)
     except json.JSONDecodeError:
         return None
+
+
+def parse_start_param(init_data: str) -> str:
+    """Возвращает start_param из initData (deep-link Mini App), напр. 'ref_<id>'."""
+    return dict(parse_qsl(init_data, keep_blank_values=True)).get(
+        "start_param", ""
+    )

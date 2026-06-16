@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     # Публичный URL Mini App (для кнопки запуска и реф-ссылок).
     mini_app_url: str = ""
+    # Username бота (без @) — для реферальных ссылок t.me/<bot>?startapp=...
+    bot_username: str = "staffswipe_bot"
+    # Бонус рефереру за приглашённого (супер-лайки).
+    referral_bonus_superlikes: int = 3
     # Разрешать вход без валидной подписи initData (ТОЛЬКО локальная отладка).
     allow_insecure_telegram_auth: bool = False
 

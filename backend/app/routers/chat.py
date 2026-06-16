@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, get_db
 from ..models import Match, Message
+from ..notify import notify_owner
 from ..schemas import MessageIn, MessageOut
 from ..security import current_principal, decode_token
 
@@ -48,6 +49,15 @@ async def send(
     db.refresh(msg)
     out = _to_out(msg)
     await manager.broadcast(match_id, out.model_dump())
+    # Уведомляем второго участника мэтча в Telegram.
+    match = db.get(Match, match_id)
+    if match is not None:
+        other = (
+            match.employer_id
+            if principal["id"] == match.user_id
+            else match.user_id
+        )
+        notify_owner(db, other, f"💬 Новое сообщение: {body.text[:60]}")
     return out
 
 

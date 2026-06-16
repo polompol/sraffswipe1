@@ -203,3 +203,29 @@ class Boost(Base):
     vacancy_id: Mapped[str] = mapped_column(String, index=True)
     expires_at: Mapped[str] = mapped_column(String)  # ISO
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Referral(Base):
+    """Реферал: кто кого пригласил. Уникальность по приглашённому."""
+
+    __tablename__ = "referrals"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    referrer_id: Mapped[str] = mapped_column(String, index=True)
+    referred_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Review(Base):
+    """Отзыв после смены: оценка одной стороны другой (1..5)."""
+
+    __tablename__ = "reviews"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    match_id: Mapped[str] = mapped_column(String, index=True)
+    rater_id: Mapped[str] = mapped_column(String, index=True)
+    ratee_id: Mapped[str] = mapped_column(String, index=True)
+    stars: Mapped[int] = mapped_column(Integer, default=5)
+    text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

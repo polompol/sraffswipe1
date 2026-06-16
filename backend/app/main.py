@@ -13,6 +13,7 @@ from .routers import (
     candidates,
     chat,
     matches,
+    social,
     swipes,
     telegram_auth,
     vacancies,
@@ -57,6 +58,7 @@ app.include_router(matches.router)
 app.include_router(chat.router)
 app.include_router(acts.router)
 app.include_router(billing.router)
+app.include_router(social.router)
 
 
 @app.get("/health", tags=["meta"])
