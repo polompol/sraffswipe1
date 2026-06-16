@@ -55,6 +55,9 @@ export function Onboarding() {
             {slide.text}
           </p>
         </div>
+        <p className="muted" style={{ textAlign: "center", fontSize: 12.5, marginBottom: 12 }}>
+          ⭐ 4.8 · 1 200+ смен закрыто · заведения уже здесь
+        </p>
         <div className="row" style={{ justifyContent: "center", marginBottom: 20 }}>
           {SLIDES.map((_, idx) => (
             <span

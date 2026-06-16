@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchMatches, leaveReview } from "@/api/endpoints";
 import { baseURL, getToken } from "@/api/client";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
-import { ErrorBox, Loading } from "@/components/States";
+import { ErrorBox, SkeletonList } from "@/components/States";
 import { haptic } from "@/telegram/sdk";
 
 function ReviewRow({ matchId }: { matchId: string }) {
@@ -53,7 +53,7 @@ export function ShiftsPage() {
     <div className="page">
       <h1 className="h1" style={{ marginBottom: 12 }}>Мои смены</h1>
 
-      {isLoading && <Loading />}
+      {isLoading && <SkeletonList />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
 
       {!isLoading && !isError && shifts.length === 0 && (

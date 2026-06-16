@@ -7,7 +7,7 @@ import { fetchFeed, sendSwipe, track } from "@/api/endpoints";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
-import { ErrorBox, Loading } from "@/components/States";
+import { ErrorBox, SkeletonCard } from "@/components/States";
 
 export function FeedPage() {
   const role = useSession((s) => s.role) ?? "seeker";
@@ -55,12 +55,15 @@ export function FeedPage() {
           <span className="ico">⚡</span>
         </button>
       </div>
-      <p className="muted" style={{ marginBottom: 12 }}>
+      <p className="muted" style={{ marginBottom: 6 }}>
         {isSeeker ? "Смены рядом с вами" : "Кандидаты рядом"}
         {data ? ` · ${data.length}` : ""}
       </p>
+      <p className="muted" style={{ marginBottom: 12, fontSize: 12 }}>
+        ⭐ 4.8 · 1 200+ смен закрыто · средний отклик 7 мин
+      </p>
 
-      {isLoading && <Loading />}
+      {isLoading && <SkeletonCard />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
 
       {!isLoading && !isError && data && (empty || data.length === 0) && (

@@ -17,7 +17,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16 }}>
         <span className="glass">💰 {rateLabel(v.rate, v.rateType)}</span>
         <span className="spacer" />
-        {v.boosted && <span className="glass" style={{ background: "rgba(201,162,39,.85)" }}>🔥 ТОП</span>}
+        {v.boosted && <span className="glass pulse" style={{ background: "rgba(201,162,39,.9)" }}>🔥 ТОП</span>}
         {typeof v.distanceKm === "number" && (
           <span className="glass">📍 {v.distanceKm.toFixed(1)} км</span>
         )}
