@@ -57,4 +57,7 @@ api.interceptors.response.use(
   },
 );
 
+export const wsBaseURL = baseURL.replace(/^http/, "ws");
+export const useBackend = import.meta.env.VITE_USE_BACKEND === "true";
+
 export { baseURL };

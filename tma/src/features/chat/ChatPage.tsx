@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message } from "@/types/domain";
 import { confirmShift, fetchMessages, sendMessage, track } from "@/api/endpoints";
+import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 
@@ -21,13 +22,48 @@ export function ChatPage() {
     queryFn: () => fetchMessages(matchId),
   });
 
+  // Добавить сообщение в кэш с дедупликацией по id (echo от WS не задвоит).
+  function appendMessage(msg: Message) {
+    qc.setQueryData<Message[]>(["messages", matchId], (old) => {
+      const list = old ?? [];
+      if (list.some((m) => m.id === msg.id)) return list;
+      return [...list, msg];
+    });
+  }
+
+  // Живой чат через WebSocket (только при реальном backend).
+  useEffect(() => {
+    if (!useBackend || !matchId) return;
+    const token = getToken();
+    const ws = new WebSocket(
+      `${wsBaseURL}/ws/chat/${matchId}?token=${token ?? ""}`,
+    );
+    ws.onmessage = (ev) => {
+      try {
+        const raw = JSON.parse(ev.data);
+        appendMessage({
+          id: raw.id,
+          chatId: raw.match_id ?? matchId,
+          senderId: raw.sender_id,
+          text: raw.text,
+          isSystem: Boolean(raw.is_system),
+          timestamp: raw.created_at ?? new Date().toISOString(),
+        });
+      } catch {
+        /* ignore malformed frame */
+      }
+    };
+    return () => ws.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
+
   async function send() {
     const t = text.trim();
     if (!t) return;
     setText("");
     try {
-      await sendMessage(matchId, t);
-      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      const msg = await sendMessage(matchId, t);
+      appendMessage(msg); // мгновенно показываем; WS-echo дедуплицируется
     } catch {
       haptic("error");
       setText(t); // вернуть текст, чтобы не потерять сообщение
