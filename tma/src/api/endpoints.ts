@@ -118,6 +118,26 @@ export async function fetchMe(): Promise<Me> {
   return data;
 }
 
+export interface MeUpdate {
+  name?: string;
+  birth_date?: string;
+  city?: string;
+  district?: string;
+  roles?: string[];
+  med_book?: string;
+  self_employed?: boolean;
+  inn?: string;
+  about?: string;
+  company_name?: string;
+}
+
+/** Обновление профиля. Бросает при ошибке (напр. 422 для <18 лет). */
+export async function updateMe(patch: MeUpdate): Promise<Me> {
+  if (!USE_BACKEND) return mock.updateMe(patch);
+  const { data } = await api.put<Me>("/me", patch);
+  return data;
+}
+
 export interface ReferralInfo {
   code: string;
   link: string;

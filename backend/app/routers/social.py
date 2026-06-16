@@ -121,3 +121,88 @@ def me(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
     )
+
+
+def _age_from_iso(iso: str) -> int | None:
+    """Возраст по дате рождения ISO (yyyy-mm-dd) или None при пустом/битом."""
+    try:
+        from datetime import date
+
+        d = date.fromisoformat(iso)
+    except (ValueError, TypeError):
+        return None
+    today = date.today()
+    return today.year - d.year - (
+        (today.month, today.day) < (d.month, d.day)
+    )
+
+
+class MeUpdateIn(BaseModel):
+    name: str | None = None
+    birth_date: str | None = None  # ISO yyyy-mm-dd
+    city: str | None = None
+    district: str | None = None
+    roles: list[str] | None = None
+    med_book: str | None = None
+    self_employed: bool | None = None
+    inn: str | None = None
+    about: str | None = None
+    company_name: str | None = None
+
+
+@router.put("/me", response_model=MeOut)
+def update_me(
+    body: MeUpdateIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    # Возрастной ценз 18+ проверяется на сервере (не только в UI).
+    if body.birth_date:
+        age = _age_from_iso(body.birth_date)
+        if age is None:
+            raise HTTPException(status_code=422, detail="Некорректная дата рождения")
+        if age < 18:
+            raise HTTPException(
+                status_code=422, detail="Сервис доступен только с 18 лет"
+            )
+
+    if principal["role"] == "employer":
+        e = db.get(Employer, principal["id"])
+        if e is None:
+            raise HTTPException(status_code=404, detail="Не найдено")
+        if body.company_name is not None:
+            e.company_name = body.company_name
+        if body.inn is not None:
+            e.inn = body.inn
+        db.commit()
+        return MeOut(
+            id=e.id, role="employer", name=e.company_name,
+            rating=e.rating, tgUsername=e.tg_username,
+        )
+
+    u = db.get(User, principal["id"])
+    if u is None:
+        raise HTTPException(status_code=404, detail="Не найдено")
+    if body.name is not None:
+        u.name = body.name
+    if body.birth_date is not None:
+        u.birth_date = body.birth_date
+    if body.city is not None:
+        u.city = body.city
+    if body.district is not None:
+        u.district = body.district
+    if body.roles is not None:
+        u.roles = ",".join(body.roles)
+    if body.med_book is not None:
+        u.med_book = body.med_book
+    if body.self_employed is not None:
+        u.self_employed = body.self_employed
+    if body.inn is not None:
+        u.inn = body.inn
+    if body.about is not None:
+        u.about = body.about
+    db.commit()
+    return MeOut(
+        id=u.id, role="seeker", name=u.name or "Соискатель",
+        rating=u.rating, tgUsername=u.tg_username,
+    )

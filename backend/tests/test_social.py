@@ -21,6 +21,23 @@ def test_me_endpoint(client):
     assert r.json()["role"] == "seeker"
 
 
+def test_update_me_persists_and_enforces_age(client):
+    token, _ = _auth(client, "seeker")
+    # Несовершеннолетний → 422 (серверная проверка 18+).
+    minor = client.put("/me", headers=_hdr(token),
+                       json={"name": "Юный", "birth_date": "2015-01-01"})
+    assert minor.status_code == 422
+
+    # Корректное обновление сохраняется.
+    ok = client.put("/me", headers=_hdr(token), json={
+        "name": "Алексей", "birth_date": "2000-04-12", "city": "Москва",
+        "roles": ["barista", "waiter"], "med_book": "yes", "self_employed": True,
+    })
+    assert ok.status_code == 200
+    assert ok.json()["name"] == "Алексей"
+    assert client.get("/me", headers=_hdr(token)).json()["name"] == "Алексей"
+
+
 def test_referral_link_and_bonus(client):
     # insecure-логины дают tg_id=0; разные роли → разные owner_id.
     # Реферер — работодатель, приглашённый — соискатель.

@@ -240,14 +240,28 @@ export function grantMock(patch: Partial<Entitlements>): void {
 
 const invited = 2;
 
+const meProfile: Me = {
+  id: "me",
+  role: "seeker",
+  name: "Алексей",
+  rating: 4.8,
+  tgUsername: "alexey",
+};
+
 export function fetchMe(): Promise<Me> {
-  return Promise.resolve({
-    id: "me",
-    role: "seeker",
-    name: "Алексей",
-    rating: 4.8,
-    tgUsername: "alexey",
-  });
+  return Promise.resolve({ ...meProfile });
+}
+
+export function updateMe(patch: { name?: string; birth_date?: string }): Promise<Me> {
+  // Серверный 18+ имитируем и в mock, чтобы UI-поток совпадал с backend.
+  if (patch.birth_date) {
+    const y = new Date(patch.birth_date).getFullYear();
+    if (new Date().getFullYear() - y < 18) {
+      return Promise.reject(new Error("Сервис доступен только с 18 лет"));
+    }
+  }
+  if (patch.name) meProfile.name = patch.name;
+  return Promise.resolve({ ...meProfile });
 }
 
 export function fetchReferral(): Promise<ReferralInfo> {
