@@ -130,8 +130,30 @@ def funnel():
         y+=88
     return im
 
-scr=[("tma_feed",feed),("tma_match",match),("tma_pricing",pricing),
-     ("tma_funnel",funnel),("tma_profile",profile)]
+# ---------- 6. FILTERS (нижняя панель) ----------
+def filters():
+    im,d=screen()
+    # затемнение + лист снизу
+    ov=Image.new("RGBA",(W,H),(20,14,9,120)); im=Image.alpha_composite(im.convert("RGBA"),ov).convert("RGB"); d=ImageDraw.Draw(im)
+    sy=300; rr(d,[0,sy,W,H],24,fill=WHITE)
+    T(d,(20,sy+24),"Фильтры",F(22,True),TEXT)
+    T(d,(20,sy+64),"Должность",F(12),MUTED)
+    chips=[("Официант",0),("Бариста",1),("Повар",0),("Бармен",0),("Хостес",0)]
+    x=20; yy=sy+86
+    for lb,on in chips:
+        w=d.textlength(lb,font=F(13,True))+22
+        if x+w>W-16: x=20; yy+=40
+        bg=GOLD if on else WHITE; fg=WHITE if on else TEXT
+        rr(d,[x,yy,x+w,yy+30],15,fill=bg,outline=BORDER); T(d,(x+w/2,yy+15),lb,F(13,True),fg,"mm"); x+=w+8
+    yy+=54
+    T(d,(20,yy),"Ставка от, ₽",F(12),MUTED); rr(d,[20,yy+18,W-20,yy+58],12,fill=WHITE,outline=BORDER); T(d,(34,yy+38),"300",F(15),TEXT,"lm"); yy+=78
+    T(d,(20,yy),"Смены с даты",F(12),MUTED); rr(d,[20,yy+18,W-20,yy+58],12,fill=WHITE,outline=BORDER); T(d,(34,yy+38),"16.06.2026",F(15),TEXT,"lm"); yy+=78
+    rr(d,[20,yy,W/2-6,yy+50],12,outline=BORDER,width=1); T(d,(W/4+4,yy+25),"Сбросить",F(15,True),TEXT,"mm")
+    rr(d,[W/2+6,yy,W-20,yy+50],12,fill=GOLD); T(d,(3*W/4-2,yy+25),"Показать",F(15,True),WHITE,"mm")
+    return im
+
+scr=[("tma_feed",feed),("tma_match",match),("tma_filters",filters),
+     ("tma_pricing",pricing),("tma_funnel",funnel),("tma_profile",profile)]
 ims=[]
 for n,fn in scr:
     im=frame(fn()); im.save(os.path.join(OUT,f"{n}.png")); ims.append(im); print("saved",n)
