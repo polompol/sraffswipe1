@@ -112,10 +112,30 @@ def profile():
         cx=W/8+i*W/4; T(d,(cx,H-40),ic,F(17),GOLD if act else MUTED,"mm"); T(d,(cx,H-20),lb,F(10),GOLD if act else MUTED,"mm")
     return im
 
-scr=[("tma_feed",feed),("tma_match",match),("tma_pricing",pricing),("tma_profile",profile)]
+# ---------- 5. FUNNEL (дашборд аналитики) ----------
+def funnel():
+    im,d=screen(); T(d,(20,52),"Воронка",F(24,True),TEXT)
+    T(d,(20,86),"Путь: открытие → свайп → мэтч → смена → покупка",F(11.5),MUTED)
+    rows=[("Открыли",1200,1.0,None),("Свайпнули",940,0.78,"78%"),
+          ("Мэтч",410,0.34,"44%"),("Подтвердили смену",180,0.15,"44%"),
+          ("Покупка",64,0.05,"36%")]
+    y=120
+    for label,val,frac,conv in rows:
+        rr(d,[16,y,W-16,y+78],16,fill=CARD,outline=BORDER)
+        T(d,(30,y+16),label,F(14,True),TEXT)
+        T(d,(W-30,y+16),f"{val:,}".replace(","," "),F(14,True),TEXT,"ra")
+        rr(d,[30,y+44,W-30,y+56],6,fill=BORDER)
+        rr(d,[30,y+44,30+int((W-60)*frac),y+56],6,fill=GOLD)
+        if conv: T(d,(30,y+64),f"конверсия: {conv}",F(11),MUTED)
+        y+=88
+    return im
+
+scr=[("tma_feed",feed),("tma_match",match),("tma_pricing",pricing),
+     ("tma_funnel",funnel),("tma_profile",profile)]
 ims=[]
 for n,fn in scr:
     im=frame(fn()); im.save(os.path.join(OUT,f"{n}.png")); ims.append(im); print("saved",n)
-cw,ch=ims[0].size; pad=22; sheet=Image.new("RGB",(4*cw+pad*5,ch+pad*2),(244,238,228))
+cw,ch=ims[0].size; pad=22; cols=len(ims)
+sheet=Image.new("RGB",(cols*cw+pad*(cols+1),ch+pad*2),(244,238,228))
 for i,im in enumerate(ims): sheet.paste(im,(pad+i*(cw+pad),pad))
 sheet.save(os.path.join(OUT,"tma_overview.png")); print("saved tma_overview",sheet.size)
