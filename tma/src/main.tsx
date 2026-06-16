@@ -6,6 +6,7 @@ import { HashRouter } from "react-router-dom";
 import "./theme/theme.css";
 import "./index.css";
 import { initTelegram } from "./telegram/sdk";
+import { initTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { App } from "./App";
@@ -15,6 +16,7 @@ const queryClient = new QueryClient({
 });
 
 void initTelegram();
+initTheme();
 // «open» — один раз за сессию, чтобы не раздувать вершину воронки на перезапусках.
 if (!sessionStorage.getItem("ss_open")) {
   sessionStorage.setItem("ss_open", "1");

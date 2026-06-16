@@ -27,6 +27,19 @@
   --shadow: 0 12px 28px rgba(59, 42, 32, 0.14);
 }
 
+/* Тёмная «шоколадная» тема (переключатель в профиле). */
+[data-theme="dark"] {
+  --bg: #171008;
+  --surface: #211711;
+  --card: #291d14;
+  --text: #f3e9dc;
+  --muted: #b3a18c;
+  --border: #3a2a1e;
+  --gold: #e3b84b;
+  --gold-soft: #efc766;
+  --link: #e3b84b;
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;

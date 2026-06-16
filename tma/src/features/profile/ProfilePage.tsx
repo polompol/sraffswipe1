@@ -10,6 +10,7 @@ import {
   type VerifyResult,
 } from "@/api/endpoints";
 import { share, haptic } from "@/telegram/sdk";
+import { applyTheme, currentTheme } from "@/lib/theme";
 
 function EmployerVerify() {
   const [inn, setInn] = useState("");
@@ -69,6 +70,7 @@ const PLAN_LABEL: Record<string, string> = {
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
+  const [theme, setTheme] = useState(currentTheme());
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
   const { data: ent } = useQuery({
     queryKey: ["entitlements"],
@@ -138,6 +140,47 @@ export function ProfilePage() {
         </div>
         <button className="btn" onClick={invite}>
           🎁 Поделиться приглашением
+        </button>
+      </div>
+
+      <div className="card row" style={{ marginBottom: 16 }}>
+        <span style={{ flex: 1 }}>
+          <b>Тёмная тема</b>
+          <div className="muted">Удобно листать ночью</div>
+        </span>
+        <button
+          role="switch"
+          aria-checked={theme === "dark"}
+          aria-label="Тёмная тема"
+          onClick={() => {
+            const next = theme === "dark" ? "light" : "dark";
+            applyTheme(next);
+            setTheme(next);
+            haptic("select");
+          }}
+          style={{
+            width: 52,
+            height: 30,
+            borderRadius: 999,
+            border: "none",
+            cursor: "pointer",
+            background: theme === "dark" ? "var(--gold)" : "var(--border)",
+            position: "relative",
+            transition: "background 0.2s",
+          }}
+        >
+          <span
+            style={{
+              position: "absolute",
+              top: 3,
+              left: theme === "dark" ? 25 : 3,
+              width: 24,
+              height: 24,
+              borderRadius: "50%",
+              background: "#fff",
+              transition: "left 0.2s",
+            }}
+          />
         </button>
       </div>
 
