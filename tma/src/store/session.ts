@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AppRole } from "@/types/domain";
 import { setToken } from "@/api/client";
+import { cloudSet } from "@/telegram/sdk";
 
 interface SessionState {
   authenticated: boolean;
@@ -19,6 +20,7 @@ export const useSession = create<SessionState>((set) => ({
   userId: localStorage.getItem("ss_uid"),
   setAuth: (token, role, userId) => {
     setToken(token);
+    cloudSet("ss_jwt", token);
     localStorage.setItem("ss_role", role);
     localStorage.setItem("ss_uid", userId);
     set({ authenticated: true, role, userId });

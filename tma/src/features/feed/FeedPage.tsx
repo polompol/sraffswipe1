@@ -7,6 +7,7 @@ import { fetchFeed, sendSwipe } from "@/api/endpoints";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
+import { ErrorBox, Loading } from "@/components/States";
 
 export function FeedPage() {
   const role = useSession((s) => s.role) ?? "seeker";
@@ -16,7 +17,7 @@ export function FeedPage() {
   const [empty, setEmpty] = useState(false);
   const controller = useRef<((dir: SwipeDirection) => void) | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["feed", role],
     queryFn: () => fetchFeed(role),
   });
@@ -48,7 +49,7 @@ export function FeedPage() {
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
         </h2>
         <span className="spacer" />
-        <button className="tab" style={{ flex: "none", width: "auto" }} onClick={() => nav("/pricing")}>
+        <button className="tab" style={{ flex: "none", width: "auto" }} aria-label="Тарифы и буст" onClick={() => nav("/pricing")}>
           <span className="ico">⚡</span>
         </button>
       </div>
@@ -57,9 +58,10 @@ export function FeedPage() {
         {data ? ` · ${data.length}` : ""}
       </p>
 
-      {isLoading && <div className="card">Загрузка…</div>}
+      {isLoading && <Loading />}
+      {isError && <ErrorBox onRetry={() => refetch()} />}
 
-      {!isLoading && data && (empty || data.length === 0) && (
+      {!isLoading && !isError && data && (empty || data.length === 0) && (
         <div className="card" style={{ textAlign: "center", padding: 40 }}>
           <div style={{ fontSize: 56 }}>✅</div>
           <h2 className="h2" style={{ marginTop: 12 }}>
@@ -69,7 +71,7 @@ export function FeedPage() {
         </div>
       )}
 
-      {!isLoading && data && !empty && data.length > 0 && (
+      {!isLoading && !isError && data && !empty && data.length > 0 && (
         <>
           {isSeeker ? (
             <SwipeDeck<Vacancy>
@@ -92,13 +94,13 @@ export function FeedPage() {
           )}
 
           <div className="actions">
-            <button className="act" style={{ borderColor: "var(--dislike)", color: "var(--dislike)" }} onClick={() => controller.current?.("dislike")}>
+            <button className="act" aria-label="Пропустить" style={{ borderColor: "var(--dislike)", color: "var(--dislike)" }} onClick={() => controller.current?.("dislike")}>
               ✕
             </button>
-            <button className="act sm" style={{ borderColor: "var(--super)", color: "var(--super)" }} onClick={() => controller.current?.("superlike")}>
+            <button className="act sm" aria-label="Срочно (супер-лайк)" style={{ borderColor: "var(--super)", color: "var(--super)" }} onClick={() => controller.current?.("superlike")}>
               ⚡
             </button>
-            <button className="act" style={{ borderColor: "var(--like)", color: "var(--like)" }} onClick={() => controller.current?.("like")}>
+            <button className="act" aria-label="Хочу здесь работать" style={{ borderColor: "var(--like)", color: "var(--like)" }} onClick={() => controller.current?.("like")}>
               ♥
             </button>
           </div>

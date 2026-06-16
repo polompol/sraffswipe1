@@ -38,9 +38,23 @@ function toCamel(value: unknown): unknown {
   return value;
 }
 
-api.interceptors.response.use((response) => {
-  response.data = toCamel(response.data);
-  return response;
-});
+api.interceptors.response.use(
+  (response) => {
+    response.data = toCamel(response.data);
+    return response;
+  },
+  (error) => {
+    // Истёкший/невалидный JWT — сбрасываем сессию и уводим на онбординг.
+    if (error?.response?.status === 401) {
+      setToken(null);
+      localStorage.removeItem("ss_role");
+      localStorage.removeItem("ss_uid");
+      if (!location.hash.startsWith("#/onboarding")) {
+        location.hash = "#/onboarding";
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 export { baseURL };

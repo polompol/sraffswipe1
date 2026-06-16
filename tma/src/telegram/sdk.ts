@@ -17,6 +17,7 @@ import {
   retrieveRawInitData,
   openInvoice,
   shareURL,
+  cloudStorage,
 } from "@telegram-apps/sdk-react";
 
 let started = false;
@@ -139,6 +140,19 @@ export async function payWithStars(link: string): Promise<string> {
 export function share(url: string, text?: string): void {
   try {
     shareURL(url, text);
+  } catch {
+    /* noop */
+  }
+}
+
+// --- Telegram CloudStorage (зашифрованное хранилище токена, best-effort) ---
+// Дублируем JWT в CloudStorage; источник для синхронного чтения — localStorage.
+
+type CloudApi = { setItem?: (k: string, v: string) => unknown };
+
+export function cloudSet(key: string, value: string): void {
+  try {
+    (cloudStorage as CloudApi).setItem?.(key, value);
   } catch {
     /* noop */
   }

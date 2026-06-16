@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { fetchMatches } from "@/api/endpoints";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
+import { ErrorBox, Loading } from "@/components/States";
 
 export function MatchesPage() {
   const nav = useNavigate();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["matches"],
     queryFn: fetchMatches,
   });
@@ -13,7 +14,8 @@ export function MatchesPage() {
   return (
     <div className="page">
       <h1 className="h1" style={{ marginBottom: 12 }}>Мэтчи</h1>
-      {isLoading && <div className="card">Загрузка…</div>}
+      {isLoading && <Loading />}
+      {isError && <ErrorBox onRetry={() => refetch()} />}
       {data && data.length === 0 && (
         <div className="card" style={{ textAlign: "center", padding: 40 }}>
           <div style={{ fontSize: 56 }}>💛</div>

@@ -4,11 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message } from "@/types/domain";
 import { confirmShift, fetchMessages, sendMessage } from "@/api/endpoints";
 import { showBackButton, haptic } from "@/telegram/sdk";
+import { useSession } from "@/store/session";
 
 export function ChatPage() {
   const { matchId = "" } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const myId = useSession((s) => s.userId);
   const [text, setText] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
@@ -23,16 +25,25 @@ export function ChatPage() {
     const t = text.trim();
     if (!t) return;
     setText("");
-    await sendMessage(matchId, t);
-    qc.invalidateQueries({ queryKey: ["messages", matchId] });
+    try {
+      await sendMessage(matchId, t);
+      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+    } catch {
+      haptic("error");
+      setText(t); // вернуть текст, чтобы не потерять сообщение
+    }
   }
 
   async function doConfirm() {
-    haptic("success");
-    await confirmShift(matchId);
-    setConfirmed(true);
-    qc.invalidateQueries({ queryKey: ["messages", matchId] });
-    qc.invalidateQueries({ queryKey: ["matches"] });
+    try {
+      await confirmShift(matchId);
+      haptic("success");
+      setConfirmed(true);
+      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    } catch {
+      haptic("error");
+    }
   }
 
   return (
@@ -47,7 +58,7 @@ export function ChatPage() {
 
         {messages?.map((m: Message) => {
           if (m.isSystem) return <div key={m.id} className="bubble system">{m.text}</div>;
-          const mine = m.senderId === "me";
+          const mine = m.senderId === (myId ?? "me");
           return (
             <div key={m.id} className={`bubble ${mine ? "mine" : "theirs"}`}>
               {m.text}
@@ -87,6 +98,7 @@ export function ChatPage() {
           />
           <button
             className="btn"
+            aria-label="Отправить"
             style={{ width: 52, flex: "none", padding: 0, height: 48 }}
             onClick={send}
           >
