@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RateType, StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
+import { suggestAddress, track, type AddressSuggestion } from "@/api/endpoints";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
@@ -15,10 +16,23 @@ export function CreateVacancyPage() {
   const [rate, setRate] = useState("350");
   const [rateType, setRateType] = useState<RateType>("perHour");
   const [address, setAddress] = useState("Москва, ул. Льва Толстого, 16");
+  const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
   const [desc, setDesc] = useState("");
   const [medBook, setMedBook] = useState(true);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
+
+  // Подсказки адреса DaData с дебаунсом.
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        setSuggests(await suggestAddress(address));
+      } catch {
+        setSuggests([]);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [address]);
 
   return (
     <div className="app">
@@ -70,8 +84,30 @@ export function CreateVacancyPage() {
           </button>
         </div>
 
-        <label className="muted">Адрес (выбор на Яндекс.Картах)</label>
-        <input className="input" style={{ marginBottom: 12 }} value={address} onChange={(e) => setAddress(e.target.value)} />
+        <label className="muted" htmlFor="addr">Адрес (подсказки DaData)</label>
+        <input
+          id="addr"
+          className="input"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+        />
+        {suggests.length > 0 && (
+          <div className="card" style={{ padding: 6, marginTop: 4, marginBottom: 12 }}>
+            {suggests.map((s) => (
+              <button
+                key={s.value}
+                style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 10px", cursor: "pointer", color: "var(--text)" }}
+                onClick={() => {
+                  setAddress(s.value);
+                  setSuggests([]);
+                }}
+              >
+                📍 {s.value}
+              </button>
+            ))}
+          </div>
+        )}
+        {suggests.length === 0 && <div style={{ marginBottom: 12 }} />}
 
         <div className="card row" style={{ marginBottom: 12, cursor: "pointer" }} onClick={() => setMedBook(!medBook)}>
           <span style={{ flex: 1 }}>Нужна медкнижка</span>
@@ -91,6 +127,7 @@ export function CreateVacancyPage() {
           className="btn"
           onClick={() => {
             haptic("success");
+            track("vacancy_publish", { role });
             nav(-1);
           }}
         >

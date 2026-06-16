@@ -4,6 +4,7 @@ import type { PriceItem } from "@/types/domain";
 import {
   createStarsInvoice,
   createYookassaPayment,
+  track,
 } from "@/api/endpoints";
 import { payWithStars, showBackButton, haptic } from "@/telegram/sdk";
 
@@ -36,6 +37,7 @@ export function PricingPage() {
 
   async function buyStars(sku: string) {
     haptic("medium");
+    track("purchase", { sku, provider: "stars" });
     setStatus("Открываем оплату Stars…");
     const { link } = await createStarsInvoice(sku);
     const res = await payWithStars(link);
@@ -44,6 +46,7 @@ export function PricingPage() {
 
   async function buyRub(sku: string) {
     haptic("medium");
+    track("purchase", { sku, provider: "yookassa" });
     setStatus("Переходим в ЮKassa…");
     const { url } = await createYookassaPayment(sku);
     window.open(url, "_blank");

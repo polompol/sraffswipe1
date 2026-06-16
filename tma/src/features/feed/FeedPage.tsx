@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import type { MatchModel, Seeker, SwipeDirection, Vacancy } from "@/types/domain";
 import { useSession } from "@/store/session";
-import { fetchFeed, sendSwipe } from "@/api/endpoints";
+import { fetchFeed, sendSwipe, track } from "@/api/endpoints";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
@@ -24,8 +24,10 @@ export function FeedPage() {
 
   async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection) {
     const targetType = isSeeker ? "vacancy" : "user";
+    track("swipe", { dir });
     const res = await sendSwipe(item.id, targetType, dir);
     if (res.matched && res.matchId && isSeeker) {
+      track("match");
       const v = item as Vacancy;
       setMatch({
         id: res.matchId,

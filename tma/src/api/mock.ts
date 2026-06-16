@@ -10,7 +10,13 @@ import type {
   SwipeDirection,
   Vacancy,
 } from "@/types/domain";
-import type { AuthResult, Me, ReferralInfo, SwipeResult } from "./endpoints";
+import type {
+  AddressSuggestion,
+  AuthResult,
+  Me,
+  ReferralInfo,
+  SwipeResult,
+} from "./endpoints";
 
 const photo = (id: string) =>
   `https://images.unsplash.com/${id}?w=900&q=80&auto=format&fit=crop`;
@@ -261,4 +267,13 @@ export function boostVacancy(vacancyId: string): Promise<void> {
   const vac = VACANCIES.find((v) => v.id === vacancyId);
   if (vac) vac.boosted = true;
   return Promise.resolve();
+}
+
+export function suggestAddress(q: string): Promise<AddressSuggestion[]> {
+  if (q.length < 3) return Promise.resolve([]);
+  return Promise.resolve([
+    { value: `Москва, ${q}, 1`, lat: 55.75, lng: 37.61 },
+    { value: `Москва, ${q}, 10`, lat: 55.76, lng: 37.62 },
+    { value: `Санкт-Петербург, ${q}, 5`, lat: 59.93, lng: 30.34 },
+  ]);
 }

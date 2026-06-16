@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message } from "@/types/domain";
-import { confirmShift, fetchMessages, sendMessage } from "@/api/endpoints";
+import { confirmShift, fetchMessages, sendMessage, track } from "@/api/endpoints";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 
@@ -37,6 +37,7 @@ export function ChatPage() {
   async function doConfirm() {
     try {
       await confirmShift(matchId);
+      track("confirm");
       haptic("success");
       setConfirmed(true);
       qc.invalidateQueries({ queryKey: ["messages", matchId] });

@@ -145,6 +145,26 @@ export async function boostVacancy(vacancyId: string): Promise<void> {
   await api.post(`/vacancies/${vacancyId}/boost`, {});
 }
 
+/** Аналитика воронки. Никогда не бросает — это «fire and forget». */
+export function track(name: string, props?: Record<string, unknown>): void {
+  if (!USE_BACKEND) return;
+  api.post("/events", { name, props }).catch(() => {});
+}
+
+export interface AddressSuggestion {
+  value: string;
+  lat?: number | null;
+  lng?: number | null;
+}
+
+export async function suggestAddress(q: string): Promise<AddressSuggestion[]> {
+  if (!USE_BACKEND) return mock.suggestAddress(q);
+  const { data } = await api.get<AddressSuggestion[]>("/dadata/address", {
+    params: { q },
+  });
+  return data;
+}
+
 export interface PaymentUrl {
   url: string;
 }

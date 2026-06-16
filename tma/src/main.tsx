@@ -6,6 +6,7 @@ import { HashRouter } from "react-router-dom";
 import "./theme/theme.css";
 import "./index.css";
 import { initTelegram } from "./telegram/sdk";
+import { track } from "./api/endpoints";
 import { App } from "./App";
 
 const queryClient = new QueryClient({
@@ -13,6 +14,7 @@ const queryClient = new QueryClient({
 });
 
 void initTelegram();
+track("open");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
