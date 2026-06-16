@@ -31,6 +31,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("staffswipe")
 
+# Наблюдаемость: Sentry подключается только если задан DSN и установлен SDK.
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1)
+        logger.info("Sentry инициализирован")
+    except Exception:  # noqa: BLE001
+        logger.warning("sentry_sdk не установлен — пропускаю Sentry")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

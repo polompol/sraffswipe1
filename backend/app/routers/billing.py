@@ -3,9 +3,11 @@
 Цифровые товары внутри Telegram — через Stars (требование Telegram).
 Подписки/верификация юрлиц — через ЮKassa.
 """
+import base64
 import hmac
 import json
 import urllib.request
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -213,6 +215,37 @@ class PaymentOut(BaseModel):
     url: str
 
 
+def _create_yookassa_payment(owner_id: str, sku: str, rub: int) -> str | None:
+    """Создаёт платёж в ЮKassa и возвращает confirmation_url (или None)."""
+    creds = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
+    auth = base64.b64encode(creds.encode()).decode()
+    payload = {
+        "amount": {"value": f"{rub}.00", "currency": "RUB"},
+        "capture": True,
+        "confirmation": {
+            "type": "redirect",
+            "return_url": settings.payment_return_url or "https://t.me",
+        },
+        "description": CATALOG[sku]["title"],
+        "metadata": {"owner_id": owner_id, "sku": sku},
+    }
+    req = urllib.request.Request(
+        "https://api.yookassa.ru/v3/payments",
+        data=json.dumps(payload).encode(),
+        headers={
+            "Authorization": f"Basic {auth}",
+            "Idempotence-Key": uuid.uuid4().hex,
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+            data = json.loads(resp.read())
+        return data.get("confirmation", {}).get("confirmation_url")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @router.post("/yookassa/payment", response_model=PaymentOut)
 def yookassa_payment(
     body: SkuIn, principal: dict = Depends(current_principal)
@@ -220,8 +253,16 @@ def yookassa_payment(
     item = CATALOG.get(body.sku)
     if item is None or item["provider"] != "yookassa":
         raise HTTPException(status_code=400, detail="Неизвестный SKU")
-    # В проде: создаём платёж через ЮKassa API с metadata={owner_id, sku}
-    # и возвращаем confirmation_url. Без ключей — демо-ссылка (webview).
+
+    # Боевой платёж ЮKassa с metadata={owner_id, sku} (вебхук начислит права).
+    if settings.yookassa_ready:
+        url = _create_yookassa_payment(
+            principal["id"], body.sku, int(item["rub"])
+        )
+        if url:
+            return PaymentOut(url=url)
+
+    # Без ключей / при ошибке — демо-ссылка (фронт откроет webview).
     base = settings.payment_return_url or "https://example.com/pay"
     return PaymentOut(url=f"{base}?sku={body.sku}&owner={principal['id']}")
 

@@ -49,5 +49,12 @@ class Settings(BaseSettings):
     # Базовый URL для возврата после оплаты ЮKassa.
     payment_return_url: str = ""
 
+    # Sentry DSN (наблюдаемость). Пусто — без отправки ошибок.
+    sentry_dsn: str = ""
+
+    @property
+    def yookassa_ready(self) -> bool:
+        return bool(self.yookassa_shop_id and self.yookassa_secret_key)
+
 
 settings = Settings()
