@@ -10,7 +10,7 @@ import type {
   SwipeDirection,
   Vacancy,
 } from "@/types/domain";
-import type { AuthResult, SwipeResult } from "./endpoints";
+import type { AuthResult, Me, ReferralInfo, SwipeResult } from "./endpoints";
 
 const photo = (id: string) =>
   `https://images.unsplash.com/${id}?w=900&q=80&auto=format&fit=crop`;
@@ -230,4 +230,35 @@ export function fetchEntitlements(): Promise<Entitlements> {
 
 export function grantMock(patch: Partial<Entitlements>): void {
   entitlements = { ...entitlements, ...patch };
+}
+
+const invited = 2;
+
+export function fetchMe(): Promise<Me> {
+  return Promise.resolve({
+    id: "me",
+    role: "seeker",
+    name: "Алексей",
+    rating: 4.8,
+    tgUsername: "alexey",
+  });
+}
+
+export function fetchReferral(): Promise<ReferralInfo> {
+  return Promise.resolve({
+    code: "ref_me",
+    link: "https://t.me/staffswipe_bot?startapp=ref_me",
+    invited,
+    bonusSuperlikes: 3,
+  });
+}
+
+export function leaveReview(): Promise<void> {
+  return Promise.resolve();
+}
+
+export function boostVacancy(vacancyId: string): Promise<void> {
+  const vac = VACANCIES.find((v) => v.id === vacancyId);
+  if (vac) vac.boosted = true;
+  return Promise.resolve();
 }

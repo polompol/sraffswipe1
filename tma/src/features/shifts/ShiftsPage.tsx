@@ -1,8 +1,38 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchMatches } from "@/api/endpoints";
+import { fetchMatches, leaveReview } from "@/api/endpoints";
 import { baseURL, getToken } from "@/api/client";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { ErrorBox, Loading } from "@/components/States";
+import { haptic } from "@/telegram/sdk";
+
+function ReviewRow({ matchId }: { matchId: string }) {
+  const [done, setDone] = useState(false);
+  if (done) return <div className="muted" style={{ marginTop: 10 }}>Спасибо за отзыв ★</div>;
+  return (
+    <div className="row" style={{ marginTop: 12, gap: 6 }}>
+      <span className="muted">Оценить смену:</span>
+      {[1, 2, 3, 4, 5].map((s) => (
+        <button
+          key={s}
+          aria-label={`${s} звёзд`}
+          style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", padding: 0 }}
+          onClick={async () => {
+            haptic("success");
+            try {
+              await leaveReview(matchId, s, "");
+              setDone(true);
+            } catch {
+              haptic("error");
+            }
+          }}
+        >
+          ⭐
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function ShiftsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
@@ -48,6 +78,7 @@ export function ShiftsPage() {
             <button className="btn secondary" style={{ marginTop: 12 }} onClick={() => downloadAct(m.id)}>
               📄 Сформировать акт (PDF)
             </button>
+            <ReviewRow matchId={m.id} />
           </div>
         ))}
       </div>

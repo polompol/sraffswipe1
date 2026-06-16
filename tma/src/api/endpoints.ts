@@ -104,6 +104,47 @@ export async function createStarsInvoice(sku: string): Promise<InvoiceLink> {
   return data;
 }
 
+export interface Me {
+  id: string;
+  role: AppRole;
+  name: string;
+  rating: number;
+  tgUsername?: string | null;
+}
+
+export async function fetchMe(): Promise<Me> {
+  if (!USE_BACKEND) return mock.fetchMe();
+  const { data } = await api.get<Me>("/me");
+  return data;
+}
+
+export interface ReferralInfo {
+  code: string;
+  link: string;
+  invited: number;
+  bonusSuperlikes: number;
+}
+
+export async function fetchReferral(): Promise<ReferralInfo> {
+  if (!USE_BACKEND) return mock.fetchReferral();
+  const { data } = await api.get<ReferralInfo>("/referral/me");
+  return data;
+}
+
+export async function leaveReview(
+  matchId: string,
+  stars: number,
+  text: string,
+): Promise<void> {
+  if (!USE_BACKEND) return mock.leaveReview();
+  await api.post(`/matches/${matchId}/review`, { stars, text });
+}
+
+export async function boostVacancy(vacancyId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.boostVacancy(vacancyId);
+  await api.post(`/vacancies/${vacancyId}/boost`, {});
+}
+
 export interface PaymentUrl {
   url: string;
 }
