@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StaffSwipe — кликабельный прототип</title>
+<style>
+  :root{
+    --crimson:#9e1b32; --crimson-dark:#7c1526; --crimson-soft:#b9485a;
+    --bg:#f6f1ea; --card:#fff; --ink:#201b18; --muted:#8b8078; --line:#ece4d9;
+    --gold:#c7a24b; --like:#9e1b32; --skip:#8b8078;
+  }
+  [data-theme="dark"]{
+    --bg:#160d0f; --card:#28171b; --ink:#f3e7e9; --muted:#b8a7ab; --line:#3a2329;
+    --crimson:#d24b60; --crimson-soft:#e0697c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#2a2330;min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;padding:18px;
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .hint{color:#cbb9c0;font-size:13px;text-align:center;max-width:320px}
+  .phone{width:330px;max-width:94vw;height:680px;max-height:88vh;background:var(--bg);
+    border:11px solid #14100e;border-radius:40px;overflow:hidden;position:relative;
+    box-shadow:0 22px 50px rgba(0,0,0,.45);color:var(--ink);display:flex;flex-direction:column}
+  .notch{height:26px;background:#14100e;width:130px;border-radius:0 0 16px 16px;margin:0 auto;flex:none}
+  .scr{flex:1;overflow:hidden;position:relative}
+  .view{position:absolute;inset:0;padding:14px 14px 70px;overflow-y:auto;display:none;animation:fade .25s}
+  .view.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+
+  .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .brand{font-weight:900;font-size:18px;display:flex;align-items:center;gap:7px}
+  .bd{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:14px;background:linear-gradient(135deg,var(--crimson-soft),var(--crimson))}
+  .sp{flex:1}
+  .ic{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--card);
+    display:flex;align-items:center;justify-content:center;color:var(--crimson);font-size:15px;cursor:pointer}
+  .sub{font-size:12.5px;color:var(--muted);margin:2px 0 10px}
+  .sub b{color:var(--crimson)} .sub .lnk{color:var(--crimson);cursor:pointer;text-decoration:underline}
+
+  /* карточка */
+  .deck{position:relative;height:402px}
+  .vcard{position:absolute;inset:0;background:var(--card);border:1px solid var(--line);
+    border-radius:22px;overflow:hidden;box-shadow:0 8px 22px rgba(60,20,25,.12);
+    transition:transform .35s ease,opacity .35s ease}
+  .vphoto{height:210px;color:#fff;display:flex;align-items:flex-end;padding:13px;position:relative}
+  .b-v{position:absolute;top:11px;left:11px;background:rgba(255,255,255,.92);color:var(--crimson);
+    font-weight:800;font-size:11px;padding:3px 9px;border-radius:999px}
+  .b-boost{position:absolute;top:11px;right:11px;background:var(--gold);color:#3a2c00;
+    font-weight:800;font-size:11px;padding:3px 9px;border-radius:999px}
+  .vname{font-weight:800;font-size:19px;text-shadow:0 1px 8px rgba(0,0,0,.4)}
+  .vbody{padding:13px 14px}
+  .vr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .role{background:#f6e9eb;color:var(--crimson);font-weight:800;font-size:12px;padding:4px 10px;border-radius:999px}
+  [data-theme="dark"] .role{background:#3a2329}
+  .rate{margin-left:auto;font-weight:900;font-size:18px}.rate small{color:var(--muted);font-weight:600;font-size:12px}
+  .vm{color:var(--muted);font-size:12.5px;margin:2px 0}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tag{font-size:11px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;color:var(--muted)}
+  .stamp{position:absolute;top:24px;font-size:30px;font-weight:900;padding:4px 12px;border:4px solid;
+    border-radius:12px;opacity:0;transform:rotate(-14deg);transition:opacity .15s}
+  .stamp.like{right:18px;color:var(--like);border-color:var(--like)}
+  .stamp.nope{left:18px;color:var(--skip);border-color:var(--skip)}
+
+  .acts{display:flex;justify-content:center;align-items:center;gap:18px;margin-top:16px}
+  .act{width:58px;height:58px;border-radius:50%;border:2px solid;background:var(--card);font-size:23px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 14px rgba(60,20,25,.14);
+    transition:transform .1s} .act:active{transform:scale(.9)}
+  .act.sm{width:48px;height:48px;font-size:18px}
+  .act.skip{border-color:#c9c1b8;color:var(--skip)} .act.super{border-color:var(--gold);color:var(--gold)}
+  .act.like{border-color:var(--crimson);color:var(--crimson)}
+  .ahint{text-align:center;font-size:11px;color:var(--muted);margin-top:8px}
+
+  .btn{display:block;width:100%;text-align:center;background:var(--crimson);color:#fff;font-weight:800;
+    border:none;border-radius:14px;padding:14px;font-size:15px;cursor:pointer;box-shadow:0 8px 18px rgba(158,27,50,.28)}
+  .btn:active{transform:scale(.99)} .btn.ghost{background:transparent;color:var(--crimson);border:1.5px solid var(--crimson);box-shadow:none}
+  .empty{text-align:center;padding:46px 16px}.empty .e{font-size:54px}
+
+  /* мэтч */
+  .match{position:absolute;inset:0;background:linear-gradient(160deg,var(--crimson),var(--crimson-dark));
+    color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center;z-index:5}
+  .match.on{display:flex;animation:fade .25s}
+  .ava{display:flex;gap:14px;margin:12px 0 18px}.ava div{width:78px;height:78px;border-radius:50%;
+    border:3px solid #fff;background:#e9c8cd;display:flex;align-items:center;justify-content:center;font-size:36px}
+
+  /* списки */
+  .item{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
+    border-radius:16px;padding:11px 13px;margin-bottom:10px;cursor:pointer}
+  .item .em{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--crimson-soft),var(--crimson));
+    display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;flex:none}
+  .item b{font-size:14.5px}.item .m{font-size:12px;color:var(--muted)}
+
+  .plan{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:13px 14px;margin-bottom:10px}
+  .plan.best{border-color:var(--crimson);box-shadow:0 6px 16px rgba(158,27,50,.12)}
+  .plan .h{display:flex;align-items:center;gap:8px}.plan .pr{margin-left:auto;font-weight:900}
+  .best-tag{background:var(--crimson);color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px}
+
+  .card2{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+  .switch{width:52px;height:30px;border-radius:999px;border:none;position:relative;cursor:pointer;background:var(--line)}
+  .switch.on{background:var(--crimson)} .knob{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
+  .switch.on .knob{left:25px}
+
+  /* нижние табы */
+  .tabs{position:absolute;left:0;right:0;bottom:0;height:60px;background:var(--card);border-top:1px solid var(--line);
+    display:flex;align-items:center}
+  .tab{flex:1;text-align:center;color:var(--muted);font-size:11px;cursor:pointer;padding-top:4px}
+  .tab .ti{font-size:20px;display:block}.tab.on{color:var(--crimson);font-weight:700}
+
+  /* toast */
+  .toast{position:absolute;left:14px;right:14px;bottom:74px;background:var(--ink);color:var(--bg);
+    padding:11px 14px;border-radius:12px;font-size:13px;text-align:center;opacity:0;transition:opacity .25s;z-index:9}
+  .toast.on{opacity:.96}
+</style>
+</head>
+<body>
+  <div class="hint">👇 Это настоящий прототип — тапай кнопки: ✕ пропустить, ⚡ срочно, ♥ откликнуться.<br>
+    Поймай мэтч, открой тарифы, переключи тёмную тему в «Профиле».</div>
+
+  <div class="phone" id="app">
+    <div class="notch"></div>
+    <div class="scr">
+
+      <!-- ЛЕНТА -->
+      <div class="view on" id="v-feed">
+        <div class="top">
+          <span class="brand"><span class="bd">⚡</span>Staff<span style="color:var(--crimson)">Swipe</span></span>
+          <span class="sp"></span>
+          <span class="ic" onclick="toast('Фильтры: роль, ставка, город…')">⚙</span>
+          <span class="ic" onclick="go('pricing')">⭐</span>
+        </div>
+        <div class="sub">Смены · <b id="cityLbl">Москва</b> · <span id="leftCnt">5</span> · <span class="lnk" onclick="toast('Тут меняется город')">сменить город</span></div>
+        <div class="deck" id="deck"></div>
+        <div class="acts">
+          <div class="act skip" onclick="swipe('skip')">✕</div>
+          <div class="act sm super" onclick="swipe('super')">⚡</div>
+          <div class="act like" onclick="swipe('like')">♥</div>
+        </div>
+        <div class="ahint">✕ пропустить · ⚡ срочно · ♥ откликнуться</div>
+      </div>
+
+      <!-- МЭТЧИ -->
+      <div class="view" id="v-matches">
+        <div class="top"><span class="brand">Мэтчи</span></div>
+        <div class="sub">Договоритесь о смене в чате</div>
+        <div id="matchList"></div>
+        <div id="noMatch" class="empty"><div class="e">💬</div><b>Пока нет мэтчей</b><div class="sub" style="text-align:center">Лайкай смены в ленте</div></div>
+      </div>
+
+      <!-- ТАРИФЫ -->
+      <div class="view" id="v-pricing">
+        <div class="top"><span class="brand">Тарифы</span></div>
+        <div class="sub">Для заведений — больше откликов</div>
+        <div class="plan"><div class="h"><b>Free</b><span class="pr">0 ₽</span></div><div class="vm">1 активная вакансия</div></div>
+        <div class="plan best"><div class="h"><b>Pro</b><span class="best-tag">ХИТ</span><span class="pr">1 990 ₽</span></div><div class="vm">Безлимит вакансий · 10 boost · приоритет</div></div>
+        <div class="plan"><div class="h"><b>Business</b><span class="pr">4 990 ₽</span></div><div class="vm">Всё из Pro · 30 boost · верификация</div></div>
+        <button class="btn" onclick="toast('Оплата откроется в Telegram')">Оформить Pro</button>
+        <div class="ahint">Супер-лайки и Boost — за Telegram Stars ⭐</div>
+      </div>
+
+      <!-- ПРОФИЛЬ -->
+      <div class="view" id="v-profile">
+        <div class="top"><span class="brand">Профиль</span></div>
+        <div class="card2" style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:42px">🙂</span>
+          <span><div style="font-weight:800;font-size:18px">Алексей</div><div class="vm">★ 4.8 · 🔥 3 дня подряд</div></span>
+        </div>
+        <div class="card2" style="display:flex;align-items:center">
+          <span style="flex:1"><b>Тариф: Free</b><div class="vm">⚡ супер-лайки: 1 · 🔥 boost: 0</div></span>
+          <button class="btn" style="width:auto;padding:8px 14px" onclick="go('pricing')">Улучшить</button>
+        </div>
+        <div class="card2" style="display:flex;align-items:center">
+          <span style="flex:1"><b>Пригласить друзей</b><div class="vm">За каждого — 3 супер-лайка</div></span>
+          <button class="btn ghost" style="width:auto;padding:8px 14px" onclick="toast('Ссылка-приглашение отправлена')">🎁</button>
+        </div>
+        <div class="card2" style="display:flex;align-items:center">
+          <span style="flex:1"><b>Тёмная тема</b><div class="vm">Удобно листать ночью</div></span>
+          <button class="switch" id="sw" onclick="toggleTheme()"><span class="knob"></span></button>
+        </div>
+      </div>
+
+      <!-- МЭТЧ-оверлей -->
+      <div class="match" id="overlay">
+        <div style="font-size:13px;letter-spacing:1px;opacity:.9">ЭТО МЭТЧ</div>
+        <div style="font-size:30px;font-weight:900;margin:6px 0">Смена ваша! 🎉</div>
+        <div class="ava"><div>🙂</div><div id="ovEmoji">🏪</div></div>
+        <div id="ovText" style="opacity:.95;margin-bottom:18px">Договоритесь о деталях в чате</div>
+        <button class="btn" style="background:#fff;color:var(--crimson)" onclick="closeMatch(true)">💬 Открыть чат</button>
+        <div style="height:10px"></div>
+        <button class="btn ghost" style="color:#fff;border-color:rgba(255,255,255,.6)" onclick="closeMatch(false)">Листать дальше</button>
+      </div>
+
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" id="t-feed" onclick="go('feed')"><span class="ti">🃏</span>Лента</div>
+      <div class="tab" id="t-matches" onclick="go('matches')"><span class="ti">💬</span>Мэтчи</div>
+      <div class="tab" id="t-pricing" onclick="go('pricing')"><span class="ti">⭐</span>Тарифы</div>
+      <div class="tab" id="t-profile" onclick="go('profile')"><span class="ti">🙂</span>Профиль</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+<script>
+  const G=["linear-gradient(135deg,#b9485a,#7c1526)","linear-gradient(135deg,#9e1b32,#5e0f1d)","linear-gradient(135deg,#c65a6c,#9e1b32)"];
+  const VACS=[
+    {name:"Кофейня «Дрова»",role:"☕ Бариста",rate:"350",unit:"₽/час",addr:"ул. Льва Толстого, 16 · 1.6 км",when:"Завтра · 08:00–16:00",tags:["Медкнижка","Без опыта","Питание"],v:true,boost:true,match:true},
+    {name:"Лаунж «Дым»",role:"💨 Кальянщик",rate:"3500",unit:"₽/смена",addr:"Покровка, 8 · 2.1 км",when:"Сегодня · 18:00–02:00",tags:["18+","Чаевые"],v:true,boost:false,match:true},
+    {name:"Студия «Букет»",role:"💐 Флорист",rate:"400",unit:"₽/час",addr:"Никольская, 10 · 1.2 км",when:"Завтра · 10:00–19:00",tags:["Без опыта","Обучение"],v:false,boost:false,match:false},
+    {name:"Бар «Полночь»",role:"🍸 Бармен",rate:"4500",unit:"₽/смена",addr:"Маросейка, 4 · 3.0 км",when:"Пятница · 20:00–04:00",tags:["Опыт","Чаевые"],v:true,boost:false,match:true},
+    {name:"Ресторан «Грядка»",role:"🍽️ Официант",rate:"300",unit:"₽/час",addr:"Тверская, 2 · 2.6 км",when:"Завтра · 11:00–23:00",tags:["Медкнижка","Касса"],v:false,boost:false,match:false},
+  ];
+  let i=0, matches=[];
+  const $=id=>document.getElementById(id);
+
+  function renderCard(){
+    const d=$('deck');
+    if(i>=VACS.length){
+      d.innerHTML='<div class="empty"><div class="e">✅</div><b>Вы посмотрели все смены</b><div class="sub" style="text-align:center">Загляните позже — появляются новые</div></div>';
+      $('leftCnt').textContent=0; return;
+    }
+    $('leftCnt').textContent=VACS.length-i;
+    const v=VACS[i];
+    d.innerHTML=`<div class="vcard" id="card">
+      <div class="stamp like">ХОЧУ</div><div class="stamp nope">МИМО</div>
+      <div class="vphoto" style="background:${G[i%G.length]}">
+        ${v.v?'<span class="b-v">✓ Проверен</span>':''}${v.boost?'<span class="b-boost">🔥 Boost</span>':''}
+        <span class="vname">${v.name}</span></div>
+      <div class="vbody">
+        <div class="vr"><span class="role">${v.role}</span><span class="rate">${v.rate} <small>${v.unit}</small></span></div>
+        <div class="vm">📍 ${v.addr}</div><div class="vm">🗓️ ${v.when}</div>
+        <div class="tags">${v.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+      </div></div>`;
+  }
+  function swipe(kind){
+    if(i>=VACS.length) return;
+    const card=$('card'); if(!card) return;
+    const v=VACS[i];
+    const st=card.querySelector(kind==='skip'?'.stamp.nope':'.stamp.like'); st.style.opacity=1;
+    const x=kind==='skip'?-380:380, rot=kind==='skip'?-18:18;
+    card.style.transform=`translateX(${x}px) rotate(${rot}deg)`; card.style.opacity=0;
+    const willMatch=(kind!=='skip')&&v.match;
+    setTimeout(()=>{
+      i++; renderCard();
+      if(willMatch){ matches.push(v); renderMatches(); showMatch(v); }
+      else if(kind==='super') toast('⚡ Срочный отклик отправлен');
+      else if(kind==='like') toast('♥ Отклик отправлен');
+    },330);
+  }
+  function showMatch(v){ $('ovText').textContent=`${v.name} · ${v.role.replace(/^[^ ]+ /,'')} — договоритесь в чате`; $('overlay').classList.add('on'); }
+  function closeMatch(chat){ $('overlay').classList.remove('on'); if(chat){ go('matches'); toast('Открыт чат со сменой'); } }
+
+  function renderMatches(){
+    $('noMatch').style.display=matches.length?'none':'block';
+    $('matchList').innerHTML=matches.map(v=>`<div class="item" onclick="toast('Чат: договоритесь о смене')">
+      <span class="em">${v.role.split(' ')[0]}</span>
+      <span style="flex:1"><b>${v.name}</b><div class="m">${v.role} · ${v.rate} ${v.unit}</div></span><span>›</span></div>`).join('');
+  }
+
+  function go(v){
+    ['feed','matches','pricing','profile'].forEach(n=>{
+      $('v-'+n).classList.toggle('on',n===v); $('t-'+n).classList.toggle('on',n===v);
+    });
+  }
+  let dark=false;
+  function toggleTheme(){ dark=!dark; document.getElementById('app').dataset.theme=dark?'dark':''; $('sw').classList.toggle('on',dark); }
+  let tt;
+  function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('on'),1800); }
+
+  // тема применяется к рамке телефона, не ко всей странице
+  document.getElementById('app').dataset.theme='';
+  renderCard();
+</script>
+</body>
+</html>
