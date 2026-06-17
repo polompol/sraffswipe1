@@ -16,10 +16,14 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;background:#2a2330;min-height:100vh;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:14px;padding:18px;
+    align-items:center;justify-content:center;gap:12px;padding:18px;
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  .hint{color:#cbb9c0;font-size:13px;text-align:center;max-width:320px}
-  .phone{width:330px;max-width:94vw;height:680px;max-height:88vh;background:var(--bg);
+  .hint{color:#cbb9c0;font-size:13px;text-align:center;max-width:340px}
+  .roleSwitch{display:flex;gap:6px;background:#1c1722;padding:5px;border-radius:12px}
+  .roleSwitch button{border:none;background:none;color:#cbb9c0;font-weight:700;font-size:13px;
+    padding:7px 14px;border-radius:9px;cursor:pointer}
+  .roleSwitch button.on{background:var(--crimson);color:#fff}
+  .phone{width:330px;max-width:94vw;height:680px;max-height:86vh;background:var(--bg);
     border:11px solid #14100e;border-radius:40px;overflow:hidden;position:relative;
     box-shadow:0 22px 50px rgba(0,0,0,.45);color:var(--ink);display:flex;flex-direction:column}
   .notch{height:26px;background:#14100e;width:130px;border-radius:0 0 16px 16px;margin:0 auto;flex:none}
@@ -35,10 +39,13 @@
   .sp{flex:1}
   .ic{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--card);
     display:flex;align-items:center;justify-content:center;color:var(--crimson);font-size:15px;cursor:pointer}
+  .back{cursor:pointer;color:var(--crimson);font-weight:700;font-size:14px}
   .sub{font-size:12.5px;color:var(--muted);margin:2px 0 10px}
   .sub b{color:var(--crimson)} .sub .lnk{color:var(--crimson);cursor:pointer;text-decoration:underline}
+  label.lb{font-size:12px;color:var(--muted);display:block;margin:10px 0 5px}
+  .inp{width:100%;border:1px solid var(--line);border-radius:11px;padding:11px 12px;font-size:14px;
+    background:var(--card);color:var(--ink);font-family:inherit}
 
-  /* карточка */
   .deck{position:relative;height:402px}
   .vcard{position:absolute;inset:0;background:var(--card);border:1px solid var(--line);
     border-radius:22px;overflow:hidden;box-shadow:0 8px 22px rgba(60,20,25,.12);
@@ -57,6 +64,8 @@
   .vm{color:var(--muted);font-size:12.5px;margin:2px 0}
   .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .tag{font-size:11px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;color:var(--muted)}
+  .chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer;color:var(--ink)}
+  .chip.on{background:var(--crimson);color:#fff;border-color:var(--crimson)}
   .stamp{position:absolute;top:24px;font-size:30px;font-weight:900;padding:4px 12px;border:4px solid;
     border-radius:12px;opacity:0;transform:rotate(-14deg);transition:opacity .15s}
   .stamp.like{right:18px;color:var(--like);border-color:var(--like)}
@@ -76,14 +85,12 @@
   .btn:active{transform:scale(.99)} .btn.ghost{background:transparent;color:var(--crimson);border:1.5px solid var(--crimson);box-shadow:none}
   .empty{text-align:center;padding:46px 16px}.empty .e{font-size:54px}
 
-  /* мэтч */
   .match{position:absolute;inset:0;background:linear-gradient(160deg,var(--crimson),var(--crimson-dark));
-    color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center;z-index:5}
+    color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center;z-index:8}
   .match.on{display:flex;animation:fade .25s}
   .ava{display:flex;gap:14px;margin:12px 0 18px}.ava div{width:78px;height:78px;border-radius:50%;
     border:3px solid #fff;background:#e9c8cd;display:flex;align-items:center;justify-content:center;font-size:36px}
 
-  /* списки */
   .item{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
     border-radius:16px;padding:11px 13px;margin-bottom:10px;cursor:pointer}
   .item .em{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--crimson-soft),var(--crimson));
@@ -100,27 +107,40 @@
   .switch.on{background:var(--crimson)} .knob{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
   .switch.on .knob{left:25px}
 
-  /* нижние табы */
+  /* чат */
+  .msgs{display:flex;flex-direction:column;gap:8px;margin:6px 0 12px}
+  .bub{max-width:78%;padding:9px 12px;border-radius:14px;font-size:13.5px}
+  .bub.me{align-self:flex-end;background:var(--crimson);color:#fff;border-bottom-right-radius:4px}
+  .bub.you{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .bub.sys{align-self:center;background:transparent;color:var(--muted);font-size:12px;text-align:center}
+  .chatbar{position:absolute;left:0;right:0;bottom:60px;background:var(--card);border-top:1px solid var(--line);
+    padding:8px 12px;display:flex;gap:8px}
+  .chatbar input{flex:1;border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:14px;
+    background:var(--bg);color:var(--ink);font-family:inherit}
+  .send{width:42px;height:42px;border-radius:50%;border:none;background:var(--crimson);color:#fff;font-size:17px;cursor:pointer}
+
   .tabs{position:absolute;left:0;right:0;bottom:0;height:60px;background:var(--card);border-top:1px solid var(--line);
-    display:flex;align-items:center}
+    display:flex;align-items:center;z-index:6}
   .tab{flex:1;text-align:center;color:var(--muted);font-size:11px;cursor:pointer;padding-top:4px}
   .tab .ti{font-size:20px;display:block}.tab.on{color:var(--crimson);font-weight:700}
 
-  /* toast */
   .toast{position:absolute;left:14px;right:14px;bottom:74px;background:var(--ink);color:var(--bg);
     padding:11px 14px;border-radius:12px;font-size:13px;text-align:center;opacity:0;transition:opacity .25s;z-index:9}
   .toast.on{opacity:.96}
 </style>
 </head>
 <body>
-  <div class="hint">👇 Это настоящий прототип — тапай кнопки: ✕ пропустить, ⚡ срочно, ♥ откликнуться.<br>
-    Поймай мэтч, открой тарифы, переключи тёмную тему в «Профиле».</div>
+  <div class="hint">👇 Настоящий прототип. Сверху переключи роль: <b>Соискатель</b> листает смены, <b>Заведение</b> создаёт вакансию.</div>
+  <div class="roleSwitch">
+    <button id="rb-seeker" class="on" onclick="setRole('seeker')">🙂 Соискатель</button>
+    <button id="rb-employer" onclick="setRole('employer')">🏪 Заведение</button>
+  </div>
 
   <div class="phone" id="app">
     <div class="notch"></div>
     <div class="scr">
 
-      <!-- ЛЕНТА -->
+      <!-- ЛЕНТА (соискатель) -->
       <div class="view on" id="v-feed">
         <div class="top">
           <span class="brand"><span class="bd">⚡</span>Staff<span style="color:var(--crimson)">Swipe</span></span>
@@ -128,7 +148,7 @@
           <span class="ic" onclick="toast('Фильтры: роль, ставка, город…')">⚙</span>
           <span class="ic" onclick="go('pricing')">⭐</span>
         </div>
-        <div class="sub">Смены · <b id="cityLbl">Москва</b> · <span id="leftCnt">5</span> · <span class="lnk" onclick="toast('Тут меняется город')">сменить город</span></div>
+        <div class="sub">Смены · <b>Москва</b> · <span id="leftCnt">5</span> · <span class="lnk" onclick="toast('Здесь меняется город')">сменить город</span></div>
         <div class="deck" id="deck"></div>
         <div class="acts">
           <div class="act skip" onclick="swipe('skip')">✕</div>
@@ -141,9 +161,34 @@
       <!-- МЭТЧИ -->
       <div class="view" id="v-matches">
         <div class="top"><span class="brand">Мэтчи</span></div>
-        <div class="sub">Договоритесь о смене в чате</div>
+        <div class="sub">Тапни мэтч, чтобы открыть чат</div>
         <div id="matchList"></div>
         <div id="noMatch" class="empty"><div class="e">💬</div><b>Пока нет мэтчей</b><div class="sub" style="text-align:center">Лайкай смены в ленте</div></div>
+      </div>
+
+      <!-- ЧАТ -->
+      <div class="view" id="v-chat">
+        <div class="top"><span class="back" onclick="go('matches')">‹ Назад</span><span class="sp"></span>
+          <span class="brand" id="chatTitle" style="font-size:15px">Чат</span><span class="sp"></span></div>
+        <button class="btn ghost" style="margin-bottom:10px" onclick="confirmShift()">✅ Подтвердить смену</button>
+        <div class="msgs" id="msgs"></div>
+      </div>
+
+      <!-- СОЗДАТЬ ВАКАНСИЮ (заведение) -->
+      <div class="view" id="v-create">
+        <div class="top"><span class="brand">Новая смена</span></div>
+        <div class="sub">Заполни — отклики придут за минуты</div>
+        <label class="lb">Кого ищете</label>
+        <div class="tags" id="roleChips"></div>
+        <label class="lb">Город</label><input class="inp" id="f-city" value="Москва">
+        <label class="lb">Адрес</label><input class="inp" id="f-addr" value="ул. Тверская, 1">
+        <div style="display:flex;gap:10px">
+          <span style="flex:1"><label class="lb">Ставка, ₽</label><input class="inp" id="f-rate" value="400" inputmode="numeric"></span>
+          <span style="flex:1"><label class="lb">Дата</label><input class="inp" id="f-date" type="date"></span>
+        </div>
+        <label class="lb">Описание</label><input class="inp" id="f-desc" placeholder="Питание, чаевые, дресс-код…">
+        <div style="height:14px"></div>
+        <button class="btn" onclick="publish()">Опубликовать вакансию</button>
       </div>
 
       <!-- ТАРИФЫ -->
@@ -161,8 +206,8 @@
       <div class="view" id="v-profile">
         <div class="top"><span class="brand">Профиль</span></div>
         <div class="card2" style="display:flex;align-items:center;gap:12px">
-          <span style="font-size:42px">🙂</span>
-          <span><div style="font-weight:800;font-size:18px">Алексей</div><div class="vm">★ 4.8 · 🔥 3 дня подряд</div></span>
+          <span style="font-size:42px" id="prof-em">🙂</span>
+          <span><div style="font-weight:800;font-size:18px" id="prof-name">Алексей</div><div class="vm">★ 4.8 · 🔥 3 дня подряд</div></span>
         </div>
         <div class="card2" style="display:flex;align-items:center">
           <span style="flex:1"><b>Тариф: Free</b><div class="vm">⚡ супер-лайки: 1 · 🔥 boost: 0</div></span>
@@ -191,13 +236,7 @@
 
     </div>
 
-    <div class="tabs">
-      <div class="tab on" id="t-feed" onclick="go('feed')"><span class="ti">🃏</span>Лента</div>
-      <div class="tab" id="t-matches" onclick="go('matches')"><span class="ti">💬</span>Мэтчи</div>
-      <div class="tab" id="t-pricing" onclick="go('pricing')"><span class="ti">⭐</span>Тарифы</div>
-      <div class="tab" id="t-profile" onclick="go('profile')"><span class="ti">🙂</span>Профиль</div>
-    </div>
-
+    <div class="tabs" id="tabbar"></div>
     <div class="toast" id="toast"></div>
   </div>
 
@@ -210,8 +249,25 @@
     {name:"Бар «Полночь»",role:"🍸 Бармен",rate:"4500",unit:"₽/смена",addr:"Маросейка, 4 · 3.0 км",when:"Пятница · 20:00–04:00",tags:["Опыт","Чаевые"],v:true,boost:false,match:true},
     {name:"Ресторан «Грядка»",role:"🍽️ Официант",rate:"300",unit:"₽/час",addr:"Тверская, 2 · 2.6 км",when:"Завтра · 11:00–23:00",tags:["Медкнижка","Касса"],v:false,boost:false,match:false},
   ];
-  let i=0, matches=[];
+  const ROLES=["☕ Бариста","🍽️ Официант","🍸 Бармен","💨 Кальянщик","💐 Флорист","🧁 Кондитер","🛵 Курьер"];
+  const SEEKER_TABS=[["feed","🃏","Лента"],["matches","💬","Мэтчи"],["pricing","⭐","Тарифы"],["profile","🙂","Профиль"]];
+  const EMPLOYER_TABS=[["create","➕","Смена"],["matches","💬","Отклики"],["pricing","⭐","Тарифы"],["profile","🏪","Профиль"]];
+  let i=0, matches=[], curRole='seeker', curChat=null, picked="☕ Бариста";
   const $=id=>document.getElementById(id);
+
+  function setRole(r){
+    curRole=r;
+    $('rb-seeker').classList.toggle('on',r==='seeker');
+    $('rb-employer').classList.toggle('on',r==='employer');
+    $('prof-em').textContent=r==='seeker'?'🙂':'🏪';
+    $('prof-name').textContent=r==='seeker'?'Алексей':'Кофейня «Дрова»';
+    renderTabs();
+    go(r==='seeker'?'feed':'create');
+  }
+  function renderTabs(){
+    const t=curRole==='seeker'?SEEKER_TABS:EMPLOYER_TABS;
+    $('tabbar').innerHTML=t.map(([v,ic,lb])=>`<div class="tab" id="t-${v}" onclick="go('${v}')"><span class="ti">${ic}</span>${lb}</div>`).join('');
+  }
 
   function renderCard(){
     const d=$('deck');
@@ -236,40 +292,71 @@
     if(i>=VACS.length) return;
     const card=$('card'); if(!card) return;
     const v=VACS[i];
-    const st=card.querySelector(kind==='skip'?'.stamp.nope':'.stamp.like'); st.style.opacity=1;
+    card.querySelector(kind==='skip'?'.stamp.nope':'.stamp.like').style.opacity=1;
     const x=kind==='skip'?-380:380, rot=kind==='skip'?-18:18;
     card.style.transform=`translateX(${x}px) rotate(${rot}deg)`; card.style.opacity=0;
     const willMatch=(kind!=='skip')&&v.match;
     setTimeout(()=>{
       i++; renderCard();
-      if(willMatch){ matches.push(v); renderMatches(); showMatch(v); }
+      if(willMatch){ if(!matches.includes(v)) matches.push(v); renderMatches(); showMatch(v); }
       else if(kind==='super') toast('⚡ Срочный отклик отправлен');
       else if(kind==='like') toast('♥ Отклик отправлен');
     },330);
   }
-  function showMatch(v){ $('ovText').textContent=`${v.name} · ${v.role.replace(/^[^ ]+ /,'')} — договоритесь в чате`; $('overlay').classList.add('on'); }
-  function closeMatch(chat){ $('overlay').classList.remove('on'); if(chat){ go('matches'); toast('Открыт чат со сменой'); } }
+  function showMatch(v){ $('ovText').textContent=`${v.name} — договоритесь о деталях в чате`; $('overlay').classList.add('on'); }
+  function closeMatch(chat){ const v=matches[matches.length-1]; $('overlay').classList.remove('on'); if(chat) openChat(v); }
 
   function renderMatches(){
     $('noMatch').style.display=matches.length?'none':'block';
-    $('matchList').innerHTML=matches.map(v=>`<div class="item" onclick="toast('Чат: договоритесь о смене')">
+    $('matchList').innerHTML=matches.map((v,k)=>`<div class="item" onclick="openChat(matches[${k}])">
       <span class="em">${v.role.split(' ')[0]}</span>
       <span style="flex:1"><b>${v.name}</b><div class="m">${v.role} · ${v.rate} ${v.unit}</div></span><span>›</span></div>`).join('');
   }
+  function openChat(v){
+    curChat=v; $('chatTitle').textContent=v.name;
+    $('msgs').innerHTML=`
+      <div class="bub sys">Это мэтч! Смена «${v.name}». Договоритесь о деталях.</div>
+      <div class="bub you">Здравствуйте! Готовы выйти на смену ${v.when.toLowerCase()}?</div>
+      <div class="bub me">Да, всё подходит 👍</div>`;
+    go('chat');
+  }
+  function sendMsg(){
+    const inp=$('chatInp'); const t=inp.value.trim(); if(!t) return;
+    $('msgs').insertAdjacentHTML('beforeend',`<div class="bub me">${t.replace(/</g,'&lt;')}</div>`);
+    inp.value=''; $('msgs').scrollTop=1e9;
+    setTimeout(()=>{ $('msgs').insertAdjacentHTML('beforeend','<div class="bub you">Отлично, ждём вас! Адрес в карточке.</div>'); $('msgs').scrollTop=1e9; },700);
+  }
+  function confirmShift(){
+    $('msgs').insertAdjacentHTML('beforeend','<div class="bub sys">Смена подтверждена ✅. Сформирован акт для самозанятого.</div>');
+    $('msgs').scrollTop=1e9; toast('Смена подтверждена — акт готов');
+  }
+
+  function renderRoleChips(){
+    $('roleChips').innerHTML=ROLES.map(r=>`<span class="chip ${r===picked?'on':''}" onclick="picked='${r}';renderRoleChips()">${r}</span>`).join('');
+  }
+  function publish(){
+    const v={name:'Моё заведение',role:picked,rate:$('f-rate').value||'400',unit:'₽/час',
+      addr:($('f-city').value+', '+$('f-addr').value),when:'Скоро',tags:[$('f-desc').value||'Без опыта'],v:false,boost:false,match:true};
+    VACS.unshift(v); i=0; renderCard();
+    toast('✅ Вакансия опубликована — она в ленте');
+  }
 
   function go(v){
-    ['feed','matches','pricing','profile'].forEach(n=>{
-      $('v-'+n).classList.toggle('on',n===v); $('t-'+n).classList.toggle('on',n===v);
-    });
+    const all=['feed','matches','chat','create','pricing','profile'];
+    all.forEach(n=>$('v-'+n).classList.toggle('on',n===v));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+    if($('t-'+v)) $('t-'+v).classList.add('on');
   }
   let dark=false;
-  function toggleTheme(){ dark=!dark; document.getElementById('app').dataset.theme=dark?'dark':''; $('sw').classList.toggle('on',dark); }
-  let tt;
-  function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('on'),1800); }
+  function toggleTheme(){ dark=!dark; $('app').dataset.theme=dark?'dark':''; $('sw').classList.toggle('on',dark); }
+  let tt; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('on'),1800); }
 
-  // тема применяется к рамке телефона, не ко всей странице
-  document.getElementById('app').dataset.theme='';
-  renderCard();
+  // chat input bar (вне скролла)
+  document.getElementById('v-chat').insertAdjacentHTML('beforeend',
+    '<div class="chatbar"><input id="chatInp" placeholder="Сообщение…" onkeydown="if(event.key===\'Enter\')sendMsg()"><button class="send" onclick="sendMsg()">➤</button></div>');
+
+  $('app').dataset.theme='';
+  renderTabs(); renderCard(); renderRoleChips();
 </script>
 </body>
 </html>
