@@ -8,7 +8,13 @@ export type StaffRole =
   | "cook"
   | "dishwasher"
   | "hostess"
-  | "bartender";
+  | "bartender"
+  | "hookah"
+  | "florist"
+  | "confectioner"
+  | "administrator"
+  | "courier"
+  | "cleaner";
 
 export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   waiter: "Официант",
@@ -17,6 +23,12 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   dishwasher: "Посудомой",
   hostess: "Хостес",
   bartender: "Бармен",
+  hookah: "Кальянщик",
+  florist: "Флорист",
+  confectioner: "Кондитер",
+  administrator: "Администратор",
+  courier: "Курьер",
+  cleaner: "Уборщик",
 };
 
 export const STAFF_ROLE_EMOJI: Record<StaffRole, string> = {
@@ -26,6 +38,12 @@ export const STAFF_ROLE_EMOJI: Record<StaffRole, string> = {
   dishwasher: "🧽",
   hostess: "💁",
   bartender: "🍸",
+  hookah: "💨",
+  florist: "💐",
+  confectioner: "🧁",
+  administrator: "🧑‍💼",
+  courier: "🛵",
+  cleaner: "🧹",
 };
 
 export type MedBookStatus = "yes" | "no" | "expired";
