@@ -2,6 +2,7 @@ import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
 import { shareVacancy } from "@/lib/share";
+import { toast } from "@/components/Toast";
 
 /** Список-вид ленты — альтернатива свайпу для тех, кто любит просматривать. */
 export function VacancyList({
@@ -61,7 +62,10 @@ export function VacancyList({
             <button
               className="btn"
               style={{ minHeight: 44 }}
-              onClick={() => onAct(v, "like")}
+              onClick={() => {
+                onAct(v, "like");
+                toast("Отклик отправлен", "success");
+              }}
             >
               Откликнуться
             </button>

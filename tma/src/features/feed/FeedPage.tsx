@@ -76,6 +76,23 @@ export function FeedPage() {
   return (
     <div className="page">
       <div className="row" style={{ marginBottom: 8 }}>
+        <span
+          aria-hidden
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            marginRight: 8,
+            background: "linear-gradient(135deg,var(--gold-soft),var(--gold))",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            fontWeight: 900,
+          }}
+        >
+          ⚡
+        </span>
         <h2 className="h2" style={{ margin: 0 }}>
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
         </h2>

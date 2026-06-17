@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { createSavedSearch, type FeedFilters } from "@/api/endpoints";
+import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
@@ -32,8 +33,10 @@ export function FilterSheet({
     try {
       await createSavedSearch(title, f, true);
       setSaved(true);
+      toast("Поиск сохранён — пришлём новые смены", "success");
     } catch {
       haptic("error");
+      toast("Не удалось сохранить поиск", "error");
     }
   }
 

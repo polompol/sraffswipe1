@@ -9,6 +9,7 @@ import { initTelegram } from "./telegram/sdk";
 import { initTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Toaster } from "./components/Toast";
 import { App } from "./App";
 
 const queryClient = new QueryClient({
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <HashRouter>
           <App />
+          <Toaster />
         </HashRouter>
       </QueryClientProvider>
     </ErrorBoundary>
