@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import type { MatchModel } from "@/types/domain";
 
-const COLORS = ["#c9a227", "#d9a441", "#b07a47", "#c2604a", "#3b82f6"];
+const COLORS = ["#9e1b32", "#b9485a", "#c7a24b", "#7c1526", "#e0697c"];
 
 export function MatchOverlay({
   match,

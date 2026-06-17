@@ -11,7 +11,7 @@ export function currentTheme(): ThemeMode {
   return (localStorage.getItem(KEY) as ThemeMode | null) ?? "light";
 }
 
-/** Применяет сохранённую тему на старте (по умолчанию — светлая «молочная»). */
+/** Применяет сохранённую тему на старте (по умолчанию — светлая «кримсон»). */
 export function initTheme(): void {
   applyTheme(currentTheme());
 }

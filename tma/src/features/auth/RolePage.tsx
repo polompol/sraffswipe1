@@ -63,17 +63,17 @@ export function RolePage() {
         <div style={{ marginTop: 16, display: "grid", gap: 16, opacity: consent ? 1 : 0.5, pointerEvents: consent ? "auto" : "none" }}>
           <RoleCard
             emoji="💼"
-            grad="linear-gradient(135deg,#d9a441,#b07a47)"
+            grad="linear-gradient(135deg,#b9485a,#9e1b32)"
             title="Я ищу подработку"
-            sub="Официант, бариста, повар, бармен, хостес"
+            sub="Официант, бариста, кальянщик, флорист, курьер"
             loading={busy === "seeker"}
             onClick={() => choose("seeker")}
           />
           <RoleCard
             emoji="🏪"
-            grad="linear-gradient(135deg,#b07a47,#3b2a20)"
+            grad="linear-gradient(135deg,#9e1b32,#7c1526)"
             title="Я ищу сотрудников"
-            sub="Кафе, ресторан, бар, кофейня"
+            sub="Кафе, ресторан, бар, кофейня, кальянная"
             loading={busy === "employer"}
             onClick={() => choose("employer")}
           />
