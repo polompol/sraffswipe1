@@ -1,6 +1,7 @@
 import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
+import { shareVacancy } from "@/lib/share";
 
 /** Список-вид ленты — альтернатива свайпу для тех, кто любит просматривать. */
 export function VacancyList({
@@ -32,6 +33,13 @@ export function VacancyList({
                 {v.boosted && (
                   <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>🔥 ТОП</span>
                 )}
+                <button
+                  aria-label="Поделиться сменой"
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--muted)" }}
+                  onClick={() => shareVacancy(v)}
+                >
+                  ↗
+                </button>
               </div>
               <div className="muted" style={{ marginTop: 2 }}>
                 {STAFF_ROLE_LABELS[v.role]} · {rateLabel(v.rate, v.rateType)}
