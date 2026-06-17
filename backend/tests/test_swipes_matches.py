@@ -205,3 +205,18 @@ def test_feed_filters_by_city(client):
     # Без фильтра — обе.
     all_ids = {v["id"] for v in client.get("/vacancies").json()}
     assert {msk["id"], kzn["id"]} <= all_ids
+
+
+def test_city_only_vacancy_visible_with_geo_search(client):
+    # Вакансия без координат (только город) не должна выпадать из гео-поиска.
+    e_token, owner = _auth(client, "employer")
+    client.post("/billing/fulfill",
+                headers={"X-Internal-Token": "test-internal-secret"},
+                json={"owner_id": owner, "sku": "sub_pro_month",
+                      "provider": "yookassa", "charge_id": "geo1"})
+    v = client.post("/vacancies", headers=_hdr(e_token), json={
+        "role": "florist", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 400, "city": "Казань", "address": "Без точки",
+    }).json()  # lat/lng = 0,0 по умолчанию
+    feed = client.get("/vacancies?lat=55.75&lng=37.61&radius_km=10&city=Казань").json()
+    assert v["id"] in {x["id"] for x in feed}

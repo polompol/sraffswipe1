@@ -80,6 +80,11 @@ def delete_search(
 
 
 def _matches(flt: dict, v: Vacancy) -> bool:
+    # Город — главный фильтр: алерт о смене не в своём городе бесполезен.
+    if flt.get("city") and (v.city or "").strip().lower() != str(
+        flt["city"]
+    ).strip().lower():
+        return False
     if flt.get("role") and v.role != flt["role"]:
         return False
     if flt.get("min_rate") is not None and v.rate < int(flt["min_rate"]):
@@ -93,20 +98,38 @@ def _matches(flt: dict, v: Vacancy) -> bool:
     return True
 
 
-def notify_matching_searches(db: Session, vacancy: Vacancy) -> int:
-    """Оповестить владельцев сохранённых поисков, подходящих под новую вакансию."""
+def notify_matching_searches(vacancy_id: str, max_notify: int = 200) -> int:
+    """Оповестить владельцев подходящих поисков. Запускается фоновой задачей —
+    открывает свою сессию (сессия запроса уже закрыта) и ограничена сверху."""
+    from ..db import SessionLocal
+
+    db = SessionLocal()
     sent = 0
-    for s in db.query(SavedSearch).filter(SavedSearch.notify.is_(True)).all():
-        try:
-            flt = json.loads(s.filters)
-        except json.JSONDecodeError:
-            continue
-        if _matches(flt, vacancy):
-            notify_owner(
-                db,
-                s.owner_id,
-                f"🔔 Новая смена по вашему поиску «{s.title}»: "
-                f"{vacancy.role}, {vacancy.rate} ₽. Откройте StaffSwipe.",
-            )
-            sent += 1
-    return sent
+    try:
+        vacancy = db.get(Vacancy, vacancy_id)
+        if vacancy is None:
+            return 0
+        searches = (
+            db.query(SavedSearch)
+            .filter(SavedSearch.notify.is_(True))
+            .limit(2000)
+            .all()
+        )
+        for s in searches:
+            if sent >= max_notify:
+                break
+            try:
+                flt = json.loads(s.filters)
+            except json.JSONDecodeError:
+                continue
+            if _matches(flt, vacancy):
+                notify_owner(
+                    db,
+                    s.owner_id,
+                    f"🔔 Новая смена по вашему поиску «{s.title}»: "
+                    f"{vacancy.role}, {vacancy.rate} ₽. Откройте StaffSwipe.",
+                )
+                sent += 1
+        return sent
+    finally:
+        db.close()

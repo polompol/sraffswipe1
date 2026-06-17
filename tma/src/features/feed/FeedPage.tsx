@@ -17,6 +17,7 @@ import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
+import { toast } from "@/components/Toast";
 
 export function FeedPage() {
   const role = useSession((s) => s.role) ?? "seeker";
@@ -33,13 +34,16 @@ export function FeedPage() {
 
   // Город по умолчанию — из профиля соискателя, чтобы человек из другого города
   // видел свою ленту, а не чужую (важно для рекламы на широкую аудиторию).
+  // Применяем РОВНО ОДИН раз, иначе очистка города пользователем сбрасывалась бы.
+  const cityDefaulted = useRef(localStorage.getItem("ss_city") != null);
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe, enabled: isSeeker });
   useEffect(() => {
-    if (!isSeeker) return;
-    if (!filters.city && !localStorage.getItem("ss_city") && me?.city) {
+    if (!isSeeker || cityDefaulted.current) return;
+    if (me?.city) {
+      cityDefaulted.current = true;
       setFilters((f) => ({ ...f, city: me.city }));
     }
-  }, [me, isSeeker, filters.city]);
+  }, [me, isSeeker]);
 
   function applyFilters(f: FeedFilters) {
     if (f.city) localStorage.setItem("ss_city", f.city);
@@ -76,22 +80,35 @@ export function FeedPage() {
   async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection) {
     const targetType = isSeeker ? "vacancy" : "user";
     track("swipe", { dir });
-    const res = await sendSwipe(item.id, targetType, dir);
-    if (res.matched && res.matchId && isSeeker) {
-      track("match");
-      const v = item as Vacancy;
-      setMatch({
-        id: res.matchId,
-        seekerId: "me",
-        employerId: v.employerId,
-        vacancyId: v.id,
-        status: "matched",
-        confirmedBySeeker: false,
-        confirmedByEmployer: false,
-        companyName: v.companyName,
-        companyPhotoUrl: v.companyPhotoUrl,
-        role: v.role,
-      });
+    try {
+      const res = await sendSwipe(item.id, targetType, dir);
+      if (res.matched && res.matchId && isSeeker) {
+        track("match");
+        const v = item as Vacancy;
+        setMatch({
+          id: res.matchId,
+          seekerId: "me",
+          employerId: v.employerId,
+          vacancyId: v.id,
+          status: "matched",
+          confirmedBySeeker: false,
+          confirmedByEmployer: false,
+          companyName: v.companyName,
+          companyPhotoUrl: v.companyPhotoUrl,
+          role: v.role,
+        });
+      }
+    } catch (e) {
+      // 402 — закончились супер-лайки (ведём в тарифы), 429 — слишком часто.
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status === 402) {
+        toast("Закончились супер-лайки", "error");
+        nav("/pricing");
+      } else if (status === 429) {
+        toast("Слишком часто — притормозите", "error");
+      } else {
+        toast("Не удалось отправить. Попробуйте ещё раз", "error");
+      }
     }
   }
 

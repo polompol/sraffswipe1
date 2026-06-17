@@ -11,6 +11,19 @@ from fastapi import Depends, HTTPException
 from .security import current_principal
 
 _hits: dict[str, list[float]] = defaultdict(list)
+_calls = 0
+
+
+def _maybe_sweep(window: float) -> None:
+    """Периодически чистим пустые/протухшие корзины, чтобы dict не рос вечно."""
+    global _calls
+    _calls += 1
+    if _calls % 1000:
+        return
+    now = time.monotonic()
+    for k in list(_hits):
+        if not [t for t in _hits[k] if now - t < window]:
+            _hits.pop(k, None)
 
 
 def hit(bucket: str, limit: int, window: float) -> None:
@@ -27,6 +40,7 @@ def hit(bucket: str, limit: int, window: float) -> None:
         )
     recent.append(now)
     _hits[bucket] = recent
+    _maybe_sweep(window)
 
 
 def rate_limit(key: str, limit: int, window: float):
@@ -34,6 +48,7 @@ def rate_limit(key: str, limit: int, window: float):
 
     def dep(principal: dict = Depends(current_principal)) -> dict:
         bucket = f"{key}:{principal['id']}"
+        _maybe_sweep(window)
         now = time.monotonic()
         recent = [t for t in _hits[bucket] if now - t < window]
         if len(recent) >= limit:

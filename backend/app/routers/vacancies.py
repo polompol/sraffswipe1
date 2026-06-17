@@ -1,9 +1,11 @@
 """Лента вакансий и их создание."""
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..entitlements import (
     PLAN_VACANCY_LIMIT,
@@ -84,19 +86,37 @@ def list_vacancies(
         query = query.filter(Vacancy.date >= date_from)
     if date_to:
         query = query.filter(Vacancy.date <= date_to)
-    # Город фильтруем в Python — корректная регистронезависимость для кириллицы
-    # (SQLite lower() её не сворачивает). Так пользователь из другого города не
-    # видит чужую ленту.
+
+    # Город: на PostgreSQL фильтруем в SQL (lower() корректен и для кириллицы),
+    # на SQLite — в Python, т.к. его lower() не сворачивает кириллицу. Так лента
+    # не тянет в память все смены страны и пользователь видит только свой город.
     city_norm = city.strip().lower() if city else None
+    is_sqlite = settings.database_url.startswith("sqlite")
+    if city_norm and not is_sqlite:
+        query = query.filter(func.lower(Vacancy.city) == city_norm)
+
+    # Кап на размер выборки — защита от перегрузки на больших объёмах.
+    rows = query.order_by(Vacancy.created_at.desc()).limit(300).all()
+
+    # Батч-подгрузка работодателей одним запросом (без N+1 на каждую вакансию).
+    emp_ids = {v.employer_id for v in rows}
+    emps = (
+        {e.id: e for e in db.query(Employer).filter(Employer.id.in_(emp_ids)).all()}
+        if emp_ids
+        else {}
+    )
+
     result: list[VacancyOut] = []
-    for v in query.all():
-        if city_norm and (v.city or "").strip().lower() != city_norm:
+    for v in rows:
+        if city_norm and is_sqlite and (v.city or "").strip().lower() != city_norm:
             continue
-        emp = db.get(Employer, v.employer_id)
+        emp = emps.get(v.employer_id)
         if verified_only and not (emp and emp.verified):
             continue
         dist = None
-        if lat is not None and lng is not None:
+        # Координаты 0,0 = «город без точки на карте» — не фильтруем по радиусу,
+        # иначе валидная смена (заведена только по городу) пропала бы из ленты.
+        if lat is not None and lng is not None and (v.lat or v.lng):
             dist = distance_km(lat, lng, v.lat, v.lng)
             if dist > radius_km:
                 continue
@@ -122,6 +142,7 @@ def list_vacancies(
 )
 def create_vacancy(
     body: VacancyIn,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
@@ -143,10 +164,10 @@ def create_vacancy(
     db.add(v)
     db.commit()
     db.refresh(v)
-    # Алерты владельцам сохранённых поисков, подходящих под новую смену.
+    # Алерты по сохранённым поискам — в фоне, чтобы не тормозить публикацию.
     from .saved_searches import notify_matching_searches
 
-    notify_matching_searches(db, v)
+    background.add_task(notify_matching_searches, v.id)
     return _to_out(v, emp, None)
 
 

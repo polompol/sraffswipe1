@@ -87,11 +87,23 @@ class ConnectionManager:
         self._rooms.setdefault(match_id, []).append(ws)
 
     def disconnect(self, match_id: str, ws: WebSocket) -> None:
-        self._rooms.get(match_id, []).remove(ws)
+        room = self._rooms.get(match_id)
+        if not room:
+            return
+        if ws in room:
+            room.remove(ws)
+        if not room:
+            self._rooms.pop(match_id, None)
 
     async def broadcast(self, match_id: str, data: dict) -> None:
+        dead: list[WebSocket] = []
         for ws in list(self._rooms.get(match_id, [])):
-            await ws.send_json(data)
+            try:
+                await ws.send_json(data)
+            except Exception:  # noqa: BLE001 — сокет умер: помечаем на удаление
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(match_id, ws)
 
 
 manager = ConnectionManager()
