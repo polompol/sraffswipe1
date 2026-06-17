@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import type { MatchModel, Seeker, SwipeDirection, Vacancy } from "@/types/domain";
 import { useSession } from "@/store/session";
 import {
   fetchFeed,
+  fetchMe,
   listSavedSearches,
   sendSwipe,
   track,
@@ -24,8 +25,28 @@ export function FeedPage() {
   const qc = useQueryClient();
   const [match, setMatch] = useState<MatchModel | null>(null);
   const [empty, setEmpty] = useState(false);
-  const [filters, setFilters] = useState<FeedFilters>({});
+  const [filters, setFilters] = useState<FeedFilters>(() => {
+    const c = localStorage.getItem("ss_city");
+    return c ? { city: c } : {};
+  });
   const [filterOpen, setFilterOpen] = useState(false);
+
+  // Город по умолчанию — из профиля соискателя, чтобы человек из другого города
+  // видел свою ленту, а не чужую (важно для рекламы на широкую аудиторию).
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe, enabled: isSeeker });
+  useEffect(() => {
+    if (!isSeeker) return;
+    if (!filters.city && !localStorage.getItem("ss_city") && me?.city) {
+      setFilters((f) => ({ ...f, city: me.city }));
+    }
+  }, [me, isSeeker, filters.city]);
+
+  function applyFilters(f: FeedFilters) {
+    if (f.city) localStorage.setItem("ss_city", f.city);
+    else localStorage.removeItem("ss_city");
+    setFilters(f);
+    setEmpty(false);
+  }
   const [view, setView] = useState<"swipe" | "list">(
     (localStorage.getItem("ss_view") as "swipe" | "list" | null) ?? "swipe",
   );
@@ -33,6 +54,7 @@ export function FeedPage() {
 
   const activeFilterCount =
     (filters.role ? 1 : 0) +
+    (filters.city ? 1 : 0) +
     (filters.min_rate ? 1 : 0) +
     (filters.date_from ? 1 : 0) +
     (filters.rate_type ? 1 : 0) +
@@ -126,8 +148,17 @@ export function FeedPage() {
         </button>
       </div>
       <p className="muted" style={{ marginBottom: 6 }}>
-        {isSeeker ? "Смены рядом с вами" : "Кандидаты рядом"}
+        {isSeeker ? (filters.city ? `Смены · ${filters.city}` : "Смены рядом с вами") : "Кандидаты рядом"}
         {data ? ` · ${data.length}` : ""}
+        {isSeeker && (
+          <button
+            className="tab"
+            style={{ display: "inline", flex: "none", width: "auto", padding: "0 6px", color: "var(--gold)" }}
+            onClick={() => setFilterOpen(true)}
+          >
+            {filters.city ? "сменить" : "выбрать город"}
+          </button>
+        )}
       </p>
       <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
         ⭐ 4.8 · 1 200+ смен закрыто · средний отклик 7 мин
@@ -140,10 +171,7 @@ export function FeedPage() {
               key={s.id}
               className="tag"
               style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
-              onClick={() => {
-                setFilters(s.filters);
-                setEmpty(false);
-              }}
+              onClick={() => applyFilters(s.filters)}
             >
               🔔 {s.title}
             </button>
@@ -158,9 +186,22 @@ export function FeedPage() {
         <div className="card" style={{ textAlign: "center", padding: 40 }}>
           <div style={{ fontSize: 56 }}>✅</div>
           <h2 className="h2" style={{ marginTop: 12 }}>
-            {isSeeker ? "Вы посмотрели все смены" : "Кандидаты закончились"}
+            {isSeeker
+              ? filters.city
+                ? `В городе ${filters.city} пока нет смен`
+                : "Вы посмотрели все смены"
+              : "Кандидаты закончились"}
           </h2>
-          <p className="muted">Загляните позже — появляются новые</p>
+          <p className="muted">
+            {isSeeker && filters.city
+              ? "Попробуйте другой город или загляните позже"
+              : "Загляните позже — появляются новые"}
+          </p>
+          {isSeeker && filters.city && (
+            <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setFilterOpen(true)}>
+              Сменить город
+            </button>
+          )}
         </div>
       )}
 
@@ -213,8 +254,7 @@ export function FeedPage() {
             qc.invalidateQueries({ queryKey: ["saved-searches"] });
           }}
           onApply={(f) => {
-            setFilters(f);
-            setEmpty(false);
+            applyFilters(f);
             setFilterOpen(false);
             qc.invalidateQueries({ queryKey: ["saved-searches"] });
           }}

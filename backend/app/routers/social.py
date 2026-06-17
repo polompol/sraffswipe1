@@ -101,6 +101,7 @@ class MeOut(BaseModel):
     rating: float
     tgUsername: str | None = None
     streak: int = 0
+    city: str = ""
 
 
 def _streak(db: Session, owner_id: str) -> int:
@@ -129,7 +130,7 @@ def me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id),
+        streak=_streak(db, u.id), city=u.city,
     )
 
 
@@ -219,5 +220,5 @@ def update_me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id),
+        streak=_streak(db, u.id), city=u.city,
     )

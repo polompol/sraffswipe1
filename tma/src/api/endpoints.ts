@@ -32,6 +32,7 @@ export async function authTelegram(
 
 export interface FeedFilters {
   role?: string;
+  city?: string;
   min_rate?: number;
   date_from?: string;
   rate_type?: string;
@@ -126,6 +127,7 @@ export interface Me {
   rating: number;
   tgUsername?: string | null;
   streak?: number;
+  city?: string;
 }
 
 export async function fetchMe(): Promise<Me> {
@@ -180,6 +182,28 @@ export async function leaveReview(
 export async function boostVacancy(vacancyId: string): Promise<void> {
   if (!USE_BACKEND) return mock.boostVacancy(vacancyId);
   await api.post(`/vacancies/${vacancyId}/boost`, {});
+}
+
+export interface VacancyInput {
+  role: string;
+  date: string;
+  start_time: number;
+  end_time: number;
+  rate: number;
+  rate_type: string;
+  description?: string;
+  require_med_book?: boolean;
+  address?: string;
+  city?: string;
+  lat?: number;
+  lng?: number;
+}
+
+/** Публикация вакансии работодателем. */
+export async function createVacancy(input: VacancyInput): Promise<Vacancy> {
+  if (!USE_BACKEND) return mock.createVacancy(input);
+  const { data } = await api.post<Vacancy>("/vacancies", input);
+  return data;
 }
 
 /** Аналитика воронки. Никогда не бросает — это «fire and forget». */

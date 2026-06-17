@@ -98,6 +98,7 @@ class Vacancy(Base):
     lat: Mapped[float] = mapped_column(Float, default=0.0)
     lng: Mapped[float] = mapped_column(Float, default=0.0)
     address: Mapped[str] = mapped_column(String, default="")
+    city: Mapped[str] = mapped_column(String, default="", index=True)
     interior_photo_url: Mapped[str] = mapped_column(String, default="")
     status: Mapped[str] = mapped_column(String, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

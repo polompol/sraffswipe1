@@ -90,6 +90,16 @@ export function FilterSheet({
       >
         <h2 className="h2">Фильтры</h2>
 
+        <label className="muted" htmlFor="city">Город</label>
+        <input
+          id="city"
+          className="input"
+          style={{ marginBottom: 16 }}
+          placeholder="например, Москва"
+          value={f.city ?? ""}
+          onChange={(e) => set({ city: e.target.value || undefined })}
+        />
+
         <label className="muted">Должность</label>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {ROLES.map((r) => (

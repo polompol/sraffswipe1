@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   sendSwipe,
   fetchFeed,
+  createVacancy,
   updateMe,
   verifyEmployer,
 } from "./mock";
+import type { Vacancy } from "@/types/domain";
 
 describe("mock swipe logic", () => {
   it("дизлайк не создаёт мэтч", async () => {
@@ -18,6 +20,30 @@ describe("mock swipe logic", () => {
     const res = await sendSwipe(id, "like");
     expect(res.matched).toBe(true);
     expect(typeof res.matchId).toBe("string");
+  });
+});
+
+describe("mock city filter + publish", () => {
+  it("лента фильтруется по городу (регистронезависимо)", async () => {
+    const msk = (await fetchFeed("seeker", { city: "москва" })) as Vacancy[];
+    expect(msk.length).toBeGreaterThan(0);
+    expect(msk.every((v) => v.city === "Москва")).toBe(true);
+    const kzn = (await fetchFeed("seeker", { city: "Казань" })) as Vacancy[];
+    expect(kzn.length).toBe(0);
+  });
+
+  it("опубликованная вакансия появляется в ленте своего города", async () => {
+    await createVacancy({
+      role: "waiter",
+      date: "2030-01-01",
+      start_time: 600,
+      end_time: 1080,
+      rate: 400,
+      rate_type: "perHour",
+      city: "Казань",
+    });
+    const kzn = (await fetchFeed("seeker", { city: "Казань" })) as Vacancy[];
+    expect(kzn.some((v) => v.role === "waiter")).toBe(true);
   });
 });
 

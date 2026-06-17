@@ -18,6 +18,7 @@ import type {
   ReferralInfo,
   SavedSearch,
   SwipeResult,
+  VacancyInput,
   VerifyResult,
 } from "./endpoints";
 
@@ -43,6 +44,7 @@ const VACANCIES: Vacancy[] = [
     lat: 55.734,
     lng: 37.587,
     address: "ул. Льва Толстого, 16",
+    city: "Москва",
     interiorPhotoUrl: photo("photo-1559925393-8be0ec4767c8"),
     employerVerified: true,
     status: "active",
@@ -67,6 +69,7 @@ const VACANCIES: Vacancy[] = [
     lat: 55.76,
     lng: 37.644,
     address: "Покровка, 8",
+    city: "Москва",
     interiorPhotoUrl: photo("photo-1572116469696-31de0f17cc34"),
     employerVerified: true,
     status: "active",
@@ -90,6 +93,7 @@ const VACANCIES: Vacancy[] = [
     lat: 55.757,
     lng: 37.623,
     address: "Никольская, 10",
+    city: "Москва",
     interiorPhotoUrl: photo("photo-1424847651672-bf20a4b0982b"),
     employerVerified: false,
     status: "active",
@@ -153,20 +157,15 @@ export function authTelegram(role: AppRole): Promise<AuthResult> {
 
 export function fetchFeed(
   role: AppRole,
-  filters?: {
-    role?: string;
-    min_rate?: number;
-    date_from?: string;
-    rate_type?: string;
-    no_med_book?: boolean;
-    no_experience?: boolean;
-    verified_only?: boolean;
-    sort?: string;
-  },
+  filters?: FeedFilters,
 ): Promise<Vacancy[] | Seeker[]> {
   if (role !== "seeker") return Promise.resolve([...SEEKERS]);
   let list = [...VACANCIES];
   if (filters?.role) list = list.filter((v) => v.role === filters.role);
+  if (filters?.city) {
+    const c = filters.city.trim().toLowerCase();
+    list = list.filter((v) => (v.city || "").trim().toLowerCase() === c);
+  }
   if (filters?.min_rate != null) list = list.filter((v) => v.rate >= filters.min_rate!);
   if (filters?.rate_type) list = list.filter((v) => v.rateType === filters.rate_type);
   if (filters?.no_med_book) list = list.filter((v) => !v.requireMedBook);
@@ -273,13 +272,45 @@ const meProfile: Me = {
   rating: 4.8,
   tgUsername: "alexey",
   streak: 3,
+  city: "Москва",
 };
+
+export function createVacancy(input: VacancyInput): Promise<Vacancy> {
+  const v: Vacancy = {
+    id: uid(),
+    employerId: "me",
+    companyName: "Моё заведение",
+    companyPhotoUrl: "",
+    role: input.role as Vacancy["role"],
+    date: input.date,
+    startTime: input.start_time,
+    endTime: input.end_time,
+    rate: input.rate,
+    rateType: input.rate_type as Vacancy["rateType"],
+    description: input.description ?? "",
+    requireMedBook: input.require_med_book ?? false,
+    requireExperience: false,
+    lat: input.lat ?? 0,
+    lng: input.lng ?? 0,
+    address: input.address ?? "",
+    city: input.city ?? "",
+    interiorPhotoUrl: "",
+    employerVerified: false,
+    status: "active",
+  };
+  VACANCIES.unshift(v);
+  return Promise.resolve(v);
+}
 
 export function fetchMe(): Promise<Me> {
   return Promise.resolve({ ...meProfile });
 }
 
-export function updateMe(patch: { name?: string; birth_date?: string }): Promise<Me> {
+export function updateMe(patch: {
+  name?: string;
+  birth_date?: string;
+  city?: string;
+}): Promise<Me> {
   // Серверный 18+ имитируем и в mock, чтобы UI-поток совпадал с backend.
   if (patch.birth_date) {
     const y = new Date(patch.birth_date).getFullYear();
@@ -288,6 +319,7 @@ export function updateMe(patch: { name?: string; birth_date?: string }): Promise
     }
   }
   if (patch.name) meProfile.name = patch.name;
+  if (patch.city) meProfile.city = patch.city;
   return Promise.resolve({ ...meProfile });
 }
 

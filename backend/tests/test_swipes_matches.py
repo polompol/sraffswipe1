@@ -181,3 +181,27 @@ def test_input_validation_rejects_garbage(client):
     assert client.post("/swipes", headers=_hdr(token), json={
         "target_id": "x", "target_type": "planet", "direction": "like",
     }).status_code == 422
+
+
+def test_feed_filters_by_city(client):
+    e_token, owner = _auth(client, "employer")
+    eh = _hdr(e_token)
+    # Pro снимает лимит на число вакансий.
+    client.post("/billing/fulfill",
+                headers={"X-Internal-Token": "test-internal-secret"},
+                json={"owner_id": owner, "sku": "sub_pro_month",
+                      "provider": "yookassa", "charge_id": "city1"})
+    msk = client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва", "address": "A"}).json()
+    kzn = client.post("/vacancies", headers=eh, json={
+        "role": "waiter", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Казань", "address": "B"}).json()
+
+    # Регистронезависимый фильтр по городу (кириллица).
+    msk_feed = client.get("/vacancies?city=москва").json()
+    ids = {v["id"] for v in msk_feed}
+    assert msk["id"] in ids and kzn["id"] not in ids
+    # Без фильтра — обе.
+    all_ids = {v["id"] for v in client.get("/vacancies").json()}
+    assert {msk["id"], kzn["id"]} <= all_ids

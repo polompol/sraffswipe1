@@ -124,6 +124,7 @@ export interface Vacancy {
   lat: number;
   lng: number;
   address: string;
+  city: string;
   interiorPhotoUrl: string;
   employerVerified: boolean;
   status: string;

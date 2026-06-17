@@ -1,26 +1,80 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import type { RateType, StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
-import { suggestAddress, track, type AddressSuggestion } from "@/api/endpoints";
+import {
+  createVacancy,
+  suggestAddress,
+  track,
+  type AddressSuggestion,
+} from "@/api/endpoints";
+import { toast } from "@/components/Toast";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
 
+const toMinutes = (t: string): number => {
+  const [h, m] = t.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
 export function CreateVacancyPage() {
   const nav = useNavigate();
+  const qc = useQueryClient();
   const [role, setRole] = useState<StaffRole>("waiter");
   const [date, setDate] = useState("");
   const [start, setStart] = useState("10:00");
   const [end, setEnd] = useState("22:00");
   const [rate, setRate] = useState("350");
   const [rateType, setRateType] = useState<RateType>("perHour");
+  const [city, setCity] = useState("Москва");
   const [address, setAddress] = useState("Москва, ул. Льва Толстого, 16");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
   const [desc, setDesc] = useState("");
   const [medBook, setMedBook] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
+
+  async function publish() {
+    if (!date) {
+      toast("Укажите дату смены", "error");
+      return;
+    }
+    if (!city.trim()) {
+      toast("Укажите город", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      await createVacancy({
+        role,
+        date,
+        start_time: toMinutes(start),
+        end_time: toMinutes(end),
+        rate: Number(rate) || 0,
+        rate_type: rateType,
+        description: desc,
+        require_med_book: medBook,
+        address,
+        city: city.trim(),
+        lat: coords?.lat,
+        lng: coords?.lng,
+      });
+      haptic("success");
+      track("vacancy_publish", { role });
+      toast("Вакансия опубликована", "success");
+      qc.invalidateQueries({ queryKey: ["feed"] });
+      nav(-1);
+    } catch {
+      haptic("error");
+      toast("Не удалось опубликовать. Проверьте поля.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // Подсказки адреса DaData с дебаунсом.
   useEffect(() => {
@@ -84,6 +138,16 @@ export function CreateVacancyPage() {
           </button>
         </div>
 
+        <label className="muted" htmlFor="city">Город</label>
+        <input
+          id="city"
+          className="input"
+          style={{ marginBottom: 12 }}
+          placeholder="например, Москва"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+        />
+
         <label className="muted" htmlFor="addr">Адрес (подсказки DaData)</label>
         <input
           id="addr"
@@ -99,6 +163,9 @@ export function CreateVacancyPage() {
                 style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 10px", cursor: "pointer", color: "var(--text)" }}
                 onClick={() => {
                   setAddress(s.value);
+                  if (s.lat != null && s.lng != null) {
+                    setCoords({ lat: s.lat, lng: s.lng });
+                  }
                   setSuggests([]);
                 }}
               >
@@ -123,15 +190,8 @@ export function CreateVacancyPage() {
           onChange={(e) => setDesc(e.target.value)}
         />
 
-        <button
-          className="btn"
-          onClick={() => {
-            haptic("success");
-            track("vacancy_publish", { role });
-            nav(-1);
-          }}
-        >
-          Опубликовать вакансию
+        <button className="btn" disabled={busy} onClick={publish}>
+          {busy ? "Публикуем…" : "Опубликовать вакансию"}
         </button>
       </div>
     </div>

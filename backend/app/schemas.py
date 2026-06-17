@@ -53,6 +53,7 @@ class VacancyIn(BaseModel):
     lat: float = Field(default=0.0, ge=-90, le=90)
     lng: float = Field(default=0.0, ge=-180, le=180)
     address: Short = ""
+    city: Short = ""
     interior_photo_url: Annotated[str, StringConstraints(max_length=500)] = ""
 
 
@@ -74,6 +75,7 @@ class VacancyOut(BaseModel):
     lat: float
     lng: float
     address: str
+    city: str = ""
     interior_photo_url: str
     status: str
     distance_km: float | None = None

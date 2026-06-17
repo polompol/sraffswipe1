@@ -42,6 +42,7 @@ def _to_out(
         lat=v.lat,
         lng=v.lng,
         address=v.address,
+        city=v.city,
         interior_photo_url=v.interior_photo_url,
         status=v.status,
         distance_km=round(dist, 1) if dist is not None else None,
@@ -54,6 +55,7 @@ def list_vacancies(
     lat: float | None = None,
     lng: float | None = None,
     radius_km: float = 25.0,
+    city: str | None = None,
     role: str | None = None,
     min_rate: int | None = None,
     date_from: str | None = None,
@@ -82,8 +84,14 @@ def list_vacancies(
         query = query.filter(Vacancy.date >= date_from)
     if date_to:
         query = query.filter(Vacancy.date <= date_to)
+    # Город фильтруем в Python — корректная регистронезависимость для кириллицы
+    # (SQLite lower() её не сворачивает). Так пользователь из другого города не
+    # видит чужую ленту.
+    city_norm = city.strip().lower() if city else None
     result: list[VacancyOut] = []
     for v in query.all():
+        if city_norm and (v.city or "").strip().lower() != city_norm:
+            continue
         emp = db.get(Employer, v.employer_id)
         if verified_only and not (emp and emp.verified):
             continue
