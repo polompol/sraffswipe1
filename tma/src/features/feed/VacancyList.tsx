@@ -1,0 +1,65 @@
+import type { SwipeDirection, Vacancy } from "@/types/domain";
+import { STAFF_ROLE_LABELS } from "@/types/domain";
+import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
+
+/** Список-вид ленты — альтернатива свайпу для тех, кто любит просматривать. */
+export function VacancyList({
+  items,
+  onAct,
+}: {
+  items: Vacancy[];
+  onAct: (v: Vacancy, dir: SwipeDirection) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {items.map((v) => (
+        <div key={v.id} className="card fade-up">
+          <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 14,
+                flex: "none",
+                backgroundImage: `url(${v.interiorPhotoUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="row">
+                <b style={{ flex: 1 }}>{v.companyName}</b>
+                {v.boosted && (
+                  <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>🔥 ТОП</span>
+                )}
+              </div>
+              <div className="muted" style={{ marginTop: 2 }}>
+                {STAFF_ROLE_LABELS[v.role]} · {rateLabel(v.rate, v.rateType)}
+              </div>
+              <div className="muted">
+                {fmtDate(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
+                {typeof v.distanceKm === "number" ? ` · ${v.distanceKm.toFixed(1)} км` : ""}
+              </div>
+            </div>
+          </div>
+          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            <button
+              className="btn secondary"
+              style={{ minHeight: 44 }}
+              onClick={() => onAct(v, "dislike")}
+            >
+              Пропустить
+            </button>
+            <button
+              className="btn"
+              style={{ minHeight: 44 }}
+              onClick={() => onAct(v, "like")}
+            >
+              Откликнуться
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

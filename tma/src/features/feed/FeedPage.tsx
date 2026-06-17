@@ -14,6 +14,7 @@ import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
+import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 
 export function FeedPage() {
@@ -25,6 +26,9 @@ export function FeedPage() {
   const [empty, setEmpty] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>({});
   const [filterOpen, setFilterOpen] = useState(false);
+  const [view, setView] = useState<"swipe" | "list">(
+    (localStorage.getItem("ss_view") as "swipe" | "list" | null) ?? "swipe",
+  );
   const controller = useRef<((dir: SwipeDirection) => void) | null>(null);
 
   const activeFilterCount =
@@ -79,6 +83,20 @@ export function FeedPage() {
         {isSeeker && (
           <button
             className="tab"
+            style={{ flex: "none", width: "auto" }}
+            aria-label={view === "swipe" ? "Показать списком" : "Показать свайпом"}
+            onClick={() => {
+              const next = view === "swipe" ? "list" : "swipe";
+              setView(next);
+              localStorage.setItem("ss_view", next);
+            }}
+          >
+            <span className="ico">{view === "swipe" ? "☰" : "🃏"}</span>
+          </button>
+        )}
+        {isSeeker && (
+          <button
+            className="tab"
             style={{ flex: "none", width: "auto", color: activeFilterCount ? "var(--gold)" : undefined }}
             aria-label="Фильтры"
             onClick={() => setFilterOpen(true)}
@@ -129,7 +147,11 @@ export function FeedPage() {
         </div>
       )}
 
-      {!isLoading && !isError && data && !empty && data.length > 0 && (
+      {!isLoading && !isError && data && !empty && data.length > 0 && isSeeker && view === "list" && (
+        <VacancyList items={data as Vacancy[]} onAct={handleSwipe} />
+      )}
+
+      {!isLoading && !isError && data && !empty && data.length > 0 && !(isSeeker && view === "list") && (
         <>
           {isSeeker ? (
             <SwipeDeck<Vacancy>
