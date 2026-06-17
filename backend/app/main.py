@@ -46,6 +46,8 @@ if settings.sentry_dsn:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail-fast: в прод-режиме не стартуем с дефолтными секретами.
+    settings.assert_production_safe()
     init_db()
     yield
 

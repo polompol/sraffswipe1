@@ -104,3 +104,68 @@ def test_confirm_requires_participant(client):
     # Участник подтверждает успешно.
     ok = client.post(f"/matches/{match_id}/confirm", headers=_hdr(s_token))
     assert ok.status_code == 200
+
+
+def _make_match(client):
+    e_token, _ = _auth(client, "employer")
+    vac = _vacancy(client, _hdr(e_token))
+    s_token, s_id = _auth(client, "seeker")
+    client.post("/swipes", headers=_hdr(e_token), json={
+        "target_id": s_id, "target_type": "user", "direction": "like",
+    })
+    sw = client.post("/swipes", headers=_hdr(s_token), json={
+        "target_id": vac["id"], "target_type": "vacancy", "direction": "like",
+    }).json()
+    return sw["match_id"], s_token, e_token
+
+
+def test_chat_history_and_send_require_participant(client):
+    match_id, s_token, _ = _make_match(client)
+    outsider = _auth_phone(client, "+79990000888", "seeker")
+    # Чужой не читает историю и не пишет в чужой чат.
+    assert client.get(
+        f"/matches/{match_id}/messages", headers=_hdr(outsider)
+    ).status_code == 403
+    assert client.post(
+        f"/matches/{match_id}/messages", headers=_hdr(outsider), json={"text": "hi"}
+    ).status_code == 403
+    # Участник — читает и пишет.
+    assert client.get(
+        f"/matches/{match_id}/messages", headers=_hdr(s_token)
+    ).status_code == 200
+    assert client.post(
+        f"/matches/{match_id}/messages", headers=_hdr(s_token), json={"text": "hi"}
+    ).status_code == 200
+
+
+def test_act_blocked_until_confirmed(client):
+    match_id, s_token, e_token = _make_match(client)
+    # До подтверждения смены акт недоступен.
+    assert client.get(
+        f"/matches/{match_id}/act.pdf?token={s_token}"
+    ).status_code == 409
+    client.post(f"/matches/{match_id}/confirm", headers=_hdr(s_token))
+    client.post(f"/matches/{match_id}/confirm", headers=_hdr(e_token))
+    # После подтверждения — PDF отдаётся.
+    assert client.get(
+        f"/matches/{match_id}/act.pdf?token={s_token}"
+    ).status_code == 200
+
+
+def test_superlike_not_double_charged_on_repeat(client):
+    e_token, _ = _auth(client, "employer")
+    vac = _vacancy(client, _hdr(e_token))
+    token, _ = _auth(client, "seeker")
+    before = _superlike_balance(client, token)
+    body = {"target_id": vac["id"], "target_type": "vacancy", "direction": "superlike"}
+    client.post("/swipes", headers=_hdr(token), json=body)
+    after_first = _superlike_balance(client, token)
+    assert after_first == before - 1
+    # Повторный свайп по той же цели не списывает баланс ещё раз.
+    client.post("/swipes", headers=_hdr(token), json=body)
+    assert _superlike_balance(client, token) == after_first
+
+
+def test_candidates_forbidden_for_seeker(client):
+    s_token, _ = _auth(client, "seeker")
+    assert client.get("/candidates", headers=_hdr(s_token)).status_code == 403

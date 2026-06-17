@@ -9,6 +9,31 @@ from ..security import decode_token
 
 router = APIRouter(prefix="/matches", tags=["acts"])
 
+# Встроенный шрифт Helvetica — latin-1, кириллицу не кодирует. Чтобы акт не
+# падал на русских названиях/именах, транслитерируем значения в латиницу.
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
+    "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
+    "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
+def _translit(text: str) -> str:
+    out: list[str] = []
+    for ch in text or "":
+        low = ch.lower()
+        rep = _TRANSLIT.get(low)
+        if rep is None:
+            out.append(ch)
+        elif ch.isupper():
+            out.append(rep.capitalize())
+        else:
+            out.append(rep)
+    # На всякий случай отбрасываем всё, что не кодируется latin-1.
+    return "".join(out).encode("latin-1", "ignore").decode("latin-1")
+
 
 def _fmt_time(minutes: int) -> str:
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
@@ -25,6 +50,11 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["id"] not in (m.user_id, m.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа к акту")
+    # Акт выполненных работ имеет смысл только для подтверждённой смены.
+    if m.status not in ("confirmed", "completed"):
+        raise HTTPException(
+            status_code=409, detail="Акт доступен после подтверждения смены"
+        )
     vac = db.get(Vacancy, m.vacancy_id)
     emp = db.get(Employer, m.employer_id)
     user = db.get(User, m.user_id)
@@ -47,10 +77,10 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     pdf.ln(4)
 
     rows = [
-        ("Zakazchik / Customer", emp.company_name),
-        ("INN", emp.inn),
-        ("OGRN", emp.ogrn),
-        ("Ispolnitel / Contractor", user.name),
+        ("Zakazchik / Customer", emp.company_name or "-"),
+        ("INN", emp.inn or "-"),
+        ("OGRN", emp.ogrn or "-"),
+        ("Ispolnitel / Contractor", user.name or "-"),
         ("INN ispolnitelya", user.inn or "-"),
         ("Status", "Samozanyatyy (NPD)" if user.self_employed else "Fiz. litso"),
         ("Smena / Shift", vac.role),
@@ -62,7 +92,7 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
         pdf.set_font("Helvetica", size=11)
         pdf.cell(70, 8, f"{label}:", border=0)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, str(value), ln=True)
+        pdf.cell(0, 8, _translit(str(value)), ln=True)
 
     pdf.ln(6)
     pdf.set_font("Helvetica", size=10)

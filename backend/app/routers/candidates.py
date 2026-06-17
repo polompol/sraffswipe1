@@ -1,5 +1,5 @@
 """Лента кандидатов для работодателя."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -34,8 +34,11 @@ def _csv(value: str) -> list[str]:
 
 @router.get("/candidates", response_model=list[CandidateOut])
 def list_candidates(
-    _principal: dict = Depends(current_principal), db: Session = Depends(get_db)
+    principal: dict = Depends(current_principal), db: Session = Depends(get_db)
 ):
+    # Ленту кандидатов с ПДн видит только работодатель.
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
     users = db.query(User).limit(50).all()
     return [
         CandidateOut(
@@ -49,7 +52,8 @@ def list_candidates(
             roles=_csv(u.roles),
             med_book=u.med_book,
             self_employed=u.self_employed,
-            inn=u.inn,
+            # ИНН не отдаём в общей ленте — он попадает в акт уже после мэтча.
+            inn=None,
             experience_tags=_csv(u.experience_tags),
             rating=u.rating,
             photo_urls=_csv(u.photo_urls),

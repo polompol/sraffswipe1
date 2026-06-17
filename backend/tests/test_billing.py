@@ -150,17 +150,29 @@ def test_boost_moves_vacancy_to_top(client):
 
 
 def test_superlike_consumes_balance(client):
-    # Работодатель создаёт вакансию-цель.
+    # Pro-работодатель публикует две вакансии — две разные цели супер-лайка.
     e = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     eh = {"Authorization": f"Bearer {e.json()['access_token']}"}
-    vac = _new_vacancy(client, eh).json()
+    client.post("/billing/fulfill", headers=INTERNAL, json={
+        "owner_id": e.json()["user_id"], "sku": "sub_pro_month",
+        "provider": "yookassa", "charge_id": "yk_sl",
+    })
+    vac1 = _new_vacancy(client, eh, role="waiter").json()
+    vac2 = _new_vacancy(client, eh, role="bartender").json()
 
     r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    body = {"target_id": vac["id"], "target_type": "vacancy", "direction": "superlike"}
-    # Стартовый баланс = 1: первый супер-лайк проходит, второй — 402.
-    assert client.post("/swipes", json=body, headers=headers).status_code == 200
-    assert client.post("/swipes", json=body, headers=headers).status_code == 402
+
+    def sup(vid):
+        return {"target_id": vid, "target_type": "vacancy", "direction": "superlike"}
+
+    # Стартовый баланс = 1: первый супер-лайк проходит, второй (др. цель) — 402.
+    assert client.post(
+        "/swipes", json=sup(vac1["id"]), headers=headers
+    ).status_code == 200
+    assert client.post(
+        "/swipes", json=sup(vac2["id"]), headers=headers
+    ).status_code == 402
 
 
 def test_act_pdf_requires_ownership(client):

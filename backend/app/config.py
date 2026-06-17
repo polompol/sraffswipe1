@@ -70,5 +70,22 @@ class Settings(BaseSettings):
     def yookassa_ready(self) -> bool:
         return bool(self.yookassa_shop_id and self.yookassa_secret_key)
 
+    def assert_production_safe(self) -> None:
+        """Не даём подняться в проде с дефолтными секретами/опасными флагами."""
+        if self.dev_mode:
+            return
+        problems: list[str] = []
+        if self.jwt_secret == "dev-secret-change-me":
+            problems.append("JWT_SECRET не задан (используется dev-значение)")
+        if not self.internal_api_secret:
+            problems.append("INTERNAL_API_SECRET не задан")
+        if self.allow_insecure_telegram_auth:
+            problems.append("ALLOW_INSECURE_TELEGRAM_AUTH=true в проде")
+        if problems:
+            raise RuntimeError(
+                "Небезопасная конфигурация для прод-режима: "
+                + "; ".join(problems)
+            )
+
 
 settings = Settings()

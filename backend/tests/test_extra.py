@@ -106,3 +106,28 @@ def test_dadata_without_token_is_empty(client):
     party = client.get("/dadata/party?inn=7707083893", headers=_hdr(token))
     assert party.status_code == 200
     assert party.json()["found"] is False
+
+
+def test_production_safe_guard_rejects_default_secrets():
+    """В прод-режиме дефолтные секреты должны ронять старт приложения."""
+    from app.config import Settings
+
+    unsafe = Settings(
+        dev_mode=False,
+        jwt_secret="dev-secret-change-me",
+        internal_api_secret="",
+    )
+    try:
+        unsafe.assert_production_safe()
+        raised = False
+    except RuntimeError:
+        raised = True
+    assert raised
+
+    safe = Settings(
+        dev_mode=False,
+        jwt_secret="a-real-long-secret",
+        internal_api_secret="another-secret",
+        allow_insecure_telegram_auth=False,
+    )
+    safe.assert_production_safe()  # не бросает

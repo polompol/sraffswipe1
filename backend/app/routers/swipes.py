@@ -70,25 +70,38 @@ def swipe(
         if db.get(User, body.target_id) is None:
             raise HTTPException(status_code=404, detail="Кандидат не найден")
 
-    # Супер-лайк «Срочно» — платная фича: списываем с баланса (после валидации).
-    if body.direction == "superlike":
-        ent = get_or_create(db, me)
-        if ent.superlike_balance < 1:
-            raise HTTPException(
-                status_code=402,
-                detail="Закончились супер-лайки. Купите пакет «Срочно».",
-            )
-        ent.superlike_balance -= 1
-
-    db.add(
-        Swipe(
-            swiper_id=me,
-            target_id=body.target_id,
-            target_type=body.target_type,
-            direction=body.direction,
+    # Идемпотентность: повторный свайп по той же цели не списывает баланс
+    # повторно и не плодит дубль-записи (защита от двойного клика/ретрая).
+    existing = (
+        db.query(Swipe)
+        .filter(
+            Swipe.swiper_id == me,
+            Swipe.target_id == body.target_id,
+            Swipe.target_type == body.target_type,
         )
+        .first()
     )
-    db.commit()
+
+    if existing is None:
+        # Супер-лайк «Срочно» — платная фича: списываем с баланса (после валидации).
+        if body.direction == "superlike":
+            ent = get_or_create(db, me)
+            if ent.superlike_balance < 1:
+                raise HTTPException(
+                    status_code=402,
+                    detail="Закончились супер-лайки. Купите пакет «Срочно».",
+                )
+            ent.superlike_balance -= 1
+
+        db.add(
+            Swipe(
+                swiper_id=me,
+                target_id=body.target_id,
+                target_type=body.target_type,
+                direction=body.direction,
+            )
+        )
+        db.commit()
 
     if body.direction not in _POSITIVE:
         return SwipeOut(recorded=True, matched=False)

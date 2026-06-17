@@ -1,5 +1,5 @@
 """Чат: REST для истории + WebSocket для real-time (в проде — Redis pub/sub)."""
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, get_db
@@ -10,6 +10,16 @@ from ..schemas import MessageIn, MessageOut
 from ..security import current_principal, decode_token
 
 router = APIRouter(tags=["chat"])
+
+
+def _require_participant(db: Session, match_id: str, principal: dict) -> Match:
+    """Мэтч существует и принципал — его участник, иначе 404/403."""
+    match = db.get(Match, match_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["id"] not in (match.user_id, match.employer_id):
+        raise HTTPException(status_code=403, detail="Нет доступа к чату")
+    return match
 
 
 def _to_out(m: Message) -> MessageOut:
@@ -28,6 +38,7 @@ def history(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
+    _require_participant(db, match_id, principal)
     rows = (
         db.query(Message)
         .filter(Message.match_id == match_id)
@@ -48,6 +59,7 @@ async def send(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
+    match = _require_participant(db, match_id, principal)
     msg = Message(match_id=match_id, sender_id=principal["id"], text=body.text)
     db.add(msg)
     db.commit()
@@ -55,14 +67,12 @@ async def send(
     out = _to_out(msg)
     await manager.broadcast(match_id, out.model_dump())
     # Уведомляем второго участника мэтча в Telegram.
-    match = db.get(Match, match_id)
-    if match is not None:
-        other = (
-            match.employer_id
-            if principal["id"] == match.user_id
-            else match.user_id
-        )
-        notify_owner(db, other, f"💬 Новое сообщение: {body.text[:60]}")
+    other = (
+        match.employer_id
+        if principal["id"] == match.user_id
+        else match.user_id
+    )
+    notify_owner(db, other, f"💬 Новое сообщение: {body.text[:60]}")
     return out
 
 

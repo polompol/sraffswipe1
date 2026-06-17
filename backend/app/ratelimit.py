@@ -13,6 +13,22 @@ from .security import current_principal
 _hits: dict[str, list[float]] = defaultdict(list)
 
 
+def hit(bucket: str, limit: int, window: float) -> None:
+    """Учёт обращения по произвольному ключу (для неавторизованных ручек).
+
+    Бросает 429 при превышении. Используется там, где нет принципала —
+    например, запрос/проверка SMS-кода (ключ = телефон).
+    """
+    now = time.monotonic()
+    recent = [t for t in _hits[bucket] if now - t < window]
+    if len(recent) >= limit:
+        raise HTTPException(
+            status_code=429, detail="Слишком часто. Попробуйте позже."
+        )
+    recent.append(now)
+    _hits[bucket] = recent
+
+
 def rate_limit(key: str, limit: int, window: float):
     """Зависимость FastAPI: не более `limit` вызовов за `window` секунд."""
 
