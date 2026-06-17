@@ -1,11 +1,24 @@
 """Pydantic-схемы запросов/ответов."""
-from pydantic import BaseModel
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field, StringConstraints
+
+Role = Literal["seeker", "employer"]
+Phone = Annotated[
+    str, StringConstraints(strip_whitespace=True, pattern=r"^\+?\d{10,15}$")
+]
+Code = Annotated[
+    str, StringConstraints(strip_whitespace=True, pattern=r"^\d{4,8}$")
+]
+# Короткие строковые поля с разумным потолком длины (анти-абуз).
+Short = Annotated[str, StringConstraints(max_length=120)]
+Longish = Annotated[str, StringConstraints(max_length=2000)]
 
 
 # ---- auth ----
 class RequestCodeIn(BaseModel):
-    phone: str
-    role: str = "seeker"  # seeker|employer
+    phone: Phone
+    role: Role = "seeker"
 
 
 class RequestCodeOut(BaseModel):
@@ -14,9 +27,9 @@ class RequestCodeOut(BaseModel):
 
 
 class VerifyIn(BaseModel):
-    phone: str
-    code: str
-    role: str = "seeker"
+    phone: Phone
+    code: Code
+    role: Role = "seeker"
 
 
 class TokenOut(BaseModel):
@@ -28,19 +41,19 @@ class TokenOut(BaseModel):
 
 # ---- vacancies ----
 class VacancyIn(BaseModel):
-    role: str
-    date: str
-    start_time: int
-    end_time: int
-    rate: int
-    rate_type: str = "perHour"
-    description: str = ""
+    role: Short
+    date: Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    start_time: int = Field(ge=0, le=1440)
+    end_time: int = Field(ge=0, le=1440)
+    rate: int = Field(ge=0, le=1_000_000)
+    rate_type: Literal["perHour", "perShift"] = "perHour"
+    description: Longish = ""
     require_med_book: bool = False
     require_experience: bool = False
-    lat: float = 0.0
-    lng: float = 0.0
-    address: str = ""
-    interior_photo_url: str = ""
+    lat: float = Field(default=0.0, ge=-90, le=90)
+    lng: float = Field(default=0.0, ge=-180, le=180)
+    address: Short = ""
+    interior_photo_url: Annotated[str, StringConstraints(max_length=500)] = ""
 
 
 class VacancyOut(BaseModel):
@@ -69,9 +82,9 @@ class VacancyOut(BaseModel):
 
 # ---- swipes / matches ----
 class SwipeIn(BaseModel):
-    target_id: str
-    target_type: str  # vacancy|user
-    direction: str  # like|superlike|dislike
+    target_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    target_type: Literal["vacancy", "user"]
+    direction: Literal["like", "superlike", "dislike"]
 
 
 class SwipeOut(BaseModel):
@@ -92,7 +105,9 @@ class MatchOut(BaseModel):
 
 # ---- chat ----
 class MessageIn(BaseModel):
-    text: str
+    text: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+    ]
 
 
 class MessageOut(BaseModel):

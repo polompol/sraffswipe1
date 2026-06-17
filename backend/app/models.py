@@ -2,7 +2,16 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -100,6 +109,11 @@ class Swipe(Base):
     """Свайп (коллекция swipes). Уникальность пары swiper→target."""
 
     __tablename__ = "swipes"
+    __table_args__ = (
+        UniqueConstraint(
+            "swiper_id", "target_id", "target_type", name="uq_swipe_target"
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     swiper_id: Mapped[str] = mapped_column(String, index=True)
@@ -113,6 +127,9 @@ class Match(Base):
     """Мэтч (коллекция matches)."""
 
     __tablename__ = "matches"
+    __table_args__ = (
+        UniqueConstraint("vacancy_id", "user_id", name="uq_match_vac_user"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(String, index=True)

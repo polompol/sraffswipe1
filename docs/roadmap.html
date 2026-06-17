@@ -119,7 +119,7 @@
           <li>Инфраструктура масштаба: Redis (рейт-лимит/кэш/чат pub-sub), очереди задач, PostGIS-индексы.</li>
           <li>Мультигород/мультирегион, биллинг юрлиц, закрывающие документы.</li>
           <li>Открытый API/вебхуки для агрегаторов вакансий и HR-систем.</li>
-          <li>Нативные сборки (RuStore/AppStore) из существующего Flutter-клиента.</li>
+          <li>При необходимости — нативная обёртка (RuStore/AppStore) поверх того же backend.</li>
         </ul>
       </div>
     </div>
@@ -131,8 +131,7 @@
       <tr><th>Компонент</th><th>Решение</th><th>Почему</th></tr>
       <tr><td><b>tma/</b> (Telegram Mini App)</td><td class="keep">Оставить — ядро</td><td>Основной канал, активно развивать.</td></tr>
       <tr><td><b>backend/</b> (FastAPI + бот)</td><td class="keep">Оставить — ядро</td><td>Единый backend для всех клиентов, покрыт тестами.</td></tr>
-      <tr><td><b>lib/</b> (Flutter)</td><td class="freeze">Заморозить</td><td>Вторичный клиент для сторов; не развивать до этапа 3. Держать <code>flutter analyze</code> зелёным.</td></tr>
-      <tr><td><code>lib/data/api/</code> (Flutter dio-слой)</td><td class="drop">Убрать или дописать</td><td>Путь <code>USE_BACKEND=true</code> во Flutter не подключён — сейчас мёртвый код, помечен экспериментальным.</td></tr>
+      <tr><td><b>Flutter-клиент</b> (lib/)</td><td class="drop">Удалён</td><td>Убран как лишний — продукт сфокусирован на Telegram Mini App. Код в истории git, при необходимости возвращается.</td></tr>
       <tr><td>In-memory рейт-лимит</td><td class="freeze">Заменить на Redis</td><td>Сейчас на 1 инстанс; для масштаба нужен общий стор.</td></tr>
       <tr><td>SQLite (дефолт)</td><td class="drop">Только dev</td><td>В проде — PostgreSQL/PostGIS.</td></tr>
       <tr><td>Заглушки фото (Unsplash)</td><td class="drop">Заменить</td><td>Реальные загрузки через S3 (эндпоинт готов).</td></tr>

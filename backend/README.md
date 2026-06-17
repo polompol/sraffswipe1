@@ -62,12 +62,13 @@ JWT в заголовке: `Authorization: Bearer <token>`. Роль (`seeker`/`
   PostGIS `ST_DWithin` + GiST-индексы.
 - **Чат** — in-memory брокер; для нескольких инстансов вынести в Redis pub/sub.
 
-## Подключение Flutter-клиента
+## Подключение клиента (Telegram Mini App)
 
-Запустите приложение с флагами:
+В `tma/.env` укажите адрес backend и включите реальный режим:
 
 ```bash
-flutter run --dart-define=USE_BACKEND=true --dart-define=API_BASE_URL=http://10.0.2.2:8000
+VITE_API_BASE_URL=http://localhost:8000
+VITE_USE_BACKEND=true
 ```
 
-(`10.0.2.2` — адрес хоста из Android-эмулятора.)
+Без `VITE_USE_BACKEND=true` Mini App работает на mock-данных (демо без сервера).

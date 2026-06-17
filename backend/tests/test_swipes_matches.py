@@ -169,3 +169,15 @@ def test_superlike_not_double_charged_on_repeat(client):
 def test_candidates_forbidden_for_seeker(client):
     s_token, _ = _auth(client, "seeker")
     assert client.get("/candidates", headers=_hdr(s_token)).status_code == 403
+
+
+def test_input_validation_rejects_garbage(client):
+    token, _ = _auth(client, "seeker")
+    # Неизвестное направление свайпа → 422 (Literal).
+    assert client.post("/swipes", headers=_hdr(token), json={
+        "target_id": "x", "target_type": "vacancy", "direction": "love",
+    }).status_code == 422
+    # Неизвестный тип цели → 422.
+    assert client.post("/swipes", headers=_hdr(token), json={
+        "target_id": "x", "target_type": "planet", "direction": "like",
+    }).status_code == 422

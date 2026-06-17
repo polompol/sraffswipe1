@@ -1,5 +1,6 @@
 """Свайпы и детект мэтча."""
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -38,7 +39,19 @@ def _ensure_match(
             is_system=True,
         )
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Гонка встречных свайпов — мэтч уже создан параллельно, берём его.
+        db.rollback()
+        existing = (
+            db.query(Match)
+            .filter(Match.vacancy_id == vacancy_id, Match.user_id == user_id)
+            .first()
+        )
+        if existing:
+            return existing, False
+        raise
     db.refresh(match)
     return match, True
 
@@ -101,7 +114,12 @@ def swipe(
                 direction=body.direction,
             )
         )
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Гонка: параллельный запрос уже записал этот свайп — откатываем
+            # списание баланса и считаем операцию идемпотентной.
+            db.rollback()
 
     if body.direction not in _POSITIVE:
         return SwipeOut(recorded=True, matched=False)
