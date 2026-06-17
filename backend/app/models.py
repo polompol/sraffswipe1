@@ -229,6 +229,16 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class Streak(Base):
+    """Серия ежедневных заходов (геймификация вовлечения)."""
+
+    __tablename__ = "streaks"
+
+    owner_id: Mapped[str] = mapped_column(String, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    last_active: Mapped[str] = mapped_column(String, default="")  # ISO date
+
+
 class SavedSearch(Base):
     """Сохранённый поиск соискателя + опция уведомлять о новых сменах."""
 

@@ -100,6 +100,14 @@ class MeOut(BaseModel):
     name: str
     rating: float
     tgUsername: str | None = None
+    streak: int = 0
+
+
+def _streak(db: Session, owner_id: str) -> int:
+    from ..models import Streak
+
+    s = db.get(Streak, owner_id)
+    return s.count if s else 0
 
 
 @router.get("/me", response_model=MeOut)
@@ -113,6 +121,7 @@ def me(
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
+            streak=_streak(db, e.id),
         )
     u = db.get(User, principal["id"])
     if u is None:
@@ -120,6 +129,7 @@ def me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
+        streak=_streak(db, u.id),
     )
 
 
@@ -179,6 +189,7 @@ def update_me(
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
+            streak=_streak(db, e.id),
         )
 
     u = db.get(User, principal["id"])
@@ -208,4 +219,5 @@ def update_me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
+        streak=_streak(db, u.id),
     )

@@ -272,6 +272,7 @@ const meProfile: Me = {
   name: "Алексей",
   rating: 4.8,
   tgUsername: "alexey",
+  streak: 3,
 };
 
 export function fetchMe(): Promise<Me> {

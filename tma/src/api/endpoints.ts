@@ -125,6 +125,7 @@ export interface Me {
   name: string;
   rating: number;
   tgUsername?: string | null;
+  streak?: number;
 }
 
 export async function fetchMe(): Promise<Me> {

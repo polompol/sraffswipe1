@@ -9,6 +9,7 @@ from ..entitlements import get_or_create
 from ..models import Employer, Entitlement, Referral, User
 from ..schemas import TokenOut
 from ..security import create_token
+from ..streaks import touch_streak
 from ..telegram import parse_start_param, parse_user, validate_init_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -80,6 +81,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(emp)
             _apply_referral(db, emp.id, ref_code)
+        touch_streak(db, emp.id)
         return TokenOut(
             access_token=create_token(emp.id, "employer"),
             role="employer",
@@ -100,6 +102,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         _apply_referral(db, user.id, ref_code)
+    touch_streak(db, user.id)
     return TokenOut(
         access_token=create_token(user.id, "seeker"),
         role="seeker",

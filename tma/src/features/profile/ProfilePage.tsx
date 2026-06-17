@@ -113,6 +113,7 @@ export function ProfilePage() {
           <div className="muted">
             {me ? `★ ${me.rating.toFixed(1)}` : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
+            {me?.streak ? ` · 🔥 ${me.streak} дн. подряд` : ""}
           </div>
         </span>
       </div>
