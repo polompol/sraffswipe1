@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     # По умолчанию SQLite — приложение поднимается без внешних зависимостей.
     # В проде: postgresql+psycopg://user:pass@host:5432/staffswipe (PostGIS).
     database_url: str = "sqlite:///./staffswipe.db"
+    # Пул соединений к БД (только PostgreSQL) — запас под нагрузку.
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
 
     jwt_secret: str = "dev-secret-change-me"
     jwt_alg: str = "HS256"

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import init_db
@@ -74,6 +75,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_error(request: Request, exc: Exception):
+    """Любая необработанная ошибка → чистый 500 без утечки трейсбека наружу.
+    Полная ошибка пишется в лог (и в Sentry, если подключён)."""
+    rid = request.headers.get("X-Request-ID", "-")
+    logger.exception("Необработанная ошибка rid=%s %s %s", rid, request.method,
+                     request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Внутренняя ошибка сервера", "request_id": rid},
+    )
 
 
 @app.middleware("http")

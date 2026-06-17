@@ -5,6 +5,11 @@ import { useSession } from "@/store/session";
 import { authTelegram, track } from "@/api/endpoints";
 import { rawInitData, haptic } from "@/telegram/sdk";
 
+// Юридические документы (152-ФЗ) — задаются через env. ОБЯЗАТЕЛЬНО укажите
+// реальные ссылки перед запуском, иначе согласие будет ссылаться в никуда.
+const OFFER_URL = import.meta.env.VITE_OFFER_URL || "#";
+const PRIVACY_URL = import.meta.env.VITE_PRIVACY_URL || "#";
+
 export function RolePage() {
   const nav = useNavigate();
   const setAuth = useSession((s) => s.setAuth);
@@ -54,8 +59,8 @@ export function RolePage() {
           />
           <span className="muted" style={{ fontSize: 13 }}>
             Мне есть 18 лет. Принимаю{" "}
-            <a href="https://example.com/offer" target="_blank" rel="noreferrer">оферту</a>,{" "}
-            <a href="https://example.com/privacy" target="_blank" rel="noreferrer">политику обработки ПДн (152-ФЗ)</a>{" "}
+            <a href={OFFER_URL} target="_blank" rel="noreferrer">оферту</a>,{" "}
+            <a href={PRIVACY_URL} target="_blank" rel="noreferrer">политику обработки ПДн (152-ФЗ)</a>{" "}
             и даю согласие на обработку персональных данных.
           </span>
         </label>

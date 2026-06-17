@@ -1,9 +1,12 @@
 # Прод-образ backend StaffSwipe.
 FROM python:3.12-slim
 
+# WEB_CONCURRENCY=1: in-memory WS-чат и рейт-лимит живут в процессе, поэтому до
+# подключения Redis держим один воркер (иначе сообщения чата не доходят между
+# воркерами). Async-воркер тянет сотни одновременных пользователей пилота.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    WEB_CONCURRENCY=2
+    WEB_CONCURRENCY=1
 
 WORKDIR /app
 

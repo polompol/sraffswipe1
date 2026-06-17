@@ -12,7 +12,18 @@ connect_args = (
     else {}
 )
 
-engine = create_engine(settings.database_url, connect_args=connect_args)
+# Для PostgreSQL: pre_ping убирает «битые» соединения после простоя (иначе под
+# нагрузкой ловим случайные 500), увеличенный пул держит всплески трафика.
+engine_kwargs: dict = {"connect_args": connect_args}
+if not settings.database_url.startswith("sqlite"):
+    engine_kwargs.update(
+        pool_pre_ping=True,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_recycle=1800,
+    )
+
+engine = create_engine(settings.database_url, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
