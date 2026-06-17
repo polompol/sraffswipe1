@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
-import type { FeedFilters } from "@/api/endpoints";
+import { createSavedSearch, type FeedFilters } from "@/api/endpoints";
 import { haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
@@ -23,7 +23,19 @@ export function FilterSheet({
   onClose: () => void;
 }) {
   const [f, setF] = useState<FeedFilters>({ sort: "distance", ...value });
+  const [saved, setSaved] = useState(false);
   const set = (patch: Partial<FeedFilters>) => setF((cur) => ({ ...cur, ...patch }));
+
+  async function saveSearch() {
+    haptic("success");
+    const title = f.role ? `Поиск: ${STAFF_ROLE_LABELS[f.role as StaffRole]}` : "Мой поиск";
+    try {
+      await createSavedSearch(title, f, true);
+      setSaved(true);
+    } catch {
+      haptic("error");
+    }
+  }
 
   function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
     return (
@@ -118,6 +130,15 @@ export function FilterSheet({
             <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
           ))}
         </div>
+
+        <button
+          className="btn ghost"
+          style={{ marginBottom: 10 }}
+          disabled={saved}
+          onClick={saveSearch}
+        >
+          {saved ? "✓ Поиск сохранён — пришлём новые смены" : "🔔 Сохранить поиск и уведомлять"}
+        </button>
 
         <div className="row" style={{ gap: 10 }}>
           <button className="btn secondary" onClick={() => onApply({ sort: "distance" })}>

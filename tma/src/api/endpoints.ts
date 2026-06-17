@@ -211,6 +211,38 @@ export async function suggestAddress(q: string): Promise<AddressSuggestion[]> {
   return data;
 }
 
+export interface SavedSearch {
+  id: string;
+  title: string;
+  filters: FeedFilters;
+  notify: boolean;
+}
+
+export async function listSavedSearches(): Promise<SavedSearch[]> {
+  if (!USE_BACKEND) return mock.listSavedSearches();
+  const { data } = await api.get<SavedSearch[]>("/saved-searches");
+  return data;
+}
+
+export async function createSavedSearch(
+  title: string,
+  filters: FeedFilters,
+  notify: boolean,
+): Promise<SavedSearch> {
+  if (!USE_BACKEND) return mock.createSavedSearch(title, filters, notify);
+  const { data } = await api.post<SavedSearch>("/saved-searches", {
+    title,
+    filters,
+    notify,
+  });
+  return data;
+}
+
+export async function deleteSavedSearch(id: string): Promise<void> {
+  if (!USE_BACKEND) return mock.deleteSavedSearch(id);
+  await api.delete(`/saved-searches/${id}`);
+}
+
 export interface VerifyResult {
   found: boolean;
   verified: boolean;

@@ -1,9 +1,15 @@
 import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import type { MatchModel, Seeker, SwipeDirection, Vacancy } from "@/types/domain";
 import { useSession } from "@/store/session";
-import { fetchFeed, sendSwipe, track, type FeedFilters } from "@/api/endpoints";
+import {
+  fetchFeed,
+  listSavedSearches,
+  sendSwipe,
+  track,
+  type FeedFilters,
+} from "@/api/endpoints";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
@@ -14,6 +20,7 @@ export function FeedPage() {
   const role = useSession((s) => s.role) ?? "seeker";
   const isSeeker = role === "seeker";
   const nav = useNavigate();
+  const qc = useQueryClient();
   const [match, setMatch] = useState<MatchModel | null>(null);
   const [empty, setEmpty] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>({});
@@ -32,6 +39,12 @@ export function FeedPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["feed", role, filters],
     queryFn: () => fetchFeed(role, filters),
+  });
+
+  const { data: searches } = useQuery({
+    queryKey: ["saved-searches"],
+    queryFn: listSavedSearches,
+    enabled: isSeeker,
   });
 
   async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection) {
@@ -81,9 +94,27 @@ export function FeedPage() {
         {isSeeker ? "Смены рядом с вами" : "Кандидаты рядом"}
         {data ? ` · ${data.length}` : ""}
       </p>
-      <p className="muted" style={{ marginBottom: 12, fontSize: 12 }}>
+      <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
         ⭐ 4.8 · 1 200+ смен закрыто · средний отклик 7 мин
       </p>
+
+      {isSeeker && searches && searches.length > 0 && (
+        <div className="row" style={{ flexWrap: "wrap", marginBottom: 12 }}>
+          {searches.map((s) => (
+            <button
+              key={s.id}
+              className="tag"
+              style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+              onClick={() => {
+                setFilters(s.filters);
+                setEmpty(false);
+              }}
+            >
+              🔔 {s.title}
+            </button>
+          ))}
+        </div>
+      )}
 
       {isLoading && <SkeletonCard />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
@@ -138,11 +169,15 @@ export function FeedPage() {
       {filterOpen && (
         <FilterSheet
           value={filters}
-          onClose={() => setFilterOpen(false)}
+          onClose={() => {
+            setFilterOpen(false);
+            qc.invalidateQueries({ queryKey: ["saved-searches"] });
+          }}
           onApply={(f) => {
             setFilters(f);
             setEmpty(false);
             setFilterOpen(false);
+            qc.invalidateQueries({ queryKey: ["saved-searches"] });
           }}
         />
       )}

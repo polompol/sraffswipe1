@@ -13,8 +13,10 @@ import type {
 import type {
   AddressSuggestion,
   AuthResult,
+  FeedFilters,
   Me,
   ReferralInfo,
+  SavedSearch,
   SwipeResult,
   VerifyResult,
 } from "./endpoints";
@@ -321,6 +323,26 @@ export function verifyEmployer(inn: string): Promise<VerifyResult> {
         : "Данные подтянуты. Бейдж «Проверен» — после оплаты верификации."
       : "Введите корректный ИНН (10–12 цифр).",
   });
+}
+
+const savedSearches: SavedSearch[] = [];
+
+export function listSavedSearches(): Promise<SavedSearch[]> {
+  return Promise.resolve([...savedSearches]);
+}
+export function createSavedSearch(
+  title: string,
+  filters: FeedFilters,
+  notify: boolean,
+): Promise<SavedSearch> {
+  const s: SavedSearch = { id: uid(), title, filters, notify };
+  savedSearches.unshift(s);
+  return Promise.resolve(s);
+}
+export function deleteSavedSearch(id: string): Promise<void> {
+  const i = savedSearches.findIndex((s) => s.id === id);
+  if (i >= 0) savedSearches.splice(i, 1);
+  return Promise.resolve();
 }
 
 export function suggestAddress(q: string): Promise<AddressSuggestion[]> {

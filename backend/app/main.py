@@ -19,6 +19,7 @@ from .routers import (
     dadata,
     employer,
     matches,
+    saved_searches,
     social,
     swipes,
     telegram_auth,
@@ -101,6 +102,7 @@ app.include_router(chat.router)
 app.include_router(acts.router)
 app.include_router(billing.router)
 app.include_router(social.router)
+app.include_router(saved_searches.router)
 app.include_router(dadata.router)
 app.include_router(employer.router)
 app.include_router(uploads.router)

@@ -135,6 +135,10 @@ def create_vacancy(
     db.add(v)
     db.commit()
     db.refresh(v)
+    # Алерты владельцам сохранённых поисков, подходящих под новую смену.
+    from .saved_searches import notify_matching_searches
+
+    notify_matching_searches(db, v)
     return _to_out(v, emp, None)
 
 

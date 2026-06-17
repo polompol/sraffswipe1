@@ -229,6 +229,19 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class SavedSearch(Base):
+    """Сохранённый поиск соискателя + опция уведомлять о новых сменах."""
+
+    __tablename__ = "saved_searches"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, index=True)
+    title: Mapped[str] = mapped_column(String, default="Мой поиск")
+    filters: Mapped[str] = mapped_column(Text, default="{}")  # JSON
+    notify: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 class Review(Base):
     """Отзыв после смены: оценка одной стороны другой (1..5)."""
 
