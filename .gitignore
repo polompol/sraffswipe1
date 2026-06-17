@@ -1,12 +1,23 @@
-# Flutter / Dart
-.dart_tool/
-.packages
-.pub-cache/
-.pub/
-build/
-.flutter-plugins
-.flutter-plugins-dependencies
-pubspec.lock
+# Секреты — НИКОГДА не коммитим (ключи только в .env на сервере)
+.env
+**/.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+secrets/
+
+# Python / backend
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.sqlite3
+
+# Node / frontend
+node_modules/
+dist/
 
 # IDE
 .idea/
@@ -16,15 +27,6 @@ pubspec.lock
 
 # OS
 .DS_Store
-
-# Generated
-*.g.dart
-*.freezed.dart
-
-# Android/iOS local
-**/android/local.properties
-**/ios/Flutter/flutter_export_environment.sh
-**/ios/Pods/
 
 # Мокапы: храним только обзорные, остальное генерится скриптами
 mockups/*.png
