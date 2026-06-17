@@ -28,7 +28,8 @@ dist/
 # OS
 .DS_Store
 
-# Мокапы: храним только обзорные, остальное генерится скриптами
+# Мокапы: храним обзорные + раскадровку, остальное генерится скриптами
 mockups/*.png
 !mockups/overview.png
 !mockups/tma_overview.png
+!mockups/storyboard.png

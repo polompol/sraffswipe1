@@ -196,7 +196,7 @@ def chat_screen(nmsgs=3, confirmed=False):
     msgs = [
         ("sys", "Это мэтч! Смена «Кофейня «Дрова»». Договоритесь о деталях."),
         ("you", "Здравствуйте! Готовы выйти завтра на утро?"),
-        ("me", "Да, всё подходит 👍"),
+        ("me", "Да, всё подходит!"),
         ("you", "Отлично, ждём вас! Адрес в карточке."),
     ]
     if confirmed:
@@ -369,3 +369,20 @@ path = os.path.join(OUT, "flow.gif")
 frames[0].save(path, save_all=True, append_images=frames[1:], duration=durs,
                loop=0, optimize=False, disposal=2)
 print("saved", path, len(frames), "frames")
+
+# Статичная раскадровка (PNG) — для просмотра там, где GIF не проигрывается.
+panels = [("1. Лента", feed_base(True)), ("2. Мэтч", match_screen()),
+          ("3. Чат", chat_screen(4)),
+          ("4. Смена подтверждена", chat_screen(4, confirmed=True)),
+          ("5. Новая вакансия", create_screen())]
+fr = [frame(p) for _, p in panels]
+cw, ch, pad, cap = fr[0].width, fr[0].height, 24, 36
+board = Image.new("RGB", (len(fr) * cw + pad * (len(fr) + 1), ch + cap + pad * 2),
+                  (40, 30, 32))
+bdd = ImageDraw.Draw(board)
+for i, (label, _) in enumerate(panels):
+    x = pad + i * (cw + pad)
+    board.paste(fr[i], (x, cap + pad))
+    bdd.text((x + cw / 2, pad + 10), label, font=F(20, True), fill=WHITE, anchor="mm")
+board.save(os.path.join(OUT, "storyboard.png"))
+print("saved storyboard.png", board.size)
