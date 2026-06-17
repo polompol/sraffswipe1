@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StaffSwipe — план развития, чистка кода и безопасность</title>
+<style>
+  :root{
+    --gold:#c9a227; --gold-soft:#d9a441; --caramel:#b07a47; --espresso:#3b2a20;
+    --bg:#fbf6ee; --card:#fffdf9; --text:#2e2018; --muted:#8a7866; --border:#ece3d6;
+    --green:#22a05b; --red:#c2604a; --blue:#3b82f6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.55}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 22px 60px}
+  header.hero{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+  .logo{width:46px;height:46px;border-radius:12px;
+    background:linear-gradient(135deg,var(--gold-soft),var(--gold));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:900}
+  h1{font-size:30px;letter-spacing:-.5px}
+  h1 span{color:var(--gold)}
+  .sub{color:var(--muted);margin:6px 0 26px}
+  h2{font-size:22px;margin:34px 0 14px;display:flex;align-items:center;gap:10px}
+  h2 .b{width:8px;height:24px;border-radius:4px;background:var(--gold)}
+  h3{font-size:17px;margin:0 0 6px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;
+    padding:18px 20px;margin-bottom:14px;box-shadow:0 2px 10px rgba(59,42,32,.05)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  ul{margin:8px 0 0 2px;padding-left:18px}
+  li{margin:5px 0}
+  .pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid}
+  .p-now{color:var(--green);border-color:var(--green);background:#eafaf0}
+  .p-next{color:var(--gold);border-color:var(--gold);background:#fbf3da}
+  .p-later{color:var(--muted);border-color:var(--border);background:#f4efe6}
+  .p-crit{color:var(--red);border-color:var(--red);background:#fbeae6}
+  .tl{position:relative;margin-left:8px;padding-left:24px;border-left:2px solid var(--border)}
+  .tl .step{position:relative;margin-bottom:18px}
+  .tl .step::before{content:"";position:absolute;left:-31px;top:4px;width:14px;height:14px;
+    border-radius:50%;background:var(--gold);border:3px solid var(--bg)}
+  .chk li{list-style:none;margin-left:-14px}
+  .chk li::before{content:"☐ ";color:var(--gold);font-weight:700}
+  .ok li::before{content:"✓ ";color:var(--green)}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+  .keep{color:var(--green);font-weight:700}
+  .drop{color:var(--red);font-weight:700}
+  .freeze{color:var(--caramel);font-weight:700}
+  code{background:#f1ead9;padding:1px 6px;border-radius:6px;font-size:13px}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);padding-top:18px}
+  @media(max-width:740px){.grid2,.grid3{grid-template-columns:1fr}h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="logo">⚡</div>
+    <div>
+      <h1>Staff<span>Swipe</span> — план развития</h1>
+      <div class="sub">Что делать дальше, что в коде оставить/убрать и как защититься. Обновлено: июнь 2026.</div>
+    </div>
+  </header>
+
+  <div class="card">
+    <h3>Где мы сейчас</h3>
+    <p>Зрелый MVP в виде <b>Telegram Mini App</b> (React) + <b>FastAPI</b> backend + бот.
+    Реализовано: вход через Telegram, свайпы, мэтчи, чат (WebSocket), смены, PDF-акт,
+    монетизация (Telegram Stars + ЮKassa с вебхуком), рефералы, отзывы/рейтинг, бот-уведомления,
+    аналитика воронки, расширенные фильтры, сохранённые поиски + алерты, список-вид, шеринг,
+    тёмная тема, стрик, согласие 18+/152-ФЗ, рейт-лимит. <b>Backend 32 теста + ruff, TMA eslint+tsc+vitest+build — зелёные</b>, CI на 3 компонента.</p>
+    <p style="margin-top:8px"><span class="pill p-crit">не сделано</span> — реальный запуск: нужны ключи (BotFather, ЮKassa, DaData, S3), PostgreSQL, хостинг РФ, пилот.</p>
+  </div>
+
+  <h2><span class="b"></span>Дорожная карта</h2>
+  <div class="tl">
+    <div class="step">
+      <h3>Этап 0 — Запуск пилота <span class="pill p-now">0–2 недели</span></h3>
+      <div class="card">
+        <ul>
+          <li>Поднять backend+бот на РФ-хостинге (Yandex Cloud / VK Cloud / Selectel), HTTPS.</li>
+          <li>PostgreSQL/PostGIS вместо SQLite; бэкапы.</li>
+          <li>Прописать ключи: <code>TELEGRAM_BOT_TOKEN</code>, <code>YOOKASSA_*</code>, <code>DADATA_TOKEN</code>, <code>S3_*</code>, <code>JWT_SECRET</code>, <code>INTERNAL_API_SECRET</code>; <code>ALLOW_INSECURE_TELEGRAM_AUTH=false</code>.</li>
+          <li>BotFather → Web App URL; вебхук ЮKassa.</li>
+          <li><b>Пилот: 1 город, 50–100 заведений, 1–2 месяца</b> — проверить экономику и удержание.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <h3>Этап 1 — Удержание и контент <span class="pill p-next">1–2 мес</span></h3>
+      <div class="card">
+        <ul>
+          <li><b>Пуш-напоминания о смене</b> за N часов (инфраструктура уведомлений уже есть).</li>
+          <li><b>Карта смен</b> (Yandex Maps JS) — нужен ключ; координаты уже даёт DaData.</li>
+          <li>Реальные <b>фото</b> (S3 уже подключён) вместо заглушек; blurhash-плейсхолдеры.</li>
+          <li><b>Дашборд аналитики</b> для админа (уже за <code>ADMIN_TG_IDS</code>) — графики когорт/retention.</li>
+          <li>Онбординг-видео, push-дайджест «смены недели».</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <h3>Этап 2 — Доверие и масштаб фич <span class="pill p-later">3–4 мес</span></h3>
+      <div class="card">
+        <ul>
+          <li><b>No-show / споры</b>: отметка «не пришёл», влияние на рейтинг, арбитраж.</li>
+          <li><b>Командные аккаунты</b> работодателя (несколько HR на заведение/сеть).</li>
+          <li>Лидерборд топ-исполнителей, бейджи, расширенная геймификация.</li>
+          <li>Учёт графика доступности соискателя в ранжировании.</li>
+          <li>A/B-тесты экранов, реактивация «спящих» пушами.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <h3>Этап 3 — Платформа <span class="pill p-later">6+ мес</span></h3>
+      <div class="card">
+        <ul>
+          <li>Инфраструктура масштаба: Redis (рейт-лимит/кэш/чат pub-sub), очереди задач, PostGIS-индексы.</li>
+          <li>Мультигород/мультирегион, биллинг юрлиц, закрывающие документы.</li>
+          <li>Открытый API/вебхуки для агрегаторов вакансий и HR-систем.</li>
+          <li>Нативные сборки (RuStore/AppStore) из существующего Flutter-клиента.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2><span class="b"></span>Что оставить, заморозить, убрать</h2>
+  <div class="card">
+    <table>
+      <tr><th>Компонент</th><th>Решение</th><th>Почему</th></tr>
+      <tr><td><b>tma/</b> (Telegram Mini App)</td><td class="keep">Оставить — ядро</td><td>Основной канал, активно развивать.</td></tr>
+      <tr><td><b>backend/</b> (FastAPI + бот)</td><td class="keep">Оставить — ядро</td><td>Единый backend для всех клиентов, покрыт тестами.</td></tr>
+      <tr><td><b>lib/</b> (Flutter)</td><td class="freeze">Заморозить</td><td>Вторичный клиент для сторов; не развивать до этапа 3. Держать <code>flutter analyze</code> зелёным.</td></tr>
+      <tr><td><code>lib/data/api/</code> (Flutter dio-слой)</td><td class="drop">Убрать или дописать</td><td>Путь <code>USE_BACKEND=true</code> во Flutter не подключён — сейчас мёртвый код, помечен экспериментальным.</td></tr>
+      <tr><td>In-memory рейт-лимит</td><td class="freeze">Заменить на Redis</td><td>Сейчас на 1 инстанс; для масштаба нужен общий стор.</td></tr>
+      <tr><td>SQLite (дефолт)</td><td class="drop">Только dev</td><td>В проде — PostgreSQL/PostGIS.</td></tr>
+      <tr><td>Заглушки фото (Unsplash)</td><td class="drop">Заменить</td><td>Реальные загрузки через S3 (эндпоинт готов).</td></tr>
+      <tr><td>Скрипты мокапов <code>tool/*.py</code></td><td class="keep">Оставить (dev-tool)</td><td>Удобно для презентаций/сторов; вынести общий хелпер.</td></tr>
+    </table>
+  </div>
+
+  <h2><span class="b"></span>Технический долг и улучшения кода</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Качество</h3>
+      <ul>
+        <li>Больше тестов TMA (render-тесты ключевых экранов, не только логика).</li>
+        <li>Единый слой ошибок: ErrorBoundary (есть) + Sentry (хук есть) — включить DSN.</li>
+        <li>Вынести дубли (хелперы карточек), общий <code>tool/_mockkit.py</code>.</li>
+        <li>i18n (ru/en) — строки в словарь.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Производительность</h3>
+      <ul>
+        <li>Code-splitting уже есть; добавить кэш изображений + blurhash.</li>
+        <li>PostGIS-индексы для гео-радиуса вместо python-фильтра.</li>
+        <li>Пагинация ленты вместо полной выборки.</li>
+        <li>CDN для статики TMA и фото.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="b"></span>Безопасность — чеклист защиты</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Уже в коде <span class="pill p-now">сделано</span></h3>
+      <ul class="chk ok">
+        <li>Валидация Telegram <code>initData</code> (HMAC по bot-token).</li>
+        <li>Свои JWT; <code>/billing/fulfill</code> только по <code>X-Internal-Token</code>.</li>
+        <li>Проверка участия в мэтче: PDF-акт, WebSocket-чат, подтверждение смены.</li>
+        <li>Серверный 18+, согласие 152-ФЗ/оферта.</li>
+        <li>Рейт-лимит на свайпы/сообщения/вакансии; CORS из списка.</li>
+        <li>Идемпотентность платежей (charge_id), супер-лайки/boost списываются.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Перед запуском <span class="pill p-crit">обязательно</span></h3>
+      <ul class="chk">
+        <li>Сменить дефолтные <code>JWT_SECRET</code> / <code>INTERNAL_API_SECRET</code>.</li>
+        <li><code>ALLOW_INSECURE_TELEGRAM_AUTH=false</code>; <code>ALLOWED_ORIGINS</code> = домен Mini App.</li>
+        <li>HTTPS везде; вебхук ЮKassa — проверка подписи/IP-allowlist.</li>
+        <li>PostgreSQL + ежедневные бэкапы + шифрование диска.</li>
+        <li>Cloudflare/WAF + анти-DDoS перед API.</li>
+        <li>Секрет-сканер и Dependabot в репозитории.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card">
+    <h3>На масштабе</h3>
+    <ul class="chk">
+      <li>Пентест перед ростом (платежи + ПДн — высокий риск).</li>
+      <li>Анти-фрод: лимиты на создание вакансий/аккаунтов, скоринг спама, модерация контента.</li>
+      <li>RBAC и аудит-лог доступа к ПДн; экспорт/удаление данных по 152-ФЗ.</li>
+      <li>Rate-limit и сессии — в Redis; ротация ключей; секреты в Vault/Secret Manager.</li>
+      <li>Наблюдаемость: Sentry (ошибки) + метрики (Prometheus) + алерты.</li>
+    </ul>
+  </div>
+
+  <h2><span class="b"></span>Метрики, за которыми следить</h2>
+  <div class="grid3">
+    <div class="card"><h3>Активация</h3><p class="sub" style="margin:0">open → первый свайп → отклик. Цель: ≥60% доходят до отклика.</p></div>
+    <div class="card"><h3>Мэтч-рейт</h3><p class="sub" style="margin:0">отклик → мэтч → подтверждённая смена. Главный показатель пользы.</p></div>
+    <div class="card"><h3>Удержание</h3><p class="sub" style="margin:0">D1/D7/D30, стрик, возвраты по пуш-алертам сохранённых поисков.</p></div>
+    <div class="card"><h3>Деньги</h3><p class="sub" style="margin:0">конверсия в Pro/Business, ARPPU, доля boost/Stars, churn.</p></div>
+    <div class="card"><h3>Виральность</h3><p class="sub" style="margin:0">K-фактор: приглашения (рефералы) + шеринг смен.</p></div>
+    <div class="card"><h3>Доверие</h3><p class="sub" style="margin:0">доля проверенных заведений, средний рейтинг, no-show.</p></div>
+  </div>
+
+  <h2><span class="b"></span>Риски</h2>
+  <div class="card">
+    <ul>
+      <li><b>Холодный старт двустороннего рынка</b> — сначала набрать заведения (платят), потом соискателей. Решение: ручной онбординг заведений в пилот-городе.</li>
+      <li><b>Экономика Stars↔рубли</b> — комиссии Telegram и вывод; крупные платежи держать на ЮKassa.</li>
+      <li><b>Юридика РФ</b> — самозанятость/НПД, ПДн: проверить документы у юриста до запуска.</li>
+      <li><b>Безопасность платежей/ПДн</b> — без пентеста не масштабировать.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Документ сгенерирован для StaffSwipe. Полные инструкции по деплою — <code>docs/deploy.md</code>,
+    питч — <code>docs/pitch.md</code>, юр-шаблоны — <code>docs/legal/</code>.
+  </footer>
+
+</div>
+</body>
+</html>
