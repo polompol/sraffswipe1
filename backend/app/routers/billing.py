@@ -53,10 +53,9 @@ CATALOG: dict[str, dict] = {
         "provider": "stars", "stars": 300, "title": "20 супер-лайков",
         "effect": {"superlike": 20},
     },
-    "premium_seeker": {
-        "provider": "stars", "stars": 250, "title": "Premium соискателя",
-        "effect": {"premium": True},
-    },
+    # NB: «Premium соискателя» («кто меня лайкнул») пока не реализован как фича —
+    # не продаём его, чтобы не брать деньги за то, что не работает. Поле
+    # seeker_premium и эффект {"premium": True} оставлены для будущей реализации.
 }
 
 

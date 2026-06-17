@@ -18,7 +18,7 @@ from ..geo import distance_km
 from ..models import Boost, Employer, Vacancy
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
-from ..security import current_principal
+from ..security import current_principal, optional_principal
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
@@ -67,10 +67,29 @@ def list_vacancies(
     no_experience: bool = False,
     verified_only: bool = False,
     sort: str = "distance",  # distance|rate|date
+    mine: bool = False,
     db: Session = Depends(get_db),
+    principal: dict | None = Depends(optional_principal),
 ):
-    """Активные вакансии с фильтрами. Boost-вакансии всегда наверху."""
+    """Активные вакансии с фильтрами. Boost-вакансии всегда наверху.
+
+    `mine=1` — вернуть собственные вакансии работодателя (любой статус)."""
     boosted_ids = active_boost_vacancy_ids(db)
+
+    # Раздел «Мои вакансии» — только свои, для текущего работодателя.
+    if mine:
+        if not principal or principal["role"] != "employer":
+            return []
+        emp = db.get(Employer, principal["id"])
+        rows = (
+            db.query(Vacancy)
+            .filter(Vacancy.employer_id == principal["id"])
+            .order_by(Vacancy.created_at.desc())
+            .all()
+        )
+        return [
+            _to_out(v, emp, None, boosted=v.id in boosted_ids) for v in rows
+        ]
     query = db.query(Vacancy).filter(Vacancy.status == "active")
     if role:
         query = query.filter(Vacancy.role == role)

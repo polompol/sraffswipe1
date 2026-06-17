@@ -44,11 +44,15 @@ def list_candidates(
         CandidateOut(
             id=u.id,
             name=u.name,
-            birth_date=u.birth_date,
+            # Только год рождения (возраст считается на клиенте) — точную дату
+            # не раскрываем в общей ленте.
+            birth_date=(u.birth_date[:4] + "-01-01") if u.birth_date else "",
             city=u.city,
             district=u.district,
-            lat=u.lat,
-            lng=u.lng,
+            # Точные координаты дома соискателя не раскрываем до мэтча —
+            # отдаём только город/район. Защита от деанонимизации/сталкинга.
+            lat=0.0,
+            lng=0.0,
             roles=_csv(u.roles),
             med_book=u.med_book,
             self_employed=u.self_employed,

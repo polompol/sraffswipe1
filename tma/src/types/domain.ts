@@ -31,21 +31,6 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   cleaner: "Уборщик",
 };
 
-export const STAFF_ROLE_EMOJI: Record<StaffRole, string> = {
-  waiter: "🍽️",
-  barista: "☕",
-  cook: "👨‍🍳",
-  dishwasher: "🧽",
-  hostess: "💁",
-  bartender: "🍸",
-  hookah: "💨",
-  florist: "💐",
-  confectioner: "🧁",
-  administrator: "🧑‍💼",
-  courier: "🛵",
-  cleaner: "🧹",
-};
-
 export type MedBookStatus = "yes" | "no" | "expired";
 
 export const MED_BOOK_LABELS: Record<MedBookStatus, string> = {
@@ -109,20 +94,6 @@ export interface Seeker {
   rating: number;
   photoUrls: string[];
   about: string;
-}
-
-export interface Employer {
-  id: string;
-  companyName: string;
-  inn: string;
-  ogrn: string;
-  address: string;
-  lat: number;
-  lng: number;
-  verified: boolean;
-  contactPhone: string;
-  photoUrl: string;
-  rating: number;
 }
 
 export interface Vacancy {

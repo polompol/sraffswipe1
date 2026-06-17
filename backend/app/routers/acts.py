@@ -61,11 +61,12 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     if not (vac and emp and user):
         raise HTTPException(status_code=404, detail="Недостаточно данных")
 
-    pay = (
-        vac.rate
-        if vac.rate_type == "perShift"
-        else round(vac.rate * (vac.end_time - vac.start_time) / 60)
-    )
+    # Длительность с учётом ночных смен (например 20:00→04:00): переход за
+    # полночь даёт отрицательную разницу — добавляем сутки.
+    dur_min = vac.end_time - vac.start_time
+    if dur_min <= 0:
+        dur_min += 1440
+    pay = vac.rate if vac.rate_type == "perShift" else round(vac.rate * dur_min / 60)
     act_no = abs(hash(vac.id)) % 100000
 
     pdf = FPDF()

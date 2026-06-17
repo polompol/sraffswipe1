@@ -19,7 +19,6 @@ const STARS: PriceItem[] = [
   { id: "boost_24h", title: "🔥 Boost 24 часа", subtitle: "Вакансия в топе ленты сутки", priceStars: 150 },
   { id: "super_5", title: "⚡ 5 супер-лайков «Срочно»", subtitle: "Ваш отклик — первым", priceStars: 100 },
   { id: "super_20", title: "⚡ 20 супер-лайков", subtitle: "Выгоднее на 25%", priceStars: 300, badge: "−25%" },
-  { id: "premium_seeker", title: "⭐ Premium соискателя", subtitle: "«Кто меня лайкнул» + приоритет", priceStars: 250 },
 ];
 
 const VERIFY: PriceItem = {

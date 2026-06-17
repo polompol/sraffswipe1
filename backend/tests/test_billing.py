@@ -1,6 +1,7 @@
 """Тесты Telegram-авторизации, прав и монетизации."""
 import hashlib
 import hmac
+import time
 from urllib.parse import urlencode
 
 from app.telegram import validate_init_data
@@ -9,7 +10,8 @@ INTERNAL = {"X-Internal-Token": "test-internal-secret"}
 
 
 def _signed_init_data(bot_token: str, user_json: str) -> str:
-    pairs = {"auth_date": "1700000000", "query_id": "AAA", "user": user_json}
+    # Свежий auth_date — иначе проверка возраста initData отвергнет подпись.
+    pairs = {"auth_date": str(int(time.time())), "query_id": "AAA", "user": user_json}
     data_check = "\n".join(sorted(f"{k}={v}" for k, v in pairs.items()))
     secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     h = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
@@ -24,6 +26,14 @@ def test_validate_init_data_signature():
     assert validate_init_data(good + "x", token) is False
     assert validate_init_data(good, "wrong:token") is False
     assert validate_init_data("", token) is False
+
+    # Просроченная (но корректно подписанная) initData отвергается — анти-replay.
+    stale_pairs = {"auth_date": "1700000000", "query_id": "AAA", "user": user}
+    dcs = "\n".join(sorted(f"{k}={v}" for k, v in stale_pairs.items()))
+    secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+    h = hmac.new(secret, dcs.encode(), hashlib.sha256).hexdigest()
+    stale = urlencode({**stale_pairs, "hash": h})
+    assert validate_init_data(stale, token) is False
 
 
 def test_telegram_login_creates_user_and_entitlements(client):

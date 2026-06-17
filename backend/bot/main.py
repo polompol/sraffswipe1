@@ -77,14 +77,6 @@ async def on_paid(message: Message) -> None:
     )
 
 
-async def notify(bot: Bot, tg_id: int, text: str) -> None:
-    """Отправка уведомления пользователю (мэтч/сообщение/смена)."""
-    try:
-        await bot.send_message(tg_id, text)
-    except Exception:  # noqa: BLE001
-        pass
-
-
 async def main() -> None:
     if not BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN не задан")

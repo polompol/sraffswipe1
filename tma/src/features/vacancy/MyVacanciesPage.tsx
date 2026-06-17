@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import type { Vacancy } from "@/types/domain";
-import { boostVacancy, fetchEntitlements, fetchFeed } from "@/api/endpoints";
+import { boostVacancy, fetchEntitlements, fetchMyVacancies } from "@/api/endpoints";
 import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { haptic } from "@/telegram/sdk";
@@ -9,10 +8,9 @@ import { haptic } from "@/telegram/sdk";
 export function MyVacanciesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  // В демо переиспользуем ленту как «мои вакансии».
   const { data } = useQuery({
     queryKey: ["my-vacancies"],
-    queryFn: () => fetchFeed("seeker") as Promise<Vacancy[]>,
+    queryFn: fetchMyVacancies,
   });
   const { data: ent } = useQuery({
     queryKey: ["entitlements"],

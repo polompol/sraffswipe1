@@ -49,7 +49,10 @@ def _apply_referral(db, referred_id: str, code: str) -> None:
 
 @router.post("/telegram", response_model=TokenOut)
 def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
-    valid = validate_init_data(body.init_data, settings.telegram_bot_token)
+    valid = validate_init_data(
+        body.init_data, settings.telegram_bot_token,
+        max_age_seconds=settings.initdata_ttl_hours * 3600,
+    )
     if not valid and not settings.allow_insecure_telegram_auth:
         raise HTTPException(status_code=401, detail="Невалидный initData")
 

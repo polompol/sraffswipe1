@@ -141,7 +141,7 @@ const SEEKERS: Seeker[] = [
 
 const matches: MatchModel[] = [];
 const messagesByMatch: Record<string, Message[]> = {};
-let entitlements: Entitlements = {
+const entitlements: Entitlements = {
   plan: "free",
   superlikeBalance: 1,
   boostBalance: 0,
@@ -218,6 +218,10 @@ export function sendSwipe(
   return Promise.resolve({ matched: true, matchId: match.id });
 }
 
+export function fetchMyVacancies(): Promise<Vacancy[]> {
+  return Promise.resolve([...VACANCIES]);
+}
+
 export function fetchMatches(): Promise<MatchModel[]> {
   return Promise.resolve([...matches]);
 }
@@ -257,10 +261,6 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
 
 export function fetchEntitlements(): Promise<Entitlements> {
   return Promise.resolve({ ...entitlements });
-}
-
-export function grantMock(patch: Partial<Entitlements>): void {
-  entitlements = { ...entitlements, ...patch };
 }
 
 const invited = 2;

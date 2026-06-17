@@ -206,6 +206,15 @@ export async function createVacancy(input: VacancyInput): Promise<Vacancy> {
   return data;
 }
 
+/** Собственные вакансии работодателя (любой статус). */
+export async function fetchMyVacancies(): Promise<Vacancy[]> {
+  if (!USE_BACKEND) return mock.fetchMyVacancies();
+  const { data } = await api.get<Vacancy[]>("/vacancies", {
+    params: { mine: 1 },
+  });
+  return data;
+}
+
 /** Аналитика воронки. Никогда не бросает — это «fire and forget». */
 export function track(name: string, props?: Record<string, unknown>): void {
   if (!USE_BACKEND) return;

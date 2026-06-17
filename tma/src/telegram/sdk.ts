@@ -4,7 +4,6 @@
 
 import {
   init as sdkInit,
-  isTMA,
   miniAppReady,
   mountMiniAppSync,
   mountThemeParamsSync,
@@ -59,15 +58,6 @@ export async function initTelegram(): Promise<void> {
     backButton.mount();
   } catch {
     /* noop */
-  }
-}
-
-/** Запущены ли мы внутри Telegram. */
-export function insideTelegram(): boolean {
-  try {
-    return isTMA();
-  } catch {
-    return false;
   }
 }
 

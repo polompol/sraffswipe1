@@ -220,3 +220,18 @@ def test_city_only_vacancy_visible_with_geo_search(client):
     }).json()  # lat/lng = 0,0 по умолчанию
     feed = client.get("/vacancies?lat=55.75&lng=37.61&radius_km=10&city=Казань").json()
     assert v["id"] in {x["id"] for x in feed}
+
+
+def test_candidates_pii_minimized(client):
+    s_token, _ = _auth(client, "seeker")
+    client.put("/me", headers=_hdr(s_token), json={
+        "name": "Тест", "birth_date": "1998-09-03", "city": "Москва",
+    })
+    e_token, _ = _auth(client, "employer")
+    cands = client.get("/candidates", headers=_hdr(e_token)).json()
+    assert cands, "ожидаем хотя бы одного кандидата"
+    for c in cands:
+        # Точные координаты дома и точная дата рождения не раскрываются.
+        assert c["lat"] == 0 and c["lng"] == 0
+        assert c["inn"] is None
+        assert c["birth_date"] in ("", None) or c["birth_date"].endswith("-01-01")

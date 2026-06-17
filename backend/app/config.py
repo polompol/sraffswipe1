@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-change-me"
     jwt_alg: str = "HS256"
     jwt_ttl_hours: int = 720
+    # Срок годности Telegram initData (часы) — защита от replay перехваченной подписи.
+    initdata_ttl_hours: int = 24
 
     # Режим разработки: код из SMS возвращается в ответе API.
     dev_mode: bool = True

@@ -23,6 +23,8 @@ export function rateLabel(rate: number, type: RateType): string {
 
 export function estimatedPay(v: Vacancy): number {
   if (v.rateType === "perShift") return v.rate;
-  const hours = Math.max(0, (v.endTime - v.startTime) / 60);
-  return Math.round(v.rate * hours);
+  // Ночные смены (20:00→04:00) переходят за полночь — добавляем сутки.
+  let mins = v.endTime - v.startTime;
+  if (mins <= 0) mins += 1440;
+  return Math.round((v.rate * mins) / 60);
 }
