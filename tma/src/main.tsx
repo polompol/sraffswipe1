@@ -8,6 +8,7 @@ import "./index.css";
 import { initTelegram } from "./telegram/sdk";
 import { initTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
+import { reportError } from "./lib/report";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Toaster } from "./components/Toast";
 import { App } from "./App";
@@ -15,6 +16,12 @@ import { App } from "./App";
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
+
+// Глобальная видимость падений: необработанные ошибки и промисы → на backend.
+window.addEventListener("error", (e) => reportError(e.error ?? e.message, "window.error"));
+window.addEventListener("unhandledrejection", (e) =>
+  reportError(e.reason, "unhandledrejection"),
+);
 
 void initTelegram();
 initTheme();

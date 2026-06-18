@@ -98,6 +98,13 @@ async def request_logger(request: Request, call_next):
     response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
     response.headers["X-Request-ID"] = rid
+    # Базовые security-заголовки (defense-in-depth).
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+    )
     logger.info(
         "%s %s -> %s %.1fms rid=%s",
         request.method,

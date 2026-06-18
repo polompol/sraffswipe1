@@ -1,6 +1,7 @@
 """Генерация PDF-акта выполненных работ для самозанятого."""
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -8,6 +9,9 @@ from ..models import Employer, Match, User, Vacancy
 from ..security import decode_token
 
 router = APIRouter(prefix="/matches", tags=["acts"])
+
+# Перенос строки в fpdf2 без устаревшего ln=True.
+_NL = {"new_x": XPos.LMARGIN, "new_y": YPos.NEXT}
 
 # Встроенный шрифт Helvetica — latin-1, кириллицу не кодирует. Чтобы акт не
 # падал на русских названиях/именах, транслитерируем значения в латиницу.
@@ -72,9 +76,9 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, f"ACT / AKT No {act_no}", ln=True)
+    pdf.cell(0, 10, f"ACT / AKT No {act_no}", **_NL)
     pdf.set_font("Helvetica", size=11)
-    pdf.cell(0, 7, "vypolnennyh rabot (okazannyh uslug)", ln=True)
+    pdf.cell(0, 7, "vypolnennyh rabot (okazannyh uslug)", **_NL)
     pdf.ln(4)
 
     rows = [
@@ -93,7 +97,7 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
         pdf.set_font("Helvetica", size=11)
         pdf.cell(70, 8, f"{label}:", border=0)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, _translit(str(value)), ln=True)
+        pdf.cell(0, 8, _translit(str(value)), **_NL)
 
     pdf.ln(6)
     pdf.set_font("Helvetica", size=10)

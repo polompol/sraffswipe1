@@ -43,4 +43,7 @@ def init_db() -> None:
     # Импорт моделей нужен, чтобы они зарегистрировались в metadata.
     from . import models  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
+    # SQLite (dev/тесты) — создаём схему на месте. PostgreSQL (прод) управляется
+    # миграциями Alembic (`alembic upgrade head`), поэтому create_all не трогаем.
+    if settings.database_url.startswith("sqlite"):
+        Base.metadata.create_all(bind=engine)
