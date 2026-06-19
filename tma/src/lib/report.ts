@@ -1,11 +1,13 @@
-// Единая точка отправки ошибок. Логируем в консоль и отправляем на backend
-// (события воронки), чтобы падения фронта были видны серверно без внешних
-// сервисов. Для Sentry — добавьте init в main.tsx и Sentry.captureException сюда.
+// Единая точка отправки ошибок. Логируем в консоль, шлём в Sentry (если задан
+// VITE_SENTRY_DSN) и на backend (события воронки) — падения фронта видны и без
+// внешних сервисов, и с полным трейсом в Sentry, если он подключён.
 import { track } from "@/api/endpoints";
+import { captureException } from "./sentry";
 
 export function reportError(error: unknown, context?: string): void {
   console.error("[StaffSwipe]", context ?? "", error);
   try {
+    captureException(error);
     const message = error instanceof Error ? error.message : String(error);
     track("client_error", { context: context ?? "", message: message.slice(0, 300) });
   } catch {

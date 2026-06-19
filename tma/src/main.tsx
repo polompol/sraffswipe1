@@ -9,6 +9,7 @@ import { initTelegram } from "./telegram/sdk";
 import { initTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
 import { reportError } from "./lib/report";
+import { initSentry } from "./lib/sentry";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Toaster } from "./components/Toast";
 import { App } from "./App";
@@ -23,6 +24,7 @@ window.addEventListener("unhandledrejection", (e) =>
   reportError(e.reason, "unhandledrejection"),
 );
 
+void initSentry();
 void initTelegram();
 initTheme();
 // «open» — один раз за сессию, чтобы не раздувать вершину воронки на перезапусках.
