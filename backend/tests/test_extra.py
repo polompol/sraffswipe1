@@ -131,3 +131,21 @@ def test_production_safe_guard_rejects_default_secrets():
         allow_insecure_telegram_auth=False,
     )
     safe.assert_production_safe()  # не бросает
+
+
+def test_report_create_and_validation(client):
+    """Жалоба создаётся; некорректная причина → 422; без токена → 401."""
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    ok = client.post("/reports", headers=h, json={
+        "target_type": "vacancy", "target_id": "vac1",
+        "reason": "fake", "text": "Похоже на обман",
+    })
+    assert ok.status_code == 201 and ok.json()["ok"] is True
+    bad = client.post("/reports", headers=h, json={
+        "target_type": "vacancy", "target_id": "vac1", "reason": "nonsense",
+    })
+    assert bad.status_code == 422
+    assert client.post("/reports", json={
+        "target_type": "vacancy", "target_id": "x", "reason": "spam",
+    }).status_code == 401

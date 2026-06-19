@@ -112,6 +112,14 @@ class MessageIn(BaseModel):
     ]
 
 
+# ---- жалобы (trust & safety) ----
+class ReportIn(BaseModel):
+    target_type: Literal["vacancy", "user", "match"]
+    target_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    reason: Literal["spam", "fake", "scam", "abuse", "other"]
+    text: Annotated[str, StringConstraints(max_length=1000)] = ""
+
+
 class MessageOut(BaseModel):
     id: str
     match_id: str

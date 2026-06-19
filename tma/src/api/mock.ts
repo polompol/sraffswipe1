@@ -336,6 +336,10 @@ export function leaveReview(): Promise<void> {
   return Promise.resolve();
 }
 
+export function reportTarget(): Promise<void> {
+  return Promise.resolve();
+}
+
 export function boostVacancy(vacancyId: string): Promise<void> {
   const vac = VACANCIES.find((v) => v.id === vacancyId);
   if (vac) vac.boosted = true;

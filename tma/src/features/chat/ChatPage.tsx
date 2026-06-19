@@ -6,6 +6,7 @@ import { confirmShift, fetchMessages, sendMessage, track } from "@/api/endpoints
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
+import { ReportSheet } from "@/components/ReportSheet";
 
 export function ChatPage() {
   const { matchId = "" } = useParams();
@@ -14,6 +15,7 @@ export function ChatPage() {
   const myId = useSession((s) => s.userId);
   const [text, setText] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
@@ -91,6 +93,15 @@ export function ChatPage() {
             <span className="ico">‹</span>
           </button>
           <b>Чат по смене</b>
+          <span className="spacer" />
+          <button
+            className="tab"
+            style={{ flex: "none", width: "auto", color: "var(--muted)" }}
+            aria-label="Пожаловаться"
+            onClick={() => setReportOpen(true)}
+          >
+            ⚠
+          </button>
         </div>
 
         {messages?.map((m: Message) => {
@@ -143,6 +154,14 @@ export function ChatPage() {
           </button>
         </div>
       </div>
+
+      {reportOpen && (
+        <ReportSheet
+          targetType="match"
+          targetId={matchId}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
     </div>
   );
 }

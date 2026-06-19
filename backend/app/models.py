@@ -282,3 +282,18 @@ class Review(Base):
     stars: Mapped[int] = mapped_column(Integer, default=5)
     text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Report(Base):
+    """Жалоба на вакансию/пользователя/мэтч (доверие и безопасность)."""
+
+    __tablename__ = "reports"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    reporter_id: Mapped[str] = mapped_column(String, index=True)
+    target_type: Mapped[str] = mapped_column(String)  # vacancy|user|match
+    target_id: Mapped[str] = mapped_column(String, index=True)
+    reason: Mapped[str] = mapped_column(String)  # spam|fake|scam|abuse|other
+    text: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String, default="open")  # open|reviewed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

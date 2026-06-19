@@ -215,6 +215,25 @@ export async function fetchMyVacancies(): Promise<Vacancy[]> {
   return data;
 }
 
+export type ReportTargetType = "vacancy" | "user" | "match";
+export type ReportReason = "spam" | "fake" | "scam" | "abuse" | "other";
+
+/** Жалоба на вакансию/пользователя/мэтч (доверие и безопасность). */
+export async function reportTarget(
+  targetType: ReportTargetType,
+  targetId: string,
+  reason: ReportReason,
+  text = "",
+): Promise<void> {
+  if (!USE_BACKEND) return mock.reportTarget();
+  await api.post("/reports", {
+    target_type: targetType,
+    target_id: targetId,
+    reason,
+    text,
+  });
+}
+
 /** Аналитика воронки. Никогда не бросает — это «fire and forget». */
 export function track(name: string, props?: Record<string, unknown>): void {
   if (!USE_BACKEND) return;
