@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
 import {
+  fetchAdminOverview,
   fetchEntitlements,
   fetchMe,
   fetchReferral,
@@ -79,6 +80,12 @@ export function ProfilePage() {
   const { data: ref } = useQuery({
     queryKey: ["referral"],
     queryFn: fetchReferral,
+  });
+  // Ссылка на админ-панель появляется только у админа (проба эндпоинта).
+  const { data: isAdmin } = useQuery({
+    queryKey: ["is-admin"],
+    queryFn: () => fetchAdminOverview().then(() => true).catch(() => false),
+    retry: false,
   });
 
   function invite() {
@@ -188,6 +195,16 @@ export function ProfilePage() {
       <button className="btn secondary" onClick={() => nav("/profile/edit")}>
         ✏️ Редактировать профиль
       </button>
+
+      {isAdmin && (
+        <button
+          className="btn ghost"
+          style={{ marginTop: 10 }}
+          onClick={() => nav("/admin")}
+        >
+          🛡 Админ-панель
+        </button>
+      )}
     </div>
   );
 }

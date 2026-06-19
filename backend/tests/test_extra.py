@@ -149,3 +149,24 @@ def test_report_create_and_validation(client):
     assert client.post("/reports", json={
         "target_type": "vacancy", "target_id": "x", "reason": "spam",
     }).status_code == 401
+
+
+def test_admin_panel_gating_and_reports(client):
+    # conftest задаёт ADMIN_TG_IDS=0, а insecure-логин даёт tg_id=0 → админ.
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    admin_h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    # Создаём жалобу.
+    client.post("/reports", headers=admin_h, json={
+        "target_type": "vacancy", "target_id": "vac1", "reason": "fake",
+    })
+    # Обзор и список жалоб доступны админу.
+    ov = client.get("/admin/overview", headers=admin_h)
+    assert ov.status_code == 200 and ov.json()["openReports"] >= 1
+    reps = client.get("/admin/reports", headers=admin_h).json()
+    assert reps and reps[0]["status"] == "open"
+    # Закрываем жалобу.
+    rid = reps[0]["id"]
+    res = client.post(f"/admin/reports/{rid}/resolve", headers=admin_h)
+    assert res.status_code == 200
+    assert client.get("/admin/reports?status=open", headers=admin_h).json() == []
+    assert client.get("/admin/subscriptions", headers=admin_h).status_code == 200

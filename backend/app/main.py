@@ -12,6 +12,7 @@ from .config import settings
 from .db import init_db
 from .routers import (
     acts,
+    admin,
     analytics,
     auth,
     billing,
@@ -132,6 +133,7 @@ app.include_router(dadata.router)
 app.include_router(employer.router)
 app.include_router(uploads.router)
 app.include_router(analytics.router)
+app.include_router(admin.router)
 
 
 @app.get("/health", tags=["meta"])

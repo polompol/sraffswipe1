@@ -340,6 +340,43 @@ export function reportTarget(): Promise<void> {
   return Promise.resolve();
 }
 
+const adminReports = [
+  {
+    id: "rep1",
+    targetType: "vacancy",
+    targetId: "vac3",
+    reason: "fake",
+    text: "Похоже на обман — просят предоплату",
+    status: "open",
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export function fetchAdminOverview() {
+  return Promise.resolve({
+    users: 128,
+    activeVacancies: 34,
+    likes: 940,
+    matches: 410,
+    openReports: adminReports.filter((r) => r.status === "open").length,
+    activeSubscriptions: 12,
+  });
+}
+export function fetchAdminReports() {
+  return Promise.resolve(adminReports.filter((r) => r.status === "open"));
+}
+export function resolveReport(id: string): Promise<void> {
+  const r = adminReports.find((x) => x.id === id);
+  if (r) r.status = "reviewed";
+  return Promise.resolve();
+}
+export function fetchAdminSubscriptions() {
+  return Promise.resolve([
+    { ownerId: "emp1", company: "Кофейня «Дрова»", plan: "pro", renewsAt: "2026-07-20" },
+    { ownerId: "emp2", company: "Бар «Полночь»", plan: "business", renewsAt: "2026-07-12" },
+  ]);
+}
+
 export function boostVacancy(vacancyId: string): Promise<void> {
   const vac = VACANCIES.find((v) => v.id === vacancyId);
   if (vac) vac.boosted = true;

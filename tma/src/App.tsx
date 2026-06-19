@@ -34,6 +34,9 @@ const PricingPage = lazy(() =>
 const FunnelPage = lazy(() =>
   import("@/features/analytics/FunnelPage").then((m) => ({ default: m.FunnelPage })),
 );
+const AdminPage = lazy(() =>
+  import("@/features/admin/AdminPage").then((m) => ({ default: m.AdminPage })),
+);
 
 function TabBar() {
   const { role } = useSession();
@@ -114,6 +117,7 @@ export function App() {
       <Route path="/chat/:matchId" element={<ChatPage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/funnel" element={<FunnelPage />} />
+      <Route path="/admin" element={<AdminPage />} />
 
       <Route
         path="*"

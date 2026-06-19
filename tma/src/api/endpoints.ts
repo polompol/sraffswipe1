@@ -250,6 +250,59 @@ export async function fetchFunnel(): Promise<Funnel> {
   return data.counts;
 }
 
+// --- Админ-панель (контроль жалоб, подписок, метрик) ---
+
+export interface AdminOverview {
+  users: number;
+  activeVacancies: number;
+  likes: number;
+  matches: number;
+  openReports: number;
+  activeSubscriptions: number;
+}
+
+export interface AdminReport {
+  id: string;
+  targetType: string;
+  targetId: string;
+  reason: string;
+  text: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface AdminSubscription {
+  ownerId: string;
+  company: string;
+  plan: string;
+  renewsAt?: string | null;
+}
+
+export async function fetchAdminOverview(): Promise<AdminOverview> {
+  if (!USE_BACKEND) return mock.fetchAdminOverview();
+  const { data } = await api.get<AdminOverview>("/admin/overview");
+  return data;
+}
+
+export async function fetchAdminReports(status = "open"): Promise<AdminReport[]> {
+  if (!USE_BACKEND) return mock.fetchAdminReports();
+  const { data } = await api.get<AdminReport[]>("/admin/reports", {
+    params: { status },
+  });
+  return data;
+}
+
+export async function resolveReport(id: string): Promise<void> {
+  if (!USE_BACKEND) return mock.resolveReport(id);
+  await api.post(`/admin/reports/${id}/resolve`, {});
+}
+
+export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {
+  if (!USE_BACKEND) return mock.fetchAdminSubscriptions();
+  const { data } = await api.get<AdminSubscription[]>("/admin/subscriptions");
+  return data;
+}
+
 export interface AddressSuggestion {
   value: string;
   lat?: number | null;
