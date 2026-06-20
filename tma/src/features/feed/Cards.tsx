@@ -53,12 +53,16 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
 }
 
 export function SeekerCardContent({ s }: { s: Seeker }) {
-  const age = new Date().getFullYear() - new Date(s.birthDate).getFullYear();
+  const year = s.birthDate ? new Date(s.birthDate).getFullYear() : NaN;
+  const age = Number.isFinite(year) ? new Date().getFullYear() - year : null;
+  const roles = s.roles ?? [];
+  const tags = s.experienceTags ?? [];
+  const photos = s.photoUrls ?? [];
   return (
     <>
       <div
         className="swipe-photo"
-        style={{ backgroundImage: `url(${s.photoUrls[0] ?? ""})` }}
+        style={{ backgroundImage: `url(${photos[0] ?? ""})` }}
       />
       <div className="swipe-shade" />
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16 }}>
@@ -68,7 +72,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
       </div>
       <div className="swipe-body">
         <div style={{ fontSize: 26, fontWeight: 800 }}>
-          {s.name}, {age}
+          {s.name}{age !== null ? `, ${age}` : ""}
           {s.selfEmployed && (
             <span className="tag" style={{ marginLeft: 8, color: "#bcd6ff", borderColor: "#3b82f6" }}>
               самозанятый
@@ -76,7 +80,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           )}
         </div>
         <div className="row" style={{ marginTop: 8, flexWrap: "wrap" }}>
-          {s.roles.map((r) => (
+          {roles.map((r) => (
             <span key={r} className="tag" style={{ background: "var(--gold)", color: "#fff", borderColor: "var(--gold)" }}>
               {STAFF_ROLE_LABELS[r]}
             </span>
@@ -87,7 +91,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           <span className="tag" style={{ color: "#ffd28a", borderColor: "#d99a2b" }}>
             Медкнижка: {MED_BOOK_LABELS[s.medBook]}
           </span>
-          {s.experienceTags.slice(0, 2).map((t) => (
+          {tags.slice(0, 2).map((t) => (
             <span key={t} className="tag" style={{ color: "#fff", borderColor: "rgba(255,255,255,.4)" }}>
               {EXPERIENCE_TAG_LABELS[t]}
             </span>

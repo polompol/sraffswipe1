@@ -174,6 +174,8 @@ export function fetchFeed(
   if (filters?.date_from) list = list.filter((v) => v.date >= filters.date_from!);
   if (filters?.sort === "rate") list.sort((a, b) => b.rate - a.rate);
   else if (filters?.sort === "date") list.sort((a, b) => a.date.localeCompare(b.date));
+  else if (filters?.sort === "distance")
+    list.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
   return Promise.resolve(list);
 }
 

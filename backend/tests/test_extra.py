@@ -170,3 +170,19 @@ def test_admin_panel_gating_and_reports(client):
     assert res.status_code == 200
     assert client.get("/admin/reports?status=open", headers=admin_h).json() == []
     assert client.get("/admin/subscriptions", headers=admin_h).status_code == 200
+
+
+def test_admin_endpoints_forbidden_for_non_admin(client):
+    # Пользователь по телефону получает tg_id=None → не входит в ADMIN_TG_IDS.
+    code = client.post("/auth/request-code", json={"phone": "+79990007777"}).json()[
+        "dev_code"
+    ]
+    token = client.post(
+        "/auth/verify", json={"phone": "+79990007777", "code": code, "role": "seeker"}
+    ).json()["access_token"]
+    h = {"Authorization": f"Bearer {token}"}
+    for path in ("/admin/overview", "/admin/reports", "/admin/subscriptions"):
+        assert client.get(path, headers=h).status_code == 403, path
+    assert client.post("/admin/reports/any/resolve", headers=h).status_code == 403
+    # Совсем без токена — тоже закрыто.
+    assert client.get("/admin/overview").status_code == 401

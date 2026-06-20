@@ -65,7 +65,17 @@ export function AdminPage() {
 
   return (
     <div className="page">
-      <h1 className="h1" style={{ marginBottom: 12 }}>Админ-панель</h1>
+      <div className="row" style={{ marginBottom: 12 }}>
+        <h1 className="h1" style={{ margin: 0 }}>Админ-панель</h1>
+        <span className="spacer" />
+        <button
+          className="tab"
+          style={{ flex: "none", width: "auto", color: "var(--gold)" }}
+          onClick={() => nav("/funnel")}
+        >
+          📊 Воронка
+        </button>
+      </div>
 
       {ov.isLoading ? (
         <Loading />

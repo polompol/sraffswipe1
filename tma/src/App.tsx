@@ -112,12 +112,12 @@ export function App() {
         element={ready ? <Shell><ProfilePage /></Shell> : <Navigate to="/onboarding" />}
       />
 
-      <Route path="/profile/edit" element={<EditProfilePage />} />
-      <Route path="/vacancy/new" element={<CreateVacancyPage />} />
-      <Route path="/chat/:matchId" element={<ChatPage />} />
-      <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/funnel" element={<FunnelPage />} />
-      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/profile/edit" element={ready ? <EditProfilePage /> : <Navigate to="/onboarding" />} />
+      <Route path="/vacancy/new" element={ready ? <CreateVacancyPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/chat/:matchId" element={ready ? <ChatPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/pricing" element={ready ? <PricingPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/funnel" element={ready ? <FunnelPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/admin" element={ready ? <AdminPage /> : <Navigate to="/onboarding" />} />
 
       <Route
         path="*"
