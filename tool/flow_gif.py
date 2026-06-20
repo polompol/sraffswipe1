@@ -261,6 +261,99 @@ def create_screen():
     return im
 
 
+def pricing_screen():
+    im = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(im)
+    status(d)
+    T(d, (16, 44), "Тарифы", F(18, True), INK, "lm")
+    T(d, (16, 70), "Для заведений — больше откликов", F(11), MUTED)
+    plans = [("Free", "0 ₽", "1 активная вакансия", False),
+             ("Pro", "1 990 ₽", "Безлимит · 10 boost · приоритет", True),
+             ("Business", "4 990 ₽", "Всё из Pro · 30 boost · верификация", False)]
+    y = 96
+    for name, price, sub, best in plans:
+        rr(d, [16, y, W - 16, y + 70], 14, fill=CARD,
+           outline=CRIM if best else LINE, width=2 if best else 1)
+        T(d, (28, y + 16), name, F(15, True), INK, "lm")
+        if best:
+            pill(d, 28 + d.textlength(name, font=F(15, True)) + 8, y + 8,
+                 "ХИТ", F(10, True), WHITE, CRIM)
+        T(d, (W - 28, y + 16), price, F(15, True), CRIM, "rm")
+        T(d, (28, y + 44), sub, F(11), MUTED, "lm")
+        y += 82
+    rr(d, [16, y + 4, W - 16, y + 44], 13, fill=CRIM)
+    T(d, (W / 2, y + 24), "Оформить Pro", F(14, True), WHITE, "mm")
+    T(d, (W / 2, y + 62), "Boost и супер-лайки — за Telegram Stars ★",
+      F(10), MUTED, "mm")
+    return im
+
+
+def profile_screen():
+    im = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(im)
+    status(d)
+    T(d, (16, 44), "Профиль", F(18, True), INK, "lm")
+    rr(d, [16, 70, W - 16, 128], 14, fill=CARD, outline=LINE)
+    d.ellipse([28, 82, 64, 118], fill=(236, 205, 210))
+    T(d, (46, 100), "А", F(20, True), CRIM, "mm")
+    T(d, (76, 90), "Алексей", F(16, True), INK, "lm")
+    T(d, (76, 112), "★ 4.8 · 🔥 3 дня подряд".replace("🔥", ""), F(11), MUTED, "lm")
+    # тариф
+    rr(d, [16, 140, W - 16, 196], 14, fill=CARD, outline=LINE)
+    T(d, (28, 158), "Тариф: Free", F(14, True), INK, "lm")
+    rr(d, [W - 104, 150, W - 28, 180], 9, fill=CRIM)
+    T(d, (W - 66, 165), "Улучшить", F(12, True), WHITE, "mm")
+    T(d, (28, 182), "супер-лайки: 1 · boost: 0", F(11), MUTED, "lm")
+    # рефералы
+    rr(d, [16, 208, W - 16, 286], 14, fill=CARD, outline=LINE)
+    T(d, (28, 224), "Пригласить друзей", F(14, True), INK, "lm")
+    T(d, (28, 248), "За каждого по ссылке — 3 супер-лайка", F(10.5), MUTED, "lm")
+    rr(d, [28, 264, W - 28, 280], 8, fill=CRIM)
+    T(d, (W / 2, 272), "Поделиться приглашением", F(11, True), WHITE, "mm")
+    # тёмная тема
+    rr(d, [16, 298, W - 16, 346], 14, fill=CARD, outline=LINE)
+    T(d, (28, 322), "Тёмная тема", F(13, True), INK, "lm")
+    rr(d, [W - 78, 312, W - 28, 336], 12, fill=CRIM)
+    d.ellipse([W - 50, 314, W - 30, 334], fill=WHITE)
+    # админ
+    rr(d, [16, 358, W - 16, 398], 13, outline=CRIM, width=2)
+    T(d, (W / 2, 378), "🛡 Админ-панель".replace("🛡", "▣"), F(13, True), CRIM, "mm")
+    return im
+
+
+def admin_screen():
+    im = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(im)
+    status(d)
+    T(d, (16, 42), "Админ-панель", F(18, True), INK, "lm")
+    stats = [("128", "Юзеры"), ("34", "Вакансии"), ("940", "Лайки"),
+             ("410", "Мэтчи"), ("1", "Жалобы"), ("12", "Подписки")]
+    gw = (W - 32 - 16) / 3
+    for i, (val, lb) in enumerate(stats):
+        cx = 16 + (i % 3) * (gw + 8)
+        cy = 70 + (i // 3) * 66
+        rr(d, [cx, cy, cx + gw, cy + 58], 12, fill=CARD, outline=LINE)
+        T(d, (cx + gw / 2, cy + 22), val, F(19, True), GOLD, "mm")
+        T(d, (cx + gw / 2, cy + 44), lb, F(10), MUTED, "mm")
+    T(d, (16, 214), "Жалобы", F(14, True), INK, "lm")
+    rr(d, [16, 234, W - 16, 312], 12, fill=CARD, outline=LINE)
+    T(d, (28, 250), "Фейк", F(13, True), INK, "lm")
+    T(d, (W - 28, 250), "vacancy · vac3", F(10), MUTED, "rm")
+    T(d, (28, 272), "Похоже на обман — просят предоплату", F(10.5), MUTED, "lm")
+    rr(d, [28, 288, 150, 304], 8, outline=CRIM, width=1)
+    T(d, (89, 296), "Закрыть жалобу", F(10.5, True), CRIM, "mm")
+    T(d, (16, 330), "Активные подписки", F(14, True), INK, "lm")
+    subs = [("Кофейня «Дрова»", "PRO"), ("Бар «Полночь»", "BUSINESS")]
+    y = 352
+    for name, plan in subs:
+        rr(d, [16, y, W - 16, y + 46], 12, fill=CARD, outline=LINE)
+        T(d, (28, y + 23), name, F(12.5, True), INK, "lm")
+        pill(d, W - 28 - d.textlength(plan, font=F(10, True)) - 20, y + 13,
+             plan, F(10, True), CRIM, (247, 235, 237))
+        y += 56
+    return im
+
+
 def wrap(d, text, f, maxw):
     words = text.split()
     lines, cur = [], ""
@@ -370,11 +463,12 @@ frames[0].save(path, save_all=True, append_images=frames[1:], duration=durs,
                loop=0, optimize=False, disposal=2)
 print("saved", path, len(frames), "frames")
 
-# Статичная раскадровка (PNG) — для просмотра там, где GIF не проигрывается.
-panels = [("1. Лента", feed_base(True)), ("2. Мэтч", match_screen()),
-          ("3. Чат", chat_screen(4)),
-          ("4. Смена подтверждена", chat_screen(4, confirmed=True)),
-          ("5. Новая вакансия", create_screen())]
+# Статичная раскадровка (PNG) — обзор всего проекта (там, где GIF не играет).
+panels = [("Лента", feed_base(True)), ("Мэтч", match_screen()),
+          ("Чат + акт", chat_screen(4, confirmed=True)),
+          ("Новая вакансия", create_screen()),
+          ("Тарифы", pricing_screen()), ("Профиль", profile_screen()),
+          ("Админ-панель", admin_screen())]
 fr = [frame(p) for _, p in panels]
 cw, ch, pad, cap = fr[0].width, fr[0].height, 24, 36
 board = Image.new("RGB", (len(fr) * cw + pad * (len(fr) + 1), ch + cap + pad * 2),
@@ -386,3 +480,7 @@ for i, (label, _) in enumerate(panels):
     bdd.text((x + cw / 2, pad + 10), label, font=F(20, True), fill=WHITE, anchor="mm")
 board.save(os.path.join(OUT, "storyboard.png"))
 print("saved storyboard.png", board.size)
+
+# Отдельный крупный скрин админ-панели.
+frame(admin_screen()).save(os.path.join(OUT, "admin.png"))
+print("saved admin.png")
