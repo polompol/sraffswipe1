@@ -330,3 +330,95 @@
     opacity: 0;
   }
 }
+
+/* ===== «Вау»-полировка: переходы и микро-взаимодействия ===== */
+
+/* Плавный въезд каждого экрана */
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page {
+  animation: pageIn 0.26s ease both;
+}
+
+/* Кнопки-действия свайпа (✕ ⚡ ♥) — мягкая тень + отклик на нажатие */
+.act {
+  box-shadow: 0 4px 14px rgba(124, 21, 38, 0.14);
+  transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.act:active {
+  transform: scale(0.88);
+}
+
+/* Вкладки — отклик и «всплытие» активной иконки */
+.tab {
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+.tab:active {
+  transform: scale(0.92);
+}
+.tab.active .ico {
+  transform: translateY(-1px) scale(1.08);
+  transition: transform 0.2s ease;
+}
+
+/* Поля ввода — фокус-свечение в фирменном цвете */
+.input {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input:focus {
+  box-shadow: 0 0 0 3px rgba(158, 27, 50, 0.12);
+}
+
+/* Карточки — плавная тень */
+.card {
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+/* Чат-пузыри появляются плавно */
+.bubble {
+  animation: fadeUp 0.22s ease both;
+}
+
+/* Оверлей мэтча — эффектный въезд */
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.overlay {
+  animation: overlayIn 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+/* Десктоп: лёгкий подъём кнопки/карточки при наведении */
+@media (hover: hover) {
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(158, 27, 50, 0.3);
+  }
+  .card:hover {
+    box-shadow: 0 8px 20px rgba(124, 21, 38, 0.1);
+  }
+}
+
+/* Уважаем настройку «уменьшить движение» (доступность) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
