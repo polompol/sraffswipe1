@@ -47,3 +47,21 @@ def notify_owner(db: Session, owner_id: str, text: str) -> None:
     threading.Thread(
         target=_send, args=(token, tg, text), daemon=True
     ).start()
+
+
+def notify_admins(text: str) -> None:
+    """Уведомить администраторов (ADMIN_TG_IDS) — напрямую по их tg_id."""
+    token = settings.telegram_bot_token
+    if not token:
+        return
+    for raw in settings.admin_tg_ids.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            tg = int(raw)
+        except ValueError:
+            continue
+        threading.Thread(
+            target=_send, args=(token, tg, text), daemon=True
+        ).start()
