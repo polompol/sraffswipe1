@@ -39,7 +39,7 @@ def list_candidates(
     # Ленту кандидатов с ПДн видит только работодатель.
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
-    users = db.query(User).limit(50).all()
+    users = db.query(User).filter(User.blocked.is_(False)).limit(50).all()
     return [
         CandidateOut(
             id=u.id,

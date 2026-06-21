@@ -116,6 +116,50 @@ def resolve_report(
     return {"ok": True}
 
 
+def _resolve_reports_for(db: Session, target_id: str) -> None:
+    """Закрыть все открытые жалобы на эту цель."""
+    for r in db.query(Report).filter(
+        Report.target_id == target_id, Report.status == "open"
+    ).all():
+        r.status = "reviewed"
+
+
+@router.post("/users/{user_id}/block")
+def block_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Заблокировать соискателя или работодателя (бан мошенника)."""
+    target = db.get(User, user_id) or db.get(Employer, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    target.blocked = True
+    # Если это работодатель — снимаем и его вакансии.
+    if isinstance(target, Employer):
+        for v in db.query(Vacancy).filter(Vacancy.employer_id == user_id).all():
+            v.status = "blocked"
+    _resolve_reports_for(db, user_id)
+    db.commit()
+    return {"ok": True, "blocked": True}
+
+
+@router.post("/vacancies/{vacancy_id}/block")
+def block_vacancy(
+    vacancy_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Снять вакансию (фейк/обман) — она исчезает из ленты."""
+    v = db.get(Vacancy, vacancy_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="Вакансия не найдена")
+    v.status = "blocked"
+    _resolve_reports_for(db, vacancy_id)
+    db.commit()
+    return {"ok": True, "blocked": True}
+
+
 class SubscriptionOut(BaseModel):
     ownerId: str
     company: str

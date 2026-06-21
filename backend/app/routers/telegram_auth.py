@@ -70,6 +70,8 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
 
     if body.role == "employer":
         emp = db.query(Employer).filter(Employer.tg_id == tg_id).first()
+        if emp is not None and emp.blocked:
+            raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
         if emp is None:
             emp = Employer(
                 tg_id=tg_id,
@@ -92,6 +94,8 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         )
 
     user = db.query(User).filter(User.tg_id == tg_id).first()
+    if user is not None and user.blocked:
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
     if user is None:
         user = User(
             tg_id=tg_id,

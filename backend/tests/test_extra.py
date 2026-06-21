@@ -186,3 +186,27 @@ def test_admin_endpoints_forbidden_for_non_admin(client):
     assert client.post("/admin/reports/any/resolve", headers=h).status_code == 403
     # Совсем без токена — тоже закрыто.
     assert client.get("/admin/overview").status_code == 401
+
+
+def test_admin_block_user_and_vacancy(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    # Работодатель + вакансия.
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eid = emp.json()["user_id"]
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    vac = client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+    }).json()
+    # Снять вакансию → исчезает из ленты.
+    bv = client.post(f"/admin/vacancies/{vac['id']}/block", headers=ah)
+    assert bv.status_code == 200
+    feed_ids = {v["id"] for v in client.get("/vacancies").json()}
+    assert vac["id"] not in feed_ids
+    # Заблокировать работодателя → больше не может войти.
+    assert client.post(f"/admin/users/{eid}/block", headers=ah).status_code == 200
+    blocked_login = client.post(
+        "/auth/telegram", json={"init_data": "", "role": "employer"}
+    )
+    assert blocked_login.status_code == 403

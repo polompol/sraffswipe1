@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  blockUser,
+  blockVacancy,
   fetchAdminOverview,
   fetchAdminReports,
   fetchAdminSubscriptions,
@@ -43,12 +45,28 @@ export function AdminPage() {
     queryFn: fetchAdminSubscriptions,
   });
 
+  function refresh() {
+    qc.invalidateQueries({ queryKey: ["admin-reports"] });
+    qc.invalidateQueries({ queryKey: ["admin-overview"] });
+  }
+
   async function resolve(id: string) {
     haptic("success");
     await resolveReport(id);
     toast("Жалоба закрыта", "success");
-    qc.invalidateQueries({ queryKey: ["admin-reports"] });
-    qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    refresh();
+  }
+
+  async function blockTarget(type: string, targetId: string) {
+    haptic("success");
+    if (type === "vacancy") {
+      await blockVacancy(targetId);
+      toast("Вакансия снята с публикации", "success");
+    } else {
+      await blockUser(targetId);
+      toast("Пользователь заблокирован", "success");
+    }
+    refresh();
   }
 
   // 403 для не-админа → показываем заглушку.
@@ -106,13 +124,29 @@ export function AdminPage() {
               </span>
             </div>
             {r.text && <div className="muted" style={{ margin: "6px 0" }}>{r.text}</div>}
-            <button
-              className="btn ghost"
-              style={{ marginTop: 8 }}
-              onClick={() => resolve(r.id)}
-            >
-              Закрыть жалобу
-            </button>
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              {r.targetType === "vacancy" && (
+                <button
+                  className="btn"
+                  style={{ background: "var(--crimson-dark)" }}
+                  onClick={() => blockTarget("vacancy", r.targetId)}
+                >
+                  🚫 Снять вакансию
+                </button>
+              )}
+              {r.targetType === "user" && (
+                <button
+                  className="btn"
+                  style={{ background: "var(--crimson-dark)" }}
+                  onClick={() => blockTarget("user", r.targetId)}
+                >
+                  🚫 Заблокировать
+                </button>
+              )}
+              <button className="btn ghost" onClick={() => resolve(r.id)}>
+                Закрыть жалобу
+              </button>
+            </div>
           </div>
         ))}
       </div>

@@ -50,6 +50,7 @@ class User(Base):
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     photo_urls: Mapped[str] = mapped_column(Text, default="")  # csv
     about: Mapped[str] = mapped_column(Text, default="")
+    blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -74,6 +75,7 @@ class Employer(Base):
     contact_phone: Mapped[str] = mapped_column(String, default="")
     photo_url: Mapped[str] = mapped_column(String, default="")
     rating: Mapped[float] = mapped_column(Float, default=0.0)
+    blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     vacancies: Mapped[list["Vacancy"]] = relationship(back_populates="employer")

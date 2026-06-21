@@ -297,6 +297,18 @@ export async function resolveReport(id: string): Promise<void> {
   await api.post(`/admin/reports/${id}/resolve`, {});
 }
 
+/** Заблокировать пользователя (соискателя/работодателя). */
+export async function blockUser(userId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.resolveReport("");
+  await api.post(`/admin/users/${userId}/block`, {});
+}
+
+/** Снять вакансию (фейк/обман) с публикации. */
+export async function blockVacancy(vacancyId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.resolveReport("");
+  await api.post(`/admin/vacancies/${vacancyId}/block`, {});
+}
+
 export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {
   if (!USE_BACKEND) return mock.fetchAdminSubscriptions();
   const { data } = await api.get<AdminSubscription[]>("/admin/subscriptions");
