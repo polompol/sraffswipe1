@@ -425,11 +425,15 @@ export interface PaymentUrl {
   url: string;
 }
 
-/** Запрос ссылки на оплату ЮKassa (рубли) с backend. */
-export async function createYookassaPayment(sku: string): Promise<PaymentUrl> {
+/** Запрос ссылки на оплату ЮKassa (рубли). email — для фискального чека (54-ФЗ). */
+export async function createYookassaPayment(
+  sku: string,
+  email?: string,
+): Promise<PaymentUrl> {
   if (!USE_BACKEND) return { url: `https://example.com/pay/${sku}` };
   const { data } = await api.post<PaymentUrl>("/billing/yookassa/payment", {
     sku,
+    email: email || null,
   });
   return data;
 }

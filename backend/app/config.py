@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     yookassa_secret_key: str = ""
     # Базовый URL для возврата после оплаты ЮKassa.
     payment_return_url: str = ""
+    # 54-ФЗ: слать фискальный чек в платеже. Включать ТОЛЬКО если касса не
+    # фискализирует автоматически (уточнить у бухгалтера). vat_code: 1 — без НДС
+    # (самозанятый/УСН), 6 — НДС 20% и т.д.
+    yookassa_send_receipt: bool = False
+    yookassa_vat_code: int = 1
 
     # Sentry DSN (наблюдаемость). Пусто — без отправки ошибок.
     sentry_dsn: str = ""

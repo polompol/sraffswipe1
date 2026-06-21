@@ -31,6 +31,7 @@ const VERIFY: PriceItem = {
 export function PricingPage() {
   const nav = useNavigate();
   const [status, setStatus] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
@@ -53,7 +54,7 @@ export function PricingPage() {
     track("purchase", { sku, provider: "yookassa" });
     setStatus("Переходим в ЮKassa…");
     try {
-      const { url } = await createYookassaPayment(sku);
+      const { url } = await createYookassaPayment(sku, email.trim());
       window.open(url, "_blank");
       setStatus("Открыли страницу оплаты ЮKassa.");
     } catch {
@@ -69,6 +70,20 @@ export function PricingPage() {
         <p className="muted" style={{ marginBottom: 16 }}>
           Подписки — в рублях через ЮKassa. Boost и супер-лайки — за Telegram Stars.
         </p>
+
+        <label className="muted" htmlFor="rcpt" style={{ display: "block", marginBottom: 4 }}>
+          Email для чека (необязательно)
+        </label>
+        <input
+          id="rcpt"
+          className="input"
+          type="email"
+          inputMode="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ marginBottom: 18 }}
+        />
 
         <h2 className="h2">Подписки для работодателей</h2>
         <div style={{ display: "grid", gap: 12, marginBottom: 24 }}>

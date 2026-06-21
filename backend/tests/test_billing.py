@@ -191,3 +191,26 @@ def test_act_pdf_requires_ownership(client):
     assert r.status_code == 401
     r2 = client.get("/matches/nonexistent/act.pdf?token=garbage")
     assert r2.status_code == 401
+
+
+def test_yookassa_receipt_payload_gated_by_config():
+    """Чек 54-ФЗ добавляется в платёж только при включённом флаге и наличии email."""
+    from app.config import settings
+    from app.routers.billing import _yk_payload
+
+    # По умолчанию (флаг выключен) — чека нет.
+    base = _yk_payload("owner1", "sub_pro_month", 1990, "a@b.ru")
+    assert "receipt" not in base
+    assert base["amount"] == {"value": "1990.00", "currency": "RUB"}
+    assert base["metadata"] == {"owner_id": "owner1", "sku": "sub_pro_month"}
+
+    # Включаем фискализацию.
+    settings.yookassa_send_receipt = True
+    try:
+        with_email = _yk_payload("owner1", "sub_pro_month", 1990, "a@b.ru")
+        assert with_email["receipt"]["customer"]["email"] == "a@b.ru"
+        assert with_email["receipt"]["items"][0]["amount"]["value"] == "1990.00"
+        # Без email чек не формируем (нет контакта для чека).
+        assert "receipt" not in _yk_payload("owner1", "sub_pro_month", 1990, None)
+    finally:
+        settings.yookassa_send_receipt = False

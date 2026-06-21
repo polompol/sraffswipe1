@@ -70,6 +70,7 @@ class EntitlementsOut(BaseModel):
 
 class SkuIn(BaseModel):
     sku: str
+    email: str | None = None  # для фискального чека ЮKassa (54-ФЗ)
 
 
 def _apply_effect(db: Session, owner_id: str, sku: str) -> None:
@@ -214,10 +215,8 @@ class PaymentOut(BaseModel):
     url: str
 
 
-def _create_yookassa_payment(owner_id: str, sku: str, rub: int) -> str | None:
-    """Создаёт платёж в ЮKassa и возвращает confirmation_url (или None)."""
-    creds = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
-    auth = base64.b64encode(creds.encode()).decode()
+def _yk_payload(owner_id: str, sku: str, rub: int, email: str | None) -> dict:
+    """Тело запроса платежа ЮKassa (+ фискальный чек по 54-ФЗ, если включено)."""
     payload = {
         "amount": {"value": f"{rub}.00", "currency": "RUB"},
         "capture": True,
@@ -228,6 +227,29 @@ def _create_yookassa_payment(owner_id: str, sku: str, rub: int) -> str | None:
         "description": CATALOG[sku]["title"],
         "metadata": {"owner_id": owner_id, "sku": sku},
     }
+    # 54-ФЗ: чек шлём, только если касса не фискализирует сама и есть контакт.
+    if settings.yookassa_send_receipt and email:
+        payload["receipt"] = {
+            "customer": {"email": email},
+            "items": [{
+                "description": CATALOG[sku]["title"][:128],
+                "quantity": "1.00",
+                "amount": {"value": f"{rub}.00", "currency": "RUB"},
+                "vat_code": settings.yookassa_vat_code,
+                "payment_subject": "service",
+                "payment_mode": "full_payment",
+            }],
+        }
+    return payload
+
+
+def _create_yookassa_payment(
+    owner_id: str, sku: str, rub: int, email: str | None = None
+) -> str | None:
+    """Создаёт платёж в ЮKassa и возвращает confirmation_url (или None)."""
+    creds = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
+    auth = base64.b64encode(creds.encode()).decode()
+    payload = _yk_payload(owner_id, sku, rub, email)
     req = urllib.request.Request(
         "https://api.yookassa.ru/v3/payments",
         data=json.dumps(payload).encode(),
@@ -256,7 +278,7 @@ def yookassa_payment(
     # Боевой платёж ЮKassa с metadata={owner_id, sku} (вебхук начислит права).
     if settings.yookassa_ready:
         url = _create_yookassa_payment(
-            principal["id"], body.sku, int(item["rub"])
+            principal["id"], body.sku, int(item["rub"]), body.email
         )
         if url:
             return PaymentOut(url=url)
