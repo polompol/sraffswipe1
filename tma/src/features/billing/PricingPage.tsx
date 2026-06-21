@@ -38,17 +38,28 @@ export function PricingPage() {
     haptic("medium");
     track("purchase", { sku, provider: "stars" });
     setStatus("Открываем оплату Stars…");
-    const { link } = await createStarsInvoice(sku);
-    const res = await payWithStars(link);
-    setStatus(res === "paid" ? "Оплачено ✅" : `Статус: ${res}`);
+    try {
+      const { link } = await createStarsInvoice(sku);
+      const res = await payWithStars(link);
+      setStatus(res === "paid" ? "Оплачено ✅" : `Статус: ${res}`);
+    } catch {
+      haptic("error");
+      setStatus("Не удалось открыть оплату. Попробуйте ещё раз.");
+    }
   }
 
   async function buyRub(sku: string) {
     haptic("medium");
     track("purchase", { sku, provider: "yookassa" });
     setStatus("Переходим в ЮKassa…");
-    const { url } = await createYookassaPayment(sku);
-    window.open(url, "_blank");
+    try {
+      const { url } = await createYookassaPayment(sku);
+      window.open(url, "_blank");
+      setStatus("Открыли страницу оплаты ЮKassa.");
+    } catch {
+      haptic("error");
+      setStatus("Не удалось перейти к оплате. Попробуйте ещё раз.");
+    }
   }
 
   return (
