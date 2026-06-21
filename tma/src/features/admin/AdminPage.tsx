@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   blockUser,
   blockVacancy,
+  cancelSubscription,
   fetchAdminOverview,
   fetchAdminReports,
   fetchAdminSubscriptions,
@@ -61,6 +62,14 @@ export function AdminPage() {
     else await unblockUser(id);
     toast("Разблокировано", "success");
     refresh();
+  }
+
+  async function cancelSub(ownerId: string) {
+    haptic("success");
+    await cancelSubscription(ownerId);
+    toast("Подписка отменена (доступ → Free)", "success");
+    qc.invalidateQueries({ queryKey: ["admin-subs"] });
+    qc.invalidateQueries({ queryKey: ["admin-overview"] });
   }
 
   async function resolve(id: string) {
@@ -173,16 +182,25 @@ export function AdminPage() {
       )}
       <div style={{ display: "grid", gap: 10 }}>
         {subs.data?.map((s) => (
-          <div key={s.ownerId} className="card row">
-            <span style={{ flex: 1 }}>
-              <b>{s.company}</b>
-              <div className="muted" style={{ fontSize: 12 }}>
-                {s.renewsAt ? `до ${s.renewsAt.slice(0, 10)}` : "—"}
-              </div>
-            </span>
-            <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
-              {s.plan.toUpperCase()}
-            </span>
+          <div key={s.ownerId} className="card">
+            <div className="row">
+              <span style={{ flex: 1 }}>
+                <b>{s.company}</b>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {s.renewsAt ? `до ${s.renewsAt.slice(0, 10)}` : "—"}
+                </div>
+              </span>
+              <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
+                {s.plan.toUpperCase()}
+              </span>
+            </div>
+            <button
+              className="tab"
+              style={{ width: "auto", marginTop: 6, color: "var(--muted)", fontSize: 12 }}
+              onClick={() => cancelSub(s.ownerId)}
+            >
+              Отменить подписку (после возврата денег)
+            </button>
           </div>
         ))}
       </div>

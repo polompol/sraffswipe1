@@ -237,3 +237,27 @@ def test_admin_unblock(client):
     assert client.post(f"/admin/users/{sid}/unblock", headers=ah).status_code == 200
     blocked2 = client.get("/admin/blocked", headers=ah).json()
     assert all(b["id"] != sid for b in blocked2)
+
+
+def test_admin_cancel_subscription_and_purchases(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    owner = emp.json()["user_id"]
+    # Оплата Pro через вебхук → подписка активна.
+    client.post("/billing/yookassa/webhook?secret=test-internal-secret", json={
+        "event": "payment.succeeded",
+        "object": {
+            "id": "ref-1",
+            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+        },
+    })
+    assert client.get("/billing/entitlements", headers=eh).json()["plan"] == "pro"
+    # Платёж виден в журнале админа.
+    purch = client.get("/admin/purchases", headers=ah).json()
+    assert any(p["ownerId"] == owner and p["status"] == "paid" for p in purch)
+    # Возврат: отменяем подписку → доступ падает на free.
+    cancel = client.post(f"/admin/subscriptions/{owner}/cancel", headers=ah)
+    assert cancel.status_code == 200
+    assert client.get("/billing/entitlements", headers=eh).json()["plan"] == "free"

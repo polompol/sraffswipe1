@@ -12,6 +12,7 @@ from ..db import get_db
 from ..models import (
     Employer,
     Match,
+    Purchase,
     Report,
     Subscription,
     Swipe,
@@ -257,3 +258,53 @@ def list_subscriptions(
             renewsAt=s.renews_at,
         ))
     return out
+
+
+@router.post("/subscriptions/{owner_id}/cancel")
+def cancel_subscription(
+    owner_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Отозвать подписку (после возврата денег в ЮKassa) — доступ падает на Free."""
+    sub = (
+        db.query(Subscription).filter(Subscription.owner_id == owner_id).first()
+    )
+    if sub is None:
+        raise HTTPException(status_code=404, detail="Подписка не найдена")
+    sub.active = False
+    sub.plan = "free"
+    db.commit()
+    return {"ok": True, "plan": "free"}
+
+
+class PurchaseOut(BaseModel):
+    id: str
+    ownerId: str
+    sku: str
+    provider: str
+    amount: int
+    currency: str
+    status: str
+    createdAt: str
+
+
+@router.get("/purchases", response_model=list[PurchaseOut])
+def list_purchases(
+    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
+):
+    """Журнал платежей — чтобы видеть, что и кому возвращать."""
+    rows = (
+        db.query(Purchase)
+        .order_by(Purchase.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [
+        PurchaseOut(
+            id=p.id, ownerId=p.owner_id, sku=p.sku, provider=p.provider,
+            amount=p.amount, currency=p.currency, status=p.status,
+            createdAt=p.created_at.isoformat(),
+        )
+        for p in rows
+    ]

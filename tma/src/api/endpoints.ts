@@ -332,6 +332,12 @@ export async function fetchBlocked(): Promise<AdminBlocked[]> {
   return data;
 }
 
+/** Отозвать подписку (после возврата денег) — доступ падает на Free. */
+export async function cancelSubscription(ownerId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.cancelSubscription(ownerId);
+  await api.post(`/admin/subscriptions/${ownerId}/cancel`, {});
+}
+
 export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {
   if (!USE_BACKEND) return mock.fetchAdminSubscriptions();
   const { data } = await api.get<AdminSubscription[]>("/admin/subscriptions");

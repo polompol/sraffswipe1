@@ -356,6 +356,54 @@ def admin_screen():
     return im
 
 
+def filter_screen():
+    # Затемнённая лента + нижняя панель фильтров.
+    im = feed_base(True)
+    ov = Image.new("RGBA", (W, H), (20, 14, 12, 150))
+    im = Image.alpha_composite(im.convert("RGBA"), ov).convert("RGB")
+    d = ImageDraw.Draw(im)
+    sy = 150
+    rr(d, [0, sy, W, H], 22, fill=BG)
+    T(d, (18, sy + 22), "Фильтры", F(19, True), INK, "lm")
+    y = sy + 50
+    T(d, (18, y), "Город", F(11), MUTED, "lm")
+    rr(d, [18, y + 16, W - 18, y + 46], 10, fill=CARD, outline=LINE)
+    T(d, (30, y + 31), "Москва", F(12.5), INK, "lm")
+    y += 60
+    T(d, (18, y), "Должность", F(11), MUTED, "lm")
+    y += 18
+    roles = [("Официант", 1), ("Бариста", 0), ("Повар", 0), ("Бармен", 0),
+             ("Кальянщик", 0), ("Флорист", 0), ("Курьер", 0), ("Хостес", 0)]
+    x = 18
+    for lb, on in roles:
+        tw = d.textlength(lb, font=F(11.5, True)) + 18
+        if x + tw > W - 14:
+            x = 18
+            y += 32
+        rr(d, [x, y, x + tw, y + 26], 13, fill=CRIM if on else CARD,
+           outline=CRIM if on else LINE)
+        T(d, (x + tw / 2, y + 13), lb, F(11.5, True), WHITE if on else INK, "mm")
+        x += tw + 6
+    y += 42
+    T(d, (18, y), "Подойдёт мне", F(11), MUTED, "lm")
+    y += 18
+    x = 18
+    for lb in ["Без медкнижки", "Без опыта", "Проверенные"]:
+        tw = d.textlength(lb, font=F(11, True)) + 18
+        rr(d, [x, y, x + tw, y + 26], 13, outline=LINE)
+        T(d, (x + tw / 2, y + 13), lb, F(11, True), INK, "mm")
+        x += tw + 6
+    y += 40
+    T(d, (18, y), "Сортировка: Ближе · Выше ставка · Раньше", F(11), MUTED, "lm")
+    y += 26
+    rr(d, [18, y, (W - 18) / 2, y + 38], 12, outline=CRIM, width=1)
+    T(d, ((W - 18) / 4 + 9, y + 19), "🔔 Сохранить".replace("🔔", ""), F(12, True),
+      CRIM, "mm")
+    rr(d, [(W + 18) / 2, y, W - 18, y + 38], 12, fill=CRIM)
+    T(d, (3 * W / 4 - 4, y + 19), "Показать", F(12.5, True), WHITE, "mm")
+    return im
+
+
 def wrap(d, text, f, maxw):
     words = text.split()
     lines, cur = [], ""
@@ -495,6 +543,7 @@ for _name, _scr in [
     ("screen_create", create_screen()),
     ("screen_pricing", pricing_screen()),
     ("screen_profile", profile_screen()),
+    ("screen_filter", filter_screen()),
 ]:
     frame(_scr).save(os.path.join(OUT, f"{_name}.png"))
 print("saved individual screens")

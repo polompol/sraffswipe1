@@ -386,6 +386,9 @@ export function fetchAdminSubscriptions() {
 export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);
 }
+export function cancelSubscription(_ownerId: string): Promise<void> {
+  return Promise.resolve();
+}
 
 export function boostVacancy(vacancyId: string): Promise<void> {
   const vac = VACANCIES.find((v) => v.id === vacancyId);
