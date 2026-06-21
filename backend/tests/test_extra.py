@@ -210,3 +210,30 @@ def test_admin_block_user_and_vacancy(client):
         "/auth/telegram", json={"init_data": "", "role": "employer"}
     )
     assert blocked_login.status_code == 403
+
+
+def test_autoflag_scam_vacancy(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+        "description": "Срочно! Внеси предоплату за форму и выходи на смену.",
+    })
+    reps = client.get("/admin/reports", headers=ah).json()
+    assert any(r["reason"] == "scam" and "Авто-флаг" in r["text"] for r in reps)
+
+
+def test_admin_unblock(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    s = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    sid = s.json()["user_id"]
+    client.post(f"/admin/users/{sid}/block", headers=ah)
+    blocked = client.get("/admin/blocked", headers=ah).json()
+    assert any(b["id"] == sid for b in blocked)
+    assert client.post(f"/admin/users/{sid}/unblock", headers=ah).status_code == 200
+    blocked2 = client.get("/admin/blocked", headers=ah).json()
+    assert all(b["id"] != sid for b in blocked2)

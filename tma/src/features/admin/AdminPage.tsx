@@ -7,7 +7,10 @@ import {
   fetchAdminOverview,
   fetchAdminReports,
   fetchAdminSubscriptions,
+  fetchBlocked,
   resolveReport,
+  unblockUser,
+  unblockVacancy,
 } from "@/api/endpoints";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { Loading } from "@/components/States";
@@ -44,10 +47,20 @@ export function AdminPage() {
     queryKey: ["admin-subs"],
     queryFn: fetchAdminSubscriptions,
   });
+  const blocked = useQuery({ queryKey: ["admin-blocked"], queryFn: fetchBlocked });
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-reports"] });
     qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    qc.invalidateQueries({ queryKey: ["admin-blocked"] });
+  }
+
+  async function unblock(type: string, id: string) {
+    haptic("success");
+    if (type === "vacancy") await unblockVacancy(id);
+    else await unblockUser(id);
+    toast("Разблокировано", "success");
+    refresh();
   }
 
   async function resolve(id: string) {
@@ -118,12 +131,14 @@ export function AdminPage() {
           <div key={r.id} className="card">
             <div className="row">
               <b>{REASON_LABEL[r.reason] ?? r.reason}</b>
+              {r.reason === "scam" && r.text.startsWith("Авто") && (
+                <span className="tag" style={{ marginLeft: 8, color: "var(--gold)", borderColor: "var(--gold)" }}>авто</span>
+              )}
               <span className="spacer" />
-              <span className="muted" style={{ fontSize: 12 }}>
-                {r.targetType} · {r.targetId.slice(0, 8)}
-              </span>
+              <span className="muted" style={{ fontSize: 12 }}>{r.targetType}</span>
             </div>
-            {r.text && <div className="muted" style={{ margin: "6px 0" }}>{r.text}</div>}
+            <div style={{ fontWeight: 700, margin: "4px 0" }}>{r.targetInfo}</div>
+            {r.text && <div className="muted" style={{ margin: "2px 0 6px" }}>{r.text}</div>}
             <div className="row" style={{ gap: 8, marginTop: 8 }}>
               {r.targetType === "vacancy" && (
                 <button
@@ -171,6 +186,31 @@ export function AdminPage() {
           </div>
         ))}
       </div>
+
+      {blocked.data && blocked.data.length > 0 && (
+        <>
+          <h2 className="h2" style={{ margin: "18px 0 8px" }}>Заблокированные</h2>
+          <div style={{ display: "grid", gap: 10 }}>
+            {blocked.data.map((b) => (
+              <div key={`${b.type}-${b.id}`} className="card row">
+                <span style={{ flex: 1 }}>
+                  <b>{b.info}</b>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {b.type === "vacancy" ? "вакансия" : "пользователь"}
+                  </div>
+                </span>
+                <button
+                  className="btn ghost"
+                  style={{ width: "auto", padding: "8px 14px" }}
+                  onClick={() => unblock(b.type, b.id)}
+                >
+                  Разблокировать
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

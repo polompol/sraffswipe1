@@ -73,6 +73,10 @@ async def send(
         else match.user_id
     )
     notify_owner(db, other, f"💬 Новое сообщение: {body.text[:60]}")
+    # Авто-модерация чата: «переведи предоплату» и т.п. → флаг админу.
+    from ..moderation import auto_flag
+
+    auto_flag(db, "match", match_id, body.text)
     return out
 
 

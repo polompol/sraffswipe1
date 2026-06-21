@@ -265,10 +265,17 @@ export interface AdminReport {
   id: string;
   targetType: string;
   targetId: string;
+  targetInfo: string;
   reason: string;
   text: string;
   status: string;
   createdAt: string;
+}
+
+export interface AdminBlocked {
+  type: string;
+  id: string;
+  info: string;
 }
 
 export interface AdminSubscription {
@@ -307,6 +314,22 @@ export async function blockUser(userId: string): Promise<void> {
 export async function blockVacancy(vacancyId: string): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport("");
   await api.post(`/admin/vacancies/${vacancyId}/block`, {});
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.resolveReport("");
+  await api.post(`/admin/users/${userId}/unblock`, {});
+}
+
+export async function unblockVacancy(vacancyId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.resolveReport("");
+  await api.post(`/admin/vacancies/${vacancyId}/unblock`, {});
+}
+
+export async function fetchBlocked(): Promise<AdminBlocked[]> {
+  if (!USE_BACKEND) return mock.fetchBlocked();
+  const { data } = await api.get<AdminBlocked[]>("/admin/blocked");
+  return data;
 }
 
 export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {

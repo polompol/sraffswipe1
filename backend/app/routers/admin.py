@@ -72,10 +72,25 @@ class ReportOut(BaseModel):
     id: str
     targetType: str
     targetId: str
+    targetInfo: str  # что именно на разборе (название вакансии/имя/…)
     reason: str
     text: str
     status: str
     createdAt: str
+
+
+def _describe_target(db: Session, target_type: str, target_id: str) -> str:
+    """Человекочитаемое описание цели жалобы — чтобы админ видел контент."""
+    if target_type == "vacancy":
+        v = db.get(Vacancy, target_id)
+        if v is None:
+            return "вакансия удалена"
+        emp = db.get(Employer, v.employer_id)
+        return f"{v.role} · {emp.company_name if emp else '—'} · {v.rate}₽"
+    if target_type == "user":
+        u = db.get(User, target_id) or db.get(Employer, target_id)
+        return getattr(u, "name", None) or getattr(u, "company_name", None) or "—"
+    return "переписка по мэтчу"
 
 
 @router.get("/reports", response_model=list[ReportOut])
@@ -93,6 +108,7 @@ def list_reports(
             id=r.id,
             targetType=r.target_type,
             targetId=r.target_id,
+            targetInfo=_describe_target(db, r.target_type, r.target_id),
             reason=r.reason,
             text=r.text,
             status=r.status,
@@ -158,6 +174,59 @@ def block_vacancy(
     _resolve_reports_for(db, vacancy_id)
     db.commit()
     return {"ok": True, "blocked": True}
+
+
+@router.post("/users/{user_id}/unblock")
+def unblock_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Снять блокировку с пользователя (отмена ошибочного бана)."""
+    target = db.get(User, user_id) or db.get(Employer, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    target.blocked = False
+    db.commit()
+    return {"ok": True, "blocked": False}
+
+
+@router.post("/vacancies/{vacancy_id}/unblock")
+def unblock_vacancy(
+    vacancy_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Вернуть вакансию в ленту."""
+    v = db.get(Vacancy, vacancy_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="Вакансия не найдена")
+    v.status = "active"
+    db.commit()
+    return {"ok": True, "blocked": False}
+
+
+class BlockedOut(BaseModel):
+    type: str  # user|employer|vacancy
+    id: str
+    info: str
+
+
+@router.get("/blocked", response_model=list[BlockedOut])
+def list_blocked(
+    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
+):
+    """Заблокированные пользователи и снятые вакансии — для разблокировки."""
+    out: list[BlockedOut] = []
+    for u in db.query(User).filter(User.blocked.is_(True)).limit(100).all():
+        out.append(BlockedOut(type="user", id=u.id, info=u.name or "Соискатель"))
+    for e in db.query(Employer).filter(Employer.blocked.is_(True)).limit(100).all():
+        out.append(
+            BlockedOut(type="user", id=e.id, info=e.company_name or "Заведение")
+        )
+    for v in db.query(Vacancy).filter(Vacancy.status == "blocked").limit(100).all():
+        out.append(BlockedOut(type="vacancy", id=v.id, info=f"{v.role} · {v.rate}₽"))
+    return out
 
 
 class SubscriptionOut(BaseModel):

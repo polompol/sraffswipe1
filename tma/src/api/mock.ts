@@ -347,11 +347,16 @@ const adminReports = [
     id: "rep1",
     targetType: "vacancy",
     targetId: "vac3",
+    targetInfo: "waiter · Ресторан «Грядка» · 300₽",
     reason: "fake",
     text: "Похоже на обман — просят предоплату",
     status: "open",
     createdAt: new Date().toISOString(),
   },
+];
+
+const adminBlocked = [
+  { type: "vacancy", id: "vacX", info: "barista · 200₽ (снята)" },
 ];
 
 export function fetchAdminOverview() {
@@ -377,6 +382,9 @@ export function fetchAdminSubscriptions() {
     { ownerId: "emp1", company: "Кофейня «Дрова»", plan: "pro", renewsAt: "2026-07-20" },
     { ownerId: "emp2", company: "Бар «Полночь»", plan: "business", renewsAt: "2026-07-12" },
   ]);
+}
+export function fetchBlocked() {
+  return Promise.resolve([...adminBlocked]);
 }
 
 export function boostVacancy(vacancyId: string): Promise<void> {

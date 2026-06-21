@@ -187,6 +187,10 @@ def create_vacancy(
     from .saved_searches import notify_matching_searches
 
     background.add_task(notify_matching_searches, v.id)
+    # Авто-модерация: подозрительные формулировки (предоплата и т.п.).
+    from ..moderation import auto_flag
+
+    auto_flag(db, "vacancy", v.id, body.description, body.role)
     return _to_out(v, emp, None)
 
 
