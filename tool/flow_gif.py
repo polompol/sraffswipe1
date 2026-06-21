@@ -484,3 +484,15 @@ print("saved storyboard.png", board.size)
 # Отдельный крупный скрин админ-панели.
 frame(admin_screen()).save(os.path.join(OUT, "admin.png"))
 print("saved admin.png")
+
+# Отдельные крупные скрины каждого экрана (для показа).
+for _name, _scr in [
+    ("screen_feed", feed_base(True)),
+    ("screen_match", match_screen()),
+    ("screen_chat", chat_screen(4, confirmed=True)),
+    ("screen_create", create_screen()),
+    ("screen_pricing", pricing_screen()),
+    ("screen_profile", profile_screen()),
+]:
+    frame(_scr).save(os.path.join(OUT, f"{_name}.png"))
+print("saved individual screens")
