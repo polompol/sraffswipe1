@@ -325,21 +325,35 @@ def admin_screen():
     im = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(im)
     status(d)
-    T(d, (16, 42), "Админ-панель", F(18, True), INK, "lm")
-    stats = [("128", "Юзеры"), ("34", "Вакансии"), ("940", "Лайки"),
-             ("410", "Мэтчи"), ("1", "Жалобы"), ("12", "Подписки")]
-    gw = (W - 32 - 16) / 3
+    T(d, (16, 40), "Админ-панель", F(18, True), INK, "lm")
+    # Блок дохода
+    rr(d, [16, 64, W - 16, 126], 12, fill=CARD, outline=LINE)
+    T(d, (28, 78), "Оценка дохода в месяц", F(10.5), MUTED, "lm")
+    T(d, (28, 100), "30 850 ₽", F(22, True), GOLD, "lm")
+    T(d, (W - 28, 80), "Всего", F(10), MUTED, "rm")
+    T(d, (W - 28, 98), "47 230 ₽ · 5400 ★", F(11, True), INK, "rm")
+    T(d, (W - 28, 114), "Pro 8 · Business 3", F(10), MUTED, "rm")
+    # Метрики компактно
+    stats = [("128", "Юзеры"), ("940", "Лайки"), ("410", "Мэтчи"),
+             ("1", "Жалобы")]
+    gw = (W - 32 - 24) / 4
     for i, (val, lb) in enumerate(stats):
-        cx = 16 + (i % 3) * (gw + 8)
-        cy = 70 + (i // 3) * 66
-        rr(d, [cx, cy, cx + gw, cy + 58], 12, fill=CARD, outline=LINE)
-        T(d, (cx + gw / 2, cy + 22), val, F(19, True), GOLD, "mm")
-        T(d, (cx + gw / 2, cy + 44), lb, F(10), MUTED, "mm")
-    T(d, (16, 214), "Жалобы", F(14, True), INK, "lm")
-    rr(d, [16, 234, W - 16, 312], 12, fill=CARD, outline=LINE)
-    T(d, (28, 250), "Фейк", F(13, True), INK, "lm")
-    T(d, (W - 28, 250), "vacancy · vac3", F(10), MUTED, "rm")
-    T(d, (28, 270), "Похоже на обман — просят предоплату", F(10.5), MUTED, "lm")
+        cx = 16 + i * (gw + 8)
+        rr(d, [cx, 136, cx + gw, 186], 11, fill=CARD, outline=LINE)
+        T(d, (cx + gw / 2, 156), val, F(16, True), CRIM, "mm")
+        T(d, (cx + gw / 2, 175), lb, F(9), MUTED, "mm")
+    # Жалобы + период
+    T(d, (16, 200), "Жалобы", F(14, True), INK, "lm")
+    for i, (lb, on) in enumerate([("Сегодня", 1), ("7 дней", 0), ("Всё", 0)]):
+        bx = W - 16 - (3 - i) * 64
+        rr(d, [bx, 196, bx + 58, 218], 11, fill=CRIM if on else CARD,
+           outline=CRIM if on else LINE)
+        T(d, (bx + 29, 207), lb, F(9.5, True), WHITE if on else INK, "mm")
+    rr(d, [16, 228, W - 16, 312], 12, fill=CARD, outline=LINE)
+    T(d, (28, 244), "Фейк", F(13, True), INK, "lm")
+    pill(d, 64, 240, "авто", F(9, True), GOLD, (247, 240, 225))
+    T(d, (W - 28, 244), "vacancy · 17.06 14:20", F(9.5), MUTED, "rm")
+    T(d, (28, 266), "waiter · Ресторан «Грядка» · 300₽", F(10.5, True), INK, "lm")
     rr(d, [28, 286, 156, 306], 8, fill=CRIM_D)
     T(d, (92, 296), "Снять вакансию", F(10.5, True), WHITE, "mm")
     rr(d, [164, 286, 272, 306], 8, outline=CRIM, width=1)

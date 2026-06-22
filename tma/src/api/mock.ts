@@ -354,6 +354,16 @@ const adminReports = [
     status: "open",
     createdAt: new Date().toISOString(),
   },
+  {
+    id: "rep2",
+    targetType: "match",
+    targetId: "m12",
+    targetInfo: "переписка по мэтчу",
+    reason: "abuse",
+    text: "Грубит в чате",
+    status: "reviewed",
+    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+  },
 ];
 
 const adminBlocked = [
@@ -370,8 +380,19 @@ export function fetchAdminOverview() {
     activeSubscriptions: 12,
   });
 }
-export function fetchAdminReports() {
-  return Promise.resolve(adminReports.filter((r) => r.status === "open"));
+export function fetchAdminReports(status = "open") {
+  const list =
+    status === "all" ? adminReports : adminReports.filter((r) => r.status === "open");
+  return Promise.resolve([...list]);
+}
+export function fetchRevenue() {
+  return Promise.resolve({
+    activePro: 8,
+    activeBusiness: 3,
+    estMonthlyRub: 8 * 1990 + 3 * 4990,
+    totalPaidRub: 47230,
+    totalStars: 5400,
+  });
 }
 export function resolveReport(id: string): Promise<void> {
   const r = adminReports.find((x) => x.id === id);

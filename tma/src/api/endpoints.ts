@@ -279,6 +279,14 @@ export interface AdminBlocked {
   info: string;
 }
 
+export interface AdminRevenue {
+  activePro: number;
+  activeBusiness: number;
+  estMonthlyRub: number;
+  totalPaidRub: number;
+  totalStars: number;
+}
+
 export interface AdminSubscription {
   ownerId: string;
   company: string;
@@ -293,10 +301,16 @@ export async function fetchAdminOverview(): Promise<AdminOverview> {
 }
 
 export async function fetchAdminReports(status = "open"): Promise<AdminReport[]> {
-  if (!USE_BACKEND) return mock.fetchAdminReports();
+  if (!USE_BACKEND) return mock.fetchAdminReports(status);
   const { data } = await api.get<AdminReport[]>("/admin/reports", {
     params: { status },
   });
+  return data;
+}
+
+export async function fetchRevenue(): Promise<AdminRevenue> {
+  if (!USE_BACKEND) return mock.fetchRevenue();
+  const { data } = await api.get<AdminRevenue>("/admin/revenue");
   return data;
 }
 

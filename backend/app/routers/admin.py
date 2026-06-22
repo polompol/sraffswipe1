@@ -69,6 +69,46 @@ def overview(db: Session = Depends(get_db), _admin: dict = Depends(require_admin
     )
 
 
+class RevenueOut(BaseModel):
+    activePro: int
+    activeBusiness: int
+    estMonthlyRub: int  # оценка дохода в месяц по активным подпискам
+    totalPaidRub: int   # всего получено рублями (за всё время)
+    totalStars: int     # всего получено Telegram Stars
+
+
+# Месячные цены тарифов — для оценки регулярного дохода.
+_PLAN_RUB = {"pro": 1990, "business": 4990}
+
+
+@router.get("/revenue", response_model=RevenueOut)
+def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
+    def _subs(plan: str) -> int:
+        return (
+            db.query(func.count(Subscription.id))
+            .filter(Subscription.active.is_(True), Subscription.plan == plan)
+            .scalar()
+            or 0
+        )
+
+    def _sum(currency: str) -> int:
+        return int(
+            db.query(func.coalesce(func.sum(Purchase.amount), 0))
+            .filter(Purchase.status == "paid", Purchase.currency == currency)
+            .scalar()
+            or 0
+        )
+
+    pro, business = _subs("pro"), _subs("business")
+    return RevenueOut(
+        activePro=pro,
+        activeBusiness=business,
+        estMonthlyRub=pro * _PLAN_RUB["pro"] + business * _PLAN_RUB["business"],
+        totalPaidRub=_sum("RUB"),
+        totalStars=_sum("XTR"),
+    )
+
+
 class ReportOut(BaseModel):
     id: str
     targetType: str

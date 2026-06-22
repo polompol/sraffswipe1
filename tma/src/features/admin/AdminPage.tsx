@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,6 +9,7 @@ import {
   fetchAdminReports,
   fetchAdminSubscriptions,
   fetchBlocked,
+  fetchRevenue,
   resolveReport,
   unblockUser,
   unblockVacancy,
@@ -34,16 +35,41 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+const DAY = 86400000;
+const PERIODS: { id: string; label: string; days: number }[] = [
+  { id: "today", label: "Сегодня", days: 1 },
+  { id: "week", label: "7 дней", days: 7 },
+  { id: "all", label: "Всё время", days: 0 },
+];
+
 export function AdminPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  const [repStatus, setRepStatus] = useState<"open" | "all">("open");
+  const [period, setPeriod] = useState("week");
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
   const ov = useQuery({ queryKey: ["admin-overview"], queryFn: fetchAdminOverview });
+  const rev = useQuery({ queryKey: ["admin-revenue"], queryFn: fetchRevenue });
   const reports = useQuery({
-    queryKey: ["admin-reports"],
-    queryFn: () => fetchAdminReports("open"),
+    queryKey: ["admin-reports", repStatus],
+    queryFn: () => fetchAdminReports(repStatus),
   });
+
+  // Фильтр по периоду (по дате жалобы) — видеть новые за день/неделю.
+  const periodDays = PERIODS.find((p) => p.id === period)?.days ?? 0;
+  const visibleReports = (reports.data ?? []).filter(
+    (r) =>
+      periodDays === 0 ||
+      Date.now() - new Date(r.createdAt).getTime() <= periodDays * DAY,
+  );
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString("ru-RU", {
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+  };
   const subs = useQuery({
     queryKey: ["admin-subs"],
     queryFn: fetchAdminSubscriptions,
@@ -54,6 +80,7 @@ export function AdminPage() {
     qc.invalidateQueries({ queryKey: ["admin-reports"] });
     qc.invalidateQueries({ queryKey: ["admin-overview"] });
     qc.invalidateQueries({ queryKey: ["admin-blocked"] });
+    qc.invalidateQueries({ queryKey: ["admin-revenue"] });
   }
 
   async function unblock(type: string, id: string) {
@@ -130,13 +157,66 @@ export function AdminPage() {
         </div>
       ) : null}
 
-      <h2 className="h2" style={{ marginBottom: 8 }}>Жалобы</h2>
+      <h2 className="h2" style={{ marginBottom: 8 }}>💰 Доход</h2>
+      {rev.data && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="row">
+            <span style={{ flex: 1 }}>
+              <div className="muted" style={{ fontSize: 12 }}>Оценка дохода в месяц</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "var(--gold)" }}>
+                {rev.data.estMonthlyRub.toLocaleString("ru-RU")} ₽
+              </div>
+            </span>
+            <span style={{ textAlign: "right" }}>
+              <div className="muted" style={{ fontSize: 12 }}>Всего получено</div>
+              <div style={{ fontWeight: 800 }}>
+                {rev.data.totalPaidRub.toLocaleString("ru-RU")} ₽ · {rev.data.totalStars} ★
+              </div>
+            </span>
+          </div>
+          <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+            Активных подписок: <b style={{ color: "var(--text)" }}>Pro {rev.data.activePro}</b>
+            {" · "}<b style={{ color: "var(--text)" }}>Business {rev.data.activeBusiness}</b>
+          </div>
+        </div>
+      )}
+
+      <div className="row" style={{ marginBottom: 8 }}>
+        <h2 className="h2" style={{ margin: 0 }}>Жалобы</h2>
+        <span className="spacer" />
+        <button
+          className="tag"
+          style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+          onClick={() => setRepStatus(repStatus === "open" ? "all" : "open")}
+        >
+          {repStatus === "open" ? "Открытые" : "Все"}
+        </button>
+      </div>
+      <div className="row" style={{ flexWrap: "wrap", marginBottom: 10 }}>
+        {PERIODS.map((p) => (
+          <button
+            key={p.id}
+            className="tag"
+            style={{
+              cursor: "pointer",
+              background: period === p.id ? "var(--crimson)" : "transparent",
+              color: period === p.id ? "#fff" : "var(--text)",
+              borderColor: period === p.id ? "var(--crimson)" : "var(--border)",
+            }}
+            onClick={() => setPeriod(p.id)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
       {reports.isLoading && <Loading />}
-      {reports.data && reports.data.length === 0 && (
-        <div className="card muted" style={{ textAlign: "center" }}>Открытых жалоб нет 🎉</div>
+      {!reports.isLoading && visibleReports.length === 0 && (
+        <div className="card muted" style={{ textAlign: "center" }}>
+          Жалоб за период нет 🎉
+        </div>
       )}
       <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
-        {reports.data?.map((r) => (
+        {visibleReports.map((r) => (
           <div key={r.id} className="card">
             <div className="row">
               <b>{REASON_LABEL[r.reason] ?? r.reason}</b>
@@ -144,33 +224,39 @@ export function AdminPage() {
                 <span className="tag" style={{ marginLeft: 8, color: "var(--gold)", borderColor: "var(--gold)" }}>авто</span>
               )}
               <span className="spacer" />
-              <span className="muted" style={{ fontSize: 12 }}>{r.targetType}</span>
+              <span className="muted" style={{ fontSize: 12 }}>
+                {r.targetType} · {fmtDate(r.createdAt)}
+              </span>
             </div>
             <div style={{ fontWeight: 700, margin: "4px 0" }}>{r.targetInfo}</div>
             {r.text && <div className="muted" style={{ margin: "2px 0 6px" }}>{r.text}</div>}
-            <div className="row" style={{ gap: 8, marginTop: 8 }}>
-              {r.targetType === "vacancy" && (
-                <button
-                  className="btn"
-                  style={{ background: "var(--crimson-dark)" }}
-                  onClick={() => blockTarget("vacancy", r.targetId)}
-                >
-                  🚫 Снять вакансию
+            {r.status === "open" ? (
+              <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                {r.targetType === "vacancy" && (
+                  <button
+                    className="btn"
+                    style={{ background: "var(--crimson-dark)" }}
+                    onClick={() => blockTarget("vacancy", r.targetId)}
+                  >
+                    🚫 Снять вакансию
+                  </button>
+                )}
+                {r.targetType === "user" && (
+                  <button
+                    className="btn"
+                    style={{ background: "var(--crimson-dark)" }}
+                    onClick={() => blockTarget("user", r.targetId)}
+                  >
+                    🚫 Заблокировать
+                  </button>
+                )}
+                <button className="btn ghost" onClick={() => resolve(r.id)}>
+                  Закрыть жалобу
                 </button>
-              )}
-              {r.targetType === "user" && (
-                <button
-                  className="btn"
-                  style={{ background: "var(--crimson-dark)" }}
-                  onClick={() => blockTarget("user", r.targetId)}
-                >
-                  🚫 Заблокировать
-                </button>
-              )}
-              <button className="btn ghost" onClick={() => resolve(r.id)}>
-                Закрыть жалобу
-              </button>
-            </div>
+              </div>
+            ) : (
+              <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>✓ Закрыта</div>
+            )}
           </div>
         ))}
       </div>

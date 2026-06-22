@@ -261,3 +261,21 @@ def test_admin_cancel_subscription_and_purchases(client):
     cancel = client.post(f"/admin/subscriptions/{owner}/cancel", headers=ah)
     assert cancel.status_code == 200
     assert client.get("/billing/entitlements", headers=eh).json()["plan"] == "free"
+
+
+def test_admin_revenue(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    owner = emp.json()["user_id"]
+    client.post("/billing/yookassa/webhook?secret=test-internal-secret", json={
+        "event": "payment.succeeded",
+        "object": {
+            "id": "rev-1",
+            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+        },
+    })
+    rev = client.get("/admin/revenue", headers=ah).json()
+    assert rev["activePro"] == 1
+    assert rev["estMonthlyRub"] == 1990
+    assert rev["totalPaidRub"] == 1990
