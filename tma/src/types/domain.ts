@@ -4,6 +4,7 @@ export type AppRole = "seeker" | "employer";
 
 export type StaffRole =
   | "waiter"
+  | "waiter_assistant"
   | "barista"
   | "cook"
   | "dishwasher"
@@ -11,13 +12,13 @@ export type StaffRole =
   | "bartender"
   | "hookah"
   | "florist"
-  | "confectioner"
   | "administrator"
   | "courier"
   | "cleaner";
 
 export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   waiter: "Официант",
+  waiter_assistant: "Помощник официанта",
   barista: "Бариста",
   cook: "Повар",
   dishwasher: "Посудомой",
@@ -25,7 +26,6 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   bartender: "Бармен",
   hookah: "Кальянщик",
   florist: "Флорист",
-  confectioner: "Кондитер",
   administrator: "Администратор",
   courier: "Курьер",
   cleaner: "Уборщик",
