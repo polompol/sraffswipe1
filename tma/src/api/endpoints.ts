@@ -35,6 +35,7 @@ export interface FeedFilters {
   city?: string;
   min_rate?: number;
   date_from?: string;
+  date_to?: string;
   rate_type?: string;
   no_med_book?: boolean;
   no_experience?: boolean;

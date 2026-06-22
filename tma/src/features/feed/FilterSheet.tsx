@@ -13,6 +13,26 @@ const SORTS: { id: string; label: string }[] = [
   { id: "date", label: "Раньше" },
 ];
 
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Диапазон «через N дней» (один день). */
+function dayRange(plus: number): { date_from: string; date_to: string } {
+  const d = new Date();
+  d.setDate(d.getDate() + plus);
+  return { date_from: iso(d), date_to: iso(d) };
+}
+
+/** Ближайшие выходные (сб–вс). */
+function weekendRange(): { date_from: string; date_to: string } {
+  const now = new Date();
+  const toSat = (6 - now.getDay() + 7) % 7;
+  const sat = new Date();
+  sat.setDate(now.getDate() + toSat);
+  const sun = new Date(sat);
+  sun.setDate(sat.getDate() + 1);
+  return { date_from: iso(sat), date_to: iso(sun) };
+}
+
 /** Нижняя панель фильтров ленты — помогает быстро найти подходящую смену. */
 export function FilterSheet({
   value,
@@ -26,6 +46,16 @@ export function FilterSheet({
   const [f, setF] = useState<FeedFilters>({ sort: "distance", ...value });
   const [saved, setSaved] = useState(false);
   const set = (patch: Partial<FeedFilters>) => setF((cur) => ({ ...cur, ...patch }));
+
+  // Какой пресет «Когда» сейчас выбран (для подсветки чипа).
+  const whenKind =
+    f.date_from && f.date_from === f.date_to && f.date_from === iso(new Date())
+      ? "today"
+      : f.date_from && f.date_from === f.date_to && f.date_from === dayRange(1).date_from
+        ? "tomorrow"
+        : f.date_from && f.date_to && f.date_from !== f.date_to
+          ? "weekend"
+          : "any";
 
   async function saveSearch() {
     haptic("success");
@@ -99,6 +129,14 @@ export function FilterSheet({
           value={f.city ?? ""}
           onChange={(e) => set({ city: e.target.value || undefined })}
         />
+
+        <label className="muted">Когда</label>
+        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+          <Chip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
+          <Chip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
+          <Chip on={whenKind === "tomorrow"} label="Завтра" onClick={() => set(dayRange(1))} />
+          <Chip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
+        </div>
 
         <label className="muted">Должность</label>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>

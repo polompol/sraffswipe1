@@ -172,6 +172,7 @@ export function fetchFeed(
   if (filters?.no_experience) list = list.filter((v) => !v.requireExperience);
   if (filters?.verified_only) list = list.filter((v) => v.employerVerified);
   if (filters?.date_from) list = list.filter((v) => v.date >= filters.date_from!);
+  if (filters?.date_to) list = list.filter((v) => v.date <= filters.date_to!);
   if (filters?.sort === "rate") list.sort((a, b) => b.rate - a.rate);
   else if (filters?.sort === "date") list.sort((a, b) => a.date.localeCompare(b.date));
   else if (filters?.sort === "distance")
