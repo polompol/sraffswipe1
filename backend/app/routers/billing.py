@@ -295,8 +295,11 @@ def yookassa_webhook(
     secret: str = "",
 ):
     """Вебхук ЮKassa. ЮKassa не подписывает запросы (рекомендует IP-allowlist),
-    поэтому защищаемся общим секретом в query `?secret=`."""
-    _require_internal(secret)
+    поэтому защищаемся секретом в query `?secret=`. Если задан отдельный
+    yookassa_webhook_secret — используем его (утечка URL не открывает /fulfill)."""
+    expected = settings.yookassa_webhook_secret or settings.internal_api_secret
+    if not expected or not hmac.compare_digest(secret or "", expected):
+        raise HTTPException(status_code=401, detail="Требуется внутренний токен")
     if payload.get("event") != "payment.succeeded":
         return {"ok": True, "ignored": True}
     obj = payload.get("object", {})

@@ -276,6 +276,7 @@ const meProfile: Me = {
   tgUsername: "alexey",
   streak: 3,
   city: "Москва",
+  incomingLikes: 4,
 };
 
 export function createVacancy(input: VacancyInput): Promise<Vacancy> {

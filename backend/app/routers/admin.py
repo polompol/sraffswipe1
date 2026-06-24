@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..entitlements import get_or_create
 from ..models import (
     Employer,
     Match,
@@ -306,14 +307,20 @@ def cancel_subscription(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Отозвать подписку (после возврата денег в ЮKassa) — доступ падает на Free."""
-    sub = (
-        db.query(Subscription).filter(Subscription.owner_id == owner_id).first()
+    """Отозвать подписку (после возврата денег в ЮKassa) — доступ падает на Free
+    и снимается платный бейдж «Проверен»."""
+    subs = (
+        db.query(Subscription).filter(Subscription.owner_id == owner_id).all()
     )
-    if sub is None:
+    if not subs:
         raise HTTPException(status_code=404, detail="Подписка не найдена")
-    sub.active = False
-    sub.plan = "free"
+    for sub in subs:
+        sub.active = False
+        sub.plan = "free"
+    # Снимаем и одноразовый платный перк (верификацию), чтобы возврат не оставлял
+    # оплаченные привилегии.
+    ent = get_or_create(db, owner_id)
+    ent.employer_verified = False
     db.commit()
     return {"ok": True, "plan": "free"}
 

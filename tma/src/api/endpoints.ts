@@ -129,6 +129,7 @@ export interface Me {
   tgUsername?: string | null;
   streak?: number;
   city?: string;
+  incomingLikes?: number;
 }
 
 export async function fetchMe(): Promise<Me> {

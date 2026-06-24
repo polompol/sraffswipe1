@@ -125,6 +125,27 @@ export function ProfilePage() {
         </span>
       </div>
 
+      {!!me?.incomingLikes && me.incomingLikes > 0 && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            background: "linear-gradient(135deg, var(--gold-soft), var(--gold))",
+            color: "#fff",
+            border: "none",
+          }}
+        >
+          <b style={{ fontSize: 17 }}>
+            ❤️ Тебя хотят: {me.incomingLikes}
+          </b>
+          <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2 }}>
+            {role === "employer"
+              ? "столько откликов на твои вакансии — листай ленту"
+              : "столько заведений лайкнули тебя — листай ленту и отвечай"}
+          </div>
+        </div>
+      )}
+
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
           <b>Тариф: {PLAN_LABEL[ent?.plan ?? "free"]}</b>

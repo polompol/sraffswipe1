@@ -43,6 +43,9 @@ class Settings(BaseSettings):
 
     # Секрет для внутренних вызовов (бот/вебхуки → /billing/fulfill).
     internal_api_secret: str = ""
+    # Отдельный секрет для вебхука ЮKassa (в query). Если задан — урон от утечки
+    # URL из логов ограничен вебхуком и не открывает /fulfill. Пусто → fallback.
+    yookassa_webhook_secret: str = ""
 
     # Разрешённые источники CORS (csv). Пусто + dev_mode → "*"; иначе — mini_app_url.
     allowed_origins: str = ""

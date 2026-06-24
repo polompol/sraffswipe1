@@ -25,31 +25,38 @@ def find_scam(*texts: str) -> str | None:
 
 
 def auto_flag(db: Session, target_type: str, target_id: str, *texts: str) -> None:
-    """Если в тексте есть признаки обмана — заводим системную жалобу (один раз
-    на цель) и уведомляем админов. Best-effort: не ломает основной поток."""
-    word = find_scam(*texts)
-    if not word:
-        return
-    exists = (
-        db.query(Report)
-        .filter(
-            Report.target_id == target_id,
-            Report.reason == "scam",
-            Report.reporter_id == "system",
+    """Если в тексте есть признаки обмана — заводим системную жалобу (одну на
+    цель, пока она не закрыта) и уведомляем админов. Best-effort: любые сбои
+    глотаем, чтобы не ломать основной поток (вакансия/сообщение уже сохранены)."""
+    try:
+        word = find_scam(*texts)
+        if not word:
+            return
+        # Не дублируем, пока есть ОТКРЫТАЯ системная жалоба на эту цель.
+        # После закрытия — можно флагнуть повторно (рецидив).
+        exists = (
+            db.query(Report)
+            .filter(
+                Report.target_id == target_id,
+                Report.reason == "scam",
+                Report.reporter_id == "system",
+                Report.status == "open",
+            )
+            .first()
         )
-        .first()
-    )
-    if exists:
-        return
-    db.add(Report(
-        reporter_id="system",
-        target_type=target_type,
-        target_id=target_id,
-        reason="scam",
-        text=f"Авто-флаг: «{word}»",
-    ))
-    db.commit()
-    notify_admins(
-        f"🚩 Авто-подозрение на обман в {target_type} ({target_id[:12]}): "
-        f"«{word}». Откройте админ-панель."
-    )
+        if exists:
+            return
+        db.add(Report(
+            reporter_id="system",
+            target_type=target_type,
+            target_id=target_id,
+            reason="scam",
+            text=f"Авто-флаг: «{word}»",
+        ))
+        db.commit()
+        notify_admins(
+            f"🚩 Авто-подозрение на обман в {target_type} ({target_id[:12]}): "
+            f"«{word}». Откройте админ-панель."
+        )
+    except Exception:  # noqa: BLE001 — модерация не должна ронять запрос
+        db.rollback()

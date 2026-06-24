@@ -279,3 +279,25 @@ def test_admin_revenue(client):
     assert rev["activePro"] == 1
     assert rev["estMonthlyRub"] == 1990
     assert rev["totalPaidRub"] == 1990
+
+
+def test_cancel_subscription_revokes_verification_badge(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    owner = emp.json()["user_id"]
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    # Покупка верификации → бейдж выдан.
+    client.post("/billing/fulfill", headers=INTERNAL, json={
+        "owner_id": owner, "sku": "verify_year", "provider": "yookassa",
+        "charge_id": "vrf-1",
+    })
+    assert client.get("/billing/entitlements", headers=eh).json()["employerVerified"]
+    # Отмена (после возврата) снимает и бейдж.
+    client.post("/billing/fulfill", headers=INTERNAL, json={
+        "owner_id": owner, "sku": "sub_pro_month", "provider": "yookassa",
+        "charge_id": "vrf-2",
+    })
+    client.post(f"/admin/subscriptions/{owner}/cancel", headers=ah)
+    ent = client.get("/billing/entitlements", headers=eh).json()
+    assert ent["employerVerified"] is False

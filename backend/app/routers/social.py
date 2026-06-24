@@ -102,6 +102,7 @@ class MeOut(BaseModel):
     tgUsername: str | None = None
     streak: int = 0
     city: str = ""
+    incomingLikes: int = 0  # «тебя хотят»: входящие лайки/отклики
 
 
 def _streak(db: Session, owner_id: str) -> int:
@@ -109,6 +110,39 @@ def _streak(db: Session, owner_id: str) -> int:
 
     s = db.get(Streak, owner_id)
     return s.count if s else 0
+
+
+def _incoming_likes(db: Session, principal: dict) -> int:
+    """Сколько входящих лайков: соискателю — от заведений на него; заведению —
+    отклики соискателей на его вакансии. Крючок «тебя хотят»."""
+    from ..models import Swipe, Vacancy
+
+    positive = ("like", "superlike")
+    if principal["role"] == "employer":
+        vac_ids = [
+            v.id for v in db.query(Vacancy.id)
+            .filter(Vacancy.employer_id == principal["id"]).all()
+        ]
+        if not vac_ids:
+            return 0
+        return (
+            db.query(Swipe)
+            .filter(
+                Swipe.target_type == "vacancy",
+                Swipe.target_id.in_(vac_ids),
+                Swipe.direction.in_(positive),
+            )
+            .count()
+        )
+    return (
+        db.query(Swipe)
+        .filter(
+            Swipe.target_type == "user",
+            Swipe.target_id == principal["id"],
+            Swipe.direction.in_(positive),
+        )
+        .count()
+    )
 
 
 @router.get("/me", response_model=MeOut)
@@ -123,6 +157,7 @@ def me(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
             streak=_streak(db, e.id),
+            incomingLikes=_incoming_likes(db, principal),
         )
     u = db.get(User, principal["id"])
     if u is None:
@@ -131,6 +166,7 @@ def me(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
         streak=_streak(db, u.id), city=u.city,
+        incomingLikes=_incoming_likes(db, principal),
     )
 
 
