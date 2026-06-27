@@ -18,6 +18,7 @@ import { FilterSheet } from "./FilterSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { Logo } from "@/components/Logo";
 
 export function FeedPage() {
   const role = useSession((s) => s.role) ?? "seeker";
@@ -126,11 +127,9 @@ export function FeedPage() {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#fff",
-            fontWeight: 900,
           }}
         >
-          ⚡
+          <Logo size={20} color="#fff" />
         </span>
         <h2 className="h2" style={{ margin: 0 }}>
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { haptic } from "@/telegram/sdk";
+import { Logo } from "@/components/Logo";
 
 const SLIDES = [
   {
@@ -49,7 +50,11 @@ export function Onboarding() {
             gap: 16,
           }}
         >
-          <div style={{ fontSize: 84 }}>{slide.emoji}</div>
+          {i === 0 ? (
+            <Logo size={100} color="var(--gold)" />
+          ) : (
+            <div style={{ fontSize: 84 }}>{slide.emoji}</div>
+          )}
           <h1 className="h1">{slide.title}</h1>
           <p className="muted" style={{ fontSize: 15, maxWidth: 320 }}>
             {slide.text}

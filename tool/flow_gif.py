@@ -82,10 +82,27 @@ def brand(d, x, y, sz=18):
     T(d, (x, y), "Staff", F(sz, True), INK, "lm")
     w = d.textlength("Staff", font=F(sz, True))
     T(d, (x + w, y), "Swipe", F(sz, True), CRIM, "lm")
-    # бейдж-логотип слева
+    # Бейдж-логотип слева: знак-пазл (два уголка) в белом на кримсоне.
     rr(d, [x - 30, y - 11, x - 8, y + 11], 7, fill=CRIM)
-    d.polygon([(x - 22, y - 6), (x - 16, y - 6), (x - 19, y),
-               (x - 14, y), (x - 23, y + 7), (x - 20, y), (x - 25, y)], fill=WHITE)
+    cx, cy, wd = x - 19, y, 2  # центр значка
+    # левый уголок-шип
+    d.line([(cx - 6, cy - 6), (cx - 6, cy + 6)], fill=WHITE, width=wd)
+    d.line([(cx - 6, cy - 6), (cx - 2, cy - 6)], fill=WHITE, width=wd)
+    d.line([(cx - 6, cy + 6), (cx - 2, cy + 6)], fill=WHITE, width=wd)
+    d.line([(cx - 2, cy - 6), (cx - 2, cy - 2)], fill=WHITE, width=wd)
+    d.line([(cx - 2, cy - 2), (cx, cy - 2)], fill=WHITE, width=wd)
+    d.line([(cx, cy - 2), (cx, cy + 2)], fill=WHITE, width=wd)
+    d.line([(cx, cy + 2), (cx - 2, cy + 2)], fill=WHITE, width=wd)
+    d.line([(cx - 2, cy + 2), (cx - 2, cy + 6)], fill=WHITE, width=wd)
+    # правый уголок-паз (зеркало)
+    d.line([(cx + 6, cy - 6), (cx + 6, cy + 6)], fill=WHITE, width=wd)
+    d.line([(cx + 6, cy - 6), (cx + 2, cy - 6)], fill=WHITE, width=wd)
+    d.line([(cx + 6, cy + 6), (cx + 2, cy + 6)], fill=WHITE, width=wd)
+    d.line([(cx + 2, cy - 6), (cx + 2, cy - 2)], fill=WHITE, width=wd)
+    d.line([(cx + 2, cy - 2), (cx + 4, cy - 2)], fill=WHITE, width=wd)
+    d.line([(cx + 4, cy - 2), (cx + 4, cy + 2)], fill=WHITE, width=wd)
+    d.line([(cx + 4, cy + 2), (cx + 2, cy + 2)], fill=WHITE, width=wd)
+    d.line([(cx + 2, cy + 2), (cx + 2, cy + 6)], fill=WHITE, width=wd)
 
 
 def tabbar(d, active):
