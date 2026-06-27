@@ -37,6 +37,9 @@ const FunnelPage = lazy(() =>
 const AdminPage = lazy(() =>
   import("@/features/admin/AdminPage").then((m) => ({ default: m.AdminPage })),
 );
+const SupportPage = lazy(() =>
+  import("@/features/support/SupportPage").then((m) => ({ default: m.SupportPage })),
+);
 
 function TabBar() {
   const { role } = useSession();
@@ -118,6 +121,7 @@ export function App() {
       <Route path="/pricing" element={ready ? <PricingPage /> : <Navigate to="/onboarding" />} />
       <Route path="/funnel" element={ready ? <FunnelPage /> : <Navigate to="/onboarding" />} />
       <Route path="/admin" element={ready ? <AdminPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/support" element={ready ? <SupportPage /> : <Navigate to="/onboarding" />} />
 
       <Route
         path="*"

@@ -216,6 +216,12 @@ export function ProfilePage() {
         ✏️ Редактировать профиль
       </Button>
 
+      <div style={{ marginTop: 10 }}>
+        <Button variant="ghost" onClick={() => nav("/support")}>
+          ❓ Помощь и поддержка
+        </Button>
+      </div>
+
       {isAdmin && (
         <div style={{ marginTop: 10 }}>
           <Button variant="ghost" onClick={() => nav("/admin")}>
