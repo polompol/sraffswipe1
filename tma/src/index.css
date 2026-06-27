@@ -240,6 +240,12 @@
   font-weight: 700;
   font-size: 13px;
 }
+.swipe-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
 .stamp {
   position: absolute;
   top: 28px;

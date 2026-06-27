@@ -15,8 +15,9 @@ interface Props<T> {
 
 const VISIBLE = 3;
 
-function dirFromVelocity(mx: number, my: number): SwipeDirection {
-  if (my < -80 && Math.abs(my) > Math.abs(mx)) return "superlike";
+function dirFrom(mx: number, my: number, sx: number, sy: number): SwipeDirection {
+  if (sy < 0 || (my < -80 && Math.abs(my) > Math.abs(mx))) return "superlike";
+  if (sx !== 0) return sx > 0 ? "like" : "dislike";
   return mx > 0 ? "like" : "dislike";
 }
 
@@ -79,10 +80,11 @@ export function SwipeDeck<T>(props: Props<T>) {
   }
 
   const bind = useDrag(
-    ({ args: [index], active, movement: [mx, my], last }) => {
-      const trigger = Math.abs(mx) > 110 || my < -110;
+    ({ args: [index], active, movement: [mx, my], swipe: [sx, sy], last }) => {
+      // Триггер: длинный свайп ИЛИ быстрый флик (swipe от use-gesture).
+      const trigger = sx !== 0 || sy !== 0 || Math.abs(mx) > 110 || my < -110;
       if (last && trigger) {
-        fling(index as number, dirFromVelocity(mx, my));
+        fling(index as number, dirFrom(mx, my, sx, sy));
         return;
       }
       apiRef.start((i) => {
@@ -118,11 +120,34 @@ export function SwipeDeck<T>(props: Props<T>) {
             }}
           >
             {renderCard(item)}
+            <Tint x={style.x} />
             <Stamps x={style.x} y={style.y} />
           </animated.div>
         );
       })}
     </div>
+  );
+}
+
+/** Цветовая подсветка карточки при свайпе: кримсон вправо, серый влево. */
+function Tint({ x }: { x: SpringValue<number> }) {
+  return (
+    <>
+      <animated.div
+        className="swipe-tint"
+        style={{
+          background: "var(--like)",
+          opacity: to(x, (v) => Math.max(0, Math.min(0.32, v / 260))),
+        }}
+      />
+      <animated.div
+        className="swipe-tint"
+        style={{
+          background: "#3a342f",
+          opacity: to(x, (v) => Math.max(0, Math.min(0.4, -v / 260))),
+        }}
+      />
+    </>
   );
 }
 
