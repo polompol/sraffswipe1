@@ -39,7 +39,7 @@ export function MyVacanciesPage() {
         </Button>
       </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
+      <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {data?.map((v) => (
           <div key={v.id} className="card">
             <div className="row">

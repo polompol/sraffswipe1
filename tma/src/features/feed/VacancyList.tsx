@@ -16,7 +16,7 @@ export function VacancyList({
 }) {
   const [reportId, setReportId] = useState<string | null>(null);
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div className="stagger" style={{ display: "grid", gap: 12 }}>
       {items.map((v) => (
         <div key={v.id} className="card fade-up">
           <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>

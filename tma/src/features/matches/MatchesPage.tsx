@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchMatches } from "@/api/endpoints";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { ErrorBox, SkeletonList } from "@/components/States";
+import { EmptyState } from "@/components/EmptyState";
 
 export function MatchesPage() {
   const nav = useNavigate();
@@ -17,14 +18,13 @@ export function MatchesPage() {
       {isLoading && <SkeletonList />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
       {data && data.length === 0 && (
-        <div className="card" style={{ textAlign: "center", padding: 40 }}>
-          <div style={{ fontSize: 56 }}>💛</div>
-          <p className="muted" style={{ marginTop: 8 }}>
-            Пока нет мэтчей. Свайпайте вправо понравившиеся смены.
-          </p>
-        </div>
+        <EmptyState
+          icon="💛"
+          title="Пока нет мэтчей"
+          text="Свайпайте вправо понравившиеся смены — при взаимном лайке откроется чат."
+        />
       )}
-      <div style={{ display: "grid", gap: 12 }}>
+      <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {data?.map((m) => (
           <button
             key={m.id}

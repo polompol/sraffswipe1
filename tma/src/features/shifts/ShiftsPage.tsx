@@ -5,6 +5,7 @@ import { baseURL, getToken } from "@/api/client";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { Button } from "@/components/Button";
+import { EmptyState } from "@/components/EmptyState";
 import { haptic } from "@/telegram/sdk";
 
 function ReviewRow({ matchId }: { matchId: string }) {
@@ -58,15 +59,14 @@ export function ShiftsPage() {
       {isError && <ErrorBox onRetry={() => refetch()} />}
 
       {!isLoading && !isError && shifts.length === 0 && (
-        <div className="card" style={{ textAlign: "center", padding: 40 }}>
-          <div style={{ fontSize: 56 }}>📅</div>
-          <p className="muted" style={{ marginTop: 8 }}>
-            Нет подтверждённых смен. Подтвердите смену в чате после мэтча.
-          </p>
-        </div>
+        <EmptyState
+          icon="📅"
+          title="Пока нет смен"
+          text="Подтвердите смену в чате после мэтча — она появится здесь с актом."
+        />
       )}
 
-      <div style={{ display: "grid", gap: 12 }}>
+      <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {shifts.map((m) => (
           <div key={m.id} className="card">
             <div className="row">
