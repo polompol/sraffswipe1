@@ -10,6 +10,7 @@ import {
   type AddressSuggestion,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
@@ -190,9 +191,9 @@ export function CreateVacancyPage() {
           onChange={(e) => setDesc(e.target.value)}
         />
 
-        <button className="btn" disabled={busy} onClick={publish}>
-          {busy ? "Публикуем…" : "Опубликовать вакансию"}
-        </button>
+        <Button loading={busy} onClick={publish}>
+          Опубликовать вакансию
+        </Button>
       </div>
     </div>
   );

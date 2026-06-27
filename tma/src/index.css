@@ -83,7 +83,94 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: 0 2px 10px rgba(59, 42, 32, 0.05);
+  box-shadow: var(--elev-1);
+}
+
+/* ===== Единая кнопка <Button> (дизайн-система) ===== */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s ease, box-shadow 0.15s ease, opacity 0.15s ease,
+    background 0.15s ease;
+}
+.ui-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.ui-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ui-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(158, 27, 50, 0.28);
+}
+.ui-btn__icon {
+  display: inline-flex;
+}
+.ui-btn--primary {
+  background: var(--grad-brand);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(158, 27, 50, 0.26);
+}
+.ui-btn--secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--elev-1);
+}
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+}
+.ui-btn--danger {
+  background: var(--crimson-dark);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(124, 21, 38, 0.28);
+}
+@media (hover: hover) {
+  .ui-btn--primary:hover:not(:disabled),
+  .ui-btn--danger:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(158, 27, 50, 0.3);
+  }
+}
+
+/* Спиннер загрузки */
+.ui-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.ui-btn--secondary .ui-spinner,
+.ui-btn--ghost .ui-spinner {
+  border-color: rgba(158, 27, 50, 0.25);
+  border-top-color: var(--gold);
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Видимый фокус для доступности на интерактивных элементах */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 /* Появление контента и пульс акцентных бейджей */

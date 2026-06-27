@@ -25,7 +25,38 @@
   --radius: 16px;
   --radius-lg: 24px;
   --radius-sm: 12px;
+  --radius-pill: 999px;
+
+  /* Премиальные тени (3 уровня глубины) */
   --shadow: 0 12px 28px rgba(124, 21, 38, 0.16);
+  --elev-1: 0 1px 2px rgba(60, 20, 25, 0.06), 0 2px 8px rgba(60, 20, 25, 0.05);
+  --elev-2: 0 4px 12px rgba(60, 20, 25, 0.08), 0 8px 24px rgba(60, 20, 25, 0.06);
+  --elev-3: 0 12px 32px rgba(124, 21, 38, 0.16);
+
+  /* Шкала отступов (8pt grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Типографическая шкала */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+
+  /* Слои z-index */
+  --z-sheet: 40;
+  --z-overlay: 50;
+  --z-toast: 60;
+
+  /* Премиальный градиент кнопки/бренда */
+  --grad-brand: linear-gradient(135deg, var(--gold-soft), var(--gold));
 }
 
 /* Тёмная «винная» тема (переключатель в профиле). */
