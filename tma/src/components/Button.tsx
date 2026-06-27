@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { haptic } from "@/telegram/sdk";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -32,12 +32,21 @@ export function Button({
   ...rest
 }: Props) {
   const s = SIZE[size];
-  const isDisabled = disabled || loading;
+  // Внутренний «running» — авто-защита от двойных нажатий: пока async-обработчик
+  // не завершился, кнопка заблокирована и крутит спиннер (важно для оплаты).
+  const [running, setRunning] = useState(false);
+  const busy = loading || running;
+  const isDisabled = disabled || busy;
 
   async function handle() {
     if (isDisabled) return;
     haptic("light");
-    await onClick?.();
+    try {
+      setRunning(true);
+      await onClick?.();
+    } finally {
+      setRunning(false);
+    }
   }
 
   return (
@@ -55,7 +64,7 @@ export function Button({
       }}
       {...rest}
     >
-      {loading ? (
+      {busy ? (
         <span className="ui-spinner" aria-hidden />
       ) : (
         <>

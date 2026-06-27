@@ -4,6 +4,7 @@ import { fetchMatches, leaveReview } from "@/api/endpoints";
 import { baseURL, getToken } from "@/api/client";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { ErrorBox, SkeletonList } from "@/components/States";
+import { Button } from "@/components/Button";
 import { haptic } from "@/telegram/sdk";
 
 function ReviewRow({ matchId }: { matchId: string }) {
@@ -75,9 +76,11 @@ export function ShiftsPage() {
                 {MATCH_STATUS_LABELS[m.status]}
               </span>
             </div>
-            <button className="btn secondary" style={{ marginTop: 12 }} onClick={() => downloadAct(m.id)}>
-              📄 Сформировать акт (PDF)
-            </button>
+            <div style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={() => downloadAct(m.id)}>
+                📄 Сформировать акт (PDF)
+              </Button>
+            </div>
             <ReviewRow matchId={m.id} />
           </div>
         ))}

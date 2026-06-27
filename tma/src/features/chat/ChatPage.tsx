@@ -7,6 +7,8 @@ import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
+import { Button } from "@/components/Button";
+import { IconSend } from "@/components/Icons";
 
 export function ChatPage() {
   const { matchId = "" } = useParams();
@@ -128,14 +130,11 @@ export function ChatPage() {
           borderTop: "1px solid var(--border)",
         }}
       >
-        <button
-          className="btn ghost"
-          style={{ marginBottom: 8 }}
-          disabled={confirmed}
-          onClick={doConfirm}
-        >
-          {confirmed ? "✓ Вы подтвердили смену" : "🤝 Подтвердить смену"}
-        </button>
+        <div style={{ marginBottom: 8 }}>
+          <Button variant="ghost" disabled={confirmed} onClick={doConfirm}>
+            {confirmed ? "✓ Вы подтвердили смену" : "🤝 Подтвердить смену"}
+          </Button>
+        </div>
         <div className="row">
           <input
             className="input"
@@ -144,14 +143,14 @@ export function ChatPage() {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
           />
-          <button
-            className="btn"
+          <Button
+            block={false}
             aria-label="Отправить"
-            style={{ width: 52, flex: "none", padding: 0, height: 48 }}
             onClick={send}
+            style={{ width: 52, flex: "none", padding: 0 }}
           >
-            ➤
-          </button>
+            <IconSend size={20} />
+          </Button>
         </div>
       </div>
 

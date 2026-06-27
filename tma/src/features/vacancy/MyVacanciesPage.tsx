@@ -4,6 +4,7 @@ import { boostVacancy, fetchEntitlements, fetchMyVacancies } from "@/api/endpoin
 import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
@@ -33,9 +34,9 @@ export function MyVacanciesPage() {
       <div className="row" style={{ marginBottom: 12 }}>
         <h1 className="h1" style={{ margin: 0 }}>Мои вакансии</h1>
         <span className="spacer" />
-        <button className="btn" style={{ width: "auto", padding: "10px 14px" }} onClick={() => nav("/vacancy/new")}>
+        <Button size="sm" block={false} onClick={() => nav("/vacancy/new")}>
           + Вакансия
-        </button>
+        </Button>
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>

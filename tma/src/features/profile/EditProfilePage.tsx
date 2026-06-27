@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
+import { Button } from "@/components/Button";
 import { updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { showBackButton, haptic } from "@/telegram/sdk";
@@ -113,9 +114,7 @@ export function EditProfilePage() {
           </div>
         )}
 
-        <button className="btn" disabled={saving} onClick={save}>
-          {saving ? "Сохраняем…" : "Сохранить"}
-        </button>
+        <Button loading={saving} onClick={save}>Сохранить</Button>
       </div>
     </div>
   );

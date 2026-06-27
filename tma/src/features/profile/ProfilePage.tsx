@@ -12,6 +12,7 @@ import {
 } from "@/api/endpoints";
 import { share, haptic } from "@/telegram/sdk";
 import { applyTheme, currentTheme } from "@/lib/theme";
+import { Button } from "@/components/Button";
 
 function EmployerVerify() {
   const [inn, setInn] = useState("");
@@ -167,9 +168,7 @@ export function ProfilePage() {
           За каждого по вашей ссылке — {ref?.bonusSuperlikes ?? 3} супер-лайка.
           Уже пришло: {ref?.invited ?? 0}.
         </div>
-        <button className="btn" onClick={invite}>
-          🎁 Поделиться приглашением
-        </button>
+        <Button onClick={invite}>🎁 Поделиться приглашением</Button>
       </div>
 
       <div className="card row" style={{ marginBottom: 16 }}>
@@ -213,18 +212,16 @@ export function ProfilePage() {
         </button>
       </div>
 
-      <button className="btn secondary" onClick={() => nav("/profile/edit")}>
+      <Button variant="secondary" onClick={() => nav("/profile/edit")}>
         ✏️ Редактировать профиль
-      </button>
+      </Button>
 
       {isAdmin && (
-        <button
-          className="btn ghost"
-          style={{ marginTop: 10 }}
-          onClick={() => nav("/admin")}
-        >
-          🛡 Админ-панель
-        </button>
+        <div style={{ marginTop: 10 }}>
+          <Button variant="ghost" onClick={() => nav("/admin")}>
+            🛡 Админ-панель
+          </Button>
+        </div>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import {
   track,
 } from "@/api/endpoints";
 import { payWithStars, showBackButton, haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 
 // Цифровые микро-фичи — Telegram Stars. Подписки/верификация — ЮKassa (рубли).
 const SUBSCRIPTIONS: PriceItem[] = [
@@ -130,9 +131,9 @@ function PriceRow({
         </div>
         <div className="muted">{item.subtitle}</div>
       </span>
-      <button className="btn" style={{ width: "auto", padding: "10px 16px", whiteSpace: "nowrap" }} onClick={onBuy}>
+      <Button size="sm" block={false} onClick={onBuy} style={{ whiteSpace: "nowrap" }}>
         {cta}
-      </button>
+      </Button>
     </div>
   );
 }
