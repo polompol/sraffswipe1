@@ -12,6 +12,7 @@ import {
   type FeedFilters,
 } from "@/api/endpoints";
 import { todayISO } from "@/lib/format";
+import { LiveTicker } from "./LiveTicker";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
@@ -194,6 +195,8 @@ export function FeedPage() {
       <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
         ⭐ 4.8 · 1 200+ смен закрыто · средний отклик 7 мин
       </p>
+
+      {isSeeker && <LiveTicker />}
 
       {isSeeker && (
         <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>

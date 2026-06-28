@@ -6,8 +6,8 @@ import { Logo } from "@/components/Logo";
 const SLIDES = [
   {
     emoji: "⚡",
-    title: "Смены рядом — за один свайп",
-    text: "Листайте вакансии в общепите рядом с домом. Вправо — «хочу», влево — мимо.",
+    title: "Подработка рядом — от 3 000 ₽ за смену",
+    text: "Свайпай смены в кафе и ресторанах у дома. Вправо — «хочу», влево — мимо. Первую найдёшь за пару минут.",
   },
   {
     emoji: "🤝",
@@ -59,6 +59,20 @@ export function Onboarding() {
           <p className="muted" style={{ fontSize: 15, maxWidth: 320 }}>
             {slide.text}
           </p>
+          {i === 0 && (
+            <span
+              className="tag"
+              style={{
+                background: "rgba(34,197,94,.12)",
+                color: "#16a34a",
+                borderColor: "#22c55e",
+                fontWeight: 700,
+                padding: "8px 14px",
+              }}
+            >
+              💰 Оплата в день смены · без посредников
+            </span>
+          )}
         </div>
         <p className="muted" style={{ textAlign: "center", fontSize: 12.5, marginBottom: 12 }}>
           ⭐ 4.8 · 1 200+ смен закрыто · заведения уже здесь

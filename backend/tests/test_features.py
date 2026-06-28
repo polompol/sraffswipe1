@@ -95,3 +95,19 @@ def test_availability_employer_forbidden(client):
     r = client.post("/me/available", headers=_hdr(emp_token),
                     json={"available": True})
     assert r.status_code == 403
+
+
+def test_activity_feed_shape(client):
+    seeker_token, _ = _auth(client, "seeker")
+    r = client.get("/activity/recent", headers=_hdr(seeker_token))
+    assert r.status_code == 200
+    body = r.json()
+    assert "items" in body and isinstance(body["items"], list)
+    # Соискатель существует → «ищут сейчас» не ноль (fallback на число юзеров).
+    assert body["searching_now"] >= 1
+
+
+def test_activity_shows_closed_shift(client):
+    _, _, seeker_token, _, _, _ = _full_shift_cycle(client)
+    body = client.get("/activity/recent", headers=_hdr(seeker_token)).json()
+    assert any(it["kind"] == "closed" for it in body["items"])

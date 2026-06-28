@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .db import init_db
 from .routers import (
+    activity,
     acts,
     admin,
     analytics,
@@ -134,6 +135,7 @@ app.include_router(employer.router)
 app.include_router(uploads.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
+app.include_router(activity.router)
 
 
 @app.get("/health", tags=["meta"])
