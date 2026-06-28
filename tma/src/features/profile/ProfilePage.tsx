@@ -7,12 +7,15 @@ import {
   fetchEntitlements,
   fetchMe,
   fetchReferral,
+  setAvailability,
   verifyEmployer,
+  type Me,
   type VerifyResult,
 } from "@/api/endpoints";
 import { share, haptic } from "@/telegram/sdk";
 import { applyTheme, currentTheme } from "@/lib/theme";
 import { Button } from "@/components/Button";
+import { toast } from "@/components/Toast";
 
 function EmployerVerify() {
   const [inn, setInn] = useState("");
@@ -69,6 +72,105 @@ const PLAN_LABEL: Record<string, string> = {
   business: "Business",
 };
 
+// «Готов выйти сегодня» — тумблер доступности. Заведения со срочной сменой
+// видят такого человека первым в ленте кандидатов.
+function AvailabilityCard({ initial }: { initial: boolean }) {
+  const [on, setOn] = useState(initial);
+  const [busy, setBusy] = useState(false);
+
+  async function toggle() {
+    const next = !on;
+    setOn(next);
+    setBusy(true);
+    haptic("select");
+    try {
+      await setAvailability(next);
+      toast(next ? "Вы готовы выйти сегодня 🟢" : "Статус снят", "success");
+    } catch {
+      setOn(!next); // откат при ошибке
+      toast("Не удалось сохранить", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="card row"
+      style={{
+        marginBottom: 16,
+        border: on ? "1px solid #22c55e" : undefined,
+        background: on ? "rgba(34,197,94,.08)" : undefined,
+      }}
+    >
+      <span style={{ flex: 1 }}>
+        <b>{on ? "🟢 Готов выйти сегодня" : "Готов выйти сегодня?"}</b>
+        <div className="muted">
+          {on
+            ? "Вы наверху ленты — заведения зовут вас на срочные смены первыми"
+            : "Включите — и срочные смены найдут вас быстрее"}
+        </div>
+      </span>
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label="Готов выйти сегодня"
+        disabled={busy}
+        onClick={toggle}
+        style={{
+          width: 52,
+          height: 30,
+          borderRadius: 999,
+          border: "none",
+          cursor: "pointer",
+          background: on ? "#22c55e" : "var(--border)",
+          position: "relative",
+          transition: "background 0.2s",
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 3,
+            left: on ? 25 : 3,
+            width: 24,
+            height: 24,
+            borderRadius: "50%",
+            background: "#fff",
+            transition: "left 0.2s",
+          }}
+        />
+      </button>
+    </div>
+  );
+}
+
+// Доход через сервис — мотивация деньгами, а не «зашёл N дней подряд».
+function EarningsCard({ me }: { me: Me }) {
+  const earned = me.earnedRub ?? 0;
+  const shifts = me.shiftsDone ?? 0;
+  if (!earned && !shifts) return null;
+  return (
+    <div
+      className="card"
+      style={{
+        marginBottom: 16,
+        background: "linear-gradient(135deg, var(--crimson-dark), var(--gold))",
+        color: "#fff",
+        border: "none",
+      }}
+    >
+      <div style={{ opacity: 0.9, fontSize: 13 }}>Заработано через StaffSwipe</div>
+      <div style={{ fontWeight: 800, fontSize: 28, marginTop: 2 }}>
+        {earned.toLocaleString("ru-RU")} ₽
+      </div>
+      <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2 }}>
+        {shifts} {shifts === 1 ? "смена закрыта" : "смен закрыто"} · так держать 🔥
+      </div>
+    </div>
+  );
+}
+
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
@@ -121,10 +223,16 @@ export function ProfilePage() {
           <div className="muted">
             {me ? `★ ${me.rating.toFixed(1)}` : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
-            {me?.streak ? ` · 🔥 ${me.streak} дн. подряд` : ""}
+            {me?.shiftsDone ? ` · ${me.shiftsDone} смен` : ""}
           </div>
         </span>
       </div>
+
+      {me && <EarningsCard me={me} />}
+
+      {role === "seeker" && (
+        <AvailabilityCard initial={me?.availableToday ?? false} />
+      )}
 
       {!!me?.incomingLikes && me.incomingLikes > 0 && (
         <div

@@ -48,6 +48,21 @@ export const RATE_SUFFIX: Record<RateType, string> = {
   perShift: "₽/смена",
 };
 
+// Как и когда платит заведение — снимает страх «вдруг кинут».
+export type PayMethod = "cash" | "card" | "transfer";
+
+export const PAY_METHOD_LABELS: Record<PayMethod, string> = {
+  cash: "Наличными в день смены",
+  card: "На карту в день смены",
+  transfer: "Перевод после смены",
+};
+
+export const PAY_METHOD_SHORT: Record<PayMethod, string> = {
+  cash: "💵 Нал в день смены",
+  card: "💳 На карту в день",
+  transfer: "🏦 Перевод после",
+};
+
 export type MatchStatus = "matched" | "confirmed" | "completed";
 
 export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
@@ -94,6 +109,7 @@ export interface Seeker {
   rating: number;
   photoUrls: string[];
   about: string;
+  availableToday?: boolean;
 }
 
 export interface Vacancy {
@@ -107,6 +123,7 @@ export interface Vacancy {
   endTime: number;
   rate: number;
   rateType: RateType;
+  payMethod?: PayMethod;
   description: string;
   requireMedBook: boolean;
   requireExperience: boolean;
@@ -119,6 +136,10 @@ export interface Vacancy {
   status: string;
   boosted?: boolean;
   distanceKm?: number;
+  // Доверие к заведению (видно ДО отклика).
+  employerRating?: number;
+  employerShiftsDone?: number;
+  employerPaysOnTime?: boolean;
 }
 
 export interface MatchModel {

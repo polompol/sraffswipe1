@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { fmtTime, rateLabel, estimatedPay } from "./format";
+import {
+  fmtTime,
+  rateLabel,
+  estimatedPay,
+  todayISO,
+  shiftDayLabel,
+  isUrgentShift,
+} from "./format";
 import type { Vacancy } from "@/types/domain";
 
 describe("format", () => {
@@ -22,5 +29,19 @@ describe("format", () => {
     } as Vacancy;
     expect(estimatedPay({ ...base, rateType: "perShift", rate: 2800 })).toBe(2800);
     expect(estimatedPay({ ...base, rateType: "perHour" })).toBe(2800); // 8ч × 350
+  });
+
+  it("shiftDayLabel: сегодня/завтра/дата", () => {
+    const today = todayISO();
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    expect(shiftDayLabel(today)).toBe("Сегодня");
+    expect(shiftDayLabel(tomorrow)).toBe("Завтра");
+    expect(shiftDayLabel("2020-03-15")).toBe("15 марта");
+  });
+
+  it("isUrgentShift: горит только если смена сегодня", () => {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    expect(isUrgentShift(todayISO())).toBe(true);
+    expect(isUrgentShift(tomorrow)).toBe(false);
   });
 });

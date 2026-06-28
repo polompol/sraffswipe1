@@ -17,6 +17,25 @@ export function fmtDate(iso: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
+/** Сегодняшняя дата в формате ISO yyyy-mm-dd (совпадает с генерацией mock). */
+export function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Подпись дня смены: «Сегодня»/«Завтра» или дата — для чувства срочности. */
+export function shiftDayLabel(iso: string): string {
+  const today = todayISO();
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (iso === today) return "Сегодня";
+  if (iso === tomorrow) return "Завтра";
+  return fmtDate(iso);
+}
+
+/** Смена «горит» — она сегодня. Такие показываем с пометкой «Срочно». */
+export function isUrgentShift(dateIso: string): boolean {
+  return dateIso === todayISO();
+}
+
 export function rateLabel(rate: number, type: RateType): string {
   return `${rate} ${RATE_SUFFIX[type]}`;
 }

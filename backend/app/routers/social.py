@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Employer, Match, Referral, Review, User
+from ..models import Employer, Match, Referral, Review, User, Vacancy
 from ..security import current_principal
 
 router = APIRouter(tags=["social"])
@@ -103,6 +103,9 @@ class MeOut(BaseModel):
     streak: int = 0
     city: str = ""
     incomingLikes: int = 0  # «тебя хотят»: входящие лайки/отклики
+    earnedRub: int = 0  # заработано через сервис (мотивация доходом)
+    shiftsDone: int = 0  # сколько смен закрыто
+    availableToday: bool = False  # «Готов выйти сегодня» (только соискатель)
 
 
 def _streak(db: Session, owner_id: str) -> int:
@@ -145,6 +148,35 @@ def _incoming_likes(db: Session, principal: dict) -> int:
     )
 
 
+def _shift_pay(rate: int, rate_type: str, start: int, end: int) -> int:
+    """Сколько стоит одна смена. Зеркало estimatedPay в TMA (lib/format.ts)."""
+    if rate_type == "perShift":
+        return rate
+    mins = end - start
+    if mins <= 0:
+        mins += 1440  # ночная смена через полночь
+    return round(rate * mins / 60)
+
+
+def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
+    """(сколько смен закрыто, сколько заработано ₽).
+
+    Считаем по подтверждённым/завершённым мэтчам. Для соискателя — сумма
+    оплат по сменам (мотивация доходом). Для заведения — только счётчик смен."""
+    col = Match.employer_id if role == "employer" else Match.user_id
+    rows = (
+        db.query(Vacancy.rate, Vacancy.rate_type, Vacancy.start_time, Vacancy.end_time)
+        .join(Match, Match.vacancy_id == Vacancy.id)
+        .filter(col == owner_id, Match.status.in_(("confirmed", "completed")))
+        .all()
+    )
+    shifts = len(rows)
+    if role == "employer":
+        return shifts, 0
+    earned = sum(_shift_pay(r, rt, s, e) for r, rt, s, e in rows)
+    return shifts, earned
+
+
 @router.get("/me", response_model=MeOut)
 def me(
     principal: dict = Depends(current_principal), db: Session = Depends(get_db)
@@ -153,21 +185,47 @@ def me(
         e = db.get(Employer, principal["id"])
         if e is None:
             raise HTTPException(status_code=404, detail="Не найдено")
+        shifts, _ = _earnings(db, "employer", e.id)
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
             streak=_streak(db, e.id),
             incomingLikes=_incoming_likes(db, principal),
+            shiftsDone=shifts,
         )
     u = db.get(User, principal["id"])
     if u is None:
         raise HTTPException(status_code=404, detail="Не найдено")
+    shifts, earned = _earnings(db, "seeker", u.id)
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
         streak=_streak(db, u.id), city=u.city,
         incomingLikes=_incoming_likes(db, principal),
+        earnedRub=earned, shiftsDone=shifts,
+        availableToday=u.available_today,
     )
+
+
+class AvailableIn(BaseModel):
+    available: bool
+
+
+@router.post("/me/available")
+def set_available(
+    body: AvailableIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """«Готов выйти сегодня» — тумблер доступности соискателя."""
+    if principal["role"] != "seeker":
+        raise HTTPException(status_code=403, detail="Только для соискателя")
+    u = db.get(User, principal["id"])
+    if u is None:
+        raise HTTPException(status_code=404, detail="Не найдено")
+    u.available_today = body.available
+    db.commit()
+    return {"availableToday": u.available_today}
 
 
 def _age_from_iso(iso: str) -> int | None:

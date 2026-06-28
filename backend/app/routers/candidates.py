@@ -26,6 +26,7 @@ class CandidateOut(BaseModel):
     rating: float
     photo_urls: list[str]
     about: str
+    available_today: bool = False
 
 
 def _csv(value: str) -> list[str]:
@@ -39,7 +40,14 @@ def list_candidates(
     # Ленту кандидатов с ПДн видит только работодатель.
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
-    users = db.query(User).filter(User.blocked.is_(False)).limit(50).all()
+    # «Готов выйти сегодня» — наверх ленты: их зовут на срочные смены первыми.
+    users = (
+        db.query(User)
+        .filter(User.blocked.is_(False))
+        .order_by(User.available_today.desc(), User.rating.desc())
+        .limit(50)
+        .all()
+    )
     return [
         CandidateOut(
             id=u.id,
@@ -62,6 +70,7 @@ def list_candidates(
             rating=u.rating,
             photo_urls=_csv(u.photo_urls),
             about=u.about,
+            available_today=u.available_today,
         )
         for u in users
     ]

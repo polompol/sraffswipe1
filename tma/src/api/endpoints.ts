@@ -130,12 +130,24 @@ export interface Me {
   streak?: number;
   city?: string;
   incomingLikes?: number;
+  earnedRub?: number;
+  shiftsDone?: number;
+  availableToday?: boolean;
 }
 
 export async function fetchMe(): Promise<Me> {
   if (!USE_BACKEND) return mock.fetchMe();
   const { data } = await api.get<Me>("/me");
   return data;
+}
+
+/** «Готов выйти сегодня» — тумблер доступности соискателя. */
+export async function setAvailability(available: boolean): Promise<boolean> {
+  if (!USE_BACKEND) return mock.setAvailability(available);
+  const { data } = await api.post<{ availableToday: boolean }>("/me/available", {
+    available,
+  });
+  return data.availableToday;
 }
 
 export interface MeUpdate {
@@ -193,6 +205,7 @@ export interface VacancyInput {
   end_time: number;
   rate: number;
   rate_type: string;
+  pay_method?: string;
   description?: string;
   require_med_book?: boolean;
   address?: string;

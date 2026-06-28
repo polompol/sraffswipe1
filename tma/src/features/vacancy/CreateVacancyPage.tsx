@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import type { RateType, StaffRole } from "@/types/domain";
-import { STAFF_ROLE_LABELS } from "@/types/domain";
+import type { PayMethod, RateType, StaffRole } from "@/types/domain";
+import { PAY_METHOD_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import {
   createVacancy,
   suggestAddress,
@@ -29,6 +29,7 @@ export function CreateVacancyPage() {
   const [end, setEnd] = useState("22:00");
   const [rate, setRate] = useState("350");
   const [rateType, setRateType] = useState<RateType>("perHour");
+  const [payMethod, setPayMethod] = useState<PayMethod>("cash");
   const [city, setCity] = useState("Москва");
   const [address, setAddress] = useState("Москва, ул. Льва Толстого, 16");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -57,6 +58,7 @@ export function CreateVacancyPage() {
         end_time: toMinutes(end),
         rate: Number(rate) || 0,
         rate_type: rateType,
+        pay_method: payMethod,
         description: desc,
         require_med_book: medBook,
         address,
@@ -137,6 +139,25 @@ export function CreateVacancyPage() {
           >
             {rateType === "perHour" ? "₽/час" : "₽/смена"}
           </button>
+        </div>
+
+        <label className="muted">Как и когда платите</label>
+        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+          {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((p) => (
+            <button
+              key={p}
+              className="tag"
+              style={{
+                cursor: "pointer",
+                background: payMethod === p ? "var(--gold)" : "transparent",
+                color: payMethod === p ? "#fff" : "var(--text)",
+                borderColor: payMethod === p ? "var(--gold)" : "var(--border)",
+              }}
+              onClick={() => setPayMethod(p)}
+            >
+              {PAY_METHOD_LABELS[p]}
+            </button>
+          ))}
         </div>
 
         <label className="muted" htmlFor="city">Город</label>

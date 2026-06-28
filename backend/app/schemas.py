@@ -47,6 +47,7 @@ class VacancyIn(BaseModel):
     end_time: int = Field(ge=0, le=1440)
     rate: int = Field(ge=0, le=1_000_000)
     rate_type: Literal["perHour", "perShift"] = "perHour"
+    pay_method: Literal["cash", "card", "transfer"] = "cash"
     description: Longish = ""
     require_med_book: bool = False
     require_experience: bool = False
@@ -69,6 +70,7 @@ class VacancyOut(BaseModel):
     end_time: int
     rate: int
     rate_type: str
+    pay_method: str = "cash"
     description: str
     require_med_book: bool
     require_experience: bool
@@ -80,6 +82,11 @@ class VacancyOut(BaseModel):
     status: str
     distance_km: float | None = None
     boosted: bool = False
+    # Доверие к заведению (видно ДО отклика): рейтинг от соискателей,
+    # сколько смен уже закрыто и признак «платит вовремя».
+    employer_rating: float = 0.0
+    employer_shifts_done: int = 0
+    employer_pays_on_time: bool = False
 
 
 # ---- swipes / matches ----

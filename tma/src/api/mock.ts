@@ -37,6 +37,7 @@ const VACANCIES: Vacancy[] = [
     endTime: 16 * 60,
     rate: 350,
     rateType: "perHour",
+    payMethod: "card",
     description:
       "Нужен бариста на утро. Дресс-код: чёрный верх, фартук выдаём. Напитки и обеды бесплатно.",
     requireMedBook: true,
@@ -50,6 +51,9 @@ const VACANCIES: Vacancy[] = [
     status: "active",
     boosted: true,
     distanceKm: 1.6,
+    employerRating: 4.7,
+    employerShiftsDone: 24,
+    employerPaysOnTime: true,
   },
   {
     id: "vac2",
@@ -62,6 +66,7 @@ const VACANCIES: Vacancy[] = [
     endTime: 4 * 60,
     rate: 4500,
     rateType: "perShift",
+    payMethod: "transfer",
     description:
       "Срочно бармен на пятницу. Опыт классической барной карты обязателен. Чаевые поровну.",
     requireMedBook: true,
@@ -74,6 +79,9 @@ const VACANCIES: Vacancy[] = [
     employerVerified: true,
     status: "active",
     distanceKm: 3.1,
+    employerRating: 4.6,
+    employerShiftsDone: 12,
+    employerPaysOnTime: true,
   },
   {
     id: "vac3",
@@ -81,11 +89,12 @@ const VACANCIES: Vacancy[] = [
     companyName: "Ресторан «Грядка»",
     companyPhotoUrl: photo("photo-1517248135467-4c7edcad34c4"),
     role: "waiter",
-    date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    date: new Date().toISOString().slice(0, 10),
     startTime: 11 * 60,
     endTime: 23 * 60,
     rate: 300,
     rateType: "perHour",
+    payMethod: "cash",
     description:
       "Официант на банкет. Работа с кассой, знание винной карты — плюс. Униформу даём.",
     requireMedBook: true,
@@ -98,6 +107,9 @@ const VACANCIES: Vacancy[] = [
     employerVerified: false,
     status: "active",
     distanceKm: 2.2,
+    employerRating: 0,
+    employerShiftsDone: 1,
+    employerPaysOnTime: false,
   },
 ];
 
@@ -119,6 +131,7 @@ const SEEKERS: Seeker[] = [
     rating: 4.9,
     photoUrls: [photo("photo-1494790108377-be9c29b29330")],
     about: "Опыт в fine dining, английский B2.",
+    availableToday: true,
   },
   {
     id: "s3",
@@ -277,6 +290,9 @@ const meProfile: Me = {
   streak: 3,
   city: "Москва",
   incomingLikes: 4,
+  earnedRub: 18400,
+  shiftsDone: 7,
+  availableToday: false,
 };
 
 export function createVacancy(input: VacancyInput): Promise<Vacancy> {
@@ -291,6 +307,7 @@ export function createVacancy(input: VacancyInput): Promise<Vacancy> {
     endTime: input.end_time,
     rate: input.rate,
     rateType: input.rate_type as Vacancy["rateType"],
+    payMethod: (input.pay_method as Vacancy["payMethod"]) ?? "cash",
     description: input.description ?? "",
     requireMedBook: input.require_med_book ?? false,
     requireExperience: false,
@@ -308,6 +325,11 @@ export function createVacancy(input: VacancyInput): Promise<Vacancy> {
 
 export function fetchMe(): Promise<Me> {
   return Promise.resolve({ ...meProfile });
+}
+
+export function setAvailability(available: boolean): Promise<boolean> {
+  meProfile.availableToday = available;
+  return Promise.resolve(available);
 }
 
 export function updateMe(patch: {

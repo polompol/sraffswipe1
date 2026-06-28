@@ -11,6 +11,7 @@ import {
   track,
   type FeedFilters,
 } from "@/api/endpoints";
+import { todayISO } from "@/lib/format";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
@@ -52,6 +53,19 @@ export function FeedPage() {
     else localStorage.removeItem("ss_city");
     setFilters(f);
     setEmpty(false);
+  }
+
+  // Быстрый фильтр «Сегодня» — главный крючок: смены, которые горят сейчас.
+  const todayOnly = filters.date_from === todayISO() && filters.date_to === todayISO();
+  function toggleToday() {
+    if (todayOnly) {
+      const { date_from: _f, date_to: _t, ...rest } = filters;
+      void _f;
+      void _t;
+      applyFilters(rest);
+    } else {
+      applyFilters({ ...filters, date_from: todayISO(), date_to: todayISO() });
+    }
   }
   const [view, setView] = useState<"swipe" | "list">(
     (localStorage.getItem("ss_view") as "swipe" | "list" | null) ?? "swipe",
@@ -180,6 +194,24 @@ export function FeedPage() {
       <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
         ⭐ 4.8 · 1 200+ смен закрыто · средний отклик 7 мин
       </p>
+
+      {isSeeker && (
+        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          <button
+            className="tag"
+            aria-pressed={todayOnly}
+            style={{
+              cursor: "pointer",
+              borderColor: todayOnly ? "#dc2626" : "var(--border)",
+              background: todayOnly ? "#dc2626" : "transparent",
+              color: todayOnly ? "#fff" : "var(--text)",
+            }}
+            onClick={toggleToday}
+          >
+            🔥 Сегодня
+          </button>
+        </div>
+      )}
 
       {isSeeker && searches && searches.length > 0 && (
         <div className="row" style={{ flexWrap: "wrap", marginBottom: 12 }}>

@@ -50,6 +50,9 @@ class User(Base):
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     photo_urls: Mapped[str] = mapped_column(Text, default="")  # csv
     about: Mapped[str] = mapped_column(Text, default="")
+    # «Готов выйти сегодня»: соискатель в один тап показывает доступность —
+    # заведение со срочной сменой видит таких людей первыми.
+    available_today: Mapped[bool] = mapped_column(Boolean, default=False)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
@@ -94,6 +97,9 @@ class Vacancy(Base):
     end_time: Mapped[int] = mapped_column(Integer)
     rate: Mapped[int] = mapped_column(Integer)
     rate_type: Mapped[str] = mapped_column(String, default="perHour")
+    # Как и когда заведение платит — снимает страх №1 «вдруг кинут».
+    # cash|card|transfer (наличными/на карту в день смены / перевод после).
+    pay_method: Mapped[str] = mapped_column(String, default="cash")
     description: Mapped[str] = mapped_column(Text, default="")
     require_med_book: Mapped[bool] = mapped_column(Boolean, default=False)
     require_experience: Mapped[bool] = mapped_column(Boolean, default=False)

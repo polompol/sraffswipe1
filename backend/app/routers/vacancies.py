@@ -15,7 +15,7 @@ from ..entitlements import (
     plan_of,
 )
 from ..geo import distance_km
-from ..models import Boost, Employer, Vacancy
+from ..models import Boost, Employer, Match, Vacancy
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal, optional_principal
@@ -23,9 +23,35 @@ from ..security import current_principal, optional_principal
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
 
+def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
+    """Сколько подтверждённых/завершённых смен у каждого работодателя.
+
+    Один групповой запрос на всю выборку — без N+1 на каждую вакансию."""
+    if not emp_ids:
+        return {}
+    rows = (
+        db.query(Match.employer_id, func.count(Match.id))
+        .filter(
+            Match.employer_id.in_(emp_ids),
+            Match.status.in_(("confirmed", "completed")),
+        )
+        .group_by(Match.employer_id)
+        .all()
+    )
+    return {emp_id: cnt for emp_id, cnt in rows}
+
+
 def _to_out(
-    v: Vacancy, emp: Employer | None, dist: float | None, boosted: bool = False
+    v: Vacancy,
+    emp: Employer | None,
+    dist: float | None,
+    boosted: bool = False,
+    shifts_done: int = 0,
 ) -> VacancyOut:
+    rating = emp.rating if emp else 0.0
+    # «Платит вовремя» — заслуженный знак доверия: высокий рейтинг от
+    # соискателей И уже несколько закрытых смен (не выдаётся «авансом»).
+    pays_on_time = bool(emp) and rating >= 4.5 and shifts_done >= 3
     return VacancyOut(
         id=v.id,
         employer_id=v.employer_id,
@@ -38,6 +64,7 @@ def _to_out(
         end_time=v.end_time,
         rate=v.rate,
         rate_type=v.rate_type,
+        pay_method=v.pay_method,
         description=v.description,
         require_med_book=v.require_med_book,
         require_experience=v.require_experience,
@@ -49,6 +76,9 @@ def _to_out(
         status=v.status,
         distance_km=round(dist, 1) if dist is not None else None,
         boosted=boosted,
+        employer_rating=round(rating, 1),
+        employer_shifts_done=shifts_done,
+        employer_pays_on_time=pays_on_time,
     )
 
 
@@ -87,8 +117,14 @@ def list_vacancies(
             .order_by(Vacancy.created_at.desc())
             .all()
         )
+        done = _shifts_done_by_employer(db, {principal["id"]})
         return [
-            _to_out(v, emp, None, boosted=v.id in boosted_ids) for v in rows
+            _to_out(
+                v, emp, None,
+                boosted=v.id in boosted_ids,
+                shifts_done=done.get(v.employer_id, 0),
+            )
+            for v in rows
         ]
     query = db.query(Vacancy).filter(Vacancy.status == "active")
     if role:
@@ -124,6 +160,7 @@ def list_vacancies(
         if emp_ids
         else {}
     )
+    done = _shifts_done_by_employer(db, emp_ids)
 
     result: list[VacancyOut] = []
     for v in rows:
@@ -139,7 +176,11 @@ def list_vacancies(
             dist = distance_km(lat, lng, v.lat, v.lng)
             if dist > radius_km:
                 continue
-        result.append(_to_out(v, emp, dist, boosted=v.id in boosted_ids))
+        result.append(_to_out(
+            v, emp, dist,
+            boosted=v.id in boosted_ids,
+            shifts_done=done.get(v.employer_id, 0),
+        ))
 
     # Boost всегда наверху; внутри группы — по выбранной сортировке.
     def _key(x: VacancyOut):
