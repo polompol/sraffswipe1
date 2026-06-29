@@ -84,7 +84,7 @@ function TabBar() {
             }}
           >
             <span className="ico">
-              <Icon size={26} active={active} />
+              <Icon size={28} active={active} />
             </span>
             <span>{t.label}</span>
           </button>
