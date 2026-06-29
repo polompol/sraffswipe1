@@ -7,6 +7,49 @@ import { toast } from "@/components/Toast";
 import { ReportSheet } from "@/components/ReportSheet";
 import { IconFire, IconShare, IconCheck, IconWarning } from "@/components/Icons";
 
+/** Миниатюра 64×64 с фолбэком: бренд-градиент+инициал, поверх — фото (если
+ *  загрузилось). Битая ссылка не оставляет пустой квадрат. */
+function Thumb({ src, initial }: { src?: string; initial: string }) {
+  const [ok, setOk] = useState(!!src);
+  return (
+    <div
+      style={{
+        width: 64,
+        height: 64,
+        borderRadius: 14,
+        flex: "none",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "rgba(255,255,255,.9)",
+        fontWeight: 800,
+        fontSize: 24,
+        background: "var(--grad-brand)",
+      }}
+    >
+      {!ok && initial}
+      {src && (
+        <img
+          src={src}
+          alt=""
+          onError={() => setOk(false)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: ok ? 1 : 0,
+            transition: "opacity .3s ease",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 /** Список-вид ленты — альтернатива свайпу для тех, кто любит просматривать. */
 export function VacancyList({
   items,
@@ -21,25 +64,7 @@ export function VacancyList({
       {items.map((v) => (
         <div key={v.id} className="card fade-up">
           <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-            <div
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: 14,
-                flex: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "rgba(255,255,255,.85)",
-                fontWeight: 800,
-                fontSize: 24,
-                background: v.interiorPhotoUrl
-                  ? `center/cover url(${v.interiorPhotoUrl})`
-                  : "var(--grad-brand)",
-              }}
-            >
-              {!v.interiorPhotoUrl && (v.companyName || "С").charAt(0)}
-            </div>
+            <Thumb src={v.interiorPhotoUrl} initial={(v.companyName || "С").charAt(0)} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="row">
                 <b style={{ flex: 1 }}>{v.companyName}</b>

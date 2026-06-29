@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
   EXPERIENCE_TAG_LABELS,
@@ -31,6 +32,28 @@ const PAY_ICON: Record<PayMethod, typeof IconCash> = {
   transfer: IconBank,
 };
 
+/** Фото карточки: всегда есть бренд-градиент + инициал как фолбэк; поверх —
+ *  картинка, которая плавно проявляется при загрузке и НЕ ломает вид, если
+ *  ссылка битая (onError) или фото нет. */
+function SwipePhoto({ src, initial }: { src?: string; initial: string }) {
+  const [state, setState] = useState<"load" | "ok" | "err">(src ? "load" : "err");
+  return (
+    <div className="swipe-photo swipe-photo-fallback">
+      <span className="swipe-initial">{initial}</span>
+      {src && state !== "err" && (
+        <img
+          src={src}
+          alt=""
+          className="swipe-img"
+          style={{ opacity: state === "ok" ? 1 : 0 }}
+          onLoad={() => setState("ok")}
+          onError={() => setState("err")}
+        />
+      )}
+    </div>
+  );
+}
+
 /** Золотой бейдж-галочка «проверено» — единый знак доверия (бренд-цвет). */
 function VerifiedDot({ size = 20, title }: { size?: number; title: string }) {
   return (
@@ -59,13 +82,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
   return (
     <>
-      {hasPhoto ? (
-        <div className="swipe-photo" style={{ backgroundImage: `url(${v.interiorPhotoUrl})` }} />
-      ) : (
-        <div className="swipe-photo swipe-photo-fallback">
-          <span className="swipe-initial">{(v.companyName || "С").charAt(0)}</span>
-        </div>
-      )}
+      <SwipePhoto src={hasPhoto ? v.interiorPhotoUrl : undefined} initial={(v.companyName || "С").charAt(0)} />
       <div className="swipe-shade" />
 
       {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
@@ -160,13 +177,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
   const verified = s.medBook === "yes" && tags.includes("experienced");
   return (
     <>
-      {hasPhoto ? (
-        <div className="swipe-photo" style={{ backgroundImage: `url(${photos[0]})` }} />
-      ) : (
-        <div className="swipe-photo swipe-photo-fallback">
-          <span className="swipe-initial">{(s.name || "?").charAt(0)}</span>
-        </div>
-      )}
+      <SwipePhoto src={hasPhoto ? photos[0] : undefined} initial={(s.name || "?").charAt(0)} />
       <div className="swipe-shade" />
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8 }}>
         <span className="glass">★ {s.rating.toFixed(1)}</span>
