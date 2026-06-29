@@ -89,7 +89,7 @@ def recent(
     for v, emp in urgent_rows:
         items.append(ActivityItem(
             kind="urgent",
-            text=f"🔥 Срочно сегодня: смена в «{emp.company_name}»",
+            text=f"Срочно сегодня: смена в «{emp.company_name}»",
             ago_min=_ago_min(v.created_at),
         ))
 

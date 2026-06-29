@@ -503,7 +503,7 @@ export function fetchActivity() {
   return Promise.resolve({
     items: [
       { kind: "closed" as const, text: "Анна вышла в «Дрова» — 2 800 ₽", agoMin: 5 },
-      { kind: "urgent" as const, text: "🔥 Срочно сегодня: смена в «Грядка»", agoMin: 11 },
+      { kind: "urgent" as const, text: "Срочно сегодня: смена в «Грядка»", agoMin: 11 },
       { kind: "closed" as const, text: "Дмитрий вышел в «Полночь» — 4 500 ₽", agoMin: 24 },
       { kind: "closed" as const, text: "Мария вышла в «Дрова» — 2 100 ₽", agoMin: 42 },
     ],

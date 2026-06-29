@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
   EXPERIENCE_TAG_LABELS,
@@ -16,6 +17,7 @@ import {
 import {
   IconBank,
   IconBolt,
+  IconBookmark,
   IconCalendar,
   IconCard,
   IconCash,
@@ -25,6 +27,9 @@ import {
   IconMoney,
   IconPin,
 } from "@/components/Icons";
+import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
+import { toast } from "@/components/Toast";
+import { haptic } from "@/telegram/sdk";
 
 const PAY_ICON: Record<PayMethod, typeof IconCash> = {
   cash: IconCash,
@@ -51,6 +56,49 @@ function SwipePhoto({ src, initial }: { src?: string; initial: string }) {
         />
       )}
     </div>
+  );
+}
+
+/** Кнопка-закладка прямо на свайп-карточке. stopPropagation на pointerdown —
+ *  чтобы тап по закладке не запускал жест свайпа. */
+function CardFavButton({ id }: { id: string }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["fav-ids"], queryFn: listFavoriteIds });
+  const saved = (data ?? []).includes(id);
+  async function toggle(e: MouseEvent) {
+    e.stopPropagation();
+    haptic("light");
+    try {
+      if (saved) await removeFavorite(id);
+      else await addFavorite(id);
+      qc.invalidateQueries({ queryKey: ["fav-ids"] });
+      qc.invalidateQueries({ queryKey: ["favorites"] });
+      toast(saved ? "Убрано из избранного" : "Сохранено в избранное", "success");
+    } catch {
+      toast("Не удалось сохранить", "error");
+    }
+  }
+  return (
+    <button
+      aria-label={saved ? "Убрать из избранного" : "В избранное"}
+      aria-pressed={saved}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={toggle}
+      style={{
+        width: 38,
+        height: 38,
+        borderRadius: "50%",
+        border: "1px solid rgba(255,255,255,.18)",
+        background: "rgba(0,0,0,0.45)",
+        color: saved ? "var(--super)" : "#fff",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+      }}
+    >
+      <IconBookmark size={18} filled={saved} />
+    </button>
   );
 }
 
@@ -90,6 +138,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
         <span className="glass">
           <IconMoney size={14} /> {rateLabel(v.rate, v.rateType)}
         </span>
+        <CardFavButton id={v.id} />
         <span className="spacer" />
         {urgent ? (
           <span className="glass pulse" style={{ background: "rgba(158,27,50,.92)" }}>

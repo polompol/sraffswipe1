@@ -4,6 +4,7 @@ import type { StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { createSavedSearch, type FeedFilters } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { IconBell, IconCheck } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
@@ -189,7 +190,10 @@ export function FilterSheet({
           disabled={saved}
           onClick={saveSearch}
         >
-          {saved ? "✓ Поиск сохранён — пришлём новые смены" : "🔔 Сохранить поиск и уведомлять"}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            {saved ? <IconCheck size={16} /> : <IconBell size={16} />}
+            {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
+          </span>
         </button>
         </div>
 

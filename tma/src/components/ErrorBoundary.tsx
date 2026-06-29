@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { reportError } from "@/lib/report";
+import { IconWarning } from "./Icons";
 
 interface Props {
   children: ReactNode;
@@ -26,7 +27,13 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="app">
         <div className="page" style={{ textAlign: "center", paddingTop: 80 }}>
-          <div style={{ fontSize: 56 }}>🛠️</div>
+          <div style={{
+            width: 72, height: 72, borderRadius: "50%", margin: "0 auto",
+            background: "rgba(199,162,75,.14)", color: "var(--gold)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <IconWarning size={36} />
+          </div>
           <h1 className="h1" style={{ marginTop: 12 }}>Что-то пошло не так</h1>
           <p className="muted" style={{ margin: "8px 0 20px" }}>
             Мы уже знаем о проблеме. Попробуйте перезапустить.

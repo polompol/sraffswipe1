@@ -17,6 +17,7 @@ import {
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { Loading } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { IconShield, IconMoney, IconCheck, IconWarning } from "@/components/Icons";
 
 const REASON_LABEL: Record<string, string> = {
   fake: "Фейк",
@@ -123,8 +124,8 @@ export function AdminPage() {
     return (
       <div className="page">
         <h1 className="h1">Админ-панель</h1>
-        <div className="card muted" style={{ textAlign: "center" }} role="alert">
-          🔒 Доступ только для администратора
+        <div className="card muted row" style={{ justifyContent: "center", gap: 8 }} role="alert">
+          <IconShield size={18} /> Доступ только для администратора
         </div>
       </div>
     );
@@ -140,7 +141,7 @@ export function AdminPage() {
           style={{ flex: "none", width: "auto", color: "var(--gold)" }}
           onClick={() => nav("/funnel")}
         >
-          📊 Воронка
+          Воронка
         </button>
       </div>
 
@@ -157,7 +158,9 @@ export function AdminPage() {
         </div>
       ) : null}
 
-      <h2 className="h2" style={{ marginBottom: 8 }}>💰 Доход</h2>
+      <h2 className="h2" style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+        <IconMoney size={20} /> Доход
+      </h2>
       {rev.data && (
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="row">
@@ -211,8 +214,8 @@ export function AdminPage() {
       </div>
       {reports.isLoading && <Loading />}
       {!reports.isLoading && visibleReports.length === 0 && (
-        <div className="card muted" style={{ textAlign: "center" }}>
-          Жалоб за период нет 🎉
+        <div className="card muted row" style={{ justifyContent: "center", gap: 8 }}>
+          <IconCheck size={16} /> Жалоб за период нет
         </div>
       )}
       <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
@@ -238,7 +241,9 @@ export function AdminPage() {
                     style={{ background: "var(--crimson-dark)" }}
                     onClick={() => blockTarget("vacancy", r.targetId)}
                   >
-                    🚫 Снять вакансию
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <IconWarning size={16} /> Снять вакансию
+                    </span>
                   </button>
                 )}
                 {r.targetType === "user" && (
@@ -247,7 +252,9 @@ export function AdminPage() {
                     style={{ background: "var(--crimson-dark)" }}
                     onClick={() => blockTarget("user", r.targetId)}
                   >
-                    🚫 Заблокировать
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <IconWarning size={16} /> Заблокировать
+                    </span>
                   </button>
                 )}
                 <button className="btn ghost" onClick={() => resolve(r.id)}>
