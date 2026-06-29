@@ -205,8 +205,8 @@ export function FeedPage() {
             aria-pressed={todayOnly}
             style={{
               cursor: "pointer",
-              borderColor: todayOnly ? "#dc2626" : "var(--border)",
-              background: todayOnly ? "#dc2626" : "transparent",
+              borderColor: todayOnly ? "var(--gold)" : "var(--border)",
+              background: todayOnly ? "var(--gold)" : "transparent",
               color: todayOnly ? "#fff" : "var(--text)",
             }}
             onClick={toggleToday}

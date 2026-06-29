@@ -27,7 +27,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
         <span className="glass">💰 {rateLabel(v.rate, v.rateType)}</span>
         <span className="spacer" />
         {urgent && (
-          <span className="glass pulse" style={{ background: "rgba(220,38,38,.9)" }}>
+          <span className="glass pulse" style={{ background: "rgba(158,27,50,.92)" }}>
             🔥 Сегодня
           </span>
         )}
@@ -47,7 +47,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             </span>
           )}
           {v.employerPaysOnTime && (
-            <span className="tag" style={{ background: "rgba(34,197,94,.18)", color: "#bbf7d0", borderColor: "#22c55e" }}>
+            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
               ✓ Платит вовремя
             </span>
           )}
@@ -68,7 +68,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
         <div style={{ marginTop: 8, opacity: 0.95 }}>{v.description}</div>
         <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }}>
           {payShort && (
-            <span className="tag" style={{ color: "#bbf7d0", borderColor: "#22c55e" }}>{payShort}</span>
+            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>{payShort}</span>
           )}
           {v.requireMedBook && (
             <span className="tag" style={{ color: "#ffd28a", borderColor: "#d99a2b" }}>⚕ Медкнижка</span>
@@ -100,8 +100,8 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16 }}>
         <span className="glass">⭐ {s.rating.toFixed(1)}</span>
         {s.availableToday && (
-          <span className="glass pulse" style={{ marginLeft: 8, background: "rgba(34,197,94,.9)" }}>
-            🟢 Готов сегодня
+          <span className="glass pulse" style={{ marginLeft: 8, background: "rgba(199,162,75,.92)" }}>
+            ⚡ Готов сегодня
           </span>
         )}
         <span className="spacer" />
@@ -111,7 +111,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         <div style={{ fontSize: 26, fontWeight: 800 }}>
           {s.name}{age !== null ? `, ${age}` : ""}
           {verified && (
-            <span className="tag" style={{ marginLeft: 8, background: "rgba(34,197,94,.18)", color: "#bbf7d0", borderColor: "#22c55e" }}>
+            <span className="tag" style={{ marginLeft: 8, color: "var(--super)", borderColor: "var(--super)" }}>
               ✓ Проверенный
             </span>
           )}

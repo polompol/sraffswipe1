@@ -35,7 +35,7 @@ export function VacancyList({
               <div className="row">
                 <b style={{ flex: 1 }}>{v.companyName}</b>
                 {isUrgentShift(v.date) && (
-                  <span className="tag pulse" style={{ color: "#dc2626", borderColor: "#dc2626" }}>🔥 Сегодня</span>
+                  <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>🔥 Сегодня</span>
                 )}
                 {v.boosted && (
                   <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>🔥 ТОП</span>
@@ -57,12 +57,12 @@ export function VacancyList({
               </div>
               <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                 {v.payMethod && (
-                  <span className="tag" style={{ color: "#16a34a", borderColor: "#22c55e", fontSize: 12 }}>
+                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 12 }}>
                     {PAY_METHOD_SHORT[v.payMethod]}
                   </span>
                 )}
                 {v.employerPaysOnTime && (
-                  <span className="tag" style={{ color: "#16a34a", borderColor: "#22c55e", fontSize: 12 }}>
+                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 12 }}>
                     ✓ Платит вовремя
                   </span>
                 )}

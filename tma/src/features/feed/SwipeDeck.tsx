@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSprings, animated, to, type SpringValue } from "@react-spring/web";
 import { useDrag } from "@use-gesture/react";
 import type { SwipeDirection } from "@/types/domain";
@@ -67,10 +67,10 @@ export function SwipeDeck<T>(props: Props<T>) {
     });
   }
 
-  // Кнопки управляют верхней картой.
+  // Кнопки управляют ВЕРХНЕЙ картой (i=0 — самый высокий z-index/фронт).
   if (props.controllerRef) {
     props.controllerRef((dir) => {
-      for (let i = items.length - 1; i >= 0; i--) {
+      for (let i = 0; i < items.length; i++) {
         if (!gone.has(i)) {
           fling(i, dir);
           break;
@@ -78,6 +78,26 @@ export function SwipeDeck<T>(props: Props<T>) {
       }
     });
   }
+
+  // Одноразовая деликатная подсказка: верхняя карта чуть кивает вправо и
+  // возвращается — показывает, что её можно свайпать (удобно для новичков
+  // любого возраста). Уважает prefers-reduced-motion (через глобальный CSS).
+  useEffect(() => {
+    if (localStorage.getItem("ss_swipe_hinted")) return;
+    localStorage.setItem("ss_swipe_hinted", "1");
+    const nudge = (x: number) =>
+      apiRef.start((i) =>
+        i === 0 && !gone.has(0)
+          ? { x, rot: x / 18, config: { tension: 180, friction: 18 } }
+          : {},
+      );
+    const t1 = setTimeout(() => nudge(44), 550);
+    const t2 = setTimeout(() => nudge(0), 1080);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [apiRef, gone]);
 
   const bind = useDrag(
     ({ args: [index], active, movement: [mx, my], swipe: [sx, sy], last }) => {

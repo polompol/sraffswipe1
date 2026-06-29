@@ -63,9 +63,8 @@ export function Onboarding() {
             <span
               className="tag"
               style={{
-                background: "rgba(34,197,94,.12)",
-                color: "#16a34a",
-                borderColor: "#22c55e",
+                color: "var(--super)",
+                borderColor: "var(--super)",
                 fontWeight: 700,
                 padding: "8px 14px",
               }}

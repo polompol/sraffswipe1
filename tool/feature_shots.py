@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Мокапы новых фич StaffSwipe (кримсон-тема): живая лента, срочность,
+"""Мокапы новых фич StaffSwipe (кримсон+золото): живая лента, срочность,
 прозрачность оплаты, доверие заведения, доход в профиле, онбординг-крючок.
 
+Палитра — только фирменные кримсон и золото (без зелёного).
 Эмодзи не используем (нет в системном шрифте) — иконки рисуем фигурами.
 Запуск: python tool/feature_shots.py  →  mockups/feat_*.png
 """
@@ -19,21 +20,19 @@ def F(s, b=False):
     return ImageFont.truetype(os.path.join(FD, name), int(s))
 
 
-# Палитра «Crimson»
+# Палитра «Crimson Premium» — кримсон + золото, без зелёного
 CRIM = (158, 27, 50)
 CRIM_D = (124, 21, 38)
 GOLD = (199, 162, 75)
+GOLD_TX = (165, 120, 30)
+GOLD_BG = (250, 244, 228)
+GOLD_LN = (225, 205, 150)
 BG = (246, 241, 234)
 CARD = (255, 255, 255)
 INK = (32, 27, 24)
 MUTED = (139, 128, 120)
 LINE = (236, 228, 217)
 WHITE = (255, 255, 255)
-GREEN = (22, 163, 74)
-GREEN_BG = (233, 248, 238)
-RED = (220, 38, 38)
-BLUE = (59, 130, 246)
-BLUE_BG = (231, 240, 255)
 W, H = 300, 600
 
 
@@ -54,7 +53,7 @@ def pill(d, x, y, s, f, fg, bg, pad=9, outline=None):
 
 
 def check(d, x, y, color, r=7):
-    """Зелёный кружок с галочкой — знак доверия."""
+    """Кружок с галочкой — знак доверия (в фирменном золоте)."""
     d.ellipse([x, y, x + r * 2, y + r * 2], fill=color)
     cx, cy = x + r, y + r
     d.line([(cx - 3, cy), (cx - 1, cy + 3)], fill=WHITE, width=2)
@@ -101,22 +100,22 @@ def base():
 
 def screen_feed():
     """Лента: живая активность + чип «Сегодня» + карточка со срочностью,
-    прозрачной оплатой и знаком доверия."""
+    прозрачной оплатой и знаком доверия. Только кримсон+золото."""
     im, d = base()
     status(d)
     brand(d, 46, 40)
     T(d, (W - 16, 40), "фильтры", F(11), MUTED, "rm")
     T(d, (16, 60), "Смены · Москва · 3", F(11), MUTED)
 
-    # живая лента активности (LiveTicker)
-    rr(d, [16, 78, W - 16, 122], 12, fill=GREEN_BG, outline=(150, 220, 175))
-    d.ellipse([26, 92, 35, 101], fill=GREEN)
-    d.ellipse([23, 89, 38, 104], outline=(150, 220, 175), width=2)
+    # живая лента активности (LiveTicker) — золотая
+    rr(d, [16, 78, W - 16, 122], 12, fill=GOLD_BG, outline=GOLD_LN)
+    d.ellipse([26, 92, 35, 101], fill=GOLD)
+    d.ellipse([23, 89, 38, 104], outline=GOLD_LN, width=2)
     T(d, (46, 86), "Анна вышла в «Дрова» — 2 800 ₽", F(11.5, True), INK)
     T(d, (46, 102), "17 ищут смену рядом · 3 срочных сегодня", F(10), MUTED)
 
     # чипы
-    pill(d, 16, 132, "Сегодня", F(11, True), WHITE, RED)
+    pill(d, 16, 132, "Сегодня", F(11, True), WHITE, CRIM)
     pill(d, 92, 132, "Рядом", F(11), INK, CARD, outline=LINE)
 
     # карточка вакансии
@@ -124,32 +123,29 @@ def screen_feed():
     rr(d, [16, cy, W - 16, 540], 16, fill=CARD, outline=LINE)
     rr(d, [16, cy, W - 16, cy + 150], 16, fill=(214, 198, 184))
     d.rectangle([16, cy + 120, W - 16, cy + 150], fill=(214, 198, 184))
-    # верхние бейджи на фото
     pill(d, 26, cy + 12, "350 ₽/час", F(10, True), INK, WHITE)
-    pill(d, W - 92, cy + 12, "Сегодня", F(10, True), WHITE, RED)
-    # тело
+    pill(d, W - 92, cy + 12, "Сегодня", F(10, True), WHITE, CRIM)
+
     ty = cy + 162
     pill(d, 26, ty, "Бариста", F(10, True), WHITE, CRIM)
     bx = 26 + d.textlength("Бариста", font=F(10, True)) + 26
-    rr(d, [bx, ty, bx + 78, ty + 19], 9.5, fill=GREEN_BG, outline=(150, 220, 175))
-    check(d, bx + 6, ty + 3, GREEN, 6)
-    T(d, (bx + 20, ty + 9), "Платит вовремя", F(9, True), GREEN, "lm")
+    rr(d, [bx, ty, bx + 78, ty + 19], 9.5, fill=GOLD_BG, outline=GOLD_LN)
+    check(d, bx + 6, ty + 3, GOLD, 6)
+    T(d, (bx + 20, ty + 9), "Платит вовремя", F(9, True), GOLD_TX, "lm")
 
     T(d, (26, ty + 28), "Кофейня «Дрова»", F(17, True), INK)
     T(d, (26, ty + 50), "Сегодня · 08:00–16:00", F(11), MUTED)
-    T(d, (26, ty + 66), "★ 4.7 · 24 смены закрыто", F(11, True), (170, 120, 30))
+    T(d, (26, ty + 66), "★ 4.7 · 24 смены закрыто", F(11, True), GOLD_TX)
 
-    # способ оплаты + медкнижка + смета
     py = ty + 88
-    w1 = pill(d, 26, py, "Нал в день смены", F(9.5, True), GREEN, GREEN_BG,
-              outline=(150, 220, 175))
-    pill(d, 26 + w1 + 6, py, "Медкнижка", F(9.5), (150, 110, 30), (250, 244, 228),
-         outline=(225, 205, 150))
-    pill(d, 26, py + 28, "≈ 2 800 ₽ за смену", F(10, True), GREEN, GREEN_BG,
-         outline=(150, 220, 175))
+    w1 = pill(d, 26, py, "Нал в день смены", F(9.5, True), GOLD_TX, GOLD_BG,
+              outline=GOLD_LN)
+    pill(d, 26 + w1 + 6, py, "Медкнижка", F(9.5), GOLD_TX, GOLD_BG, outline=GOLD_LN)
+    pill(d, 26, py + 28, "≈ 2 800 ₽ за смену", F(10, True), GOLD_TX, GOLD_BG,
+         outline=GOLD_LN)
 
-    # нижние действия (кнопки-кружки)
-    for i, (c, lab) in enumerate([(MUTED, "✕"), (GOLD, "★"), (GREEN, "♥")]):
+    # нижние действия: пропустить (серый), срочно (золото), хочу (кримсон)
+    for i, (c, lab) in enumerate([(MUTED, "✕"), (GOLD, "★"), (CRIM, "♥")]):
         cx = 70 + i * 80
         d.ellipse([cx - 18, 552, cx + 18, 588], outline=c, width=2)
         T(d, (cx, 570), lab, F(15, True), c, "mm")
@@ -163,13 +159,12 @@ def screen_profile():
     T(d, (16, 40), "Профиль", F(20, True), INK)
     T(d, (W - 16, 42), "Выйти", F(11), MUTED, "rm")
 
-    # шапка профиля
     rr(d, [16, 70, W - 16, 120], 14, fill=CARD, outline=LINE)
     d.ellipse([26, 80, 56, 110], fill=(232, 224, 214))
     T(d, (66, 84), "Алексей", F(15, True), INK)
     T(d, (66, 102), "★ 4.8 · @alexey · 7 смен", F(10.5), MUTED)
 
-    # карточка дохода (градиент кримсон→золото)
+    # карточка дохода — градиент кримсон→золото
     gy = 132
     grad = Image.new("RGB", (W - 32, 78))
     gp = grad.load()
@@ -185,12 +180,12 @@ def screen_profile():
     T(d, (28, gy + 28), "18 400 ₽", F(26, True), WHITE)
     T(d, (28, gy + 60), "7 смен закрыто · так держать", F(10.5), (250, 240, 235))
 
-    # тумблер «Готов выйти сегодня» (ВКЛ)
+    # тумблер «Готов выйти сегодня» (ВКЛ) — кримсон
     ay = 224
-    rr(d, [16, ay, W - 16, ay + 56], 14, fill=GREEN_BG, outline=(150, 220, 175))
+    rr(d, [16, ay, W - 16, ay + 56], 14, fill=(250, 237, 240), outline=(228, 200, 208))
     T(d, (28, ay + 12), "Готов выйти сегодня", F(12, True), INK)
     T(d, (28, ay + 30), "Ты наверху ленты — зовут первым", F(9.5), MUTED)
-    rr(d, [W - 64, ay + 14, W - 28, ay + 36], 11, fill=GREEN)
+    rr(d, [W - 64, ay + 14, W - 28, ay + 36], 11, fill=CRIM)
     d.ellipse([W - 44, ay + 16, W - 28, ay + 34], fill=WHITE)
 
     # «тебя хотят»
@@ -199,7 +194,6 @@ def screen_profile():
     T(d, (28, hy + 12), "Тебя хотят: 4", F(12, True), CRIM)
     T(d, (28, hy + 30), "4 заведения лайкнули — листай ленту", F(9.5), MUTED)
 
-    # тариф
     py = 354
     rr(d, [16, py, W - 16, py + 56], 14, fill=CARD, outline=LINE)
     T(d, (28, py + 14), "Тариф: Free", F(12, True), INK)
@@ -216,12 +210,11 @@ def screen_profile():
 
 
 def screen_onboarding():
-    """Онбординг-крючок: ведём с дохода."""
+    """Онбординг-крючок: ведём с дохода. Пилл — золотой."""
     im, d = base()
     status(d)
     T(d, (W - 16, 40), "Пропустить", F(11), MUTED, "rm")
 
-    # лого крупно
     cx, cy = W / 2, 175
     rr(d, [cx - 45, cy - 45, cx + 45, cy + 45], 24, fill=CRIM)
     wd = 5
@@ -238,15 +231,13 @@ def screen_onboarding():
     T(d, (W / 2, 312), "Свайпай смены в кафе у дома.", F(11.5), MUTED, "mm")
     T(d, (W / 2, 328), "Первую найдёшь за пару минут.", F(11.5), MUTED, "mm")
 
-    # зелёный пилл-крючок
     s = "Оплата в день смены · без посредников"
     w = d.textlength(s, font=F(10.5, True))
     x0 = (W - w - 24) / 2
-    rr(d, [x0, 352, x0 + w + 24, 376], 12, fill=GREEN_BG, outline=(150, 220, 175))
-    T(d, (W / 2, 364), s, F(10.5, True), GREEN, "mm")
+    rr(d, [x0, 352, x0 + w + 24, 376], 12, fill=GOLD_BG, outline=GOLD_LN)
+    T(d, (W / 2, 364), s, F(10.5, True), GOLD_TX, "mm")
 
     T(d, (W / 2, 432), "★ 4.8 · 1 200+ смен закрыто", F(11), MUTED, "mm")
-    # точки
     for i in range(3):
         on = i == 0
         x = W / 2 - 20 + i * 16

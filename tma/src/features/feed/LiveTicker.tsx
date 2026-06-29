@@ -32,8 +32,8 @@ export function LiveTicker() {
         gap: 10,
         padding: "10px 14px",
         marginBottom: 10,
-        background: "rgba(34,197,94,.07)",
-        border: "1px solid rgba(34,197,94,.35)",
+        background: "rgba(199,162,75,.08)",
+        border: "1px solid rgba(199,162,75,.4)",
       }}
     >
       <span
@@ -43,13 +43,16 @@ export function LiveTicker() {
           width: 9,
           height: 9,
           borderRadius: "50%",
-          background: "#22c55e",
+          background: "var(--super)",
           flex: "none",
-          boxShadow: "0 0 0 3px rgba(34,197,94,.2)",
+          boxShadow: "0 0 0 3px rgba(199,162,75,.22)",
         }}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* key={idx} перезапускает мягкую анимацию появления при смене события */}
         <div
+          key={idx}
+          className="fade-up"
           style={{
             fontSize: 13,
             fontWeight: 700,
@@ -61,8 +64,8 @@ export function LiveTicker() {
           {current ? current.text : "Здесь кипит жизнь"}
         </div>
         <div className="muted" style={{ fontSize: 11.5 }}>
-          👀 {data.searchingNow} ищут смену рядом сейчас
-          {data.urgentToday > 0 ? ` · 🔥 ${data.urgentToday} срочных на сегодня` : ""}
+          {data.searchingNow} ищут смену рядом сейчас
+          {data.urgentToday > 0 ? ` · ${data.urgentToday} срочных сегодня` : ""}
         </div>
       </div>
     </div>

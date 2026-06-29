@@ -99,8 +99,8 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       className="card row"
       style={{
         marginBottom: 16,
-        border: on ? "1px solid #22c55e" : undefined,
-        background: on ? "rgba(34,197,94,.08)" : undefined,
+        border: on ? "1px solid var(--gold)" : undefined,
+        background: on ? "rgba(158,27,50,.06)" : undefined,
       }}
     >
       <span style={{ flex: 1 }}>
@@ -123,7 +123,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
           borderRadius: 999,
           border: "none",
           cursor: "pointer",
-          background: on ? "#22c55e" : "var(--border)",
+          background: on ? "var(--gold)" : "var(--border)",
           position: "relative",
           transition: "background 0.2s",
         }}
@@ -155,7 +155,7 @@ function EarningsCard({ me }: { me: Me }) {
       className="card"
       style={{
         marginBottom: 16,
-        background: "linear-gradient(135deg, var(--crimson-dark), var(--gold))",
+        background: "linear-gradient(135deg, var(--crimson-dark), var(--super))",
         color: "#fff",
         border: "none",
       }}
