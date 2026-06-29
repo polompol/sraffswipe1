@@ -8,7 +8,16 @@ import { showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Button } from "@/components/Button";
-import { IconSend } from "@/components/Icons";
+import { IconSend, IconBack, IconWarning, IconCheck } from "@/components/Icons";
+
+// Быстрые ответы — частые фразы в один тап (экономят время, снижают трение).
+const QUICK_REPLIES = [
+  "Здравствуйте!",
+  "Готов выйти на смену",
+  "Во сколько выходить?",
+  "Какой адрес?",
+  "Что взять с собой?",
+];
 
 export function ChatPage() {
   const { matchId = "" } = useParams();
@@ -61,10 +70,7 @@ export function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
-  async function send() {
-    const t = text.trim();
-    if (!t) return;
-    setText("");
+  async function deliver(t: string) {
     try {
       const msg = await sendMessage(matchId, t);
       appendMessage(msg); // мгновенно показываем; WS-echo дедуплицируется
@@ -72,6 +78,18 @@ export function ChatPage() {
       haptic("error");
       setText(t); // вернуть текст, чтобы не потерять сообщение
     }
+  }
+
+  async function send() {
+    const t = text.trim();
+    if (!t) return;
+    setText("");
+    await deliver(t);
+  }
+
+  function quickReply(t: string) {
+    haptic("light");
+    void deliver(t);
   }
 
   async function doConfirm() {
@@ -91,18 +109,17 @@ export function ChatPage() {
     <div className="app">
       <div className="page" style={{ paddingBottom: 150 }}>
         <div className="row" style={{ marginBottom: 12 }}>
-          <button className="tab" style={{ flex: "none", width: "auto" }} onClick={() => nav(-1)}>
-            <span className="ico">‹</span>
+          <button className="icon-btn" aria-label="Назад" onClick={() => nav(-1)}>
+            <IconBack size={22} />
           </button>
-          <b>Чат по смене</b>
-          <span className="spacer" />
+          <b style={{ flex: 1 }}>Чат по смене</b>
           <button
-            className="tab"
-            style={{ flex: "none", width: "auto", color: "var(--muted)" }}
+            className="icon-btn"
+            style={{ color: "var(--muted)" }}
             aria-label="Пожаловаться"
             onClick={() => setReportOpen(true)}
           >
-            ⚠
+            <IconWarning size={20} />
           </button>
         </div>
 
@@ -130,9 +147,26 @@ export function ChatPage() {
           borderTop: "1px solid var(--border)",
         }}
       >
+        <div
+          style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 2 }}
+        >
+          {QUICK_REPLIES.map((q) => (
+            <button
+              key={q}
+              className="tag"
+              style={{ cursor: "pointer", whiteSpace: "nowrap", flex: "none", borderColor: "var(--border)" }}
+              onClick={() => quickReply(q)}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
         <div style={{ marginBottom: 8 }}>
           <Button variant="ghost" disabled={confirmed} onClick={doConfirm}>
-            {confirmed ? "✓ Вы подтвердили смену" : "🤝 Подтвердить смену"}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <IconCheck size={17} />
+              {confirmed ? "Вы подтвердили смену" : "Подтвердить смену"}
+            </span>
           </Button>
         </div>
         <div className="row">

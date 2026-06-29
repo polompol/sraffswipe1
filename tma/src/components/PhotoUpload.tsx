@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadPhoto } from "@/api/endpoints";
 import { haptic } from "@/telegram/sdk";
+import { IconCamera } from "./Icons";
 
 /** Выбор и загрузка фото. При недоступном S3 — мягкая деградация к вводу URL. */
 export function PhotoUpload({
@@ -48,10 +49,10 @@ export function PhotoUpload({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 24,
+            color: "var(--muted)",
           }}
         >
-          {value ? "" : "📷"}
+          {!value && <IconCamera size={24} />}
         </div>
         <button
           className="btn secondary"

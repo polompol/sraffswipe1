@@ -211,6 +211,13 @@ export const IconStore = ({ size = 24, className }: P) => (
   </svg>
 );
 
+export const IconCamera = ({ size = 24, className }: P) => (
+  <svg {...base(size)} className={className}>
+    <path d="M3 8h3l2-2.5h8L18 8h3v11H3V8z" stroke={S} strokeWidth="1.9" strokeLinejoin="round" />
+    <circle cx="12" cy="13" r="3.4" stroke={S} strokeWidth="1.9" />
+  </svg>
+);
+
 export const IconChevronRight = ({ size = 24, className }: P) => (
   <svg {...base(size)} className={className}>
     <path d="M9 5l7 7-7 7" stroke={S} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />

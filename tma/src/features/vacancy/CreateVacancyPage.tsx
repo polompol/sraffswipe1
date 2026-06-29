@@ -11,6 +11,7 @@ import {
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
+import { IconPin, IconCheck } from "@/components/Icons";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
@@ -191,7 +192,9 @@ export function CreateVacancyPage() {
                   setSuggests([]);
                 }}
               >
-                📍 {s.value}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <IconPin size={15} /> {s.value}
+                </span>
               </button>
             ))}
           </div>
@@ -200,7 +203,18 @@ export function CreateVacancyPage() {
 
         <div className="card row" style={{ marginBottom: 12, cursor: "pointer" }} onClick={() => setMedBook(!medBook)}>
           <span style={{ flex: 1 }}>Нужна медкнижка</span>
-          <span>{medBook ? "✅" : "⬜"}</span>
+          <span
+            aria-hidden
+            style={{
+              width: 26, height: 26, borderRadius: 8,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              background: medBook ? "var(--gold)" : "transparent",
+              border: medBook ? "none" : "2px solid var(--border)",
+              color: "#fff",
+            }}
+          >
+            {medBook && <IconCheck size={16} />}
+          </span>
         </div>
 
         <label className="muted">Описание</label>

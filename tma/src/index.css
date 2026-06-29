@@ -552,6 +552,36 @@ body[data-large="1"] .swipe-body {
 body[data-large="1"] .feed-loc {
   font-size: 15px;
 }
+/* Крупный режим масштабирует и основную типографику по всему интерфейсу */
+body[data-large="1"] {
+  font-size: 17px;
+}
+body[data-large="1"] .h1 {
+  font-size: 30px;
+}
+body[data-large="1"] .h2 {
+  font-size: 22px;
+}
+body[data-large="1"] .muted {
+  font-size: 15px;
+}
+body[data-large="1"] .tag {
+  font-size: 14px;
+  padding: 6px 12px;
+}
+body[data-large="1"] .btn {
+  font-size: 17px;
+  min-height: 50px;
+}
+body[data-large="1"] .input {
+  font-size: 17px;
+}
+body[data-large="1"] .bubble {
+  font-size: 17px;
+}
+body[data-large="1"] .card-meta {
+  font-size: 15.5px;
+}
 
 /* Чат */
 .bubble {
