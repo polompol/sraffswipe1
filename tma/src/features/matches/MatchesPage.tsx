@@ -4,6 +4,7 @@ import { fetchMatches } from "@/api/endpoints";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
+import { IconTabMatches } from "@/components/Icons";
 
 export function MatchesPage() {
   const nav = useNavigate();
@@ -19,7 +20,7 @@ export function MatchesPage() {
       {isError && <ErrorBox onRetry={() => refetch()} />}
       {data && data.length === 0 && (
         <EmptyState
-          icon="💛"
+          icon={<IconTabMatches size={34} active />}
           title="Пока нет мэтчей"
           text="Свайпайте вправо понравившиеся смены — при взаимном лайке откроется чат."
         />

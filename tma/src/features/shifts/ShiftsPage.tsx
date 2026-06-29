@@ -6,6 +6,7 @@ import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
+import { IconCalendar, IconDoc } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
 
 function ReviewRow({ matchId }: { matchId: string }) {
@@ -60,7 +61,7 @@ export function ShiftsPage() {
 
       {!isLoading && !isError && shifts.length === 0 && (
         <EmptyState
-          icon="📅"
+          icon={<IconCalendar size={34} />}
           title="Пока нет смен"
           text="Подтвердите смену в чате после мэтча — она появится здесь с актом."
         />
@@ -78,7 +79,9 @@ export function ShiftsPage() {
             </div>
             <div style={{ marginTop: 12 }}>
               <Button variant="secondary" onClick={() => downloadAct(m.id)}>
-                📄 Сформировать акт (PDF)
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <IconDoc size={17} /> Сформировать акт (PDF)
+                </span>
               </Button>
             </div>
             <ReviewRow matchId={m.id} />

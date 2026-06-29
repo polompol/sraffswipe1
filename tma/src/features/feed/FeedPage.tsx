@@ -30,6 +30,9 @@ import {
   IconBolt,
   IconList,
   IconCards,
+  IconFire,
+  IconBell,
+  IconCheck,
 } from "@/components/Icons";
 
 export function FeedPage() {
@@ -217,13 +220,13 @@ export function FeedPage() {
             }}
             onClick={toggleToday}
           >
-            🔥 Сегодня
+            <IconFire size={14} /> Сегодня
           </button>
         </div>
       )}
 
       {isSeeker && searches && searches.length > 0 && (
-        <div className="row" style={{ flexWrap: "wrap", marginBottom: 12 }}>
+        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
           {searches.map((s) => (
             <button
               key={s.id}
@@ -231,7 +234,7 @@ export function FeedPage() {
               style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
               onClick={() => applyFilters(s.filters)}
             >
-              🔔 {s.title}
+              <IconBell size={13} /> {s.title}
             </button>
           ))}
         </div>
@@ -242,7 +245,13 @@ export function FeedPage() {
 
       {!isLoading && !isError && data && (empty || data.length === 0) && (
         <div className="card" style={{ textAlign: "center", padding: 40 }}>
-          <div style={{ fontSize: 56 }}>✅</div>
+          <div style={{
+            width: 64, height: 64, borderRadius: "50%", margin: "0 auto",
+            background: "var(--grad-brand)", color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <IconCheck size={34} />
+          </div>
           <h2 className="h2" style={{ marginTop: 12 }}>
             {isSeeker
               ? filters.city

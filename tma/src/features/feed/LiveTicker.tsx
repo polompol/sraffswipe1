@@ -32,8 +32,8 @@ export function LiveTicker() {
         gap: 10,
         padding: "10px 14px",
         marginBottom: 10,
-        background: "rgba(199,162,75,.08)",
-        border: "1px solid rgba(199,162,75,.4)",
+        background: "rgba(199,162,75,.10)",
+        border: "1.5px solid rgba(199,162,75,.55)",
       }}
     >
       <span

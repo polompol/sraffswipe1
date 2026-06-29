@@ -8,6 +8,14 @@ import {
 } from "@/api/endpoints";
 import { payWithStars, showBackButton, haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
+import { IconFire, IconBolt, IconShield, IconBriefcase } from "@/components/Icons";
+
+function categoryIcon(id: string) {
+  if (id.startsWith("boost")) return IconFire;
+  if (id.startsWith("super")) return IconBolt;
+  if (id.startsWith("verify")) return IconShield;
+  return IconBriefcase;
+}
 
 // Цифровые микро-фичи — Telegram Stars. Подписки/верификация — ЮKassa (рубли).
 const SUBSCRIPTIONS: PriceItem[] = [
@@ -17,14 +25,14 @@ const SUBSCRIPTIONS: PriceItem[] = [
 ];
 
 const STARS: PriceItem[] = [
-  { id: "boost_24h", title: "🔥 Boost 24 часа", subtitle: "Вакансия в топе ленты сутки", priceStars: 150 },
-  { id: "super_5", title: "⚡ 5 супер-лайков «Срочно»", subtitle: "Ваш отклик — первым", priceStars: 100 },
-  { id: "super_20", title: "⚡ 20 супер-лайков", subtitle: "Выгоднее на 25%", priceStars: 300, badge: "−25%" },
+  { id: "boost_24h", title: "Boost 24 часа", subtitle: "Вакансия в топе ленты сутки", priceStars: 150 },
+  { id: "super_5", title: "5 супер-лайков «Срочно»", subtitle: "Ваш отклик — первым", priceStars: 100 },
+  { id: "super_20", title: "20 супер-лайков", subtitle: "Выгоднее на 25%", priceStars: 300, badge: "−25%" },
 ];
 
 const VERIFY: PriceItem = {
   id: "verify_year",
-  title: "✓ Верификация заведения",
+  title: "Верификация заведения",
   subtitle: "Бейдж «Проверен» (DaData) + приоритет, на год",
   priceRub: 2900,
 };
@@ -43,7 +51,7 @@ export function PricingPage() {
     try {
       const { link } = await createStarsInvoice(sku);
       const res = await payWithStars(link);
-      setStatus(res === "paid" ? "Оплачено ✅" : `Статус: ${res}`);
+      setStatus(res === "paid" ? "Оплачено" : `Статус: ${res}`);
     } catch {
       haptic("error");
       setStatus("Не удалось открыть оплату. Попробуйте ещё раз.");
@@ -120,10 +128,18 @@ function PriceRow({
   onBuy: () => void;
   cta: string;
 }) {
+  const Icon = categoryIcon(item.id);
   return (
     <div className="card row" style={{ gap: 12 }}>
-      <span style={{ flex: 1 }}>
-        <div className="row">
+      <span style={{
+        width: 40, height: 40, borderRadius: 12, flex: "none",
+        background: "var(--gold-tint, rgba(158,27,50,.08))", color: "var(--gold)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon size={21} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <div className="row" style={{ gap: 6 }}>
           <b>{item.title}</b>
           {item.badge && (
             <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>{item.badge}</span>

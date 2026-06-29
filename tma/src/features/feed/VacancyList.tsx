@@ -5,6 +5,7 @@ import { fmtTime, isUrgentShift, rateLabel, shiftDayLabel } from "@/lib/format";
 import { shareVacancy } from "@/lib/share";
 import { toast } from "@/components/Toast";
 import { ReportSheet } from "@/components/ReportSheet";
+import { IconFire, IconShare, IconCheck, IconWarning } from "@/components/Icons";
 
 /** Список-вид ленты — альтернатива свайпу для тех, кто любит просматривать. */
 export function VacancyList({
@@ -26,26 +27,34 @@ export function VacancyList({
                 height: 64,
                 borderRadius: 14,
                 flex: "none",
-                backgroundImage: `url(${v.interiorPhotoUrl})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "rgba(255,255,255,.85)",
+                fontWeight: 800,
+                fontSize: 24,
+                background: v.interiorPhotoUrl
+                  ? `center/cover url(${v.interiorPhotoUrl})`
+                  : "var(--grad-brand)",
               }}
-            />
+            >
+              {!v.interiorPhotoUrl && (v.companyName || "С").charAt(0)}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="row">
                 <b style={{ flex: 1 }}>{v.companyName}</b>
                 {isUrgentShift(v.date) && (
-                  <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>🔥 Сегодня</span>
+                  <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}><IconFire size={12} /> Сегодня</span>
                 )}
                 {v.boosted && (
-                  <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>🔥 ТОП</span>
+                  <span className="tag pulse" style={{ color: "var(--super)", borderColor: "var(--super)" }}><IconFire size={12} /> ТОП</span>
                 )}
                 <button
                   aria-label="Поделиться сменой"
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--muted)" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", display: "inline-flex", padding: 4 }}
                   onClick={() => shareVacancy(v)}
                 >
-                  ↗
+                  <IconShare size={18} />
                 </button>
               </div>
               <div className="muted" style={{ marginTop: 2 }}>
@@ -63,7 +72,7 @@ export function VacancyList({
                 )}
                 {v.employerPaysOnTime && (
                   <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 12 }}>
-                    ✓ Платит вовремя
+                    <IconCheck size={12} /> Платит вовремя
                   </span>
                 )}
                 {!!v.employerShiftsDone && (
@@ -94,10 +103,10 @@ export function VacancyList({
             </button>
           </div>
           <button
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 12, marginTop: 8 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 12, marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5 }}
             onClick={() => setReportId(v.id)}
           >
-            ⚠ Пожаловаться на вакансию
+            <IconWarning size={13} /> Пожаловаться на вакансию
           </button>
         </div>
       ))}

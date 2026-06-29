@@ -411,6 +411,32 @@ input:focus-visible {
   bottom: 22px;
   color: #fff;
 }
+/* Чистые мета-строки карточки: иконка + текст, без рамок */
+.card-meta {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+  font-size: 14px;
+  opacity: 0.92;
+}
+.card-meta > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Изящный фолбэк, когда нет фото: бренд-градиент + крупный инициал */
+.swipe-photo-fallback {
+  background: linear-gradient(150deg, var(--crimson-dark), var(--gold-soft) 65%, var(--super));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.swipe-initial {
+  font-size: 140px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.18);
+  line-height: 1;
+}
 .glass {
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.18);

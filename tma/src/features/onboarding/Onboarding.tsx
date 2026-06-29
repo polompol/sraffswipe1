@@ -2,20 +2,21 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
+import { IconChat, IconDoc, IconMoney } from "@/components/Icons";
 
 const SLIDES = [
   {
-    emoji: "⚡",
+    Icon: null,
     title: "Подработка рядом — от 3 000 ₽ за смену",
     text: "Свайпай смены в кафе и ресторанах у дома. Вправо — «хочу», влево — мимо. Первую найдёшь за пару минут.",
   },
   {
-    emoji: "🤝",
+    Icon: IconChat,
     title: "Мэтч → чат → смена",
     text: "Понравились друг другу — открывается чат. Договорились — подтверждаете смену в один тап.",
   },
   {
-    emoji: "📄",
+    Icon: IconDoc,
     title: "Акт для самозанятого",
     text: "После смены формируется акт в PDF. Чек — в «Мой налог». Всё по-белому.",
   },
@@ -50,10 +51,23 @@ export function Onboarding() {
             gap: 16,
           }}
         >
-          {i === 0 ? (
+          {i === 0 || !slide.Icon ? (
             <Logo size={100} color="var(--gold)" />
           ) : (
-            <div style={{ fontSize: 84 }}>{slide.emoji}</div>
+            <span
+              style={{
+                width: 110,
+                height: 110,
+                borderRadius: 30,
+                background: "var(--grad-brand)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <slide.Icon size={56} />
+            </span>
           )}
           <h1 className="h1">{slide.title}</h1>
           <p className="muted" style={{ fontSize: 15, maxWidth: 320 }}>
@@ -67,14 +81,15 @@ export function Onboarding() {
                 borderColor: "var(--super)",
                 fontWeight: 700,
                 padding: "8px 14px",
+                gap: 6,
               }}
             >
-              💰 Оплата в день смены · без посредников
+              <IconMoney size={15} /> Оплата в день смены · без посредников
             </span>
           )}
         </div>
         <p className="muted" style={{ textAlign: "center", fontSize: 12.5, marginBottom: 12 }}>
-          ⭐ 4.8 · 1 200+ смен закрыто · заведения уже здесь
+          ★ 4.8 · 1 200+ смен закрыто · заведения уже здесь
         </p>
         <div className="row" style={{ justifyContent: "center", marginBottom: 20 }}>
           {SLIDES.map((_, idx) => (

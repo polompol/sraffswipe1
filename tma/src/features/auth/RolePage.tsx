@@ -4,6 +4,8 @@ import type { AppRole } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { authTelegram, track } from "@/api/endpoints";
 import { rawInitData, haptic } from "@/telegram/sdk";
+import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
+import type { ComponentType } from "react";
 
 // Юридические документы (152-ФЗ) — задаются через env. ОБЯЗАТЕЛЬНО укажите
 // реальные ссылки перед запуском, иначе согласие будет ссылаться в никуда.
@@ -67,7 +69,7 @@ export function RolePage() {
 
         <div style={{ marginTop: 16, display: "grid", gap: 16, opacity: consent ? 1 : 0.5, pointerEvents: consent ? "auto" : "none" }}>
           <RoleCard
-            emoji="💼"
+            Icon={IconBriefcase}
             grad="linear-gradient(135deg,#b9485a,#9e1b32)"
             title="Я ищу подработку"
             sub="Официант, бариста, кальянщик, флорист, курьер"
@@ -75,7 +77,7 @@ export function RolePage() {
             onClick={() => choose("seeker")}
           />
           <RoleCard
-            emoji="🏪"
+            Icon={IconStore}
             grad="linear-gradient(135deg,#9e1b32,#7c1526)"
             title="Я ищу сотрудников"
             sub="Кафе, ресторан, бар, кофейня, кальянная"
@@ -89,13 +91,14 @@ export function RolePage() {
 }
 
 function RoleCard(props: {
-  emoji: string;
+  Icon: ComponentType<{ size?: number }>;
   grad: string;
   title: string;
   sub: string;
   loading: boolean;
   onClick: () => void;
 }) {
+  const { Icon } = props;
   return (
     <button
       className="card row"
@@ -109,21 +112,21 @@ function RoleCard(props: {
           height: 56,
           borderRadius: 16,
           background: props.grad,
+          color: "#fff",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 28,
           flex: "none",
         }}
       >
-        {props.emoji}
+        <Icon size={28} />
       </span>
       <span style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>{props.title}</div>
         <div className="muted">{props.sub}</div>
       </span>
-      <span style={{ color: "var(--muted)", fontSize: 24 }}>
-        {props.loading ? "…" : "›"}
+      <span style={{ color: "var(--muted)", display: "inline-flex" }}>
+        {props.loading ? "…" : <IconChevronRight size={20} />}
       </span>
     </button>
   );

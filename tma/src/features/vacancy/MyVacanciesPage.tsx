@@ -5,6 +5,7 @@ import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
+import { IconFire } from "@/components/Icons";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
@@ -46,14 +47,14 @@ export function MyVacanciesPage() {
               <b>{STAFF_ROLE_LABELS[v.role]}</b>
               <span className="spacer" />
               {v.boosted ? (
-                <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>🔥 в топе</span>
+                <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}><IconFire size={12} /> в топе</span>
               ) : (
                 <button
                   className="tag"
                   style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
                   onClick={() => doBoost(v.id)}
                 >
-                  🔥 Поднять
+                  <IconFire size={12} /> Поднять
                 </button>
               )}
             </div>

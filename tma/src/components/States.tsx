@@ -1,3 +1,5 @@
+import { IconWarning } from "./Icons";
+
 export function Loading({ label = "Загрузка…" }: { label?: string }) {
   return (
     <div className="card" style={{ textAlign: "center" }} role="status" aria-live="polite">
@@ -56,7 +58,9 @@ export function SkeletonCard() {
 export function ErrorBox({ onRetry }: { onRetry?: () => void }) {
   return (
     <div className="card" style={{ textAlign: "center" }} role="alert">
-      <div style={{ fontSize: 40 }}>😕</div>
+      <div style={{ color: "var(--muted)", display: "flex", justifyContent: "center", marginBottom: 4 }}>
+        <IconWarning size={36} />
+      </div>
       <p className="muted" style={{ margin: "8px 0 12px" }}>
         Не удалось загрузить. Проверьте соединение.
       </p>

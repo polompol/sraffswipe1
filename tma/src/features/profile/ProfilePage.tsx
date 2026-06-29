@@ -14,6 +14,17 @@ import {
 } from "@/api/endpoints";
 import { share, haptic } from "@/telegram/sdk";
 import { applyTheme, currentTheme } from "@/lib/theme";
+import {
+  IconBolt,
+  IconFire,
+  IconGift,
+  IconEdit,
+  IconHelp,
+  IconShield,
+  IconStore,
+  IconBriefcase,
+  IconCheck,
+} from "@/components/Icons";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 
@@ -53,7 +64,11 @@ function EmployerVerify() {
         <div className="muted" style={{ marginTop: 10 }}>
           {res.found ? (
             <>
-              {res.verified ? "✅ Проверен: " : "🔎 "}
+              {res.verified && (
+                <span style={{ color: "var(--super)", display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}>
+                  <IconCheck size={15} />
+                </span>
+              )}
               <b style={{ color: "var(--text)" }}>{res.name}</b>
               {res.ogrn && <> · ОГРН {res.ogrn}</>}
               {res.address && <div>{res.address}</div>}
@@ -85,7 +100,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
     haptic("select");
     try {
       await setAvailability(next);
-      toast(next ? "Вы готовы выйти сегодня 🟢" : "Статус снят", "success");
+      toast(next ? "Вы готовы выйти сегодня" : "Статус снят", "success");
     } catch {
       setOn(!next); // откат при ошибке
       toast("Не удалось сохранить", "error");
@@ -104,7 +119,10 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       }}
     >
       <span style={{ flex: 1 }}>
-        <b>{on ? "🟢 Готов выйти сегодня" : "Готов выйти сегодня?"}</b>
+        <b style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {on && <span style={{ color: "var(--gold)", display: "inline-flex" }}><IconBolt size={15} /></span>}
+          {on ? "Готов выйти сегодня" : "Готов выйти сегодня?"}
+        </b>
         <div className="muted">
           {on
             ? "Вы наверху ленты — заведения зовут вас на срочные смены первыми"
@@ -164,8 +182,9 @@ function EarningsCard({ me }: { me: Me }) {
       <div style={{ fontWeight: 800, fontSize: 28, marginTop: 2 }}>
         {earned.toLocaleString("ru-RU")} ₽
       </div>
-      <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2 }}>
-        {shifts} {shifts === 1 ? "смена закрыта" : "смен закрыто"} · так держать 🔥
+      <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+        {shifts} {shifts === 1 ? "смена закрыта" : "смен закрыто"} · так держать
+        <IconFire size={13} />
       </div>
     </div>
   );
@@ -270,7 +289,13 @@ export function ProfilePage() {
       </div>
 
       <div className="card row" style={{ gap: 14, marginBottom: 16 }}>
-        <span style={{ fontSize: 48 }}>{role === "employer" ? "🏪" : "🙂"}</span>
+        <span style={{
+          width: 56, height: 56, borderRadius: 16, flex: "none",
+          background: "var(--grad-brand)", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
+        </span>
         <span style={{ flex: 1 }}>
           <div style={{ fontWeight: 800, fontSize: 20 }}>
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
@@ -299,10 +324,11 @@ export function ProfilePage() {
             border: "none",
           }}
         >
-          <b style={{ fontSize: 17 }}>
+          <b style={{ fontSize: 17, display: "flex", alignItems: "center", gap: 7 }}>
+            <IconBolt size={18} />
             {role === "employer"
-              ? `⚡ Новых откликов: ${me.incomingLikes}`
-              : `⚡ Тебя зовут на смены: ${me.incomingLikes}`}
+              ? `Новых откликов: ${me.incomingLikes}`
+              : `Тебя зовут на смены: ${me.incomingLikes}`}
           </b>
           <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2 }}>
             {role === "employer"
@@ -320,8 +346,10 @@ export function ProfilePage() {
             Улучшить
           </button>
         </div>
-        <div className="muted" style={{ marginTop: 8 }}>
-          ⚡ Супер-лайки: {ent?.superlikeBalance ?? 0} · 🔥 Boost: {ent?.boostBalance ?? 0}
+        <div className="muted" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <IconBolt size={14} /> Супер-лайки: {ent?.superlikeBalance ?? 0}
+          <span style={{ opacity: 0.5 }}>·</span>
+          <IconFire size={14} /> Boost: {ent?.boostBalance ?? 0}
         </div>
       </div>
 
@@ -333,7 +361,11 @@ export function ProfilePage() {
           За каждого по вашей ссылке — {ref?.bonusSuperlikes ?? 3} супер-лайка.
           Уже пришло: {ref?.invited ?? 0}.
         </div>
-        <Button onClick={invite}>🎁 Поделиться приглашением</Button>
+        <Button onClick={invite}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <IconGift size={18} /> Поделиться приглашением
+          </span>
+        </Button>
       </div>
 
       <div className="card row" style={{ marginBottom: 16 }}>
@@ -380,19 +412,25 @@ export function ProfilePage() {
       <LargeModeCard />
 
       <Button variant="secondary" onClick={() => nav("/profile/edit")}>
-        ✏️ Редактировать профиль
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <IconEdit size={18} /> Редактировать профиль
+        </span>
       </Button>
 
       <div style={{ marginTop: 10 }}>
         <Button variant="ghost" onClick={() => nav("/support")}>
-          ❓ Помощь и поддержка
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <IconHelp size={18} /> Помощь и поддержка
+          </span>
         </Button>
       </div>
 
       {isAdmin && (
         <div style={{ marginTop: 10 }}>
           <Button variant="ghost" onClick={() => nav("/admin")}>
-            🛡 Админ-панель
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <IconShield size={18} /> Админ-панель
+            </span>
           </Button>
         </div>
       )}

@@ -58,9 +58,9 @@ export const PAY_METHOD_LABELS: Record<PayMethod, string> = {
 };
 
 export const PAY_METHOD_SHORT: Record<PayMethod, string> = {
-  cash: "💵 Нал в день смены",
-  card: "💳 На карту в день",
-  transfer: "🏦 Перевод после",
+  cash: "Нал в день смены",
+  card: "На карту в день",
+  transfer: "Перевод после",
 };
 
 export type MatchStatus = "matched" | "confirmed" | "completed";

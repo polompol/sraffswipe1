@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import type { MatchModel } from "@/types/domain";
+import { IconTabMatches, IconChat } from "@/components/Icons";
 
 const COLORS = ["#9e1b32", "#b9485a", "#c7a24b", "#7c1526", "#e0697c"];
 
@@ -44,7 +45,9 @@ export function MatchOverlay({
       <div style={{ fontSize: 44, fontWeight: 900, color: "var(--gold)", position: "relative" }}>
         Это мэтч!
       </div>
-      <div style={{ fontSize: 64, margin: "8px 0", position: "relative" }}>🤝</div>
+      <div style={{ margin: "12px 0", position: "relative", color: "var(--gold)" }}>
+        <IconTabMatches size={68} active />
+      </div>
       <p style={{ color: "#e6dccd", maxWidth: 300 }}>
         Вы и «{match.companyName ?? "заведение"}» понравились друг другу
       </p>
@@ -56,7 +59,9 @@ export function MatchOverlay({
             nav(`/chat/${match.id}`);
           }}
         >
-          💬 Перейти в чат
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <IconChat size={18} /> Перейти в чат
+          </span>
         </button>
         <button className="btn secondary" style={{ color: "#e6dccd", borderColor: "rgba(255,255,255,.25)" }} onClick={onClose}>
           Продолжить листать

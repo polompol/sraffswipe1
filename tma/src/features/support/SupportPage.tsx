@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
+import { IconChat } from "@/components/Icons";
 
 // Ссылка на поддержку (Telegram-чат/бот). Задаётся через env перед запуском.
 const SUPPORT_URL =
@@ -94,7 +95,9 @@ export function SupportPage() {
 
         <a href={SUPPORT_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
           <Button variant="secondary" onClick={() => haptic("light")}>
-            💬 Написать в поддержку
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <IconChat size={18} /> Написать в поддержку
+            </span>
           </Button>
         </a>
       </div>
