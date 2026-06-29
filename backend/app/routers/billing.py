@@ -307,6 +307,12 @@ def yookassa_webhook(
     owner_id, sku = meta.get("owner_id"), meta.get("sku")
     if not owner_id or sku not in CATALOG:
         raise HTTPException(status_code=400, detail="Некорректные metadata")
+    # Сверяем фактически оплаченную сумму с ценой SKU (защита на случай утечки
+    # секрета вебхука: нельзя «оплатить» дешёвый платёж и получить дорогой тариф).
+    amount = obj.get("amount", {})
+    expected = f"{int(CATALOG[sku].get('rub') or 0)}.00"
+    if str(amount.get("value")) != expected or amount.get("currency") != "RUB":
+        raise HTTPException(status_code=400, detail="Сумма платежа не совпадает")
     charge_id = obj.get("id")
     if charge_id and db.query(Purchase).filter(
         Purchase.provider_charge_id == charge_id

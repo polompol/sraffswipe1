@@ -45,6 +45,7 @@ def test_yookassa_webhook_grants_plan(client):
         "event": "payment.succeeded",
         "object": {
             "id": "yk-evt-1",
+            "amount": {"value": "1990.00", "currency": "RUB"},
             "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
         },
     }
@@ -250,6 +251,7 @@ def test_admin_cancel_subscription_and_purchases(client):
         "event": "payment.succeeded",
         "object": {
             "id": "ref-1",
+            "amount": {"value": "1990.00", "currency": "RUB"},
             "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
         },
     })
@@ -272,6 +274,7 @@ def test_admin_revenue(client):
         "event": "payment.succeeded",
         "object": {
             "id": "rev-1",
+            "amount": {"value": "1990.00", "currency": "RUB"},
             "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
         },
     })

@@ -107,6 +107,43 @@ def test_yookassa_subscription_activates_plan(client):
     assert ent["boostBalance"] >= 10
 
 
+def test_yookassa_webhook_verifies_amount(client):
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    owner = r.json()["user_id"]
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    secret = "test-internal-secret"  # = internal_api_secret в conftest
+
+    def hook(charge_id, value):
+        return client.post(
+            f"/billing/yookassa/webhook?secret={secret}",
+            json={
+                "event": "payment.succeeded",
+                "object": {
+                    "id": charge_id,
+                    "amount": {"value": value, "currency": "RUB"},
+                    "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+                },
+            },
+        )
+
+    # Неверная сумма (дешевле тарифа) — отклоняется, права не выдаются.
+    bad = hook("yk_bad", "1.00")
+    assert bad.status_code == 400
+    assert client.get("/billing/entitlements", headers=headers).json()["plan"] == "free"
+
+    # Верная сумма — начисляет тариф.
+    ok = hook("yk_ok", "1990.00")
+    assert ok.status_code == 200
+    assert client.get("/billing/entitlements", headers=headers).json()["plan"] == "pro"
+
+    # Неверный секрет — 401.
+    no = client.post(
+        "/billing/yookassa/webhook?secret=wrong",
+        json={"event": "payment.succeeded", "object": {}},
+    )
+    assert no.status_code == 401
+
+
 def test_fulfill_requires_internal_secret(client):
     r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     owner = r.json()["user_id"]
