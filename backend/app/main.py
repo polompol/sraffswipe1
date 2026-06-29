@@ -21,6 +21,7 @@ from .routers import (
     chat,
     dadata,
     employer,
+    favorites,
     matches,
     reports,
     saved_searches,
@@ -136,6 +137,7 @@ app.include_router(uploads.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
 app.include_router(activity.router)
+app.include_router(favorites.router)
 
 
 @app.get("/health", tags=["meta"])

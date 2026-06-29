@@ -211,6 +211,13 @@ export const IconStore = ({ size = 24, className }: P) => (
   </svg>
 );
 
+export const IconBookmark = ({ size = 24, className, filled }: P & { filled?: boolean }) => (
+  <svg {...base(size)} className={className}>
+    <path d="M6 4h12v16l-6-4-6 4V4z" stroke={S} strokeWidth="1.9"
+      strokeLinejoin="round" fill={filled ? "currentColor" : "none"} />
+  </svg>
+);
+
 export const IconCamera = ({ size = 24, className }: P) => (
   <svg {...base(size)} className={className}>
     <path d="M3 8h3l2-2.5h8L18 8h3v11H3V8z" stroke={S} strokeWidth="1.9" strokeLinejoin="round" />

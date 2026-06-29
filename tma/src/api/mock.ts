@@ -293,6 +293,7 @@ const meProfile: Me = {
   earnedRub: 18400,
   shiftsDone: 7,
   availableToday: false,
+  verifyStatus: "none",
 };
 
 export function createVacancy(input: VacancyInput): Promise<Vacancy> {
@@ -475,6 +476,27 @@ export function deleteSavedSearch(id: string): Promise<void> {
   const i = savedSearches.findIndex((s) => s.id === id);
   if (i >= 0) savedSearches.splice(i, 1);
   return Promise.resolve();
+}
+
+const favorites = new Set<string>();
+
+export function listFavoriteIds(): Promise<string[]> {
+  return Promise.resolve([...favorites]);
+}
+export function listFavorites(): Promise<Vacancy[]> {
+  return Promise.resolve(VACANCIES.filter((v) => favorites.has(v.id)));
+}
+export function addFavorite(id: string): Promise<void> {
+  favorites.add(id);
+  return Promise.resolve();
+}
+export function removeFavorite(id: string): Promise<void> {
+  favorites.delete(id);
+  return Promise.resolve();
+}
+export function submitVerifyDoc(_photoUrl: string): Promise<string> {
+  meProfile.verifyStatus = "pending";
+  return Promise.resolve("pending");
 }
 
 export function fetchActivity() {

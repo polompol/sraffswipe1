@@ -106,6 +106,7 @@ class MeOut(BaseModel):
     earnedRub: int = 0  # заработано через сервис (мотивация доходом)
     shiftsDone: int = 0  # сколько смен закрыто
     availableToday: bool = False  # «Готов выйти сегодня» (только соискатель)
+    verifyStatus: str = "none"  # none|pending|verified (верификация исполнителя)
 
 
 def _streak(db: Session, owner_id: str) -> int:
@@ -204,6 +205,7 @@ def me(
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
         availableToday=u.available_today,
+        verifyStatus=u.verify_status,
     )
 
 
@@ -226,6 +228,29 @@ def set_available(
     u.available_today = body.available
     db.commit()
     return {"availableToday": u.available_today}
+
+
+class VerifyDocIn(BaseModel):
+    photo_url: str
+
+
+@router.post("/me/verify-doc")
+def submit_verify_doc(
+    body: VerifyDocIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Соискатель загружает фото медкнижки на проверку → статус «на проверке».
+    Подтверждает админ (в админ-панели). Усиливает доверие к исполнителю."""
+    if principal["role"] != "seeker":
+        raise HTTPException(status_code=403, detail="Только для соискателя")
+    u = db.get(User, principal["id"])
+    if u is None:
+        raise HTTPException(status_code=404, detail="Не найдено")
+    u.med_book_photo = body.photo_url[:500]
+    u.verify_status = "pending"
+    db.commit()
+    return {"verifyStatus": u.verify_status}
 
 
 def _age_from_iso(iso: str) -> int | None:

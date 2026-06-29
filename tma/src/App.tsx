@@ -48,6 +48,9 @@ const AdminPage = lazy(() =>
 const SupportPage = lazy(() =>
   import("@/features/support/SupportPage").then((m) => ({ default: m.SupportPage })),
 );
+const FavoritesPage = lazy(() =>
+  import("@/features/feed/FavoritesPage").then((m) => ({ default: m.FavoritesPage })),
+);
 
 function TabBar() {
   const { role } = useSession();
@@ -138,6 +141,7 @@ export function App() {
       <Route path="/funnel" element={ready ? <FunnelPage /> : <Navigate to="/onboarding" />} />
       <Route path="/admin" element={ready ? <AdminPage /> : <Navigate to="/onboarding" />} />
       <Route path="/support" element={ready ? <SupportPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/favorites" element={ready ? <FavoritesPage /> : <Navigate to="/onboarding" />} />
 
       <Route
         path="*"

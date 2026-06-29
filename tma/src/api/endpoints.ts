@@ -133,6 +133,7 @@ export interface Me {
   earnedRub?: number;
   shiftsDone?: number;
   availableToday?: boolean;
+  verifyStatus?: string; // none|pending|verified
 }
 
 export async function fetchMe(): Promise<Me> {
@@ -445,6 +446,39 @@ export async function createSavedSearch(
 export async function deleteSavedSearch(id: string): Promise<void> {
   if (!USE_BACKEND) return mock.deleteSavedSearch(id);
   await api.delete(`/saved-searches/${id}`);
+}
+
+// --- Избранные смены ---
+
+export async function listFavoriteIds(): Promise<string[]> {
+  if (!USE_BACKEND) return mock.listFavoriteIds();
+  const { data } = await api.get<string[]>("/favorites/ids");
+  return data;
+}
+
+export async function listFavorites(): Promise<Vacancy[]> {
+  if (!USE_BACKEND) return mock.listFavorites();
+  const { data } = await api.get<Vacancy[]>("/favorites");
+  return data;
+}
+
+export async function addFavorite(vacancyId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.addFavorite(vacancyId);
+  await api.post(`/favorites/${vacancyId}`, {});
+}
+
+export async function removeFavorite(vacancyId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.removeFavorite(vacancyId);
+  await api.delete(`/favorites/${vacancyId}`);
+}
+
+/** Загрузить фото медкнижки на верификацию исполнителя. */
+export async function submitVerifyDoc(photoUrl: string): Promise<string> {
+  if (!USE_BACKEND) return mock.submitVerifyDoc(photoUrl);
+  const { data } = await api.post<{ verifyStatus: string }>("/me/verify-doc", {
+    photo_url: photoUrl,
+  });
+  return data.verifyStatus;
 }
 
 export interface VerifyResult {

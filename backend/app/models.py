@@ -53,6 +53,9 @@ class User(Base):
     # «Готов выйти сегодня»: соискатель в один тап показывает доступность —
     # заведение со срочной сменой видит таких людей первыми.
     available_today: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Фото медкнижки на верификацию + её статус (none|pending|verified).
+    med_book_photo: Mapped[str] = mapped_column(String, default="")
+    verify_status: Mapped[str] = mapped_column(String, default="none")
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
@@ -289,6 +292,20 @@ class Review(Base):
     ratee_id: Mapped[str] = mapped_column(String, index=True)
     stars: Mapped[int] = mapped_column(Integer, default=5)
     text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Favorite(Base):
+    """Сохранённая (избранная) вакансия соискателя — вернуться позже."""
+
+    __tablename__ = "favorites"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "vacancy_id", name="uq_favorite"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, index=True)
+    vacancy_id: Mapped[str] = mapped_column(String, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

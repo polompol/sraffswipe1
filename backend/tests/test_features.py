@@ -111,3 +111,95 @@ def test_activity_shows_closed_shift(client):
     _, _, seeker_token, _, _, _ = _full_shift_cycle(client)
     body = client.get("/activity/recent", headers=_hdr(seeker_token)).json()
     assert any(it["kind"] == "closed" for it in body["items"])
+
+
+def test_favorites_add_list_remove(client):
+    emp_token, _ = _auth(client, "employer")
+    vac = _make_vacancy(client, emp_token)
+    seeker_token, _ = _auth(client, "seeker")
+
+    def ids():
+        return client.get("/favorites/ids", headers=_hdr(seeker_token)).json()
+
+    assert ids() == []
+    r = client.post(f"/favorites/{vac['id']}", headers=_hdr(seeker_token))
+    assert r.status_code == 200
+    assert ids() == [vac["id"]]
+    lst = client.get("/favorites", headers=_hdr(seeker_token)).json()
+    assert len(lst) == 1 and lst[0]["id"] == vac["id"]
+
+    client.delete(f"/favorites/{vac['id']}", headers=_hdr(seeker_token))
+    assert ids() == []
+
+
+def test_favorite_unknown_vacancy_404(client):
+    seeker_token, _ = _auth(client, "seeker")
+    r = client.post("/favorites/nope", headers=_hdr(seeker_token))
+    assert r.status_code == 404
+
+
+def _verify_status(client, token):
+    return client.get("/me", headers=_hdr(token)).json()["verifyStatus"]
+
+
+def test_worker_verification_flow(client):
+    seeker_token, sid = _auth(client, "seeker")
+    assert _verify_status(client, seeker_token) == "none"
+    r = client.post("/me/verify-doc", headers=_hdr(seeker_token),
+                    json={"photo_url": "https://example.com/med.jpg"})
+    assert r.status_code == 200 and r.json()["verifyStatus"] == "pending"
+    assert _verify_status(client, seeker_token) == "pending"
+    # админ подтверждает (tg_id=0 — админ в тестах)
+    adm = client.post(f"/admin/users/{sid}/verify", headers=_hdr(seeker_token))
+    assert adm.status_code == 200
+    assert _verify_status(client, seeker_token) == "verified"
+
+
+def test_verify_doc_employer_forbidden(client):
+    emp_token, _ = _auth(client, "employer")
+    r = client.post("/me/verify-doc", headers=_hdr(emp_token),
+                    json={"photo_url": "x"})
+    assert r.status_code == 403
+
+
+def test_digest_and_reminders_logic(client):
+    from datetime import UTC, datetime
+
+    from app import digest
+    from app.db import SessionLocal
+
+    emp_token, _ = _auth(client, "employer")
+    today = datetime.now(UTC).date().isoformat()
+    # активная смена на сегодня в Москве
+    vac = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "barista", "date": today, "start_time": 600, "end_time": 1080,
+        "rate": 350, "rate_type": "perHour", "city": "Москва",
+        "lat": 55.75, "lng": 37.61, "address": "Тверская, 1",
+    }).json()
+
+    seeker_token, sid = _auth(client, "seeker")
+    client.put("/me", headers=_hdr(seeker_token), json={
+        "birth_date": "2000-01-01", "city": "Москва"})
+
+    db = SessionLocal()
+    try:
+        # дайджест: соискателю в Москве предлагается свежая смена
+        d = digest.build_digest(db)
+        assert sid in d and len(d[sid]) >= 1
+        assert digest.send_digest(db) >= 1  # no-op без токена, но без ошибок
+
+        # доводим до подтверждённой смены и проверяем напоминание на сегодня
+        client.post("/swipes", headers=_hdr(emp_token), json={
+            "target_id": sid, "target_type": "user", "direction": "like"})
+        sw = client.post("/swipes", headers=_hdr(seeker_token), json={
+            "target_id": vac["id"], "target_type": "vacancy",
+            "direction": "like"}).json()
+        mid = sw["match_id"]
+        client.post(f"/matches/{mid}/confirm", headers=_hdr(seeker_token))
+        client.post(f"/matches/{mid}/confirm", headers=_hdr(emp_token))
+
+        reminders = digest.build_reminders(db)
+        assert any(uid == sid for uid, _ in reminders)
+        assert digest.send_reminders(db) >= 1
+    finally:
+        db.close()
