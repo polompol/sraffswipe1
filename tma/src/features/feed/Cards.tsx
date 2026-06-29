@@ -141,7 +141,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
         <CardFavButton id={v.id} />
         <span className="spacer" />
         {urgent ? (
-          <span className="glass pulse" style={{ background: "rgba(158,27,50,.92)" }}>
+          <span className="glass pulse" style={{ background: "rgba(165,28,48,.92)" }}>
             <IconFire size={13} /> Сегодня
           </span>
         ) : v.boosted ? (

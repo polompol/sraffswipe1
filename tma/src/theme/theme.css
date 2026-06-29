@@ -1,26 +1,28 @@
-/* Дизайн-токены StaffSwipe. Базируемся на Telegram themeParams (--tg-theme-*),
-   поверх — фирменная гамма «Crimson» (собственный оттенок, не точный Гарвард). */
+/* Дизайн-токены StaffSwipe. Фирменная гамма: кримсон (в стиле классического
+   академического багрового) + фон «слоновая кость» + золотой акцент.
+   Поверхности заданы явно, чтобы бренд-вид был стабильным и красивым в любом
+   окружении (своя тёмная тема — переключателем в профиле). */
 
 :root {
-  /* Бренд — кримсон + слоновая кость + золотой акцент */
-  --gold: #9e1b32;        /* основной акцент: бренд, кнопки, лайк */
-  --gold-soft: #b9485a;   /* партнёр для градиентов */
-  --crimson-dark: #7c1526;
+  /* Бренд — багровый кримсон + слоновая кость + золото */
+  --gold: #a51c30;        /* основной акцент: бренд, кнопки, лайк */
+  --gold-soft: #c0334a;   /* партнёр для градиентов (светлее кримсон) */
+  --crimson-dark: #7e1322;
   --caramel: #b07a47;
   --espresso: #2a1f1a;
-  --terracotta: #b9485a;
-  --like: #9e1b32;
-  --dislike: #8b8078;     /* нейтральный серый — «пропустить» */
-  --super: #c7a24b;       /* золото — супер-лайк / boost */
+  --terracotta: #c0334a;
+  --like: #a51c30;
+  --dislike: #8a8073;     /* нейтральный тёплый серый — «пропустить» */
+  --super: #c39a3a;       /* золото — супер-лайк / boost / акценты */
 
-  /* Поверхности — мягкий фолбэк, если Telegram не отдал тему */
-  --bg: var(--tg-theme-secondary-bg-color, #f6f1ea);
-  --surface: var(--tg-theme-bg-color, #ffffff);
-  --card: var(--tg-theme-bg-color, #ffffff);
-  --text: var(--tg-theme-text-color, #201b18);
-  --muted: var(--tg-theme-hint-color, #8b8078);
-  --border: #ece4d9;
-  --link: var(--tg-theme-link-color, var(--gold));
+  /* Поверхности — слоновая кость (чуть глубже) + белые карточки */
+  --bg: #efe7d3;          /* слоновая кость, тёплая, чуть темнее */
+  --surface: #fffdf8;     /* почти белый с кремовым подтоном */
+  --card: #fffdf8;
+  --text: #241f1b;
+  --muted: #8a8073;
+  --border: #e4d9c2;
+  --link: var(--gold);
 
   --radius: 16px;
   --radius-lg: 24px;
@@ -90,8 +92,10 @@ body {
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
     "Segoe UI", Roboto, sans-serif;
-  font-size: 15px;
-  line-height: 1.4;
+  /* Комфортнее для чтения: крупнее базовый кегль + больше межстрочного */
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
 }
 

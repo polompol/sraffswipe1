@@ -118,7 +118,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       style={{
         marginBottom: 16,
         border: on ? "1px solid var(--gold)" : undefined,
-        background: on ? "rgba(158,27,50,.06)" : undefined,
+        background: on ? "rgba(165,28,48,.06)" : undefined,
       }}
     >
       <span style={{ flex: 1 }}>

@@ -133,7 +133,7 @@ function PriceRow({
     <div className="card row" style={{ gap: 12 }}>
       <span style={{
         width: 40, height: 40, borderRadius: 12, flex: "none",
-        background: "var(--gold-tint, rgba(158,27,50,.08))", color: "var(--gold)",
+        background: "var(--gold-tint, rgba(165,28,48,.08))", color: "var(--gold)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <Icon size={21} />

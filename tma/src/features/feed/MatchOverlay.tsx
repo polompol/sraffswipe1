@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import type { MatchModel } from "@/types/domain";
 import { IconTabMatches, IconChat } from "@/components/Icons";
 
-const COLORS = ["#9e1b32", "#b9485a", "#c7a24b", "#7c1526", "#e0697c"];
+const COLORS = ["#a51c30", "#c0334a", "#c39a3a", "#7e1322", "#d2546a"];
 
 export function MatchOverlay({
   match,

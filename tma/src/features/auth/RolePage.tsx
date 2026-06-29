@@ -70,7 +70,7 @@ export function RolePage() {
         <div style={{ marginTop: 16, display: "grid", gap: 16, opacity: consent ? 1 : 0.5, pointerEvents: consent ? "auto" : "none" }}>
           <RoleCard
             Icon={IconBriefcase}
-            grad="linear-gradient(135deg,#b9485a,#9e1b32)"
+            grad="linear-gradient(135deg,#c0334a,#a51c30)"
             title="Я ищу подработку"
             sub="Официант, бариста, кальянщик, флорист, курьер"
             loading={busy === "seeker"}
@@ -78,7 +78,7 @@ export function RolePage() {
           />
           <RoleCard
             Icon={IconStore}
-            grad="linear-gradient(135deg,#9e1b32,#7c1526)"
+            grad="linear-gradient(135deg,#a51c30,#7e1322)"
             title="Я ищу сотрудников"
             sub="Кафе, ресторан, бар, кофейня, кальянная"
             loading={busy === "employer"}
