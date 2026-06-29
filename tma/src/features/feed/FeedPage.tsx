@@ -290,15 +290,24 @@ export function FeedPage() {
           )}
 
           <div className="actions">
-            <button className="act" aria-label="Пропустить" style={{ borderColor: "var(--dislike)", color: "var(--dislike)" }} onClick={() => controller.current?.("dislike")}>
-              <IconSkip size={32} />
-            </button>
-            <button className="act sm" aria-label="Срочно (супер-лайк)" style={{ borderColor: "var(--super)", color: "var(--super)" }} onClick={() => controller.current?.("superlike")}>
-              <IconSuper size={26} />
-            </button>
-            <button className="act" aria-label="Хочу здесь работать" style={{ borderColor: "var(--like)", color: "var(--like)" }} onClick={() => controller.current?.("like")}>
-              <IconLike size={30} />
-            </button>
+            <div className="act-col">
+              <button className="act act-skip" aria-label="Пропустить" onClick={() => controller.current?.("dislike")}>
+                <IconSkip size={32} />
+              </button>
+              <span className="act-label act-label-skip">Пропустить</span>
+            </div>
+            <div className="act-col">
+              <button className="act sm act-super" aria-label="Срочно — показать заведению первым" onClick={() => controller.current?.("superlike")}>
+                <IconSuper size={28} />
+              </button>
+              <span className="act-label act-label-super">Срочно</span>
+            </div>
+            <div className="act-col">
+              <button className="act act-like" aria-label="Откликнуться — хочу здесь работать" onClick={() => controller.current?.("like")}>
+                <IconLike size={34} />
+              </button>
+              <span className="act-label act-label-like">Отклик</span>
+            </div>
           </div>
         </>
       )}

@@ -441,26 +441,80 @@ input:focus-visible {
 .actions {
   display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 22px;
+  align-items: flex-start;
+  gap: 26px;
   margin-top: 18px;
+}
+.act-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
 }
 .act {
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 2.5px solid;
-  font-size: 30px;
+  border: 2.5px solid transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
 .act.sm {
-  width: 58px;
-  height: 58px;
-  font-size: 24px;
+  width: 60px;
+  height: 60px;
+}
+/* Высокий контраст: заливка + белая иконка — хорошо видно при слабом зрении */
+.act-like {
+  background: var(--like);
+  color: #fff;
+  border-color: var(--like);
+}
+.act-super {
+  background: var(--super);
+  color: #fff;
+  border-color: var(--super);
+}
+.act-skip {
+  background: var(--surface);
+  color: var(--dislike);
+  border-color: var(--dislike);
+}
+.act-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.act-label-like {
+  color: var(--like);
+}
+.act-label-super {
+  color: var(--super);
+}
+.act-label-skip {
+  color: var(--dislike);
+}
+/* Крупный режим (самостоятельная регулировка в профиле) — для слабого зрения */
+body[data-large="1"] .act {
+  width: 88px;
+  height: 88px;
+}
+body[data-large="1"] .act.sm {
+  width: 74px;
+  height: 74px;
+}
+body[data-large="1"] .act-label {
+  font-size: 15px;
+}
+body[data-large="1"] .tab {
+  font-size: 12.5px;
+}
+body[data-large="1"] .swipe-body {
+  font-size: 17px;
+}
+body[data-large="1"] .feed-loc {
+  font-size: 15px;
 }
 
 /* Чат */

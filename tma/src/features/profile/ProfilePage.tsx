@@ -171,6 +171,61 @@ function EarningsCard({ me }: { me: Me }) {
   );
 }
 
+// Доступность: крупные кнопки и текст. Состояние — на <body data-large>,
+// сохраняется в localStorage и применяется при старте (main.tsx).
+function LargeModeCard() {
+  const [on, setOn] = useState(() => document.body.dataset.large === "1");
+  function toggle() {
+    const next = !on;
+    setOn(next);
+    haptic("select");
+    if (next) {
+      document.body.dataset.large = "1";
+      localStorage.setItem("ss_large", "1");
+    } else {
+      delete document.body.dataset.large;
+      localStorage.removeItem("ss_large");
+    }
+  }
+  return (
+    <div className="card row" style={{ marginBottom: 16 }}>
+      <span style={{ flex: 1 }}>
+        <b>Крупные кнопки и текст</b>
+        <div className="muted">Удобнее, если мелкое плохо видно</div>
+      </span>
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label="Крупные кнопки и текст"
+        onClick={toggle}
+        style={{
+          width: 52,
+          height: 30,
+          borderRadius: 999,
+          border: "none",
+          cursor: "pointer",
+          background: on ? "var(--gold)" : "var(--border)",
+          position: "relative",
+          transition: "background 0.2s",
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 3,
+            left: on ? 25 : 3,
+            width: 24,
+            height: 24,
+            borderRadius: "50%",
+            background: "#fff",
+            transition: "left 0.2s",
+          }}
+        />
+      </button>
+    </div>
+  );
+}
+
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
@@ -321,6 +376,8 @@ export function ProfilePage() {
           />
         </button>
       </div>
+
+      <LargeModeCard />
 
       <Button variant="secondary" onClick={() => nav("/profile/edit")}>
         ✏️ Редактировать профиль

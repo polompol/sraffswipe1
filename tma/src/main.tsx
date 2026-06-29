@@ -27,6 +27,10 @@ window.addEventListener("unhandledrejection", (e) =>
 void initSentry();
 void initTelegram();
 initTheme();
+// Крупный режим (доступность) — применяем до первого рендера, если включён.
+if (localStorage.getItem("ss_large") === "1") {
+  document.body.dataset.large = "1";
+}
 // «open» — один раз за сессию, чтобы не раздувать вершину воронки на перезапусках.
 if (!sessionStorage.getItem("ss_open")) {
   sessionStorage.setItem("ss_open", "1");
