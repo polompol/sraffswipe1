@@ -245,12 +245,14 @@ export function ProfilePage() {
           }}
         >
           <b style={{ fontSize: 17 }}>
-            ❤️ Тебя хотят: {me.incomingLikes}
+            {role === "employer"
+              ? `⚡ Новых откликов: ${me.incomingLikes}`
+              : `⚡ Тебя зовут на смены: ${me.incomingLikes}`}
           </b>
           <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2 }}>
             {role === "employer"
-              ? "столько откликов на твои вакансии — листай ленту"
-              : "столько заведений лайкнули тебя — листай ленту и отвечай"}
+              ? "столько откликов на твои вакансии — открой ленту"
+              : "столько заведений готовы позвать — открой ленту и ответь"}
           </div>
         </div>
       )}

@@ -361,25 +361,26 @@ input:focus-visible {
 .actions {
   display: flex;
   justify-content: center;
-  gap: 16px;
-  margin-top: 16px;
+  align-items: center;
+  gap: 22px;
+  margin-top: 18px;
 }
 .act {
-  width: 60px;
-  height: 60px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   background: var(--surface);
-  border: 2px solid;
-  font-size: 26px;
+  border: 2.5px solid;
+  font-size: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
 .act.sm {
-  width: 48px;
-  height: 48px;
-  font-size: 20px;
+  width: 58px;
+  height: 58px;
+  font-size: 24px;
 }
 
 /* Чат */

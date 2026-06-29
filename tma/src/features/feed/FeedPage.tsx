@@ -285,13 +285,13 @@ export function FeedPage() {
 
           <div className="actions">
             <button className="act" aria-label="Пропустить" style={{ borderColor: "var(--dislike)", color: "var(--dislike)" }} onClick={() => controller.current?.("dislike")}>
-              <IconSkip size={26} />
+              <IconSkip size={32} />
             </button>
             <button className="act sm" aria-label="Срочно (супер-лайк)" style={{ borderColor: "var(--super)", color: "var(--super)" }} onClick={() => controller.current?.("superlike")}>
-              <IconSuper size={20} />
+              <IconSuper size={26} />
             </button>
             <button className="act" aria-label="Хочу здесь работать" style={{ borderColor: "var(--like)", color: "var(--like)" }} onClick={() => controller.current?.("like")}>
-              <IconLike size={24} />
+              <IconLike size={30} />
             </button>
           </div>
         </>
