@@ -20,8 +20,17 @@ import { FilterSheet } from "./FilterSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
-import { IconSkip, IconSuper, IconLike } from "@/components/Icons";
+import {
+  IconSkip,
+  IconSuper,
+  IconLike,
+  IconFilter,
+  IconBolt,
+  IconList,
+  IconCards,
+} from "@/components/Icons";
 
 export function FeedPage() {
   const role = useSession((s) => s.role) ?? "seeker";
@@ -131,7 +140,7 @@ export function FeedPage() {
 
   return (
     <div className="page">
-      <div className="row" style={{ marginBottom: 8 }}>
+      <div className="row" style={{ marginBottom: 6, gap: 4 }}>
         <span
           aria-hidden
           style={{
@@ -147,54 +156,51 @@ export function FeedPage() {
         >
           <Logo size={20} color="#fff" />
         </span>
-        <h2 className="h2" style={{ margin: 0 }}>
+        <h2 className="h2" style={{ margin: 0, flex: 1 }}>
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
         </h2>
-        <span className="spacer" />
         {isSeeker && (
           <button
-            className="tab"
-            style={{ flex: "none", width: "auto" }}
-            aria-label={view === "swipe" ? "Показать списком" : "Показать свайпом"}
+            className="icon-btn"
+            aria-label={view === "swipe" ? "Показать списком" : "Показать карточками"}
             onClick={() => {
               const next = view === "swipe" ? "list" : "swipe";
               setView(next);
               localStorage.setItem("ss_view", next);
+              haptic("light");
             }}
           >
-            <span className="ico">{view === "swipe" ? "☰" : "🃏"}</span>
+            {view === "swipe" ? <IconList size={22} /> : <IconCards size={22} />}
           </button>
         )}
         {isSeeker && (
           <button
-            className="tab"
-            style={{ flex: "none", width: "auto", color: activeFilterCount ? "var(--gold)" : undefined }}
+            className="icon-btn"
             aria-label="Фильтры"
+            style={{ color: activeFilterCount ? "var(--gold)" : undefined }}
             onClick={() => setFilterOpen(true)}
           >
-            <span className="ico">⚙{activeFilterCount ? ` ${activeFilterCount}` : ""}</span>
+            <IconFilter size={22} />
+            {activeFilterCount > 0 && (
+              <span className="icon-badge">{activeFilterCount}</span>
+            )}
           </button>
         )}
-        <button className="tab" style={{ flex: "none", width: "auto" }} aria-label="Тарифы и буст" onClick={() => nav("/pricing")}>
-          <span className="ico">⚡</span>
+        <button className="icon-btn" aria-label="Тарифы и буст" onClick={() => nav("/pricing")}>
+          <IconBolt size={22} />
         </button>
       </div>
-      <p className="muted" style={{ marginBottom: 6 }}>
-        {isSeeker ? (filters.city ? `Смены · ${filters.city}` : "Смены рядом с вами") : "Кандидаты рядом"}
-        {data ? ` · ${data.length}` : ""}
-        {isSeeker && (
-          <button
-            className="tab"
-            style={{ display: "inline", flex: "none", width: "auto", padding: "0 6px", color: "var(--gold)" }}
-            onClick={() => setFilterOpen(true)}
-          >
-            {filters.city ? "сменить" : "выбрать город"}
-          </button>
-        )}
-      </p>
-      <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
-        ⭐ 4.8 · 1 200+ смен закрыто · средний отклик 7 мин
-      </p>
+
+      <button
+        className="feed-loc"
+        onClick={() => isSeeker && setFilterOpen(true)}
+        aria-label={isSeeker ? "Сменить город и фильтры" : undefined}
+      >
+        {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
+        {isSeeker && filters.city ? ` · ${filters.city}` : ""}
+        {typeof data?.length === "number" ? ` · ${data.length}` : ""}
+        {isSeeker && <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>}
+      </button>
 
       {isSeeker && <LiveTicker />}
 

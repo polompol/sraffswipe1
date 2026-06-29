@@ -2,6 +2,14 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "@/store/session";
 import { Loading } from "@/components/States";
+import { haptic } from "@/telegram/sdk";
+import {
+  IconTabFeed,
+  IconTabMatches,
+  IconTabShifts,
+  IconTabVacancies,
+  IconTabProfile,
+} from "@/components/Icons";
 // Стартовый путь грузим сразу, остальное — по требованию (code-splitting).
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { RolePage } from "@/features/auth/RolePage";
@@ -48,25 +56,33 @@ function TabBar() {
   const isEmployer = role === "employer";
 
   const tabs = [
-    { path: "/feed", ico: "🃏", label: "Лента" },
-    { path: "/matches", ico: "🔥", label: "Мэтчи" },
+    { path: "/feed", Icon: IconTabFeed, label: "Лента" },
+    { path: "/matches", Icon: IconTabMatches, label: "Мэтчи" },
     isEmployer
-      ? { path: "/vacancy/my", ico: "📋", label: "Вакансии" }
-      : { path: "/shifts", ico: "📅", label: "Смены" },
-    { path: "/profile", ico: "👤", label: "Профиль" },
+      ? { path: "/vacancy/my", Icon: IconTabVacancies, label: "Вакансии" }
+      : { path: "/shifts", Icon: IconTabShifts, label: "Смены" },
+    { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
   ];
 
   return (
     <nav className="tabbar">
       {tabs.map((t) => {
         const active = loc.pathname.startsWith(t.path);
+        const Icon = t.Icon;
         return (
           <button
             key={t.path}
             className={`tab ${active ? "active" : ""}`}
-            onClick={() => nav(t.path)}
+            aria-label={t.label}
+            aria-current={active ? "page" : undefined}
+            onClick={() => {
+              if (!active) haptic("light");
+              nav(t.path);
+            }}
           >
-            <span className="ico">{t.ico}</span>
+            <span className="ico">
+              <Icon size={26} active={active} />
+            </span>
             <span>{t.label}</span>
           </button>
         );

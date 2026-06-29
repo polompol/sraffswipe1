@@ -47,3 +47,78 @@ export const IconSend = ({ size = 24, className }: P) => (
     <path d="M4 12l16-8-6 16-2.5-6L4 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="none" />
   </svg>
 );
+
+export const IconList = ({ size = 24, className }: P) => (
+  <svg {...base(size)} className={className}>
+    <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+export const IconCards = ({ size = 24, className }: P) => (
+  <svg {...base(size)} className={className}>
+    <rect x="5" y="4" width="14" height="16" rx="3" stroke="currentColor" strokeWidth="2" />
+    <path d="M9 4h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+export const IconBolt = ({ size = 24, className }: P) => (
+  <svg {...base(size)} className={className}>
+    <path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor"
+      strokeWidth="2" strokeLinejoin="round" fill="none" />
+  </svg>
+);
+
+// --- Иконки нижнего таб-бара. active=true → залитый вариант (как в iOS). ---
+type TabP = P & { active?: boolean };
+const sw = 1.9;
+
+export const IconTabFeed = ({ size = 26, active, className }: TabP) => (
+  <svg {...base(size)} className={className}>
+    {/* стопка карточек — «лента смен» */}
+    <rect x="6" y="4" width="12" height="16" rx="3"
+      fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={sw} />
+    <path d="M9 8h6M9 11h6M9 14h4" stroke={active ? "var(--surface)" : "currentColor"}
+      strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+);
+
+export const IconTabMatches = ({ size = 26, active, className }: TabP) => (
+  <svg {...base(size)} className={className}>
+    {/* два пересекающихся кольца — «мэтчи» */}
+    <circle cx="9" cy="12" r="5" fill={active ? "currentColor" : "none"}
+      stroke="currentColor" strokeWidth={sw} />
+    <circle cx="15" cy="12" r="5" fill="none" stroke="currentColor" strokeWidth={sw} />
+  </svg>
+);
+
+export const IconTabShifts = ({ size = 26, active, className }: TabP) => (
+  <svg {...base(size)} className={className}>
+    {/* календарь — «смены» */}
+    <rect x="4" y="5" width="16" height="15" rx="3"
+      fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={sw} />
+    <path d="M4 9h16M8 3v4M16 3v4" stroke={active ? "var(--surface)" : "currentColor"}
+      strokeWidth={sw} strokeLinecap="round" />
+  </svg>
+);
+
+export const IconTabVacancies = ({ size = 26, active, className }: TabP) => (
+  <svg {...base(size)} className={className}>
+    {/* портфель — «вакансии» (для работодателя) */}
+    <rect x="3" y="8" width="18" height="12" rx="3"
+      fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={sw} />
+    <path d="M8 8V6a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor"
+      strokeWidth={sw} strokeLinecap="round" />
+  </svg>
+);
+
+export const IconTabProfile = ({ size = 26, active, className }: TabP) => (
+  <svg {...base(size)} className={className}>
+    {/* человек — «профиль» */}
+    <circle cx="12" cy="8" r="3.6" fill={active ? "currentColor" : "none"}
+      stroke="currentColor" strokeWidth={sw} />
+    <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"
+      fill={active ? "currentColor" : "none"} stroke="currentColor"
+      strokeWidth={sw} strokeLinecap="round" />
+  </svg>
+);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { createSavedSearch, type FeedFilters } from "@/api/endpoints";
@@ -90,7 +91,7 @@ export function FilterSheet({
     );
   }
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed",
@@ -98,27 +99,28 @@ export function FilterSheet({
         background: "rgba(20,14,9,0.5)",
         display: "flex",
         alignItems: "flex-end",
-        zIndex: 40,
+        zIndex: 100,
       }}
       onClick={onClose}
     >
       <div
-        className="fade-up"
+        className="fade-up sheet"
         style={{
           width: "100%",
           maxWidth: 520,
           margin: "0 auto",
-          maxHeight: "88vh",
-          overflowY: "auto",
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
           background: "var(--surface)",
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
-          padding: 20,
-          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="h2">Фильтры</h2>
+        <div className="sheet-grab" aria-hidden />
+        <div className="sheet-body">
+        <h2 className="h2" style={{ marginTop: 0 }}>Фильтры</h2>
 
         <label className="muted" htmlFor="city">Город</label>
         <input
@@ -184,14 +186,14 @@ export function FilterSheet({
 
         <button
           className="btn ghost"
-          style={{ marginBottom: 10 }}
           disabled={saved}
           onClick={saveSearch}
         >
           {saved ? "✓ Поиск сохранён — пришлём новые смены" : "🔔 Сохранить поиск и уведомлять"}
         </button>
+        </div>
 
-        <div className="row" style={{ gap: 10 }}>
+        <div className="sheet-foot">
           <button className="btn secondary" onClick={() => onApply({ sort: "distance" })}>
             Сбросить
           </button>
@@ -200,6 +202,7 @@ export function FilterSheet({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
