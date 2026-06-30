@@ -166,6 +166,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
 
 // Доход через сервис — мотивация деньгами, а не «зашёл N дней подряд».
 function EarningsCard({ me }: { me: Me }) {
+  const nav = useNavigate();
   const earned = me.earnedRub ?? 0;
   const shifts = me.shiftsDone ?? 0;
   if (!earned && !shifts) return null;
@@ -187,6 +188,23 @@ function EarningsCard({ me }: { me: Me }) {
         {shifts} {shifts === 1 ? "смена закрыта" : "смен закрыто"} · так держать
         <IconFire size={13} />
       </div>
+      <button
+        onClick={() => nav("/share")}
+        style={{
+          marginTop: 12,
+          width: "100%",
+          minHeight: 44,
+          borderRadius: 12,
+          border: "1.5px solid rgba(255,255,255,.7)",
+          background: "rgba(255,255,255,.16)",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: 15,
+          cursor: "pointer",
+        }}
+      >
+        Поделиться в сторис
+      </button>
     </div>
   );
 }
