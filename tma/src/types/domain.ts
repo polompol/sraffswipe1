@@ -145,6 +145,8 @@ export interface Seeker {
   photoUrls: string[];
   about: string;
   availableToday?: boolean;
+  shiftsTotal?: number; // надёжность: всего подтверждённых смен
+  shiftsAttended?: number; // из них вышел
 }
 
 export interface Vacancy {

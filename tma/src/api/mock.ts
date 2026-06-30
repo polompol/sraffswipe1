@@ -134,6 +134,8 @@ const SEEKERS: Seeker[] = [
     photoUrls: [photo("photo-1494790108377-be9c29b29330")],
     about: "Опыт в fine dining, английский B2.",
     availableToday: true,
+    shiftsTotal: 12,
+    shiftsAttended: 12,
   },
   {
     id: "s3",
@@ -151,6 +153,8 @@ const SEEKERS: Seeker[] = [
     rating: 4.4,
     photoUrls: [photo("photo-1500648767791-00dcc994a43e")],
     about: "Холодный и горячий цех, опыт 2 года.",
+    shiftsTotal: 4,
+    shiftsAttended: 3,
   },
 ];
 
@@ -276,6 +280,12 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
     timestamp: new Date().toISOString(),
   });
   return Promise.resolve({ ...m });
+}
+
+export function markAttendance(matchId: string, attended: boolean): Promise<void> {
+  const m = matches.find((x) => x.id === matchId);
+  if (m) m.status = attended ? "completed" : m.status;
+  return Promise.resolve();
 }
 
 export function fetchEntitlements(): Promise<Entitlements> {

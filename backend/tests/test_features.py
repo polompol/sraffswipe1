@@ -164,6 +164,33 @@ def test_favorite_unknown_vacancy_404(client):
     assert r.status_code == 404
 
 
+def test_attendance_and_reliability(client):
+    emp_token, _, seeker_token, sid, _, match_id = _full_shift_cycle(client)
+
+    # не работодатель смены не может отметить (соискатель → 403)
+    assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(seeker_token),
+                       json={"attended": True}).status_code == 403
+
+    # работодатель смены отмечает «не вышел»
+    r = client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                    json={"attended": False})
+    assert r.status_code == 200 and r.json()["noShow"] is True
+
+    # в ленте кандидатов у работодателя видно надёжность
+    cands = client.get("/candidates", headers=_hdr(emp_token)).json()
+    me = next((c for c in cands if c["id"] == sid), None)
+    assert me is not None
+    assert me["shifts_total"] == 1
+    assert me["shifts_attended"] == 0
+
+    # отметили «вышел» — счётчик обновился
+    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                json={"attended": True})
+    cands = client.get("/candidates", headers=_hdr(emp_token)).json()
+    me = next(c for c in cands if c["id"] == sid)
+    assert me["shifts_attended"] == 1
+
+
 def test_digest_and_reminders_logic(client):
     from datetime import UTC, datetime
 

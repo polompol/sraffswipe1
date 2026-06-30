@@ -267,6 +267,11 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         </div>
         {s.about && <div style={{ marginTop: 8, opacity: 0.95 }}>{s.about}</div>}
         <div className="card-meta" style={{ marginTop: 10 }}>
+          {!!s.shiftsTotal && s.shiftsTotal > 0 && (
+            <div style={{ color: "var(--super)", fontWeight: 700 }}>
+              <IconCheck size={15} /> Вышел на {s.shiftsAttended ?? 0} из {s.shiftsTotal} смен
+            </div>
+          )}
           <div>
             <IconMedBook size={15} /> Медкнижка: {MED_BOOK_LABELS[s.medBook]}
           </div>

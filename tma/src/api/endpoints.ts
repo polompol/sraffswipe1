@@ -105,6 +105,15 @@ export async function confirmShift(matchId: string): Promise<MatchModel> {
   return data;
 }
 
+/** Работодатель отмечает после смены: работник вышел или нет (надёжность). */
+export async function markAttendance(
+  matchId: string,
+  attended: boolean,
+): Promise<void> {
+  if (!USE_BACKEND) return mock.markAttendance(matchId, attended);
+  await api.post(`/matches/${matchId}/attendance`, { attended });
+}
+
 export async function fetchEntitlements(): Promise<Entitlements> {
   if (!USE_BACKEND) return mock.fetchEntitlements();
   const { data } = await api.get<Entitlements>("/billing/entitlements");

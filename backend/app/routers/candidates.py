@@ -1,10 +1,11 @@
 """Лента кандидатов для работодателя."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import User
+from ..models import Match, User
 from ..security import current_principal
 
 router = APIRouter(tags=["candidates"])
@@ -27,10 +28,38 @@ class CandidateOut(BaseModel):
     photo_urls: list[str]
     about: str
     available_today: bool = False
+    # Надёжность: вышел на `attended` из `shifts_total` подтверждённых смен.
+    shifts_total: int = 0
+    shifts_attended: int = 0
 
 
 def _csv(value: str) -> list[str]:
     return [x for x in (value or "").split(",") if x]
+
+
+def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]:
+    """{user_id: (всего подтверждённых смен, из них вышел)} — одним запросом."""
+    if not user_ids:
+        return {}
+    rows = (
+        db.query(
+            Match.user_id,
+            func.count(Match.id),
+            func.sum(func.cast(Match.no_show, Integer)),
+        )
+        .filter(
+            Match.user_id.in_(user_ids),
+            Match.status.in_(("confirmed", "completed")),
+        )
+        .group_by(Match.user_id)
+        .all()
+    )
+    out: dict[str, tuple[int, int]] = {}
+    for uid, total, noshows in rows:
+        total = int(total or 0)
+        noshows = int(noshows or 0)
+        out[uid] = (total, total - noshows)
+    return out
 
 
 @router.get("/candidates", response_model=list[CandidateOut])
@@ -48,6 +77,7 @@ def list_candidates(
         .limit(50)
         .all()
     )
+    rel = _reliability(db, [u.id for u in users])
     return [
         CandidateOut(
             id=u.id,
@@ -71,6 +101,8 @@ def list_candidates(
             photo_urls=_csv(u.photo_urls),
             about=u.about,
             available_today=u.available_today,
+            shifts_total=rel.get(u.id, (0, 0))[0],
+            shifts_attended=rel.get(u.id, (0, 0))[1],
         )
         for u in users
     ]

@@ -150,6 +150,8 @@ class Match(Base):
     status: Mapped[str] = mapped_column(String, default="matched")
     confirmed_by_seeker: Mapped[bool] = mapped_column(Boolean, default=False)
     confirmed_by_employer: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Работодатель отмечает после смены: вышел человек или нет (надёжность).
+    no_show: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
