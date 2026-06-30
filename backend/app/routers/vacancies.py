@@ -15,7 +15,8 @@ from ..entitlements import (
     plan_of,
 )
 from ..geo import distance_km
-from ..models import Boost, Employer, Match, Vacancy
+from ..models import Boost, Employer, Match, User, Vacancy
+from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal, optional_principal
@@ -259,3 +260,32 @@ def boost_vacancy(
     db.add(Boost(vacancy_id=vacancy_id, expires_at=expires))
     db.commit()
     return {"ok": True, "boostBalance": ent.boost_balance, "expiresAt": expires}
+
+
+@router.post("/{vacancy_id}/urgent")
+def urgent_ping(
+    vacancy_id: str,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """«Срочно»: пингуем доступных сегодня соискателей в городе смены.
+    Рассылка через notify_owner (тихий no-op без токена бота)."""
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    v = db.get(Vacancy, vacancy_id)
+    if v is None or v.employer_id != principal["id"]:
+        raise HTTPException(status_code=404, detail="Вакансия не найдена")
+    city = (v.city or "").strip().lower()
+    seekers = (
+        db.query(User)
+        .filter(User.blocked.is_(False), User.available_today.is_(True))
+        .all()
+    )
+    sent = 0
+    text = f"Срочно нужен человек: {v.role} · {v.rate}₽ · {v.address or v.city}"
+    for u in seekers:
+        if city and (u.city or "").strip().lower() != city:
+            continue
+        notify_owner(db, u.id, text)
+        sent += 1
+    return {"ok": True, "pinged": sent}

@@ -191,6 +191,37 @@ def test_attendance_and_reliability(client):
     assert me["shifts_attended"] == 1
 
 
+def test_my_workers_and_invite_again(client):
+    emp_token, _, _, sid, _, _ = _full_shift_cycle(client)
+    workers = client.get("/employer/workers", headers=_hdr(emp_token)).json()
+    assert any(w["id"] == sid for w in workers)
+    # позвать снова
+    r = client.post(f"/employer/invite/{sid}", headers=_hdr(emp_token))
+    assert r.status_code == 200 and r.json()["ok"] is True
+    # соискатель не имеет доступа к списку работников
+    seeker_token, _ = _auth(client, "seeker")
+    r2 = client.get("/employer/workers", headers=_hdr(seeker_token))
+    assert r2.status_code == 403
+
+
+def test_urgent_ping(client):
+    emp_token, _ = _auth(client, "employer")
+    vac = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "waiter", "date": "2026-06-25", "start_time": 600,
+        "end_time": 1080, "rate": 300, "rate_type": "perHour", "city": "Москва",
+        "lat": 55.75, "lng": 37.61, "address": "Тверская, 1",
+    }).json()
+    # доступный соискатель в Москве
+    st, _ = _auth(client, "seeker")
+    client.put("/me", headers=_hdr(st), json={
+        "birth_date": "2000-01-01", "city": "Москва"})
+    client.post("/me/available", headers=_hdr(st), json={"available": True})
+
+    r = client.post(f"/vacancies/{vac['id']}/urgent", headers=_hdr(emp_token))
+    assert r.status_code == 200
+    assert r.json()["pinged"] >= 1
+
+
 def test_digest_and_reminders_logic(client):
     from datetime import UTC, datetime
 

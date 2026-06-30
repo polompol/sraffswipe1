@@ -455,6 +455,21 @@ export function boostVacancy(vacancyId: string): Promise<void> {
   return Promise.resolve();
 }
 
+export function urgentPing(_vacancyId: string): Promise<number> {
+  return Promise.resolve(7); // демо: «пингнули 7 доступных рядом»
+}
+
+export function fetchMyWorkers() {
+  return Promise.resolve([
+    { id: "s2", name: "Мария", rating: 4.9, availableToday: true, shiftsTotal: 12, shiftsAttended: 12 },
+    { id: "s3", name: "Иван", rating: 4.4, availableToday: false, shiftsTotal: 4, shiftsAttended: 3 },
+  ]);
+}
+
+export function inviteWorker(_userId: string): Promise<void> {
+  return Promise.resolve();
+}
+
 export function verifyEmployer(inn: string): Promise<VerifyResult> {
   const ok = /^\d{10,12}$/.test(inn);
   return Promise.resolve({

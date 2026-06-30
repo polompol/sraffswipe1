@@ -208,6 +208,39 @@ export async function boostVacancy(vacancyId: string): Promise<void> {
   await api.post(`/vacancies/${vacancyId}/boost`, {});
 }
 
+/** «Срочно»: пинг доступным соискателям в городе смены. Возвращает число. */
+export async function urgentPing(vacancyId: string): Promise<number> {
+  if (!USE_BACKEND) return mock.urgentPing(vacancyId);
+  const { data } = await api.post<{ pinged: number }>(`/vacancies/${vacancyId}/urgent`, {});
+  return data.pinged;
+}
+
+export interface Worker {
+  id: string;
+  name: string;
+  rating: number;
+  availableToday: boolean;
+  shiftsTotal: number;
+  shiftsAttended: number;
+}
+
+/** Работники, уже выходившие на смены заведения — чтобы позвать снова. */
+export async function fetchMyWorkers(): Promise<Worker[]> {
+  if (!USE_BACKEND) return mock.fetchMyWorkers();
+  const { data } = await api.get<
+    { id: string; name: string; rating: number; available_today: boolean; shifts_total: number; shifts_attended: number }[]
+  >("/employer/workers");
+  return data.map((w) => ({
+    id: w.id, name: w.name, rating: w.rating, availableToday: w.available_today,
+    shiftsTotal: w.shifts_total, shiftsAttended: w.shifts_attended,
+  }));
+}
+
+export async function inviteWorker(userId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.inviteWorker(userId);
+  await api.post(`/employer/invite/${userId}`, {});
+}
+
 export interface VacancyInput {
   role: string;
   date: string;
