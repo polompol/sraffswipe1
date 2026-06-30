@@ -124,17 +124,17 @@ export function VacancyList({
               </div>
               <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                 {v.payMethod && (
-                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 12 }}>
+                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 13 }}>
                     {PAY_METHOD_SHORT[v.payMethod]}
                   </span>
                 )}
                 {v.employerPaysOnTime && (
-                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 12 }}>
+                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 13 }}>
                     <IconCheck size={12} /> Платит вовремя
                   </span>
                 )}
                 {!!v.employerShiftsDone && (
-                  <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 12 }}>
+                  <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 13 }}>
                     {v.employerShiftsDone} смен закрыто
                   </span>
                 )}
@@ -161,7 +161,7 @@ export function VacancyList({
             </button>
           </div>
           <button
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 12, marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5 }}
             onClick={() => setReportId(v.id)}
           >
             <IconWarning size={13} /> Пожаловаться на вакансию

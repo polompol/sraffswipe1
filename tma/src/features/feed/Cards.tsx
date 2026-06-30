@@ -190,7 +190,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
         </div>
 
         {v.description && (
-          <div style={{ marginTop: 8, opacity: 0.92, fontSize: 14, lineHeight: 1.4 }}>
+          <div style={{ marginTop: 8, opacity: 0.92, fontSize: 15, lineHeight: 1.45 }}>
             {v.description}
           </div>
         )}

@@ -181,11 +181,11 @@ function EarningsCard({ me }: { me: Me }) {
         border: "none",
       }}
     >
-      <div style={{ opacity: 0.9, fontSize: 13 }}>Заработано через StaffSwipe</div>
+      <div style={{ opacity: 0.9, fontSize: 14 }}>Заработано через StaffSwipe</div>
       <div style={{ fontWeight: 800, fontSize: 28, marginTop: 2 }}>
         {earned.toLocaleString("ru-RU")} ₽
       </div>
-      <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+      <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
         {shifts} {shifts === 1 ? "смена закрыта" : "смен закрыто"} · так держать
         <IconFire size={13} />
       </div>
@@ -386,7 +386,7 @@ export function ProfilePage() {
               ? `Новых откликов: ${me.incomingLikes}`
               : `Тебя зовут на смены: ${me.incomingLikes}`}
           </b>
-          <div style={{ opacity: 0.92, fontSize: 13, marginTop: 2 }}>
+          <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2 }}>
             {role === "employer"
               ? "столько откликов на твои вакансии — открой ленту"
               : "столько заведений готовы позвать — открой ленту и ответь"}

@@ -44,13 +44,13 @@
   --space-6: 32px;
   --space-7: 48px;
 
-  /* Типографическая шкала */
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-md: 15px;
-  --text-lg: 18px;
-  --text-xl: 22px;
-  --text-2xl: 28px;
+  /* Типографическая шкала (крупнее для читабельности) */
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
 
   /* Слои z-index */
   --z-sheet: 40;
@@ -93,7 +93,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
     "Segoe UI", Roboto, sans-serif;
   /* Комфортнее для чтения: крупнее базовый кегль + больше межстрочного */
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;

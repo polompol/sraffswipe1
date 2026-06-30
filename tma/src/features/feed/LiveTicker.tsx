@@ -54,7 +54,7 @@ export function LiveTicker() {
           key={idx}
           className="fade-up"
           style={{
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 700,
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -63,7 +63,7 @@ export function LiveTicker() {
         >
           {current ? current.text : "Здесь кипит жизнь"}
         </div>
-        <div className="muted" style={{ fontSize: 11.5 }}>
+        <div className="muted" style={{ fontSize: 12.5 }}>
           {data.searchingNow} ищут смену рядом сейчас
           {data.urgentToday > 0 ? ` · ${data.urgentToday} срочных сегодня` : ""}
         </div>
