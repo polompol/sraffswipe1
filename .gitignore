@@ -34,3 +34,6 @@ mockups/*.png
 !mockups/tma_overview.png
 !mockups/storyboard.png
 !mockups/admin.png
+
+# вложенные мокап-скриншоты (генерируются на лету)
+mockups/**/*.png
