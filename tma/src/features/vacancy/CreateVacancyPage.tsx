@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import type { PayMethod, RateType, StaffRole, TipsMode } from "@/types/domain";
-import { PAY_METHOD_LABELS, STAFF_ROLE_LABELS, TIPS_LABELS } from "@/types/domain";
+import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/domain";
+import {
+  PAY_METHOD_LABELS,
+  ROLE_FAMILIES,
+  ROLE_FAMILY_LABELS,
+  ROLE_FAMILY_ORDER,
+  STAFF_ROLE_LABELS,
+  TIPS_LABELS,
+} from "@/types/domain";
 import {
   createVacancy,
   suggestAddress,
@@ -14,30 +21,33 @@ import { Button } from "@/components/Button";
 import { IconPin, IconCheck } from "@/components/Icons";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
-const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
-
 const toMinutes = (t: string): number => {
   const [h, m] = t.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
 };
 
+const fromMinutes = (m: number): string =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
 export function CreateVacancyPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [role, setRole] = useState<StaffRole>("waiter");
+  // «Повторить смену»: префилл всех полей из прошлой вакансии (кроме даты).
+  const pre = (useLocation().state as { prefill?: Vacancy } | null)?.prefill;
+  const [role, setRole] = useState<StaffRole>(pre?.role ?? "waiter");
   const [date, setDate] = useState("");
-  const [start, setStart] = useState("10:00");
-  const [end, setEnd] = useState("22:00");
-  const [rate, setRate] = useState("350");
-  const [rateType, setRateType] = useState<RateType>("perHour");
-  const [payMethod, setPayMethod] = useState<PayMethod>("cash");
-  const [tips, setTips] = useState<TipsMode>("none");
-  const [city, setCity] = useState("Москва");
-  const [address, setAddress] = useState("Москва, ул. Льва Толстого, 16");
+  const [start, setStart] = useState(pre ? fromMinutes(pre.startTime) : "10:00");
+  const [end, setEnd] = useState(pre ? fromMinutes(pre.endTime) : "22:00");
+  const [rate, setRate] = useState(pre ? String(pre.rate) : "350");
+  const [rateType, setRateType] = useState<RateType>(pre?.rateType ?? "perHour");
+  const [payMethod, setPayMethod] = useState<PayMethod>(pre?.payMethod ?? "cash");
+  const [tips, setTips] = useState<TipsMode>(pre?.tips ?? "none");
+  const [city, setCity] = useState(pre?.city || "Москва");
+  const [address, setAddress] = useState(pre?.address || "Москва, ул. Льва Толстого, 16");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
-  const [desc, setDesc] = useState("");
-  const [medBook, setMedBook] = useState(true);
+  const [desc, setDesc] = useState(pre?.description ?? "");
+  const [medBook, setMedBook] = useState(pre?.requireMedBook ?? true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
@@ -97,24 +107,40 @@ export function CreateVacancyPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 16 }}>Новая вакансия</h1>
+        <h1 className="h1" style={{ marginBottom: 4 }}>
+          {pre ? "Повторить смену" : "Новая вакансия"}
+        </h1>
+        {pre && (
+          <p className="muted" style={{ marginBottom: 16 }}>
+            Поля заполнены по прошлой смене — укажите новую дату.
+          </p>
+        )}
 
         <label className="muted">Должность</label>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-          {ROLES.map((r) => (
-            <button
-              key={r}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: role === r ? "var(--gold)" : "transparent",
-                color: role === r ? "#fff" : "var(--text)",
-                borderColor: role === r ? "var(--gold)" : "var(--border)",
-              }}
-              onClick={() => setRole(r)}
-            >
-              {STAFF_ROLE_LABELS[r]}
-            </button>
+        <div style={{ margin: "8px 0 16px" }}>
+          {ROLE_FAMILY_ORDER.map((fam) => (
+            <div key={fam} style={{ marginBottom: 10 }}>
+              <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
+                {ROLE_FAMILY_LABELS[fam]}
+              </div>
+              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+                {ROLE_FAMILIES[fam].map((r) => (
+                  <button
+                    key={r}
+                    className="tag"
+                    style={{
+                      cursor: "pointer",
+                      background: role === r ? "var(--gold)" : "transparent",
+                      color: role === r ? "#fff" : "var(--text)",
+                      borderColor: role === r ? "var(--gold)" : "var(--border)",
+                    }}
+                    onClick={() => setRole(r)}
+                  >
+                    {STAFF_ROLE_LABELS[r]}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 

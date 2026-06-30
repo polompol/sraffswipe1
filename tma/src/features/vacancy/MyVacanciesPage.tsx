@@ -5,7 +5,7 @@ import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
-import { IconFire } from "@/components/Icons";
+import { IconFire, IconCalendar } from "@/components/Icons";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
@@ -62,6 +62,13 @@ export function MyVacanciesPage() {
               {fmtDate(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)} · {rateLabel(v.rate, v.rateType)}
             </div>
             <div className="muted">{v.address}</div>
+            <button
+              className="tag"
+              style={{ cursor: "pointer", marginTop: 10, borderColor: "var(--gold)", color: "var(--gold)" }}
+              onClick={() => nav("/vacancy/new", { state: { prefill: v } })}
+            >
+              <IconCalendar size={13} /> Повторить смену
+            </button>
           </div>
         ))}
       </div>

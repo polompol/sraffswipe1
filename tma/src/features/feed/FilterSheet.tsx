@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { StaffRole } from "@/types/domain";
-import { STAFF_ROLE_LABELS } from "@/types/domain";
+import {
+  ROLE_FAMILIES,
+  ROLE_FAMILY_LABELS,
+  ROLE_FAMILY_ORDER,
+  STAFF_ROLE_LABELS,
+} from "@/types/domain";
 import { createSavedSearch, type FeedFilters } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { IconBell, IconCheck } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
-
-const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
 
 const SORTS: { id: string; label: string }[] = [
   { id: "distance", label: "Ближе" },
@@ -142,14 +145,23 @@ export function FilterSheet({
         </div>
 
         <label className="muted">Должность</label>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-          {ROLES.map((r) => (
-            <Chip
-              key={r}
-              on={f.role === r}
-              label={STAFF_ROLE_LABELS[r]}
-              onClick={() => set({ role: f.role === r ? undefined : r })}
-            />
+        <div style={{ margin: "8px 0 16px" }}>
+          {ROLE_FAMILY_ORDER.map((fam) => (
+            <div key={fam} style={{ marginBottom: 10 }}>
+              <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
+                {ROLE_FAMILY_LABELS[fam]}
+              </div>
+              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+                {ROLE_FAMILIES[fam].map((r) => (
+                  <Chip
+                    key={r}
+                    on={f.role === r}
+                    label={STAFF_ROLE_LABELS[r]}
+                    onClick={() => set({ role: f.role === r ? undefined : r })}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 

@@ -31,6 +31,25 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   cleaner: "Уборщик",
 };
 
+// Семейства ролей («ёлочка») — группируем 12 ролей в 4 понятных блока.
+export type RoleFamily = "hall" | "bar" | "kitchen" | "house";
+
+export const ROLE_FAMILY_LABELS: Record<RoleFamily, string> = {
+  hall: "Зал",
+  bar: "Бар",
+  kitchen: "Кухня",
+  house: "Хозяйство",
+};
+
+export const ROLE_FAMILIES: Record<RoleFamily, StaffRole[]> = {
+  hall: ["waiter", "waiter_assistant", "hostess", "administrator"],
+  bar: ["barista", "bartender", "hookah"],
+  kitchen: ["cook", "dishwasher"],
+  house: ["cleaner", "courier", "florist"],
+};
+
+export const ROLE_FAMILY_ORDER: RoleFamily[] = ["hall", "bar", "kitchen", "house"];
+
 export type MedBookStatus = "yes" | "no" | "expired";
 
 export const MED_BOOK_LABELS: Record<MedBookStatus, string> = {

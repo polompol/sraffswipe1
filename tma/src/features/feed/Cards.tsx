@@ -228,8 +228,8 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
   const tags = s.experienceTags ?? [];
   const photos = s.photoUrls ?? [];
   const hasPhoto = !!photos[0];
-  // «Проверенный исполнитель» — действующая медкнижка + подтверждённый опыт.
-  const verified = s.medBook === "yes" && tags.includes("experienced");
+  // «Опытный» — по указанному опыту работника (мы не проверяем документы).
+  const experienced = tags.includes("experienced");
   return (
     <>
       <SwipePhoto src={hasPhoto ? photos[0] : undefined} initial={(s.name || "?").charAt(0)} />
@@ -247,7 +247,11 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
       <div className="swipe-body">
         <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span>{s.name}{age !== null ? `, ${age}` : ""}</span>
-          {verified && <VerifiedDot title="Проверенный исполнитель" />}
+          {experienced && (
+            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
+              Опытный
+            </span>
+          )}
           {s.selfEmployed && (
             <span className="tag" style={{ color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
               самозанятый

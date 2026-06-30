@@ -7,6 +7,7 @@ import {
   track,
 } from "@/api/endpoints";
 import { payWithStars, showBackButton, haptic } from "@/telegram/sdk";
+import { useSession } from "@/store/session";
 import { Button } from "@/components/Button";
 import { IconFire, IconBolt, IconShield, IconBriefcase } from "@/components/Icons";
 
@@ -24,10 +25,10 @@ const SUBSCRIPTIONS: PriceItem[] = [
   { id: "sub_business", title: "Business · месяц", subtitle: "Несколько точек, приоритет, 30 boost", priceRub: 4990 },
 ];
 
+// Платим только с работодателей. Супер-лайки соискателям не продаём (не
+// добавляем трение той стороне, которую растим). Остаётся boost для заведений.
 const STARS: PriceItem[] = [
   { id: "boost_24h", title: "Boost 24 часа", subtitle: "Вакансия в топе ленты сутки", priceStars: 150 },
-  { id: "super_5", title: "5 супер-лайков «Срочно»", subtitle: "Ваш отклик — первым", priceStars: 100 },
-  { id: "super_20", title: "20 супер-лайков", subtitle: "Выгоднее на 25%", priceStars: 300, badge: "−25%" },
 ];
 
 const VERIFY: PriceItem = {
@@ -39,6 +40,7 @@ const VERIFY: PriceItem = {
 
 export function PricingPage() {
   const nav = useNavigate();
+  const role = useSession((s) => s.role);
   const [status, setStatus] = useState<string | null>(null);
   const [email, setEmail] = useState("");
 
@@ -72,12 +74,37 @@ export function PricingPage() {
     }
   }
 
+  // Для соискателей всё бесплатно — ничего не продаём (растим эту сторону).
+  if (role === "seeker") {
+    return (
+      <div className="app">
+        <div className="page">
+          <h1 className="h1" style={{ marginBottom: 4 }}>Для соискателей — бесплатно</h1>
+          <p className="muted" style={{ marginBottom: 16 }}>
+            Поиск смен, отклики, чат и акты — без оплаты и без ограничений.
+          </p>
+          <div className="card">
+            <b>Откликайтесь сколько хотите</b>
+            <div className="muted" style={{ marginTop: 6 }}>
+              Мы зарабатываем на заведениях, а не на тех, кто ищет работу.
+            </div>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <Button variant="secondary" onClick={() => nav("/feed")}>
+              К ленте смен
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>Тарифы и буст</h1>
         <p className="muted" style={{ marginBottom: 16 }}>
-          Подписки — в рублях через ЮKassa. Boost и супер-лайки — за Telegram Stars.
+          Подписки — в рублях через ЮKassa. Boost — за Telegram Stars.
         </p>
 
         <label className="muted" htmlFor="rcpt" style={{ display: "block", marginBottom: 4 }}>
@@ -101,7 +128,7 @@ export function PricingPage() {
           ))}
         </div>
 
-        <h2 className="h2">Boost и супер-лайки</h2>
+        <h2 className="h2">Boost вакансий</h2>
         <div style={{ display: "grid", gap: 12, marginBottom: 24 }}>
           {STARS.map((p) => (
             <PriceRow key={p.id} item={p} onBuy={() => buyStars(p.id)} cta={`${p.priceStars} ★`} />

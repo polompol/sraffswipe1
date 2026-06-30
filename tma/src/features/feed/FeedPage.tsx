@@ -132,8 +132,7 @@ export function FeedPage() {
       // 402 — закончились супер-лайки (ведём в тарифы), 429 — слишком часто.
       const status = (e as { response?: { status?: number } })?.response?.status;
       if (status === 402) {
-        toast("Закончились супер-лайки", "error");
-        nav("/pricing");
+        toast("Срочные закончились — откликайтесь обычным лайком", "error");
       } else if (status === 429) {
         toast("Слишком часто — притормозите", "error");
       } else {
