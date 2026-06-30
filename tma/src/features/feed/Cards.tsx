@@ -46,6 +46,7 @@ function SwipePhoto({ src, initial }: { src?: string; initial: string }) {
   return (
     <div className="swipe-photo swipe-photo-fallback">
       <span className="swipe-initial">{initial}</span>
+      {src && state === "load" && <div className="photo-shimmer" />}
       {src && state !== "err" && (
         <img
           src={src}

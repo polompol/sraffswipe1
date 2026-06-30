@@ -52,7 +52,11 @@ export function Onboarding() {
           }}
         >
           {i === 0 || !slide.Icon ? (
-            <Logo size={100} color="var(--gold)" />
+            <div className="onb-demo" aria-hidden>
+              <Logo size={92} color="#fff" />
+              <span className="onb-demo-skip">✕</span>
+              <span className="onb-demo-like">♥</span>
+            </div>
           ) : (
             <span
               style={{
