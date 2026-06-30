@@ -164,6 +164,7 @@ export function FilterSheet({
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           <Chip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
           <Chip on={!!f.no_experience} label="Без опыта" onClick={() => set({ no_experience: !f.no_experience })} />
+          <Chip on={!!f.tips_only} label="С чаевыми" onClick={() => set({ tips_only: !f.tips_only })} />
           <Chip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
         </div>
 

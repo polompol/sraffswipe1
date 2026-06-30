@@ -47,9 +47,21 @@ def test_tips_roundtrips(client):
         "tips": "shared", "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
     assert vac["tips"] == "shared"
+    # вторая смена — без чаевых
+    client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "cook", "date": "2026-06-22", "start_time": 600,
+        "end_time": 1080, "rate": 300, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Тест2",
+    })
     seeker_token, _ = _auth(client, "seeker")
     feed = client.get("/vacancies", headers=_hdr(seeker_token)).json()
     assert any(v["tips"] == "shared" for v in feed)
+
+    # фильтр «с чаевыми» оставляет только смены с чаевыми
+    only = client.get(
+        "/vacancies?tips_only=true", headers=_hdr(seeker_token)
+    ).json()
+    assert only and all(v["tips"] != "none" for v in only)
 
 
 def _full_shift_cycle(client):

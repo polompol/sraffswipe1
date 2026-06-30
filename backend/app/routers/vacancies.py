@@ -97,6 +97,7 @@ def list_vacancies(
     no_med_book: bool = False,
     no_experience: bool = False,
     verified_only: bool = False,
+    tips_only: bool = False,
     sort: str = "distance",  # distance|rate|date
     mine: bool = False,
     db: Session = Depends(get_db),
@@ -134,6 +135,8 @@ def list_vacancies(
         query = query.filter(Vacancy.rate >= min_rate)
     if rate_type:
         query = query.filter(Vacancy.rate_type == rate_type)
+    if tips_only:
+        query = query.filter(Vacancy.tips != "none")
     if no_med_book:
         query = query.filter(Vacancy.require_med_book.is_(False))
     if no_experience:

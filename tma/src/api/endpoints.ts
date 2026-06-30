@@ -40,6 +40,7 @@ export interface FeedFilters {
   no_med_book?: boolean;
   no_experience?: boolean;
   verified_only?: boolean;
+  tips_only?: boolean;
   sort?: string;
 }
 

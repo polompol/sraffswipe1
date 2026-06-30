@@ -93,6 +93,7 @@ export function FeedPage() {
     (filters.rate_type ? 1 : 0) +
     (filters.no_med_book ? 1 : 0) +
     (filters.no_experience ? 1 : 0) +
+    (filters.tips_only ? 1 : 0) +
     (filters.verified_only ? 1 : 0);
 
   const { data, isLoading, isError, refetch } = useQuery({

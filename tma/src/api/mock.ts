@@ -186,6 +186,7 @@ export function fetchFeed(
   if (filters?.no_med_book) list = list.filter((v) => !v.requireMedBook);
   if (filters?.no_experience) list = list.filter((v) => !v.requireExperience);
   if (filters?.verified_only) list = list.filter((v) => v.employerVerified);
+  if (filters?.tips_only) list = list.filter((v) => v.tips && v.tips !== "none");
   if (filters?.date_from) list = list.filter((v) => v.date >= filters.date_from!);
   if (filters?.date_to) list = list.filter((v) => v.date <= filters.date_to!);
   if (filters?.sort === "rate") list.sort((a, b) => b.rate - a.rate);
