@@ -27,6 +27,7 @@ import {
   IconMedBook,
   IconMoney,
   IconPin,
+  IconHelp,
 } from "@/components/Icons";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
@@ -126,7 +127,7 @@ function VerifiedDot({ size = 20, title }: { size?: number; title: string }) {
   );
 }
 
-export function VacancyCardContent({ v }: { v: Vacancy }) {
+export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (v: Vacancy) => void }) {
   const urgent = isUrgentShift(v.date);
   const hasPhoto = !!v.interiorPhotoUrl;
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
@@ -141,6 +142,20 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           <IconMoney size={14} /> {rateLabel(v.rate, v.rateType)}
         </span>
         <CardFavButton id={v.id} />
+        {onDetails && (
+          <button
+            aria-label="Детали смены"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onDetails(v); }}
+            style={{
+              width: 38, height: 38, borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,.18)", background: "rgba(0,0,0,0.45)",
+              color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            }}
+          >
+            <IconHelp size={18} />
+          </button>
+        )}
         <span className="spacer" />
         {urgent ? (
           <span className="glass pulse" style={{ background: "rgba(165,28,48,.92)" }}>

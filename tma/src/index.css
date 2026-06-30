@@ -434,6 +434,37 @@ input:focus-visible {
   justify-content: center;
   overflow: hidden;
 }
+/* «Деньги рядом сейчас» — money-магнит наверху ленты */
+.money-near {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--crimson-dark), var(--gold));
+  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.22);
+  cursor: pointer;
+}
+.money-near-cap {
+  display: block;
+  font-size: 14px;
+  opacity: 0.92;
+}
+.money-near-sum {
+  display: block;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  margin: 2px 0;
+}
+.money-near-sub {
+  display: block;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
 /* Демо-карточка свайпа на онбординге — мягко качается, подсказывая жест */
 @keyframes swipeDemo {
   0%, 100% { transform: translateX(0) rotate(0deg); }

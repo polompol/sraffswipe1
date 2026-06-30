@@ -264,6 +264,118 @@ function LargeModeCard() {
   );
 }
 
+// Выключатель звуковых эффектов («ка-чинг» на мэтч/смену).
+function SoundCard() {
+  const [on, setOn] = useState(() => localStorage.getItem("ss_sound") !== "off");
+  function toggle() {
+    const next = !on;
+    setOn(next);
+    haptic("select");
+    if (next) localStorage.removeItem("ss_sound");
+    else localStorage.setItem("ss_sound", "off");
+  }
+  return (
+    <div className="card row" style={{ marginBottom: 16 }}>
+      <span style={{ flex: 1 }}>
+        <b>Звук</b>
+        <div className="muted">Приятный сигнал на мэтч и закрытие смены</div>
+      </span>
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label="Звук"
+        onClick={toggle}
+        style={{
+          width: 52, height: 30, borderRadius: 999, border: "none",
+          cursor: "pointer", position: "relative", transition: "background 0.2s",
+          background: on ? "var(--gold)" : "var(--border)",
+        }}
+      >
+        <span style={{ position: "absolute", top: 3, left: on ? 25 : 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+      </button>
+    </div>
+  );
+}
+
+// Цель заработка + кольцо прогресса (психология незавершённого действия —
+// люди возвращаются «дозакрыть кольцо», как в Apple Watch). Цель — локально.
+const GOAL_PRESETS = [20000, 30000, 50000, 100000];
+
+function GoalCard({ earned }: { earned: number }) {
+  const [goal, setGoal] = useState(
+    () => Number(localStorage.getItem("ss_goal")) || 30000,
+  );
+  const [editing, setEditing] = useState(false);
+  const pct = Math.max(0, Math.min(1, goal > 0 ? earned / goal : 0));
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  const left = Math.max(0, goal - earned);
+
+  function pick(g: number) {
+    setGoal(g);
+    localStorage.setItem("ss_goal", String(g));
+    setEditing(false);
+    haptic("select");
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="row" style={{ gap: 16, alignItems: "center" }}>
+        <svg width="124" height="124" viewBox="0 0 124 124" style={{ flex: "none" }}>
+          <circle cx="62" cy="62" r={R} fill="none" stroke="var(--border)" strokeWidth="11" />
+          <circle
+            cx="62" cy="62" r={R} fill="none"
+            stroke="var(--gold)" strokeWidth="11" strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={C * (1 - pct)}
+            transform="rotate(-90 62 62)"
+            style={{ transition: "stroke-dashoffset 1s ease" }}
+          />
+          <text x="62" y="58" textAnchor="middle" fontSize="22" fontWeight="800" fill="var(--text)">
+            {Math.round(pct * 100)}%
+          </text>
+          <text x="62" y="80" textAnchor="middle" fontSize="12" fill="var(--muted)">
+            цель
+          </text>
+        </svg>
+        <span style={{ flex: 1 }}>
+          <b>Цель на месяц: {goal.toLocaleString("ru-RU")} ₽</b>
+          <div className="muted" style={{ marginTop: 4 }}>
+            {left > 0
+              ? `Осталось ${left.toLocaleString("ru-RU")} ₽ — лови ещё смены`
+              : "Цель достигнута! 🔥 Поставь новую"}
+          </div>
+          <button
+            onClick={() => setEditing((v) => !v)}
+            style={{ marginTop: 8, background: "none", border: "none", color: "var(--gold)", fontWeight: 700, cursor: "pointer", padding: 0 }}
+          >
+            Изменить цель
+          </button>
+        </span>
+      </div>
+      {editing && (
+        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          {GOAL_PRESETS.map((g) => (
+            <button
+              key={g}
+              className="tag"
+              style={{
+                cursor: "pointer",
+                background: goal === g ? "var(--gold)" : "transparent",
+                color: goal === g ? "#fff" : "var(--text)",
+                borderColor: goal === g ? "var(--gold)" : "var(--border)",
+              }}
+              onClick={() => pick(g)}
+            >
+              {g.toLocaleString("ru-RU")} ₽
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
@@ -328,6 +440,8 @@ export function ProfilePage() {
       </div>
 
       {me && <EarningsCard me={me} />}
+
+      {role === "seeker" && me && <GoalCard earned={me.earnedRub ?? 0} />}
 
       {role === "seeker" && (
         <AvailabilityCard initial={me?.availableToday ?? false} />
@@ -429,6 +543,8 @@ export function ProfilePage() {
       </div>
 
       <LargeModeCard />
+
+      <SoundCard />
 
       {role === "seeker" && (
         <div style={{ marginBottom: 10 }}>

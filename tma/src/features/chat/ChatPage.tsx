@@ -5,6 +5,7 @@ import type { Message } from "@/types/domain";
 import { confirmShift, fetchMessages, sendMessage, track } from "@/api/endpoints";
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
+import { coin } from "@/lib/sfx";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Button } from "@/components/Button";
@@ -97,6 +98,7 @@ export function ChatPage() {
       await confirmShift(matchId);
       track("confirm");
       haptic("success");
+      coin();
       setConfirmed(true);
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
       qc.invalidateQueries({ queryKey: ["matches"] });

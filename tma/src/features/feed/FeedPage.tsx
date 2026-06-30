@@ -11,12 +11,15 @@ import {
   track,
   type FeedFilters,
 } from "@/api/endpoints";
-import { todayISO } from "@/lib/format";
+import { todayISO, estimatedPay } from "@/lib/format";
+import { CountUp } from "@/components/CountUp";
+import { pop } from "@/lib/sfx";
 import { LiveTicker } from "./LiveTicker";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
+import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
@@ -41,6 +44,7 @@ export function FeedPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const [match, setMatch] = useState<MatchModel | null>(null);
+  const [details, setDetails] = useState<Vacancy | null>(null);
   const [empty, setEmpty] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>(() => {
     const c = localStorage.getItem("ss_city");
@@ -101,6 +105,13 @@ export function FeedPage() {
     queryFn: () => fetchFeed(role, filters),
   });
 
+  // «Деньги рядом сейчас» — сумма оплат всех смен в ленте. Money-магнит:
+  // человек заходит посмотреть, сколько денег лежит рядом прямо сейчас.
+  const moneyNear =
+    isSeeker && data
+      ? (data as Vacancy[]).reduce((s, v) => s + estimatedPay(v), 0)
+      : 0;
+
   const { data: searches } = useQuery({
     queryKey: ["saved-searches"],
     queryFn: listSavedSearches,
@@ -114,6 +125,7 @@ export function FeedPage() {
       const res = await sendSwipe(item.id, targetType, dir);
       if (res.matched && res.matchId && isSeeker) {
         track("match");
+        pop();
         const v = item as Vacancy;
         setMatch({
           id: res.matchId,
@@ -205,6 +217,19 @@ export function FeedPage() {
         {isSeeker && <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>}
       </button>
 
+      {isSeeker && moneyNear > 0 && !empty && (
+        <div
+          className="money-near"
+          onClick={() => haptic("light")}
+        >
+          <span className="money-near-cap">Рядом сейчас смен на</span>
+          <span className="money-near-sum">
+            <CountUp value={moneyNear} /> ₽
+          </span>
+          <span className="money-near-sub">забери свою — листай ленту</span>
+        </div>
+      )}
+
       {isSeeker && <LiveTicker />}
 
       {isSeeker && (
@@ -282,7 +307,7 @@ export function FeedPage() {
             <SwipeDeck<Vacancy>
               items={data as Vacancy[]}
               keyOf={(v) => v.id}
-              renderCard={(v) => <VacancyCardContent v={v} />}
+              renderCard={(v) => <VacancyCardContent v={v} onDetails={setDetails} />}
               onSwipe={handleSwipe}
               onEmpty={() => setEmpty(true)}
               controllerRef={(fn) => (controller.current = fn)}
@@ -322,6 +347,7 @@ export function FeedPage() {
       )}
 
       {match && <MatchOverlay match={match} onClose={() => setMatch(null)} />}
+      {details && <ShiftDetailsSheet v={details} onClose={() => setDetails(null)} />}
       {filterOpen && (
         <FilterSheet
           value={filters}
