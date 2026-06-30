@@ -6,6 +6,7 @@ import {
   MED_BOOK_LABELS,
   PAY_METHOD_LABELS,
   STAFF_ROLE_LABELS,
+  TIPS_BADGE,
 } from "@/types/domain";
 import {
   estimatedPay,
@@ -198,6 +199,11 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           {PayGlyph && v.payMethod && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
               <PayGlyph size={16} /> {PAY_METHOD_LABELS[v.payMethod]}
+            </span>
+          )}
+          {v.tips && v.tips !== "none" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
+              <IconMoney size={16} /> {TIPS_BADGE[v.tips]}
             </span>
           )}
           {v.requireMedBook && (

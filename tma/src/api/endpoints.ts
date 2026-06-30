@@ -207,6 +207,7 @@ export interface VacancyInput {
   rate: number;
   rate_type: string;
   pay_method?: string;
+  tips?: string;
   description?: string;
   require_med_book?: boolean;
   address?: string;

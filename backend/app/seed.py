@@ -36,6 +36,7 @@ def run() -> None:
                     rate=350,
                     rate_type="perHour",
                     pay_method="card",
+                    tips="shared",
                     description="Бариста на утреннюю смену.",
                     require_med_book=True,
                     lat=55.7340,

@@ -63,6 +63,22 @@ export const PAY_METHOD_SHORT: Record<PayMethod, string> = {
   transfer: "Перевод после",
 };
 
+// Чаевые: их платят гости, не заведение. Поле информационное — но цепляет.
+export type TipsMode = "none" | "individual" | "shared";
+
+export const TIPS_LABELS: Record<TipsMode, string> = {
+  none: "Без чаевых",
+  individual: "Чаевые себе",
+  shared: "Чаевые поровну",
+};
+
+// Короткая подпись для бейджа на карточке (none — не показываем).
+export const TIPS_BADGE: Record<TipsMode, string> = {
+  none: "",
+  individual: "Чаевые — вам",
+  shared: "Чаевые — поровну",
+};
+
 export type MatchStatus = "matched" | "confirmed" | "completed";
 
 export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
@@ -124,6 +140,7 @@ export interface Vacancy {
   rate: number;
   rateType: RateType;
   payMethod?: PayMethod;
+  tips?: TipsMode;
   description: string;
   requireMedBook: boolean;
   requireExperience: boolean;

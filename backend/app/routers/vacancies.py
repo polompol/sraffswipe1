@@ -65,6 +65,7 @@ def _to_out(
         rate=v.rate,
         rate_type=v.rate_type,
         pay_method=v.pay_method,
+        tips=v.tips,
         description=v.description,
         require_med_book=v.require_med_book,
         require_experience=v.require_experience,

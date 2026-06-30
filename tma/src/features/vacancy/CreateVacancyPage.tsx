@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import type { PayMethod, RateType, StaffRole } from "@/types/domain";
-import { PAY_METHOD_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
+import type { PayMethod, RateType, StaffRole, TipsMode } from "@/types/domain";
+import { PAY_METHOD_LABELS, STAFF_ROLE_LABELS, TIPS_LABELS } from "@/types/domain";
 import {
   createVacancy,
   suggestAddress,
@@ -31,6 +31,7 @@ export function CreateVacancyPage() {
   const [rate, setRate] = useState("350");
   const [rateType, setRateType] = useState<RateType>("perHour");
   const [payMethod, setPayMethod] = useState<PayMethod>("cash");
+  const [tips, setTips] = useState<TipsMode>("none");
   const [city, setCity] = useState("Москва");
   const [address, setAddress] = useState("Москва, ул. Льва Толстого, 16");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -60,6 +61,7 @@ export function CreateVacancyPage() {
         rate: Number(rate) || 0,
         rate_type: rateType,
         pay_method: payMethod,
+        tips,
         description: desc,
         require_med_book: medBook,
         address,
@@ -157,6 +159,25 @@ export function CreateVacancyPage() {
               onClick={() => setPayMethod(p)}
             >
               {PAY_METHOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
+
+        <label className="muted">Чаевые (платят гости)</label>
+        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+          {(Object.keys(TIPS_LABELS) as TipsMode[]).map((t) => (
+            <button
+              key={t}
+              className="tag"
+              style={{
+                cursor: "pointer",
+                background: tips === t ? "var(--gold)" : "transparent",
+                color: tips === t ? "#fff" : "var(--text)",
+                borderColor: tips === t ? "var(--gold)" : "var(--border)",
+              }}
+              onClick={() => setTips(t)}
+            >
+              {TIPS_LABELS[t]}
             </button>
           ))}
         </div>

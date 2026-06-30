@@ -103,6 +103,9 @@ class Vacancy(Base):
     # Как и когда заведение платит — снимает страх №1 «вдруг кинут».
     # cash|card|transfer (наличными/на карту в день смены / перевод после).
     pay_method: Mapped[str] = mapped_column(String, default="cash")
+    # Чаевые (их платят гости, не заведение — поле информационное, но цепляет):
+    # none|individual|shared (нет / себе / поровну между сменой).
+    tips: Mapped[str] = mapped_column(String, default="none")
     description: Mapped[str] = mapped_column(Text, default="")
     require_med_book: Mapped[bool] = mapped_column(Boolean, default=False)
     require_experience: Mapped[bool] = mapped_column(Boolean, default=False)

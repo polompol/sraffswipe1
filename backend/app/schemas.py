@@ -48,6 +48,7 @@ class VacancyIn(BaseModel):
     rate: int = Field(ge=0, le=1_000_000)
     rate_type: Literal["perHour", "perShift"] = "perHour"
     pay_method: Literal["cash", "card", "transfer"] = "cash"
+    tips: Literal["none", "individual", "shared"] = "none"
     description: Longish = ""
     require_med_book: bool = False
     require_experience: bool = False
@@ -71,6 +72,7 @@ class VacancyOut(BaseModel):
     rate: int
     rate_type: str
     pay_method: str = "cash"
+    tips: str = "none"
     description: str
     require_med_book: bool
     require_experience: bool

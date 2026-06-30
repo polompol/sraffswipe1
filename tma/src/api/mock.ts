@@ -38,6 +38,7 @@ const VACANCIES: Vacancy[] = [
     rate: 350,
     rateType: "perHour",
     payMethod: "card",
+    tips: "shared",
     description:
       "Нужен бариста на утро. Дресс-код: чёрный верх, фартук выдаём. Напитки и обеды бесплатно.",
     requireMedBook: true,
@@ -67,8 +68,9 @@ const VACANCIES: Vacancy[] = [
     rate: 4500,
     rateType: "perShift",
     payMethod: "transfer",
+    tips: "individual",
     description:
-      "Срочно бармен на пятницу. Опыт классической барной карты обязателен. Чаевые поровну.",
+      "Срочно бармен на пятницу. Опыт классической барной карты обязателен.",
     requireMedBook: true,
     requireExperience: true,
     lat: 55.76,
@@ -309,6 +311,7 @@ export function createVacancy(input: VacancyInput): Promise<Vacancy> {
     rate: input.rate,
     rateType: input.rate_type as Vacancy["rateType"],
     payMethod: (input.pay_method as Vacancy["payMethod"]) ?? "cash",
+    tips: (input.tips as Vacancy["tips"]) ?? "none",
     description: input.description ?? "",
     requireMedBook: input.require_med_book ?? false,
     requireExperience: false,

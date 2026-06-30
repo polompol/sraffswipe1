@@ -36,6 +36,20 @@ def test_pay_method_defaults_to_cash(client):
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
     assert vac["pay_method"] == "cash"
+    assert vac["tips"] == "none"  # чаевые по умолчанию выключены
+
+
+def test_tips_roundtrips(client):
+    emp_token, _ = _auth(client, "employer")
+    vac = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "waiter", "date": "2026-06-22", "start_time": 600,
+        "end_time": 1080, "rate": 300, "rate_type": "perHour",
+        "tips": "shared", "lat": 55.75, "lng": 37.61, "address": "Тест",
+    }).json()
+    assert vac["tips"] == "shared"
+    seeker_token, _ = _auth(client, "seeker")
+    feed = client.get("/vacancies", headers=_hdr(seeker_token)).json()
+    assert any(v["tips"] == "shared" for v in feed)
 
 
 def _full_shift_cycle(client):
