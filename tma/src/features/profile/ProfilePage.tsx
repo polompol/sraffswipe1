@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
 import {
   fetchAdminOverview,
@@ -8,12 +8,10 @@ import {
   fetchMe,
   fetchReferral,
   setAvailability,
-  submitVerifyDoc,
   verifyEmployer,
   type Me,
   type VerifyResult,
 } from "@/api/endpoints";
-import { PhotoUpload } from "@/components/PhotoUpload";
 import { share, haptic } from "@/telegram/sdk";
 import { applyTheme, currentTheme } from "@/lib/theme";
 import {
@@ -248,57 +246,6 @@ function LargeModeCard() {
   );
 }
 
-// Верификация исполнителя: загрузка медкнижки → «на проверке» → «проверено».
-// Проверенных зовут чаще — главный знак доверия для соискателя.
-function VerifyCard({ status }: { status?: string }) {
-  const qc = useQueryClient();
-  const [url, setUrl] = useState("");
-
-  if (status === "verified") {
-    return (
-      <div className="card row" style={{ marginBottom: 16, gap: 10, borderColor: "var(--super)" }}>
-        <span style={{ color: "var(--super)", display: "inline-flex" }}><IconShield size={22} /></span>
-        <span style={{ flex: 1 }}>
-          <b>Медкнижка проверена</b>
-          <div className="muted">Вы — проверенный исполнитель</div>
-        </span>
-      </div>
-    );
-  }
-  if (status === "pending") {
-    return (
-      <div className="card" style={{ marginBottom: 16 }}>
-        <b>Медкнижка на проверке</b>
-        <div className="muted">Обычно до 24 часов — пришлём результат</div>
-      </div>
-    );
-  }
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <b style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <IconShield size={18} /> Подтвердите медкнижку
-      </b>
-      <div className="muted" style={{ margin: "6px 0 10px" }}>
-        Проверенных исполнителей зовут чаще. Загрузите фото медкнижки — мы проверим.
-      </div>
-      <PhotoUpload
-        label="Фото медкнижки"
-        value={url}
-        onChange={async (u) => {
-          setUrl(u);
-          try {
-            await submitVerifyDoc(u);
-            qc.invalidateQueries({ queryKey: ["me"] });
-            toast("Отправлено на проверку", "success");
-          } catch {
-            toast("Не удалось отправить", "error");
-          }
-        }}
-      />
-    </div>
-  );
-}
-
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
@@ -367,8 +314,6 @@ export function ProfilePage() {
       {role === "seeker" && (
         <AvailabilityCard initial={me?.availableToday ?? false} />
       )}
-
-      {role === "seeker" && <VerifyCard status={me?.verifyStatus} />}
 
       {!!me?.incomingLikes && me.incomingLikes > 0 && (
         <div

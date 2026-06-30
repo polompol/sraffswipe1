@@ -53,9 +53,6 @@ class User(Base):
     # «Готов выйти сегодня»: соискатель в один тап показывает доступность —
     # заведение со срочной сменой видит таких людей первыми.
     available_today: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Фото медкнижки на верификацию + её статус (none|pending|verified).
-    med_book_photo: Mapped[str] = mapped_column(String, default="")
-    verify_status: Mapped[str] = mapped_column(String, default="none")
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 

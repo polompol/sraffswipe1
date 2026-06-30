@@ -134,7 +134,6 @@ export interface Me {
   earnedRub?: number;
   shiftsDone?: number;
   availableToday?: boolean;
-  verifyStatus?: string; // none|pending|verified
 }
 
 export async function fetchMe(): Promise<Me> {
@@ -472,15 +471,6 @@ export async function addFavorite(vacancyId: string): Promise<void> {
 export async function removeFavorite(vacancyId: string): Promise<void> {
   if (!USE_BACKEND) return mock.removeFavorite(vacancyId);
   await api.delete(`/favorites/${vacancyId}`);
-}
-
-/** Загрузить фото медкнижки на верификацию исполнителя. */
-export async function submitVerifyDoc(photoUrl: string): Promise<string> {
-  if (!USE_BACKEND) return mock.submitVerifyDoc(photoUrl);
-  const { data } = await api.post<{ verifyStatus: string }>("/me/verify-doc", {
-    photo_url: photoUrl,
-  });
-  return data.verifyStatus;
 }
 
 export interface VerifyResult {

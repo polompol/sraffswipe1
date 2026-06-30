@@ -296,7 +296,6 @@ const meProfile: Me = {
   earnedRub: 18400,
   shiftsDone: 7,
   availableToday: false,
-  verifyStatus: "none",
 };
 
 export function createVacancy(input: VacancyInput): Promise<Vacancy> {
@@ -498,11 +497,6 @@ export function removeFavorite(id: string): Promise<void> {
   favorites.delete(id);
   return Promise.resolve();
 }
-export function submitVerifyDoc(_photoUrl: string): Promise<string> {
-  meProfile.verifyStatus = "pending";
-  return Promise.resolve("pending");
-}
-
 export function fetchActivity() {
   return Promise.resolve({
     items: [

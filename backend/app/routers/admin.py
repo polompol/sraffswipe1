@@ -182,21 +182,6 @@ def _resolve_reports_for(db: Session, target_id: str) -> None:
         r.status = "reviewed"
 
 
-@router.post("/users/{user_id}/verify")
-def verify_user_doc(
-    user_id: str,
-    db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
-):
-    """Подтвердить медкнижку соискателя (после проверки фото)."""
-    u = db.get(User, user_id)
-    if u is None:
-        raise HTTPException(status_code=404, detail="Соискатель не найден")
-    u.verify_status = "verified"
-    db.commit()
-    return {"ok": True, "verifyStatus": u.verify_status}
-
-
 @router.post("/users/{user_id}/block")
 def block_user(
     user_id: str,

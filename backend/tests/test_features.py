@@ -164,30 +164,6 @@ def test_favorite_unknown_vacancy_404(client):
     assert r.status_code == 404
 
 
-def _verify_status(client, token):
-    return client.get("/me", headers=_hdr(token)).json()["verifyStatus"]
-
-
-def test_worker_verification_flow(client):
-    seeker_token, sid = _auth(client, "seeker")
-    assert _verify_status(client, seeker_token) == "none"
-    r = client.post("/me/verify-doc", headers=_hdr(seeker_token),
-                    json={"photo_url": "https://example.com/med.jpg"})
-    assert r.status_code == 200 and r.json()["verifyStatus"] == "pending"
-    assert _verify_status(client, seeker_token) == "pending"
-    # админ подтверждает (tg_id=0 — админ в тестах)
-    adm = client.post(f"/admin/users/{sid}/verify", headers=_hdr(seeker_token))
-    assert adm.status_code == 200
-    assert _verify_status(client, seeker_token) == "verified"
-
-
-def test_verify_doc_employer_forbidden(client):
-    emp_token, _ = _auth(client, "employer")
-    r = client.post("/me/verify-doc", headers=_hdr(emp_token),
-                    json={"photo_url": "x"})
-    assert r.status_code == 403
-
-
 def test_digest_and_reminders_logic(client):
     from datetime import UTC, datetime
 
