@@ -123,6 +123,25 @@ def test_availability_employer_forbidden(client):
     assert r.status_code == 403
 
 
+def test_profile_completion_grows_as_fields_fill(client):
+    # Свежий соискатель: заполнен только город (роль по умолчанию проставляется
+    # при регистрации), потому анкета неполная.
+    seeker_token, _ = _auth(client, "seeker")
+    start = client.get("/me", headers=_hdr(seeker_token)).json()[
+        "profileCompletion"]
+    assert 0 <= start < 100
+    # Дозаполняем ключевые поля — процент растёт до 100.
+    client.put("/me", headers=_hdr(seeker_token), json={
+        "birth_date": "2000-01-01", "city": "Москва",
+        "roles": ["barista"], "photo_url": "https://x/p.jpg",
+        "about": "Опыт 2 года",
+    })
+    full = client.get("/me", headers=_hdr(seeker_token)).json()[
+        "profileCompletion"]
+    assert full == 100
+    assert full > start
+
+
 def test_activity_feed_shape(client):
     seeker_token, _ = _auth(client, "seeker")
     r = client.get("/activity/recent", headers=_hdr(seeker_token))

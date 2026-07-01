@@ -376,6 +376,50 @@ function GoalCard({ earned }: { earned: number }) {
   );
 }
 
+// Заполненность анкеты. С фото и опытом зовут заметно чаще — показываем
+// прогресс и мягко подталкиваем дополнить недостающее.
+function ProfileMeter({ pct }: { pct: number }) {
+  const nav = useNavigate();
+  if (pct >= 100) return null;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <b>Профиль готов на {pct}%</b>
+        <span className="spacer" />
+        <span className="muted" style={{ fontSize: 13 }}>
+          {pct >= 80 ? "почти всё" : "заполни до конца"}
+        </span>
+      </div>
+      <div
+        style={{
+          height: 8,
+          borderRadius: 999,
+          background: "var(--border)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            borderRadius: 999,
+            background: "var(--grad-brand)",
+            transition: "width 0.8s ease",
+          }}
+        />
+      </div>
+      <div className="muted" style={{ margin: "10px 0 12px" }}>
+        Анкеты с фото и опытом зовут на смены заметно чаще.
+      </div>
+      <Button variant="secondary" onClick={() => nav("/profile/edit")}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <IconEdit size={18} /> Дополнить профиль
+        </span>
+      </Button>
+    </div>
+  );
+}
+
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
@@ -440,6 +484,10 @@ export function ProfilePage() {
       </div>
 
       {me && <EarningsCard me={me} />}
+
+      {role === "seeker" && me && (
+        <ProfileMeter pct={me.profileCompletion ?? 100} />
+      )}
 
       {role === "seeker" && me && <GoalCard earned={me.earnedRub ?? 0} />}
 

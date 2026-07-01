@@ -45,8 +45,25 @@ export function MatchOverlay({
       <div style={{ fontSize: 44, fontWeight: 900, color: "var(--gold)", position: "relative" }}>
         Это мэтч!
       </div>
-      <div style={{ margin: "12px 0", position: "relative", color: "var(--gold)" }}>
-        <IconTabMatches size={68} active />
+      <div style={{ margin: "12px 0", position: "relative" }}>
+        {match.companyPhotoUrl ? (
+          <img
+            className="match-avatar"
+            src={match.companyPhotoUrl}
+            alt={match.companyName ?? "заведение"}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              e.currentTarget.nextElementSibling?.removeAttribute("hidden");
+            }}
+          />
+        ) : null}
+        <div
+          className="match-avatar"
+          hidden={!!match.companyPhotoUrl}
+          style={{ color: "#fff" }}
+        >
+          <IconTabMatches size={54} active />
+        </div>
       </div>
       <p style={{ color: "#e6dccd", maxWidth: 300 }}>
         Вы и «{match.companyName ?? "заведение"}» понравились друг другу

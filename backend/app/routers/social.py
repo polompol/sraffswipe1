@@ -106,6 +106,7 @@ class MeOut(BaseModel):
     earnedRub: int = 0  # заработано через сервис (мотивация доходом)
     shiftsDone: int = 0  # сколько смен закрыто
     availableToday: bool = False  # «Готов выйти сегодня» (только соискатель)
+    profileCompletion: int = 100  # % заполненности анкеты соискателя
 
 
 def _streak(db: Session, owner_id: str) -> int:
@@ -177,6 +178,18 @@ def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
     return shifts, earned
 
 
+def _profile_completion(u) -> int:
+    """% заполненности анкеты — ключевые поля, что влияют на мэтчи."""
+    fields = [
+        bool(u.birth_date),
+        bool(u.city),
+        bool(u.roles),
+        bool(u.photo_urls),
+        bool(u.about),
+    ]
+    return round(sum(fields) / len(fields) * 100)
+
+
 @router.get("/me", response_model=MeOut)
 def me(
     principal: dict = Depends(current_principal), db: Session = Depends(get_db)
@@ -204,6 +217,7 @@ def me(
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
         availableToday=u.available_today,
+        profileCompletion=_profile_completion(u),
     )
 
 

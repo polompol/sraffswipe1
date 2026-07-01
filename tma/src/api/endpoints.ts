@@ -143,6 +143,7 @@ export interface Me {
   earnedRub?: number;
   shiftsDone?: number;
   availableToday?: boolean;
+  profileCompletion?: number;
 }
 
 export async function fetchMe(): Promise<Me> {

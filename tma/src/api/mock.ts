@@ -306,6 +306,7 @@ const meProfile: Me = {
   earnedRub: 18400,
   shiftsDone: 7,
   availableToday: false,
+  profileCompletion: 70,
 };
 
 export function createVacancy(input: VacancyInput): Promise<Vacancy> {
