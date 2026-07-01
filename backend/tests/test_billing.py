@@ -170,8 +170,10 @@ def _new_vacancy(client, headers, role="barista"):
 def test_free_plan_vacancy_limit(client):
     r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    assert _new_vacancy(client, headers).status_code == 201
-    # Вторая вакансия на Free — запрещена (402).
+    # Free-план на пилоте: до 5 активных вакансий (наполняем ленту сменами).
+    for _ in range(5):
+        assert _new_vacancy(client, headers).status_code == 201
+    # Шестая вакансия на Free — запрещена (402).
     assert _new_vacancy(client, headers).status_code == 402
 
 

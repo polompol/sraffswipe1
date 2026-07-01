@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import type { MatchModel, Seeker, SwipeDirection, Vacancy } from "@/types/domain";
 import { useSession } from "@/store/session";
 import {
+  createSavedSearch,
   fetchFeed,
   fetchMe,
   listSavedSearches,
@@ -70,6 +71,28 @@ export function FeedPage() {
     else localStorage.removeItem("ss_city");
     setFilters(f);
     setEmpty(false);
+  }
+
+  // Пустая лента на старте — не тупик: превращаем в подписку на уведомления.
+  // Как только заведение заведёт подходящую смену, бот напишет человеку.
+  const [subscribing, setSubscribing] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+  async function notifyOnNewShifts() {
+    setSubscribing(true);
+    try {
+      await createSavedSearch(
+        filters.city ? `Смены · ${filters.city}` : "Смены рядом",
+        filters,
+        true,
+      );
+      qc.invalidateQueries({ queryKey: ["saved-searches"] });
+      setSubscribed(true);
+      toast("Готово! Напишем в бота, как появится смена рядом", "success");
+    } catch {
+      toast("Не удалось. Попробуйте ещё раз", "error");
+    } finally {
+      setSubscribing(false);
+    }
   }
 
   // Быстрый фильтр «Сегодня» — главный крючок: смены, которые горят сейчас.
@@ -285,12 +308,25 @@ export function FeedPage() {
               : "Кандидаты закончились"}
           </h2>
           <p className="muted">
-            {isSeeker && filters.city
-              ? "Попробуйте другой город или загляните позже"
+            {isSeeker
+              ? "Оставь подписку — и мы напишем в бота, как только смена появится рядом"
               : "Загляните позже — появляются новые"}
           </p>
+          {isSeeker && (
+            <button
+              className="btn"
+              style={{ marginTop: 14 }}
+              disabled={subscribing || subscribed}
+              onClick={notifyOnNewShifts}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconBell size={18} />
+                {subscribed ? "Подписка включена" : "Сообщить о новых сменах"}
+              </span>
+            </button>
+          )}
           {isSeeker && filters.city && (
-            <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setFilterOpen(true)}>
+            <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => setFilterOpen(true)}>
               Сменить город
             </button>
           )}
