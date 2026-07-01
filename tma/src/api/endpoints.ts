@@ -42,6 +42,9 @@ export interface FeedFilters {
   verified_only?: boolean;
   tips_only?: boolean;
   sort?: string;
+  radius_km?: number;
+  lat?: number;
+  lng?: number;
 }
 
 export async function fetchFeed(

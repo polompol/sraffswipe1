@@ -13,6 +13,7 @@ import {
   type FeedFilters,
 } from "@/api/endpoints";
 import { todayISO, estimatedPay } from "@/lib/format";
+import { useGeo } from "@/lib/useGeo";
 import { CountUp } from "@/components/CountUp";
 import { pop } from "@/lib/sfx";
 import { LiveTicker } from "./LiveTicker";
@@ -123,9 +124,15 @@ export function FeedPage() {
     (filters.tips_only ? 1 : 0) +
     (filters.verified_only ? 1 : 0);
 
+  // Геолокация устройства → «смены рядом» (расстояние + сортировка «Ближе» +
+  // фильтр радиуса). Спрашиваем только у соискателя; отказ — работаем без.
+  const geo = useGeo(isSeeker);
+  const feedFilters =
+    isSeeker && geo ? { ...filters, lat: geo.lat, lng: geo.lng } : filters;
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["feed", role, filters],
-    queryFn: () => fetchFeed(role, filters),
+    queryKey: ["feed", role, feedFilters],
+    queryFn: () => fetchFeed(role, feedFilters),
   });
 
   // «Деньги рядом сейчас» — сумма оплат всех смен в ленте. Money-магнит:
@@ -387,6 +394,7 @@ export function FeedPage() {
       {filterOpen && (
         <FilterSheet
           value={filters}
+          hasLocation={!!geo}
           onClose={() => {
             setFilterOpen(false);
             qc.invalidateQueries({ queryKey: ["saved-searches"] });

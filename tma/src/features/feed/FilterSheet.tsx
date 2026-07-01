@@ -43,10 +43,12 @@ export function FilterSheet({
   value,
   onApply,
   onClose,
+  hasLocation = false,
 }: {
   value: FeedFilters;
   onApply: (f: FeedFilters) => void;
   onClose: () => void;
+  hasLocation?: boolean;
 }) {
   const [f, setF] = useState<FeedFilters>({ sort: "distance", ...value });
   const [saved, setSaved] = useState(false);
@@ -197,6 +199,26 @@ export function FilterSheet({
             <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
           ))}
         </div>
+
+        <label className="muted" htmlFor="radius">
+          Радиус{hasLocation ? `: ${f.radius_km ?? 25} км` : ""}
+        </label>
+        {hasLocation ? (
+          <input
+            id="radius"
+            type="range"
+            min={1}
+            max={30}
+            step={1}
+            value={f.radius_km ?? 25}
+            onChange={(e) => set({ radius_km: Number(e.target.value) })}
+            style={{ width: "100%", margin: "8px 0 18px", accentColor: "var(--gold)" }}
+          />
+        ) : (
+          <div className="muted" style={{ fontSize: 13, margin: "6px 0 18px" }}>
+            Разреши доступ к геолокации, чтобы фильтровать смены по расстоянию.
+          </div>
+        )}
 
         <button
           className="btn ghost"

@@ -199,6 +199,35 @@ def test_invites_shows_employers_who_liked_me(client):
     assert all(v["id"] != vac["id"] for v in inv2)
 
 
+def test_feed_radius_filters_by_distance(client):
+    emp_token, _ = _auth(client, "employer")
+    near = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "lat": 55.75, "lng": 37.61,
+        "address": "Рядом",
+    }).json()
+    far = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "lat": 56.30, "lng": 38.60,
+        "address": "Далеко",
+    }).json()
+    seeker_token, _ = _auth(client, "seeker")
+    base = {"lat": 55.75, "lng": 37.61}
+    # Малый радиус — только ближняя смена.
+    tight = client.get("/vacancies", headers=_hdr(seeker_token),
+                       params={**base, "radius_km": 5}).json()
+    ids = {v["id"] for v in tight}
+    assert near["id"] in ids and far["id"] not in ids
+    # Большой радиус — обе.
+    wide = client.get("/vacancies", headers=_hdr(seeker_token),
+                      params={**base, "radius_km": 300}).json()
+    wide_ids = {v["id"] for v in wide}
+    assert near["id"] in wide_ids and far["id"] in wide_ids
+    # У ближней смены посчитано расстояние (не null).
+    near_row = next(v for v in wide if v["id"] == near["id"])
+    assert near_row["distance_km"] is not None
+
+
 def test_invites_forbidden_for_employer(client):
     emp_token, _ = _auth(client, "employer")
     assert client.get(

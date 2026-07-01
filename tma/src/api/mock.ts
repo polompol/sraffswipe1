@@ -193,6 +193,8 @@ export function fetchFeed(
   if (filters?.tips_only) list = list.filter((v) => v.tips && v.tips !== "none");
   if (filters?.date_from) list = list.filter((v) => v.date >= filters.date_from!);
   if (filters?.date_to) list = list.filter((v) => v.date <= filters.date_to!);
+  if (filters?.radius_km != null && filters.lat != null)
+    list = list.filter((v) => (v.distanceKm ?? 0) <= filters.radius_km!);
   if (filters?.sort === "rate") list.sort((a, b) => b.rate - a.rate);
   else if (filters?.sort === "date") list.sort((a, b) => a.date.localeCompare(b.date));
   else if (filters?.sort === "distance")
