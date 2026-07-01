@@ -1,0 +1,19 @@
+# Caddy: авто-HTTPS (Let's Encrypt) на один домен.
+#   https://ДОМЕН/api/*  → FastAPI (префикс /api снимается)
+#   https://ДОМЕН/*      → статика Telegram Mini App (nginx)
+# WebSocket-чат (/api/ws/...) проксируется тем же reverse_proxy автоматически.
+# Домен подставляется из переменной DOMAIN (см. .env).
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Бэкенд. handle_path снимает префикс /api, дальше FastAPI видит свои пути
+	# (/me, /vacancies, /auth/..., /ws/chat/...).
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Всё остальное — собранный Mini App.
+	handle {
+		reverse_proxy tma:80
+	}
+}

@@ -1,0 +1,104 @@
+# Прод-стек StaffSwipe для одного VPS: Caddy (авто-HTTPS) + API + бот + БД + SPA.
+# Всё на одном домене, весь трафик по HTTPS (требование Telegram Mini Apps).
+#
+# Запуск:
+#   cp .env.example .env
+#   nano .env                       # заполнить DOMAIN, токен бота, секреты
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Смотреть логи:   docker compose -f docker-compose.prod.yml logs -f api
+# Обновить:        git pull && docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  # Реверс-прокси + автоматический TLS-сертификат Let's Encrypt.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - tma
+
+  # PostgreSQL + PostGIS (гео-поиск смен рядом).
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: staffswipe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: staffswipe
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staffswipe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # FastAPI. При старте прогоняет миграции и проверяет безопасность конфига
+  # (DEV_MODE=false → требует заданные секреты, иначе не поднимется).
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://staffswipe:${POSTGRES_PASSWORD}@db:5432/staffswipe
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
+      BOT_USERNAME: ${BOT_USERNAME:?set BOT_USERNAME in .env}
+      # Прод-режим: строгая проверка подписи Telegram, без dev-лазеек.
+      DEV_MODE: "false"
+      ALLOW_INSECURE_TELEGRAM_AUTH: "false"
+      MINI_APP_URL: https://${DOMAIN}
+      ALLOWED_ORIGINS: https://${DOMAIN}
+      # Опциональное (можно оставить пустым на пилоте).
+      ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
+      DADATA_TOKEN: ${DADATA_TOKEN:-}
+      DADATA_SECRET: ${DADATA_SECRET:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_KEY: ${S3_KEY:-}
+      S3_SECRET: ${S3_SECRET:-}
+      S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Telegram-бот: кнопка запуска Mini App, платежи Stars, уведомления.
+  bot:
+    build: ./backend/bot
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
+      MINI_APP_URL: https://${DOMAIN}
+      API_BASE_URL: http://api:8000
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET in .env}
+    depends_on:
+      - api
+
+  # Собранная статика Mini App. VITE_*-переменные «запекаются» в бандл на этапе
+  # сборки образа (build args), поэтому важен пересбор при смене домена.
+  tma:
+    build:
+      context: ./tma
+      args:
+        VITE_USE_BACKEND: "true"
+        VITE_API_BASE_URL: https://${DOMAIN}/api
+        VITE_OFFER_URL: ${VITE_OFFER_URL:-}
+        VITE_PRIVACY_URL: ${VITE_PRIVACY_URL:-}
+        VITE_SUPPORT_URL: ${VITE_SUPPORT_URL:-}
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
