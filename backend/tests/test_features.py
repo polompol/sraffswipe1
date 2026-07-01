@@ -199,6 +199,32 @@ def test_invites_shows_employers_who_liked_me(client):
     assert all(v["id"] != vac["id"] for v in inv2)
 
 
+def test_candidate_filters_role_district_available(client):
+    seeker_token, sid = _auth(client, "seeker")
+    client.put("/me", headers=_hdr(seeker_token), json={
+        "roles": ["bartender"], "city": "Москва", "district": "Тверской",
+    })
+    client.post("/me/available", headers=_hdr(seeker_token), json={"available": True})
+    emp_token, _ = _auth(client, "employer")
+
+    def ids(**params):
+        rows = client.get(
+            "/candidates", headers=_hdr(emp_token), params=params
+        ).json()
+        return {c["id"] for c in rows}
+
+    # По роли: совпадающая — есть, другая — нет.
+    assert sid in ids(role="bartender")
+    assert sid not in ids(role="cook")
+    # По району.
+    assert sid in ids(district="Тверской")
+    assert sid not in ids(district="Басманный")
+    # «Готов сегодня» — включён.
+    assert sid in ids(available_today=True)
+    # «Надёжные» (без неявок): 0 смен → без неявок → показываем.
+    assert sid in ids(reliable_only=True)
+
+
 def test_feed_radius_filters_by_distance(client):
     emp_token, _ = _auth(client, "employer")
     near = client.post("/vacancies", headers=_hdr(emp_token), json={

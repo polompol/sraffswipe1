@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import type { MatchModel, Seeker, SwipeDirection, Vacancy } from "@/types/domain";
+import type { MatchModel, Seeker, StaffRole, SwipeDirection, Vacancy } from "@/types/domain";
+import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
 import {
   createSavedSearch,
@@ -21,6 +22,7 @@ import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
+import { CandidateFilterSheet } from "./CandidateFilterSheet";
 import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
@@ -113,16 +115,20 @@ export function FeedPage() {
   );
   const controller = useRef<((dir: SwipeDirection) => void) | null>(null);
 
-  const activeFilterCount =
-    (filters.role ? 1 : 0) +
-    (filters.city ? 1 : 0) +
-    (filters.min_rate ? 1 : 0) +
-    (filters.date_from ? 1 : 0) +
-    (filters.rate_type ? 1 : 0) +
-    (filters.no_med_book ? 1 : 0) +
-    (filters.no_experience ? 1 : 0) +
-    (filters.tips_only ? 1 : 0) +
-    (filters.verified_only ? 1 : 0);
+  const activeFilterCount = isSeeker
+    ? (filters.role ? 1 : 0) +
+      (filters.city ? 1 : 0) +
+      (filters.min_rate ? 1 : 0) +
+      (filters.date_from ? 1 : 0) +
+      (filters.rate_type ? 1 : 0) +
+      (filters.no_med_book ? 1 : 0) +
+      (filters.no_experience ? 1 : 0) +
+      (filters.tips_only ? 1 : 0) +
+      (filters.verified_only ? 1 : 0)
+    : (filters.role ? 1 : 0) +
+      (filters.district ? 1 : 0) +
+      (filters.available_today ? 1 : 0) +
+      (filters.reliable_only ? 1 : 0);
 
   // Геолокация устройства → «смены рядом» (расстояние + сортировка «Ближе» +
   // фильтр радиуса). Спрашиваем только у соискателя; отказ — работаем без.
@@ -218,19 +224,17 @@ export function FeedPage() {
             {view === "swipe" ? <IconList size={22} /> : <IconCards size={22} />}
           </button>
         )}
-        {isSeeker && (
-          <button
-            className="icon-btn"
-            aria-label="Фильтры"
-            style={{ color: activeFilterCount ? "var(--gold)" : undefined }}
-            onClick={() => setFilterOpen(true)}
-          >
-            <IconFilter size={22} />
-            {activeFilterCount > 0 && (
-              <span className="icon-badge">{activeFilterCount}</span>
-            )}
-          </button>
-        )}
+        <button
+          className="icon-btn"
+          aria-label="Фильтры"
+          style={{ color: activeFilterCount ? "var(--gold)" : undefined }}
+          onClick={() => setFilterOpen(true)}
+        >
+          <IconFilter size={22} />
+          {activeFilterCount > 0 && (
+            <span className="icon-badge">{activeFilterCount}</span>
+          )}
+        </button>
         <button className="icon-btn" aria-label="Тарифы и буст" onClick={() => nav("/pricing")}>
           <IconBolt size={22} />
         </button>
@@ -238,13 +242,14 @@ export function FeedPage() {
 
       <button
         className="feed-loc"
-        onClick={() => isSeeker && setFilterOpen(true)}
-        aria-label={isSeeker ? "Сменить город и фильтры" : undefined}
+        onClick={() => setFilterOpen(true)}
+        aria-label={isSeeker ? "Сменить город и фильтры" : "Фильтры кандидатов"}
       >
         {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
         {isSeeker && filters.city ? ` · ${filters.city}` : ""}
+        {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
         {typeof data?.length === "number" ? ` · ${data.length}` : ""}
-        {isSeeker && <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>}
+        <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>
       </button>
 
       {isSeeker && moneyNear > 0 && !empty && (
@@ -391,7 +396,7 @@ export function FeedPage() {
 
       {match && <MatchOverlay match={match} onClose={() => setMatch(null)} />}
       {details && <ShiftDetailsSheet v={details} onClose={() => setDetails(null)} />}
-      {filterOpen && (
+      {filterOpen && isSeeker && (
         <FilterSheet
           value={filters}
           hasLocation={!!geo}
@@ -403,6 +408,16 @@ export function FeedPage() {
             applyFilters(f);
             setFilterOpen(false);
             qc.invalidateQueries({ queryKey: ["saved-searches"] });
+          }}
+        />
+      )}
+      {filterOpen && !isSeeker && (
+        <CandidateFilterSheet
+          value={filters}
+          onClose={() => setFilterOpen(false)}
+          onApply={(f) => {
+            applyFilters(f);
+            setFilterOpen(false);
           }}
         />
       )}

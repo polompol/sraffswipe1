@@ -64,8 +64,16 @@ def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]
 
 @router.get("/candidates", response_model=list[CandidateOut])
 def list_candidates(
-    principal: dict = Depends(current_principal), db: Session = Depends(get_db)
+    role: str | None = None,
+    district: str | None = None,
+    available_today: bool = False,
+    reliable_only: bool = False,
+    principal: dict = Depends(current_principal),
+    db: Session = Depends(get_db),
 ):
+    """Лента кандидатов для заведения. Фильтры: роль, район, «готов сегодня»,
+    «надёжные» (без неявок). Роль/район фильтруем в Python — CSV-роли и
+    кириллица корректнее, чем LIKE/lower() на SQLite."""
     # Ленту кандидатов с ПДн видит только работодатель.
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
@@ -81,12 +89,31 @@ def list_candidates(
     q = db.query(User).filter(User.blocked.is_(False))
     if swiped:
         q = q.filter(User.id.notin_(swiped))
-    users = (
+    if available_today:
+        q = q.filter(User.available_today.is_(True))
+    rows = (
         q.order_by(User.available_today.desc(), User.rating.desc())
-        .limit(50)
+        .limit(200)
         .all()
     )
+    role_f = role.strip() if role else None
+    dist_f = district.strip().lower() if district else None
+
+    def _match(u: User) -> bool:
+        if role_f and role_f not in _csv(u.roles):
+            return False
+        if dist_f and (u.district or "").strip().lower() != dist_f:
+            return False
+        return True
+
+    users = [u for u in rows if _match(u)][:50]
     rel = _reliability(db, [u.id for u in users])
+    if reliable_only:
+        # Надёжный = без единой неявки (вышел на все подтверждённые смены).
+        users = [
+            u for u in users
+            if rel.get(u.id, (0, 0))[0] == rel.get(u.id, (0, 0))[1]
+        ]
     return [
         CandidateOut(
             id=u.id,

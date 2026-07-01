@@ -178,7 +178,19 @@ export function fetchFeed(
   role: AppRole,
   filters?: FeedFilters,
 ): Promise<Vacancy[] | Seeker[]> {
-  if (role !== "seeker") return Promise.resolve([...SEEKERS]);
+  if (role !== "seeker") {
+    let cands = [...SEEKERS];
+    if (filters?.role)
+      cands = cands.filter((s) => (s.roles as string[]).includes(filters.role!));
+    if (filters?.district) {
+      const d = filters.district.trim().toLowerCase();
+      cands = cands.filter((s) => (s.district || "").trim().toLowerCase() === d);
+    }
+    if (filters?.available_today) cands = cands.filter((s) => s.availableToday);
+    if (filters?.reliable_only)
+      cands = cands.filter((s) => (s.shiftsTotal ?? 0) === (s.shiftsAttended ?? 0));
+    return Promise.resolve(cands);
+  }
   let list = [...VACANCIES];
   if (filters?.role) list = list.filter((v) => v.role === filters.role);
   if (filters?.city) {

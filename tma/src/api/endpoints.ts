@@ -45,6 +45,10 @@ export interface FeedFilters {
   radius_km?: number;
   lat?: number;
   lng?: number;
+  // Фильтры ленты кандидатов (сторона заведения).
+  district?: string;
+  available_today?: boolean;
+  reliable_only?: boolean;
 }
 
 export async function fetchFeed(
@@ -56,7 +60,7 @@ export async function fetchFeed(
     const { data } = await api.get<Vacancy[]>("/vacancies", { params: filters });
     return data;
   }
-  const { data } = await api.get<Seeker[]>("/candidates");
+  const { data } = await api.get<Seeker[]>("/candidates", { params: filters });
   return data;
 }
 
