@@ -213,6 +213,66 @@ def test_admin_block_user_and_vacancy(client):
     assert blocked_login.status_code == 403
 
 
+def test_admin_resolve_with_reply(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    client.post("/reports", headers=ah, json={
+        "target_type": "vacancy", "target_id": "vacX", "reason": "fake",
+    })
+    rid = client.get("/admin/reports", headers=ah).json()[0]["id"]
+    # Закрытие с ответом заявителю — без бота notify no-op, но эндпоинт 200.
+    res = client.post(
+        f"/admin/reports/{rid}/resolve", headers=ah,
+        json={"reply": "Проверили, спасибо"},
+    )
+    assert res.status_code == 200
+    assert client.get("/admin/reports?status=open", headers=ah).json() == []
+
+
+def test_admin_warn_increments_and_closes(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eid = emp.json()["user_id"]
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    vac = client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+    }).json()
+    client.post("/reports", headers=ah, json={
+        "target_type": "vacancy", "target_id": vac["id"], "reason": "spam",
+    })
+    rid = next(
+        r["id"] for r in client.get("/admin/reports", headers=ah).json()
+        if r["targetId"] == vac["id"]
+    )
+    # Предупреждение владельцу вакансии: +1 и жалоба закрыта.
+    w = client.post(f"/admin/reports/{rid}/warn", headers=ah, json={"note": "спам"})
+    assert w.status_code == 200 and w.json()["warnings"] == 1
+    # Повторное предупреждение по другой жалобе на того же → 2.
+    client.post("/reports", headers=ah, json={
+        "target_type": "vacancy", "target_id": vac["id"], "reason": "spam",
+    })
+    rid2 = next(
+        r["id"] for r in client.get("/admin/reports?status=open", headers=ah).json()
+        if r["targetId"] == vac["id"]
+    )
+    w2 = client.post(f"/admin/reports/{rid2}/warn", headers=ah)
+    assert w2.json()["warnings"] == 2
+    assert eid  # владелец существует
+
+
+def test_admin_warn_on_match_rejected(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    client.post("/reports", headers=ah, json={
+        "target_type": "match", "target_id": "m1", "reason": "abuse",
+    })
+    rid = client.get("/admin/reports", headers=ah).json()[0]["id"]
+    # По переписке мэтча предупреждение выносить некому → 400.
+    assert client.post(f"/admin/reports/{rid}/warn", headers=ah).status_code == 400
+
+
 def test_autoflag_scam_vacancy(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}

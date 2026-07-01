@@ -401,9 +401,19 @@ export async function fetchRevenue(): Promise<AdminRevenue> {
   return data;
 }
 
-export async function resolveReport(id: string): Promise<void> {
+export async function resolveReport(id: string, reply = ""): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport(id);
-  await api.post(`/admin/reports/${id}/resolve`, {});
+  await api.post(`/admin/reports/${id}/resolve`, { reply });
+}
+
+/** Предупредить нарушителя (+1 предупреждение, уведомление ему). */
+export async function warnReport(id: string, note = ""): Promise<number> {
+  if (!USE_BACKEND) return mock.warnReport(id);
+  const { data } = await api.post<{ warnings: number }>(
+    `/admin/reports/${id}/warn`,
+    { note },
+  );
+  return data.warnings;
 }
 
 /** Заблокировать пользователя (соискателя/работодателя). */

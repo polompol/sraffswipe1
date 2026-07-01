@@ -437,6 +437,11 @@ export function resolveReport(id: string): Promise<void> {
   if (r) r.status = "reviewed";
   return Promise.resolve();
 }
+export function warnReport(id: string): Promise<number> {
+  const r = adminReports.find((x) => x.id === id);
+  if (r) r.status = "reviewed";
+  return Promise.resolve(1);
+}
 export function fetchAdminSubscriptions() {
   return Promise.resolve([
     { ownerId: "emp1", company: "Кофейня «Дрова»", plan: "pro", renewsAt: "2026-07-20" },

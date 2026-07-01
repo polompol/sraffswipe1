@@ -54,6 +54,7 @@ class User(Base):
     # заведение со срочной сменой видит таких людей первыми.
     available_today: Mapped[bool] = mapped_column(Boolean, default=False)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
+    warnings: Mapped[int] = mapped_column(Integer, default=0)  # предупреждения
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -79,6 +80,7 @@ class Employer(Base):
     photo_url: Mapped[str] = mapped_column(String, default="")
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
+    warnings: Mapped[int] = mapped_column(Integer, default=0)  # предупреждения
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     vacancies: Mapped[list["Vacancy"]] = relationship(back_populates="employer")

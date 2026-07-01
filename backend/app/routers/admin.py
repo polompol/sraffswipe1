@@ -20,6 +20,7 @@ from ..models import (
     User,
     Vacancy,
 )
+from ..notify import notify_owner
 from ..security import current_principal
 from .analytics import _is_admin
 
@@ -160,9 +161,14 @@ def list_reports(
     ]
 
 
+class ResolveIn(BaseModel):
+    reply: str = ""  # необязательный ответ заявителю (уходит ему в бота)
+
+
 @router.post("/reports/{report_id}/resolve")
 def resolve_report(
     report_id: str,
+    body: ResolveIn | None = None,
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
@@ -171,7 +177,56 @@ def resolve_report(
         raise HTTPException(status_code=404, detail="Жалоба не найдена")
     rep.status = "reviewed"
     db.commit()
+    # Если админ написал ответ — доставляем заявителю (чтобы человек видел, что
+    # его услышали). Без bot-токена notify_owner — no-op.
+    reply = (body.reply.strip() if body else "")
+    if reply:
+        notify_owner(db, rep.reporter_id, f"По вашей жалобе: {reply}")
     return {"ok": True}
+
+
+def _offender_id(db: Session, rep: Report) -> str | None:
+    """Кого предупреждаем по жалобе: пользователь напрямую или владелец вакансии."""
+    if rep.target_type == "user":
+        return rep.target_id
+    if rep.target_type == "vacancy":
+        v = db.get(Vacancy, rep.target_id)
+        return v.employer_id if v else None
+    return None  # по переписке мэтча предупреждение не выдаём
+
+
+class WarnIn(BaseModel):
+    note: str = ""  # за что предупреждение (пойдёт нарушителю)
+
+
+@router.post("/reports/{report_id}/warn")
+def warn_report(
+    report_id: str,
+    body: WarnIn | None = None,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Мягкая мера между «закрыть» и «бан»: +1 предупреждение нарушителю и
+    уведомление ему в бота. Жалоба закрывается."""
+    rep = db.get(Report, report_id)
+    if rep is None:
+        raise HTTPException(status_code=404, detail="Жалоба не найдена")
+    offender = _offender_id(db, rep)
+    if offender is None:
+        raise HTTPException(status_code=400, detail="Некому выносить предупреждение")
+    target = db.get(User, offender) or db.get(Employer, offender)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Нарушитель не найден")
+    target.warnings += 1
+    rep.status = "reviewed"
+    db.commit()
+    note = (body.note.strip() if body else "") or "нарушение правил сервиса"
+    notify_owner(
+        db, offender,
+        f"⚠️ Предупреждение от модерации StaffSwipe: {note}. "
+        f"При повторных нарушениях — блокировка.",
+    )
+    return {"ok": True, "warnings": target.warnings}
 
 
 def _resolve_reports_for(db: Session, target_id: str) -> None:

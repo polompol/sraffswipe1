@@ -13,6 +13,7 @@ import {
   resolveReport,
   unblockUser,
   unblockVacancy,
+  warnReport,
 } from "@/api/endpoints";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { Loading } from "@/components/States";
@@ -48,6 +49,8 @@ export function AdminPage() {
   const qc = useQueryClient();
   const [repStatus, setRepStatus] = useState<"open" | "all">("open");
   const [period, setPeriod] = useState("week");
+  // Черновики ответов заявителю — по одному на жалобу.
+  const [replies, setReplies] = useState<Record<string, string>>({});
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
   const ov = useQuery({ queryKey: ["admin-overview"], queryFn: fetchAdminOverview });
@@ -102,8 +105,18 @@ export function AdminPage() {
 
   async function resolve(id: string) {
     haptic("success");
-    await resolveReport(id);
-    toast("Жалоба закрыта", "success");
+    const reply = (replies[id] ?? "").trim();
+    await resolveReport(id, reply);
+    setReplies((m) => ({ ...m, [id]: "" }));
+    toast(reply ? "Ответ отправлен, жалоба закрыта" : "Жалоба закрыта", "success");
+    refresh();
+  }
+
+  async function warn(id: string) {
+    haptic("warning");
+    const n = await warnReport(id, (replies[id] ?? "").trim());
+    setReplies((m) => ({ ...m, [id]: "" }));
+    toast(`Предупреждение вынесено (всего: ${n})`, "success");
     refresh();
   }
 
@@ -234,32 +247,52 @@ export function AdminPage() {
             <div style={{ fontWeight: 700, margin: "4px 0" }}>{r.targetInfo}</div>
             {r.text && <div className="muted" style={{ margin: "2px 0 6px" }}>{r.text}</div>}
             {r.status === "open" ? (
-              <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                {r.targetType === "vacancy" && (
-                  <button
-                    className="btn"
-                    style={{ background: "var(--crimson-dark)" }}
-                    onClick={() => blockTarget("vacancy", r.targetId)}
-                  >
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <IconWarning size={16} /> Снять вакансию
-                    </span>
+              <div style={{ marginTop: 8 }}>
+                <input
+                  className="input"
+                  style={{ width: "100%", marginBottom: 8 }}
+                  placeholder="Ответ заявителю / причина предупреждения (необязательно)"
+                  value={replies[r.id] ?? ""}
+                  onChange={(e) =>
+                    setReplies((m) => ({ ...m, [r.id]: e.target.value }))
+                  }
+                />
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  {r.targetType === "vacancy" && (
+                    <button
+                      className="btn"
+                      style={{ background: "var(--crimson-dark)" }}
+                      onClick={() => blockTarget("vacancy", r.targetId)}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <IconWarning size={16} /> Снять вакансию
+                      </span>
+                    </button>
+                  )}
+                  {r.targetType === "user" && (
+                    <button
+                      className="btn"
+                      style={{ background: "var(--crimson-dark)" }}
+                      onClick={() => blockTarget("user", r.targetId)}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <IconWarning size={16} /> Заблокировать
+                      </span>
+                    </button>
+                  )}
+                  {r.targetType !== "match" && (
+                    <button
+                      className="btn secondary"
+                      style={{ width: "auto" }}
+                      onClick={() => warn(r.id)}
+                    >
+                      Предупредить
+                    </button>
+                  )}
+                  <button className="btn ghost" onClick={() => resolve(r.id)}>
+                    Закрыть жалобу
                   </button>
-                )}
-                {r.targetType === "user" && (
-                  <button
-                    className="btn"
-                    style={{ background: "var(--crimson-dark)" }}
-                    onClick={() => blockTarget("user", r.targetId)}
-                  >
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <IconWarning size={16} /> Заблокировать
-                    </span>
-                  </button>
-                )}
-                <button className="btn ghost" onClick={() => resolve(r.id)}>
-                  Закрыть жалобу
-                </button>
+                </div>
               </div>
             ) : (
               <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>✓ Закрыта</div>
