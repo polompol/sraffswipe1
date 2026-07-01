@@ -13,7 +13,6 @@ import {
   type VerifyResult,
 } from "@/api/endpoints";
 import { share, haptic } from "@/telegram/sdk";
-import { applyTheme, currentTheme } from "@/lib/theme";
 import {
   IconBolt,
   IconFire,
@@ -211,92 +210,6 @@ function EarningsCard({ me }: { me: Me }) {
 
 // Доступность: крупные кнопки и текст. Состояние — на <body data-large>,
 // сохраняется в localStorage и применяется при старте (main.tsx).
-function LargeModeCard() {
-  const [on, setOn] = useState(() => document.body.dataset.large === "1");
-  function toggle() {
-    const next = !on;
-    setOn(next);
-    haptic("select");
-    if (next) {
-      document.body.dataset.large = "1";
-      localStorage.setItem("ss_large", "1");
-    } else {
-      delete document.body.dataset.large;
-      localStorage.removeItem("ss_large");
-    }
-  }
-  return (
-    <div className="card row" style={{ marginBottom: 16 }}>
-      <span style={{ flex: 1 }}>
-        <b>Крупные кнопки и текст</b>
-        <div className="muted">Удобнее, если мелкое плохо видно</div>
-      </span>
-      <button
-        role="switch"
-        aria-checked={on}
-        aria-label="Крупные кнопки и текст"
-        onClick={toggle}
-        style={{
-          width: 52,
-          height: 30,
-          borderRadius: 999,
-          border: "none",
-          cursor: "pointer",
-          background: on ? "var(--gold)" : "var(--border)",
-          position: "relative",
-          transition: "background 0.2s",
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            top: 3,
-            left: on ? 25 : 3,
-            width: 24,
-            height: 24,
-            borderRadius: "50%",
-            background: "#fff",
-            transition: "left 0.2s",
-          }}
-        />
-      </button>
-    </div>
-  );
-}
-
-// Выключатель звуковых эффектов («ка-чинг» на мэтч/смену).
-function SoundCard() {
-  const [on, setOn] = useState(() => localStorage.getItem("ss_sound") !== "off");
-  function toggle() {
-    const next = !on;
-    setOn(next);
-    haptic("select");
-    if (next) localStorage.removeItem("ss_sound");
-    else localStorage.setItem("ss_sound", "off");
-  }
-  return (
-    <div className="card row" style={{ marginBottom: 16 }}>
-      <span style={{ flex: 1 }}>
-        <b>Звук</b>
-        <div className="muted">Приятный сигнал на мэтч и закрытие смены</div>
-      </span>
-      <button
-        role="switch"
-        aria-checked={on}
-        aria-label="Звук"
-        onClick={toggle}
-        style={{
-          width: 52, height: 30, borderRadius: 999, border: "none",
-          cursor: "pointer", position: "relative", transition: "background 0.2s",
-          background: on ? "var(--gold)" : "var(--border)",
-        }}
-      >
-        <span style={{ position: "absolute", top: 3, left: on ? 25 : 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-      </button>
-    </div>
-  );
-}
-
 // Цель заработка + кольцо прогресса (психология незавершённого действия —
 // люди возвращаются «дозакрыть кольцо», как в Apple Watch). Цель — локально.
 const GOAL_PRESETS = [20000, 30000, 50000, 100000];
@@ -423,7 +336,6 @@ function ProfileMeter({ pct }: { pct: number }) {
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
-  const [theme, setTheme] = useState(currentTheme());
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
   const { data: ent } = useQuery({
     queryKey: ["entitlements"],
@@ -551,50 +463,13 @@ export function ProfilePage() {
         </Button>
       </div>
 
-      <div className="card row" style={{ marginBottom: 16 }}>
-        <span style={{ flex: 1 }}>
-          <b>Тёмная тема</b>
-          <div className="muted">Удобно листать ночью</div>
-        </span>
-        <button
-          role="switch"
-          aria-checked={theme === "dark"}
-          aria-label="Тёмная тема"
-          onClick={() => {
-            const next = theme === "dark" ? "light" : "dark";
-            applyTheme(next);
-            setTheme(next);
-            haptic("select");
-          }}
-          style={{
-            width: 52,
-            height: 30,
-            borderRadius: 999,
-            border: "none",
-            cursor: "pointer",
-            background: theme === "dark" ? "var(--gold)" : "var(--border)",
-            position: "relative",
-            transition: "background 0.2s",
-          }}
-        >
-          <span
-            style={{
-              position: "absolute",
-              top: 3,
-              left: theme === "dark" ? 25 : 3,
-              width: 24,
-              height: 24,
-              borderRadius: "50%",
-              background: "#fff",
-              transition: "left 0.2s",
-            }}
-          />
-        </button>
+      <div style={{ marginBottom: 10 }}>
+        <Button variant="secondary" onClick={() => nav("/settings")}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <IconEdit size={18} /> Настройки — тема, крупный режим, звук
+          </span>
+        </Button>
       </div>
-
-      <LargeModeCard />
-
-      <SoundCard />
 
       {role === "seeker" && (
         <div style={{ marginBottom: 10 }}>
