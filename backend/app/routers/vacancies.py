@@ -15,7 +15,7 @@ from ..entitlements import (
     plan_of,
 )
 from ..geo import distance_km
-from ..models import Boost, Employer, Match, Swipe, User, Vacancy
+from ..models import Boost, Employer, Entitlement, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
@@ -310,13 +310,25 @@ def boost_vacancy(
     v = db.get(Vacancy, vacancy_id)
     if v is None or v.employer_id != principal["id"]:
         raise HTTPException(status_code=404, detail="Вакансия не найдена")
-    ent = get_or_create(db, principal["id"])
-    if ent.boost_balance < 1:
+    # Атомарное списание буста (защита от double-spend при параллельных запросах).
+    get_or_create(db, principal["id"])
+    spent = (
+        db.query(Entitlement)
+        .filter(
+            Entitlement.owner_id == principal["id"],
+            Entitlement.boost_balance >= 1,
+        )
+        .update(
+            {Entitlement.boost_balance: Entitlement.boost_balance - 1},
+            synchronize_session=False,
+        )
+    )
+    if not spent:
         raise HTTPException(status_code=402, detail="Нет boost на балансе")
-    ent.boost_balance -= 1
     expires = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
     db.add(Boost(vacancy_id=vacancy_id, expires_at=expires))
     db.commit()
+    ent = get_or_create(db, principal["id"])
     return {"ok": True, "boostBalance": ent.boost_balance, "expiresAt": expires}
 
 

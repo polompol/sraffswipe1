@@ -57,6 +57,8 @@ def verify(body: VerifyIn, db: Session = Depends(get_db)):
         employer = (
             db.query(Employer).filter(Employer.phone == body.phone).first()
         )
+        if employer is not None and employer.blocked:
+            raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
         if employer is None:
             employer = Employer(phone=body.phone, contact_phone=body.phone)
             db.add(employer)
@@ -67,6 +69,8 @@ def verify(body: VerifyIn, db: Session = Depends(get_db)):
         return TokenOut(access_token=token, role="employer", user_id=employer.id)
 
     user = db.query(User).filter(User.phone == body.phone).first()
+    if user is not None and user.blocked:
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
     if user is None:
         user = User(phone=body.phone)
         db.add(user)

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Match, Message, Swipe, User, Vacancy
+from ..models import Entitlement, Match, Message, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
@@ -96,15 +96,27 @@ def swipe(
     )
 
     if existing is None:
-        # Супер-лайк «Срочно» — платная фича: списываем с баланса (после валидации).
+        # Супер-лайк «Срочно» — платная фича: списываем с баланса атомарно
+        # (UPDATE ... WHERE balance >= 1), иначе параллельные запросы на разные
+        # цели уводят баланс в минус (double-spend).
         if body.direction == "superlike":
-            ent = get_or_create(db, me)
-            if ent.superlike_balance < 1:
+            get_or_create(db, me)  # гарантируем строку прав
+            spent = (
+                db.query(Entitlement)
+                .filter(
+                    Entitlement.owner_id == me,
+                    Entitlement.superlike_balance >= 1,
+                )
+                .update(
+                    {Entitlement.superlike_balance: Entitlement.superlike_balance - 1},
+                    synchronize_session=False,
+                )
+            )
+            if not spent:
                 raise HTTPException(
                     status_code=402,
                     detail="Закончились супер-лайки. Купите пакет «Срочно».",
                 )
-            ent.superlike_balance -= 1
 
         db.add(
             Swipe(

@@ -213,6 +213,25 @@ def test_admin_block_user_and_vacancy(client):
     assert blocked_login.status_code == 403
 
 
+def test_blocked_user_denied_with_existing_token(client):
+    # Бан должен действовать сразу по уже выданному токену, а не только при
+    # следующем логине (иначе бан «мягкий» на 30 дней).
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eid = emp.json()["user_id"]
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    # До бана работодатель действует.
+    assert client.get("/me", headers=eh).status_code == 200
+    client.post(f"/admin/users/{eid}/block", headers=ah)
+    # После бана тот же токен получает 403 на любом защищённом эндпоинте.
+    assert client.get("/me", headers=eh).status_code == 403
+    assert client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+    }).status_code == 403
+
+
 def test_admin_resolve_with_reply(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
@@ -329,8 +348,10 @@ def test_autoflag_scam_vacancy(client):
 def test_admin_unblock(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
-    s = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
-    sid = s.json()["user_id"]
+    # Блокируем работодателя (отдельная сущность от админа-соискателя, чтобы
+    # админ не «забанил сам себя» — теперь бан действует на каждом запросе).
+    e = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    sid = e.json()["user_id"]
     client.post(f"/admin/users/{sid}/block", headers=ah)
     blocked = client.get("/admin/blocked", headers=ah).json()
     assert any(b["id"] == sid for b in blocked)

@@ -4,10 +4,25 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from .config import settings
+from .db import get_db
 
 bearer = HTTPBearer(auto_error=False)
+
+
+def _is_blocked(db: Session, principal: dict) -> bool:
+    """Забанен ли владелец токена. Проверяется на КАЖДОМ запросе, а не только
+    при логине — иначе бан админа не действует до истечения токена (30 дней)."""
+    from .models import Employer, User
+
+    owner = (
+        db.get(Employer, principal["id"])
+        if principal.get("role") == "employer"
+        else db.get(User, principal["id"])
+    )
+    return bool(owner is not None and owner.blocked)
 
 
 def create_token(subject_id: str, role: str) -> str:
@@ -37,6 +52,7 @@ def decode_token(token: str) -> dict | None:
 
 def current_principal(
     creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
 ) -> dict:
     if creds is None:
         raise HTTPException(
@@ -47,6 +63,8 @@ def current_principal(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен"
         )
+    if _is_blocked(db, principal):
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
     return principal
 
 
