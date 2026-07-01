@@ -93,12 +93,21 @@ def test_employer_trust_aggregates_in_feed(client):
     # Закрытая смена + 5★ отзыв соискателя → в ленте у вакансии этого
     # заведения видны рейтинг и счётчик смен. «Платит вовремя» ещё не выдаётся:
     # порог ≥3 закрытых смен не достигнут (знак не выдаётся «авансом»).
-    emp_token, _, seeker_token, _, vac, match_id = _full_shift_cycle(client)
+    emp_token, emp_id, seeker_token, _, vac, match_id = _full_shift_cycle(client)
     client.post(f"/matches/{match_id}/review", headers=_hdr(seeker_token),
                 json={"stars": 5})
 
+    # Первую смену соискатель уже свайпнул (её теперь нет в ленте — так и надо).
+    # Даём заведению Pro (безлимит вакансий) и заводим вторую смену — на ней и
+    # виден агрегат доверия заведения, которую соискатель ещё не листал.
+    client.post("/billing/fulfill",
+                headers={"X-Internal-Token": "test-internal-secret"},
+                json={"owner_id": emp_id, "sku": "sub_pro_month",
+                      "provider": "yookassa", "charge_id": "t1"})
+    vac2 = _make_vacancy(client, emp_token)
     feed = client.get("/vacancies", headers=_hdr(seeker_token)).json()
-    v = next(x for x in feed if x["id"] == vac["id"])
+    assert vac["id"] not in {x["id"] for x in feed}
+    v = next(x for x in feed if x["id"] == vac2["id"])
     assert v["employer_shifts_done"] == 1
     assert v["employer_rating"] == 5.0
     assert v["employer_pays_on_time"] is False
@@ -140,6 +149,34 @@ def test_profile_completion_grows_as_fields_fill(client):
         "profileCompletion"]
     assert full == 100
     assert full > start
+
+
+def test_feed_excludes_already_swiped_vacancy(client):
+    emp_token, _ = _auth(client, "employer")
+    vac = _make_vacancy(client, emp_token)
+    seeker_token, _ = _auth(client, "seeker")
+
+    def feed_ids():
+        return {v["id"] for v in
+                client.get("/vacancies", headers=_hdr(seeker_token)).json()}
+
+    assert vac["id"] in feed_ids()  # до свайпа — в ленте
+    client.post("/swipes", headers=_hdr(seeker_token), json={
+        "target_type": "vacancy", "target_id": vac["id"], "direction": "dislike",
+    })
+    assert vac["id"] not in feed_ids()  # после свайпа — исчезла (колода не зациклена)
+
+
+def test_candidates_exclude_already_swiped(client):
+    seeker_token, seeker_id = _auth(client, "seeker")
+    emp_token, _ = _auth(client, "employer")
+    ids = {c["id"] for c in client.get("/candidates", headers=_hdr(emp_token)).json()}
+    assert seeker_id in ids  # кандидат виден работодателю
+    client.post("/swipes", headers=_hdr(emp_token), json={
+        "target_type": "user", "target_id": seeker_id, "direction": "dislike",
+    })
+    ids2 = {c["id"] for c in client.get("/candidates", headers=_hdr(emp_token)).json()}
+    assert seeker_id not in ids2  # после свайпа кандидат уходит из колоды
 
 
 def test_activity_feed_shape(client):
@@ -195,9 +232,10 @@ def test_attendance_and_reliability(client):
                     json={"attended": False})
     assert r.status_code == 200 and r.json()["noShow"] is True
 
-    # в ленте кандидатов у работодателя видно надёжность
-    cands = client.get("/candidates", headers=_hdr(emp_token)).json()
-    me = next((c for c in cands if c["id"] == sid), None)
+    # Кандидата работодатель уже свайпнул — он ушёл из колоды (правильно), но
+    # его надёжность видна в «Мои работники».
+    workers = client.get("/employer/workers", headers=_hdr(emp_token)).json()
+    me = next((c for c in workers if c["id"] == sid), None)
     assert me is not None
     assert me["shifts_total"] == 1
     assert me["shifts_attended"] == 0
@@ -205,8 +243,8 @@ def test_attendance_and_reliability(client):
     # отметили «вышел» — счётчик обновился
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
                 json={"attended": True})
-    cands = client.get("/candidates", headers=_hdr(emp_token)).json()
-    me = next(c for c in cands if c["id"] == sid)
+    workers = client.get("/employer/workers", headers=_hdr(emp_token)).json()
+    me = next(c for c in workers if c["id"] == sid)
     assert me["shifts_attended"] == 1
 
 

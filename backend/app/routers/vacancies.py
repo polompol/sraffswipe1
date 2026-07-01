@@ -15,7 +15,7 @@ from ..entitlements import (
     plan_of,
 )
 from ..geo import distance_km
-from ..models import Boost, Employer, Match, User, Vacancy
+from ..models import Boost, Employer, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
@@ -130,6 +130,17 @@ def list_vacancies(
             for v in rows
         ]
     query = db.query(Vacancy).filter(Vacancy.status == "active")
+    # Не показываем смены, которые соискатель уже свайпнул, — иначе колода
+    # зацикливается и после «просмотрел все» те же карточки лезут снова.
+    if principal and principal["role"] == "seeker":
+        swiped = [
+            s[0] for s in db.query(Swipe.target_id).filter(
+                Swipe.swiper_id == principal["id"],
+                Swipe.target_type == "vacancy",
+            ).all()
+        ]
+        if swiped:
+            query = query.filter(Vacancy.id.notin_(swiped))
     if role:
         query = query.filter(Vacancy.role == role)
     if min_rate is not None:

@@ -5,7 +5,7 @@ from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Match, User
+from ..models import Match, Swipe, User
 from ..security import current_principal
 
 router = APIRouter(tags=["candidates"])
@@ -69,11 +69,20 @@ def list_candidates(
     # Ленту кандидатов с ПДн видит только работодатель.
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
+    # Не показываем кандидатов, которых работодатель уже свайпнул (иначе колода
+    # зацикливается после «кандидаты закончились»).
+    swiped = [
+        s[0] for s in db.query(Swipe.target_id).filter(
+            Swipe.swiper_id == principal["id"],
+            Swipe.target_type == "user",
+        ).all()
+    ]
     # «Готов выйти сегодня» — наверх ленты: их зовут на срочные смены первыми.
+    q = db.query(User).filter(User.blocked.is_(False))
+    if swiped:
+        q = q.filter(User.id.notin_(swiped))
     users = (
-        db.query(User)
-        .filter(User.blocked.is_(False))
-        .order_by(User.available_today.desc(), User.rating.desc())
+        q.order_by(User.available_today.desc(), User.rating.desc())
         .limit(50)
         .all()
     )
