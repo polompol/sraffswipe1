@@ -210,6 +210,53 @@ def list_vacancies(
     return result
 
 
+@router.get("/invites", response_model=list[VacancyOut])
+def invites(
+    principal: dict = Depends(current_principal),
+    db: Session = Depends(get_db),
+):
+    """«Кто меня зовёт»: активные смены заведений, которые лайкнули соискателя,
+    но мэтча ещё нет. Свайп по такой смене → мгновенный мэтч (лайк взаимный)."""
+    if principal["role"] != "seeker":
+        raise HTTPException(status_code=403, detail="Только для соискателя")
+    me = principal["id"]
+    emp_ids = [
+        s[0] for s in db.query(Swipe.swiper_id).filter(
+            Swipe.target_id == me,
+            Swipe.target_type == "user",
+            Swipe.direction.in_(("like", "superlike")),
+        ).distinct().all()
+    ]
+    if not emp_ids:
+        return []
+    # Смены, которые соискатель уже свайпнул, повторно не показываем.
+    swiped = [
+        s[0] for s in db.query(Swipe.target_id).filter(
+            Swipe.swiper_id == me, Swipe.target_type == "vacancy",
+        ).all()
+    ]
+    q = db.query(Vacancy).filter(
+        Vacancy.employer_id.in_(emp_ids), Vacancy.status == "active",
+    )
+    if swiped:
+        q = q.filter(Vacancy.id.notin_(swiped))
+    rows = q.order_by(Vacancy.created_at.desc()).limit(100).all()
+    if not rows:
+        return []
+    ids = {v.employer_id for v in rows}
+    emps = {e.id: e for e in db.query(Employer).filter(Employer.id.in_(ids)).all()}
+    boosted = active_boost_vacancy_ids(db)
+    done = _shifts_done_by_employer(db, ids)
+    return [
+        _to_out(
+            v, emps.get(v.employer_id), None,
+            boosted=v.id in boosted,
+            shifts_done=done.get(v.employer_id, 0),
+        )
+        for v in rows
+    ]
+
+
 @router.post(
     "",
     response_model=VacancyOut,

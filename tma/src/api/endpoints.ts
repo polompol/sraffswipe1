@@ -57,6 +57,13 @@ export async function fetchFeed(
   return data;
 }
 
+/** «Кто меня зовёт»: смены заведений, которые лайкнули соискателя (мэтча нет). */
+export async function fetchInvites(): Promise<Vacancy[]> {
+  if (!USE_BACKEND) return mock.fetchInvites();
+  const { data } = await api.get<Vacancy[]>("/vacancies/invites");
+  return data;
+}
+
 export interface SwipeResult {
   matched: boolean;
   matchId?: string;
@@ -414,6 +421,31 @@ export async function warnReport(id: string, note = ""): Promise<number> {
     { note },
   );
   return data.warnings;
+}
+
+export interface AdminUser {
+  id: string;
+  role: "seeker" | "employer";
+  name: string;
+  username?: string | null;
+  blocked: boolean;
+  warnings: number;
+  plan: string;
+  boostBalance: number;
+  superlikeBalance: number;
+}
+
+/** Поиск людей/заведений в админке (по имени, @нику, телефону). */
+export async function adminSearchUsers(q: string): Promise<AdminUser[]> {
+  if (!USE_BACKEND) return mock.adminSearchUsers(q);
+  const { data } = await api.get<AdminUser[]>("/admin/users", { params: { q } });
+  return data;
+}
+
+/** Бесплатно выдать буст/подписку/супер-лайки (комп, поддержка). */
+export async function adminGrant(ownerId: string, sku: string): Promise<void> {
+  if (!USE_BACKEND) return mock.adminGrant(ownerId, sku);
+  await api.post("/admin/grant", { owner_id: ownerId, sku });
 }
 
 /** Заблокировать пользователя (соискателя/работодателя). */

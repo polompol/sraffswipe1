@@ -179,6 +179,33 @@ def test_candidates_exclude_already_swiped(client):
     assert seeker_id not in ids2  # после свайпа кандидат уходит из колоды
 
 
+def test_invites_shows_employers_who_liked_me(client):
+    emp_token, _ = _auth(client, "employer")
+    vac = _make_vacancy(client, emp_token)
+    seeker_token, sid = _auth(client, "seeker")
+    # Заведение лайкнуло соискателя → смена появляется в «Кто меня зовёт».
+    client.post("/swipes", headers=_hdr(emp_token), json={
+        "target_type": "user", "target_id": sid, "direction": "like",
+    })
+    inv = client.get("/vacancies/invites", headers=_hdr(seeker_token)).json()
+    assert any(v["id"] == vac["id"] for v in inv)
+    # Отклик соискателя на эту смену → мгновенный мэтч (лайк взаимный).
+    sw = client.post("/swipes", headers=_hdr(seeker_token), json={
+        "target_type": "vacancy", "target_id": vac["id"], "direction": "like",
+    }).json()
+    assert sw["matched"] is True
+    # После свайпа смена уходит из приглашений.
+    inv2 = client.get("/vacancies/invites", headers=_hdr(seeker_token)).json()
+    assert all(v["id"] != vac["id"] for v in inv2)
+
+
+def test_invites_forbidden_for_employer(client):
+    emp_token, _ = _auth(client, "employer")
+    assert client.get(
+        "/vacancies/invites", headers=_hdr(emp_token)
+    ).status_code == 403
+
+
 def test_activity_feed_shape(client):
     seeker_token, _ = _auth(client, "seeker")
     r = client.get("/activity/recent", headers=_hdr(seeker_token))

@@ -273,6 +273,45 @@ def test_admin_warn_on_match_rejected(client):
     assert client.post(f"/admin/reports/{rid}/warn", headers=ah).status_code == 400
 
 
+def test_admin_search_and_grant(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eid = emp.json()["user_id"]
+    # Поиск находит заведение среди пользователей.
+    users = client.get("/admin/users", headers=ah).json()
+    assert any(u["id"] == eid and u["role"] == "employer" for u in users)
+    # Бесплатная выдача буста — баланс растёт.
+    g = client.post("/admin/grant", headers=ah,
+                    json={"owner_id": eid, "sku": "boost_24h"})
+    assert g.status_code == 200
+    by_id = {u["id"]: u for u in client.get("/admin/users", headers=ah).json()}
+    assert by_id[eid]["boostBalance"] == 1
+    # Выдача подписки → план обновился.
+    client.post("/admin/grant", headers=ah,
+                json={"owner_id": eid, "sku": "sub_pro_month"})
+    by_id = {u["id"]: u for u in client.get("/admin/users", headers=ah).json()}
+    assert by_id[eid]["plan"] == "pro"
+    # Неизвестный SKU → 400.
+    assert client.post(
+        "/admin/grant", headers=ah, json={"owner_id": eid, "sku": "nope"}
+    ).status_code == 400
+
+
+def test_admin_users_forbidden_for_non_admin(client):
+    code = client.post("/auth/request-code", json={"phone": "+79990008888"}).json()[
+        "dev_code"
+    ]
+    token = client.post(
+        "/auth/verify", json={"phone": "+79990008888", "code": code, "role": "seeker"}
+    ).json()["access_token"]
+    h = {"Authorization": f"Bearer {token}"}
+    assert client.get("/admin/users", headers=h).status_code == 403
+    assert client.post(
+        "/admin/grant", headers=h, json={"owner_id": "x", "sku": "boost_24h"}
+    ).status_code == 403
+
+
 def test_autoflag_scam_vacancy(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}

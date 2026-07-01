@@ -442,6 +442,33 @@ export function warnReport(id: string): Promise<number> {
   if (r) r.status = "reviewed";
   return Promise.resolve(1);
 }
+export function fetchInvites(): Promise<Vacancy[]> {
+  // Демо: показываем пару смен как «зовущих».
+  return Promise.resolve(VACANCIES.slice(0, 2));
+}
+export function adminSearchUsers(q: string) {
+  const all = [
+    {
+      id: "emp1", role: "employer" as const, name: "Кофейня «Дрова»",
+      username: "drova", blocked: false, warnings: 0, plan: "pro",
+      boostBalance: 4, superlikeBalance: 0,
+    },
+    {
+      id: "seek1", role: "seeker" as const, name: "Мария", username: null,
+      blocked: false, warnings: 1, plan: "free", boostBalance: 0,
+      superlikeBalance: 2,
+    },
+  ];
+  const ql = q.trim().toLowerCase();
+  return Promise.resolve(
+    ql ? all.filter((u) => u.name.toLowerCase().includes(ql)) : all,
+  );
+}
+export function adminGrant(_ownerId: string, _sku: string): Promise<void> {
+  void _ownerId;
+  void _sku;
+  return Promise.resolve();
+}
 export function fetchAdminSubscriptions() {
   return Promise.resolve([
     { ownerId: "emp1", company: "Кофейня «Дрова»", plan: "pro", renewsAt: "2026-07-20" },

@@ -57,6 +57,9 @@ const WorkersPage = lazy(() =>
 const ShareEarningsPage = lazy(() =>
   import("@/features/share/ShareEarningsPage").then((m) => ({ default: m.ShareEarningsPage })),
 );
+const InvitesPage = lazy(() =>
+  import("@/features/invites/InvitesPage").then((m) => ({ default: m.InvitesPage })),
+);
 
 function TabBar() {
   const { role } = useSession();
@@ -150,6 +153,7 @@ export function App() {
       <Route path="/favorites" element={ready ? <FavoritesPage /> : <Navigate to="/onboarding" />} />
       <Route path="/workers" element={ready ? <WorkersPage /> : <Navigate to="/onboarding" />} />
       <Route path="/share" element={ready ? <ShareEarningsPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/invites" element={ready ? <InvitesPage /> : <Navigate to="/onboarding" />} />
 
       <Route
         path="*"

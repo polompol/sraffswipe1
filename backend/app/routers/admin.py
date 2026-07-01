@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..entitlements import get_or_create
+from ..entitlements import get_or_create, plan_of
 from ..models import (
     Employer,
     Match,
@@ -410,3 +410,74 @@ def list_purchases(
         )
         for p in rows
     ]
+
+
+# ---- Поиск пользователей и ручная выдача прав (комп/поддержка) ----
+
+
+class AdminUserOut(BaseModel):
+    id: str
+    role: str
+    name: str
+    username: str | None = None
+    blocked: bool
+    warnings: int
+    plan: str
+    boostBalance: int
+    superlikeBalance: int
+
+
+def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
+    ent = get_or_create(db, obj.id)
+    name = getattr(obj, "name", "") or getattr(obj, "company_name", "") or "—"
+    return AdminUserOut(
+        id=obj.id, role=role, name=name, username=obj.tg_username,
+        blocked=obj.blocked, warnings=obj.warnings,
+        plan=plan_of(db, obj.id),
+        boostBalance=ent.boost_balance,
+        superlikeBalance=ent.superlike_balance,
+    )
+
+
+@router.get("/users", response_model=list[AdminUserOut])
+def search_users(
+    q: str = "",
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Быстрый поиск людей и заведений по имени/@нику/телефону. Фильтруем в
+    Python — корректно для кириллицы и на SQLite, и на Postgres."""
+    ql = q.strip().lower()
+
+    def _match(*vals: str | None) -> bool:
+        return not ql or any(ql in (v or "").lower() for v in vals)
+
+    res: list[AdminUserOut] = []
+    for u in db.query(User).order_by(User.created_at.desc()).limit(300).all():
+        if _match(u.name, u.tg_username, u.phone):
+            res.append(_admin_user_out(db, u, "seeker"))
+    for e in db.query(Employer).order_by(Employer.created_at.desc()).limit(300).all():
+        if _match(e.company_name, e.tg_username, e.phone):
+            res.append(_admin_user_out(db, e, "employer"))
+    return res[:30]
+
+
+class GrantIn(BaseModel):
+    owner_id: str
+    sku: str
+
+
+@router.post("/grant")
+def grant_entitlement(
+    body: GrantIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Бесплатно выдать буст/подписку/супер-лайки (комп заведению, поддержка).
+    Переиспользует ту же логику начисления, что и оплата."""
+    from .billing import CATALOG, _apply_effect
+
+    if body.sku not in CATALOG:
+        raise HTTPException(status_code=400, detail="Неизвестный SKU")
+    _apply_effect(db, body.owner_id, body.sku)
+    return {"ok": True, "sku": body.sku}

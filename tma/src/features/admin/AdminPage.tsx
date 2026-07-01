@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  adminGrant,
+  adminSearchUsers,
   blockUser,
   blockVacancy,
   cancelSubscription,
@@ -51,6 +53,7 @@ export function AdminPage() {
   const [period, setPeriod] = useState("week");
   // Черновики ответов заявителю — по одному на жалобу.
   const [replies, setReplies] = useState<Record<string, string>>({});
+  const [userQ, setUserQ] = useState("");
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
   const ov = useQuery({ queryKey: ["admin-overview"], queryFn: fetchAdminOverview });
@@ -79,6 +82,17 @@ export function AdminPage() {
     queryFn: fetchAdminSubscriptions,
   });
   const blocked = useQuery({ queryKey: ["admin-blocked"], queryFn: fetchBlocked });
+  const users = useQuery({
+    queryKey: ["admin-users", userQ],
+    queryFn: () => adminSearchUsers(userQ),
+  });
+
+  async function grant(id: string, sku: string, label: string) {
+    haptic("success");
+    await adminGrant(id, sku);
+    toast(`Выдано: ${label}`, "success");
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
+  }
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["admin-reports"] });
@@ -196,6 +210,63 @@ export function AdminPage() {
           </div>
         </div>
       )}
+
+      <h2 className="h2" style={{ marginBottom: 8 }}>Пользователи</h2>
+      <input
+        className="input"
+        style={{ width: "100%", marginBottom: 10 }}
+        placeholder="Поиск: имя / @ник / телефон"
+        value={userQ}
+        onChange={(e) => setUserQ(e.target.value)}
+      />
+      <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
+        {users.data?.length === 0 && (
+          <div className="card muted" style={{ textAlign: "center" }}>Никого не нашли</div>
+        )}
+        {users.data?.map((u) => (
+          <div key={u.id} className="card">
+            <div className="row">
+              <span style={{ flex: 1 }}>
+                <b>{u.name}</b>
+                {u.blocked && (
+                  <span className="tag" style={{ marginLeft: 8, color: "var(--crimson)", borderColor: "var(--crimson)" }}>бан</span>
+                )}
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {u.role === "employer" ? "заведение" : "соискатель"}
+                  {u.username ? ` · @${u.username}` : ""} · {u.plan.toUpperCase()}
+                  {" · "}Boost {u.boostBalance}
+                  {u.warnings > 0 ? ` · ⚠ ${u.warnings}` : ""}
+                </div>
+              </span>
+            </div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              <button
+                className="tag"
+                style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
+                onClick={() => grant(u.id, "boost_24h", "Boost 24ч")}
+              >
+                + Boost
+              </button>
+              {u.role === "employer" && (
+                <button
+                  className="tag"
+                  style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
+                  onClick={() => grant(u.id, "sub_pro_month", "Pro на месяц")}
+                >
+                  + Pro (месяц)
+                </button>
+              )}
+              <button
+                className="tag"
+                style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
+                onClick={() => grant(u.id, "super_5", "5 срочных")}
+              >
+                + 5 срочных
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div className="row" style={{ marginBottom: 8 }}>
         <h2 className="h2" style={{ margin: 0 }}>Жалобы</h2>

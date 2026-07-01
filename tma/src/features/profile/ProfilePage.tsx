@@ -498,11 +498,13 @@ export function ProfilePage() {
       {!!me?.incomingLikes && me.incomingLikes > 0 && (
         <div
           className="card"
+          onClick={() => nav(role === "seeker" ? "/invites" : "/feed")}
           style={{
             marginBottom: 16,
             background: "linear-gradient(135deg, var(--gold-soft), var(--gold))",
             color: "#fff",
             border: "none",
+            cursor: "pointer",
           }}
         >
           <b style={{ fontSize: 17, display: "flex", alignItems: "center", gap: 7 }}>
@@ -514,7 +516,7 @@ export function ProfilePage() {
           <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2 }}>
             {role === "employer"
               ? "столько откликов на твои вакансии — открой ленту"
-              : "столько заведений готовы позвать — открой ленту и ответь"}
+              : "нажми, чтобы увидеть кто зовёт, и ответить в один тап"}
           </div>
         </div>
       )}
