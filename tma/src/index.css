@@ -833,6 +833,67 @@ body[data-large="1"] .tab {
   animation: matchPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 
+/* ===== Премиальная полировка «вау»: глянец, глубина, тактильность ===== */
+
+/* Главные CTA — лёгкий глянец сверху + фирменное свечение. «Дорого» на касание. */
+.btn,
+.ui-btn--primary {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0) 44%),
+    linear-gradient(135deg, var(--gold-soft), var(--gold));
+  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  letter-spacing: 0.2px;
+}
+.btn:active,
+.ui-btn--primary:active:not(:disabled) {
+  box-shadow: 0 3px 10px rgba(165, 28, 48, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20);
+}
+.btn.secondary,
+.btn.ghost {
+  background-image: none; /* глянец — только на главных действиях */
+  letter-spacing: 0.2px;
+}
+
+/* Круглые кнопки свайпа — объём: внутренняя подсветка + цветное свечение по смыслу. */
+.act-like {
+  background-image: linear-gradient(160deg, #c0334a, #a51c30);
+  box-shadow: 0 10px 24px rgba(165, 28, 48, 0.42),
+    inset 0 2px 4px rgba(255, 255, 255, 0.30);
+}
+.act-super {
+  background-image: linear-gradient(160deg, #d8b85a, #c39a3a);
+  box-shadow: 0 10px 24px rgba(195, 154, 58, 0.44),
+    inset 0 2px 4px rgba(255, 255, 255, 0.36);
+}
+.act-skip {
+  box-shadow: 0 6px 16px rgba(60, 40, 30, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.act:active {
+  transform: scale(0.9);
+}
+@media (hover: hover) {
+  .act:hover {
+    transform: translateY(-2px);
+  }
+  .act-like:hover {
+    box-shadow: 0 16px 32px rgba(165, 28, 48, 0.5),
+      inset 0 2px 4px rgba(255, 255, 255, 0.3);
+  }
+  .act-super:hover {
+    box-shadow: 0 16px 32px rgba(195, 154, 58, 0.52),
+      inset 0 2px 4px rgba(255, 255, 255, 0.36);
+  }
+}
+
+/* Карточки — мягче и «дороже» глубина. */
+.card {
+  box-shadow: 0 1px 2px rgba(60, 20, 25, 0.05),
+    0 6px 18px rgba(60, 20, 25, 0.07);
+}
+
 /* Уважаем настройку «уменьшить движение» (доступность) */
 @media (prefers-reduced-motion: reduce) {
   *,
