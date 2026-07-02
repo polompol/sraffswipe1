@@ -154,6 +154,9 @@ class Match(Base):
     confirmed_by_employer: Mapped[bool] = mapped_column(Boolean, default=False)
     # Работодатель отмечает после смены: вышел человек или нет (надёжность).
     no_show: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Код прихода: заведение называет его работнику на месте, тот вводит в
+    # приложении — доказательство, что смена состоялась ЧЕРЕЗ сервис.
+    checkin_code: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

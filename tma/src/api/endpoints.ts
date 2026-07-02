@@ -128,6 +128,19 @@ export async function markAttendance(
   await api.post(`/matches/${matchId}/attendance`, { attended });
 }
 
+/** Работник отмечается на смене кодом от заведения (доказательство выхода). */
+export async function checkinShift(
+  matchId: string,
+  code: string,
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.checkinShift(matchId, code);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/checkin`,
+    { code },
+  );
+  return data;
+}
+
 export async function fetchEntitlements(): Promise<Entitlements> {
   if (!USE_BACKEND) return mock.fetchEntitlements();
   const { data } = await api.get<Entitlements>("/billing/entitlements");

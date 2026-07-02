@@ -191,6 +191,8 @@ export interface MatchModel {
   companyName?: string;
   companyPhotoUrl?: string;
   role?: StaffRole;
+  checkinCode?: string | null; // виден только заведению
+  checkedIn?: boolean;
 }
 
 export interface Message {

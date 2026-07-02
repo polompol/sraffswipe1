@@ -285,6 +285,7 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
   if (!m) return Promise.reject(new Error("not found"));
   m.confirmedBySeeker = true;
   m.status = "confirmed";
+  m.checkinCode = "1234"; // демо-код прихода
   (messagesByMatch[matchId] ??= []).push({
     id: uid(),
     chatId: matchId,
@@ -300,6 +301,15 @@ export function markAttendance(matchId: string, attended: boolean): Promise<void
   const m = matches.find((x) => x.id === matchId);
   if (m) m.status = attended ? "completed" : m.status;
   return Promise.resolve();
+}
+export function checkinShift(matchId: string, code: string): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  if (code.trim() !== (m.checkinCode ?? "1234"))
+    return Promise.reject(new Error("bad code"));
+  m.status = "completed";
+  m.checkedIn = true;
+  return Promise.resolve(m);
 }
 
 export function fetchEntitlements(): Promise<Entitlements> {

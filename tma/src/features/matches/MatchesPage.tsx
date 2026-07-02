@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { fetchMatches, markAttendance } from "@/api/endpoints";
+import { checkinShift, fetchMatches, markAttendance } from "@/api/endpoints";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
@@ -13,6 +14,7 @@ export function MatchesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
+  const [codes, setCodes] = useState<Record<string, string>>({});
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["matches"],
     queryFn: fetchMatches,
@@ -26,6 +28,21 @@ export function MatchesPage() {
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
       toast("Не удалось отметить", "error");
+    }
+  }
+
+  async function doCheckin(matchId: string) {
+    const code = (codes[matchId] ?? "").trim();
+    if (code.length < 4) return;
+    try {
+      await checkinShift(matchId, code);
+      haptic("success");
+      toast("Вы отметились на смене ✓", "success");
+      setCodes((c) => ({ ...c, [matchId]: "" }));
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    } catch {
+      haptic("error");
+      toast("Неверный код прихода", "error");
     }
   }
 
@@ -67,6 +84,55 @@ export function MatchesPage() {
               </span>
               <span style={{ color: "var(--muted)", fontSize: 22 }}>›</span>
             </div>
+            {m.checkedIn && (
+              <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--like)" }}>
+                <IconCheck size={16} /> <b>Смена закрыта — работник отметился</b>
+              </div>
+            )}
+
+            {/* Заведение: показывает код прихода, называет работнику на месте. */}
+            {role === "employer" && m.status === "confirmed" && m.checkinCode && (
+              <div
+                className="card"
+                style={{ marginTop: 12, background: "rgba(165,28,48,.05)", borderColor: "var(--gold)" }}
+              >
+                <div className="muted" style={{ fontSize: 13 }}>Код прихода — назовите работнику на месте:</div>
+                <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 6, color: "var(--gold)" }}>
+                  {m.checkinCode}
+                </div>
+              </div>
+            )}
+
+            {/* Работник: вводит код, полученный от заведения на месте. */}
+            {role === "seeker" && m.status === "confirmed" && (
+              <div style={{ marginTop: 12 }}>
+                <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+                  На месте заведение назовёт код — введите, чтобы отметиться:
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    maxLength={4}
+                    placeholder="код"
+                    style={{ width: 110, letterSpacing: 4, fontWeight: 800 }}
+                    value={codes[m.id] ?? ""}
+                    onChange={(e) =>
+                      setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
+                    }
+                  />
+                  <button
+                    className="btn"
+                    style={{ width: "auto", flex: 1 }}
+                    disabled={(codes[m.id] ?? "").length < 4}
+                    onClick={() => doCheckin(m.id)}
+                  >
+                    Отметиться на смене
+                  </button>
+                </div>
+              </div>
+            )}
+
             {role === "employer" && (m.status === "confirmed" || m.status === "completed") && (
               <div className="row" style={{ gap: 8, marginTop: 12 }}>
                 <button

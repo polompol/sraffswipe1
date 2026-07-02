@@ -112,6 +112,9 @@ class MatchOut(BaseModel):
     status: str
     confirmed_by_seeker: bool
     confirmed_by_employer: bool
+    # Код прихода виден ТОЛЬКО заведению (называет работнику на месте).
+    checkin_code: str | None = None
+    checked_in: bool = False
 
 
 # ---- chat ----

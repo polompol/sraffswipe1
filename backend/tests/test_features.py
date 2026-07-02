@@ -199,6 +199,30 @@ def test_invites_shows_employers_who_liked_me(client):
     assert all(v["id"] != vac["id"] for v in inv2)
 
 
+def test_checkin_by_code_closes_shift(client):
+    emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    # Код прихода виден заведению, скрыт от работника.
+    em = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+              if m["id"] == match_id)
+    code = em["checkin_code"]
+    assert code and len(code) == 4
+    sm = next(m for m in client.get("/matches", headers=_hdr(seeker_token)).json()
+              if m["id"] == match_id)
+    assert sm["checkin_code"] is None
+    # Заведение не может отметиться за работника.
+    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(emp_token),
+                       json={"code": code}).status_code == 403
+    # Неверный код → 400.
+    wrong = "0000" if code != "0000" else "1111"
+    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                       json={"code": wrong}).status_code == 400
+    # Верный код → смена закрыта (completed, checked_in).
+    r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                    json={"code": code})
+    assert r.status_code == 200
+    assert r.json()["status"] == "completed" and r.json()["checked_in"] is True
+
+
 def test_candidate_filters_role_district_available(client):
     seeker_token, sid = _auth(client, "seeker")
     client.put("/me", headers=_hdr(seeker_token), json={

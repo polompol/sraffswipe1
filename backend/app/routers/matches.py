@@ -1,4 +1,6 @@
 """Мэтчи и подтверждение смены."""
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -13,6 +15,10 @@ router = APIRouter(prefix="/matches", tags=["matches"])
 
 class AttendanceIn(BaseModel):
     attended: bool
+
+
+class CheckinIn(BaseModel):
+    code: str
 
 
 @router.post("/{match_id}/attendance")
@@ -35,7 +41,10 @@ def mark_attendance(
     return {"ok": True, "noShow": m.no_show}
 
 
-def _to_out(m: Match) -> MatchOut:
+def _to_out(m: Match, role: str = "") -> MatchOut:
+    # Код прихода показываем ТОЛЬКО заведению и только пока смена подтверждена,
+    # но ещё не закрыта чек-ином. Работник узнаёт код у заведения на месте.
+    show_code = role == "employer" and m.status == "confirmed" and bool(m.checkin_code)
     return MatchOut(
         id=m.id,
         user_id=m.user_id,
@@ -44,6 +53,8 @@ def _to_out(m: Match) -> MatchOut:
         status=m.status,
         confirmed_by_seeker=m.confirmed_by_seeker,
         confirmed_by_employer=m.confirmed_by_employer,
+        checkin_code=m.checkin_code if show_code else None,
+        checked_in=m.status == "completed",
     )
 
 
@@ -54,7 +65,37 @@ def list_matches(
 ):
     col = Match.user_id if principal["role"] == "seeker" else Match.employer_id
     rows = db.query(Match).filter(col == principal["id"]).all()
-    return [_to_out(m) for m in rows]
+    return [_to_out(m, principal["role"]) for m in rows]
+
+
+@router.post("/{match_id}/checkin", response_model=MatchOut)
+def checkin(
+    match_id: str,
+    body: CheckinIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Работник отмечается на смене кодом, который назвало заведение на месте.
+    Доказательство, что смена состоялась через сервис (основа для комиссии и
+    честной надёжности). Закрывает смену как выполненную."""
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["role"] != "seeker" or principal["id"] != m.user_id:
+        raise HTTPException(status_code=403, detail="Отметиться может только работник")
+    if m.status != "confirmed":
+        raise HTTPException(status_code=400, detail="Смена не подтверждена")
+    if not m.checkin_code or body.code.strip() != m.checkin_code:
+        raise HTTPException(status_code=400, detail="Неверный код прихода")
+    m.status = "completed"
+    m.no_show = False
+    db.add(Message(
+        match_id=m.id, sender_id="system",
+        text="Работник отметился на смене ✓ Смена закрыта.", is_system=True,
+    ))
+    db.commit()
+    db.refresh(m)
+    return _to_out(m, principal["role"])
 
 
 @router.post("/{match_id}/confirm", response_model=MatchOut)
@@ -76,14 +117,16 @@ def confirm(
 
     if m.confirmed_by_seeker and m.confirmed_by_employer and m.status == "matched":
         m.status = "confirmed"
+        m.checkin_code = f"{secrets.randbelow(10000):04d}"  # код прихода
         db.add(
             Message(
                 match_id=m.id,
                 sender_id="system",
-                text="Смена подтверждена обеими сторонами. Сформирован акт.",
+                text="Смена подтверждена. Заведение назовёт код прихода на месте — "
+                     "работник вводит его, чтобы отметиться.",
                 is_system=True,
             )
         )
     db.commit()
     db.refresh(m)
-    return _to_out(m)
+    return _to_out(m, principal["role"])
