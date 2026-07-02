@@ -6,11 +6,15 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Match, Message
+from ..geo import distance_km
+from ..models import Match, Message, Vacancy
 from ..schemas import MatchOut
 from ..security import current_principal
 
 router = APIRouter(prefix="/matches", tags=["matches"])
+
+# Радиус, в пределах которого гео-отметка «я на смене» считается валидной.
+_CHECKIN_RADIUS_KM = 0.3
 
 
 class AttendanceIn(BaseModel):
@@ -18,7 +22,11 @@ class AttendanceIn(BaseModel):
 
 
 class CheckinIn(BaseModel):
-    code: str
+    # Отметиться можно ДВУМЯ путями: код от заведения ИЛИ геолокация на месте
+    # (чтобы работник не зависел от того, покажет ли заведение код).
+    code: str | None = None
+    lat: float | None = None
+    lng: float | None = None
 
 
 @router.post("/{match_id}/attendance")
@@ -85,8 +93,22 @@ def checkin(
         raise HTTPException(status_code=403, detail="Отметиться может только работник")
     if m.status != "confirmed":
         raise HTTPException(status_code=400, detail="Смена не подтверждена")
-    if not m.checkin_code or body.code.strip() != m.checkin_code:
-        raise HTTPException(status_code=400, detail="Неверный код прихода")
+
+    # Путь 1 — код от заведения. Путь 2 — геолокация: работник физически на
+    # месте смены, даже если заведение код не назвало.
+    by_code = bool(
+        body.code and m.checkin_code and body.code.strip() == m.checkin_code
+    )
+    by_geo = False
+    if body.lat is not None and body.lng is not None:
+        v = db.get(Vacancy, m.vacancy_id)
+        if v is not None and (v.lat or v.lng):
+            by_geo = distance_km(body.lat, body.lng, v.lat, v.lng) <= _CHECKIN_RADIUS_KM
+    if not (by_code or by_geo):
+        raise HTTPException(
+            status_code=400,
+            detail="Не удалось отметиться: неверный код или вы не на месте смены",
+        )
     m.status = "completed"
     m.no_show = False
     db.add(Message(

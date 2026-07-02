@@ -223,6 +223,17 @@ def test_checkin_by_code_closes_shift(client):
     assert r.json()["status"] == "completed" and r.json()["checked_in"] is True
 
 
+def test_checkin_by_geolocation_without_code(client):
+    # Работник может отметиться геолокацией, даже если заведение не назвало код.
+    _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    far = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                      json={"lat": 55.0, "lng": 38.5})
+    assert far.status_code == 400  # не на месте
+    near = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                       json={"lat": 55.75, "lng": 37.61})  # координаты смены
+    assert near.status_code == 200 and near.json()["status"] == "completed"
+
+
 def test_candidate_filters_role_district_available(client):
     seeker_token, sid = _auth(client, "seeker")
     client.put("/me", headers=_hdr(seeker_token), json={

@@ -6,7 +6,7 @@ import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
-import { IconTabMatches, IconCheck, IconWarning } from "@/components/Icons";
+import { IconTabMatches, IconCheck, IconWarning, IconPin } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
 
@@ -35,7 +35,7 @@ export function MatchesPage() {
     const code = (codes[matchId] ?? "").trim();
     if (code.length < 4) return;
     try {
-      await checkinShift(matchId, code);
+      await checkinShift(matchId, { code });
       haptic("success");
       toast("Вы отметились на смене ✓", "success");
       setCodes((c) => ({ ...c, [matchId]: "" }));
@@ -44,6 +44,32 @@ export function MatchesPage() {
       haptic("error");
       toast("Неверный код прихода", "error");
     }
+  }
+
+  // Отметиться геолокацией — работник физически на месте смены, код не нужен.
+  function checkinByGeo(matchId: string) {
+    if (!("geolocation" in navigator)) {
+      toast("Геолокация недоступна — введите код", "error");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await checkinShift(matchId, {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+          haptic("success");
+          toast("Вы отметились на смене ✓", "success");
+          qc.invalidateQueries({ queryKey: ["matches"] });
+        } catch {
+          haptic("error");
+          toast("Вы не на месте смены — попробуйте код", "error");
+        }
+      },
+      () => toast("Нет доступа к геолокации — введите код", "error"),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
   }
 
   return (
@@ -103,11 +129,16 @@ export function MatchesPage() {
               </div>
             )}
 
-            {/* Работник: вводит код, полученный от заведения на месте. */}
+            {/* Работник: отметиться геолокацией (основной путь) или кодом. */}
             {role === "seeker" && m.status === "confirmed" && (
               <div style={{ marginTop: 12 }}>
-                <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
-                  На месте заведение назовёт код — введите, чтобы отметиться:
+                <button className="btn" onClick={() => checkinByGeo(m.id)}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <IconPin size={18} /> Я на смене — отметиться
+                  </span>
+                </button>
+                <div className="muted" style={{ fontSize: 13, margin: "12px 0 6px" }}>
+                  …или введите код, если заведение его назвало:
                 </div>
                 <div className="row" style={{ gap: 8 }}>
                   <input
@@ -122,12 +153,12 @@ export function MatchesPage() {
                     }
                   />
                   <button
-                    className="btn"
+                    className="btn secondary"
                     style={{ width: "auto", flex: 1 }}
                     disabled={(codes[m.id] ?? "").length < 4}
                     onClick={() => doCheckin(m.id)}
                   >
-                    Отметиться на смене
+                    Отметиться кодом
                   </button>
                 </div>
               </div>
