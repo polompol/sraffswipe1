@@ -191,8 +191,11 @@ export interface MatchModel {
   companyName?: string;
   companyPhotoUrl?: string;
   role?: StaffRole;
-  checkinCode?: string | null; // виден только заведению
-  checkedIn?: boolean;
+  checkinCode?: string | null; // виден только заведению (помощник)
+  checkedIn?: boolean; // смена закрыта (обе стороны подтвердили)
+  seekerCheckedIn?: boolean;
+  employerCheckedIn?: boolean;
+  disputed?: boolean;
 }
 
 export interface Message {

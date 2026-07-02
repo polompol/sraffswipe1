@@ -299,7 +299,17 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
 
 export function markAttendance(matchId: string, attended: boolean): Promise<void> {
   const m = matches.find((x) => x.id === matchId);
-  if (m) m.status = attended ? "completed" : m.status;
+  if (m) {
+    if (attended) {
+      m.employerCheckedIn = true;
+      if (m.seekerCheckedIn) {
+        m.status = "completed";
+        m.checkedIn = true;
+      }
+    } else if (m.seekerCheckedIn) {
+      m.disputed = true; // конфликт
+    }
+  }
   return Promise.resolve();
 }
 export function checkinShift(
@@ -311,8 +321,18 @@ export function checkinShift(
   const byCode = !!body.code && body.code.trim() === (m.checkinCode ?? "1234");
   const byGeo = body.lat != null && body.lng != null; // в демо гео всегда «на месте»
   if (!byCode && !byGeo) return Promise.reject(new Error("bad checkin"));
-  m.status = "completed";
-  m.checkedIn = true;
+  m.seekerCheckedIn = true;
+  if (m.employerCheckedIn) {
+    m.status = "completed";
+    m.checkedIn = true;
+  }
+  return Promise.resolve(m);
+}
+export function disputeShift(matchId: string, _note: string): Promise<MatchModel> {
+  void _note;
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  m.disputed = true;
   return Promise.resolve(m);
 }
 

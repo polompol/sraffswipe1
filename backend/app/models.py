@@ -154,9 +154,14 @@ class Match(Base):
     confirmed_by_employer: Mapped[bool] = mapped_column(Boolean, default=False)
     # Работодатель отмечает после смены: вышел человек или нет (надёжность).
     no_show: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Код прихода: заведение называет его работнику на месте, тот вводит в
-    # приложении — доказательство, что смена состоялась ЧЕРЕЗ сервис.
+    # Код прихода: помощник — заведение называет работнику на месте.
     checkin_code: Mapped[str] = mapped_column(String, default="")
+    # Взаимное подтверждение выхода: закрываем смену, только когда ОБЕ стороны
+    # подтвердили (противоположные стимулы → сами полицейские друг другу).
+    seeker_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    employer_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Спор (стороны не сошлись / работник не может отметиться) → к оператору.
+    disputed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

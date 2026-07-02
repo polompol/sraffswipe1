@@ -199,39 +199,56 @@ def test_invites_shows_employers_who_liked_me(client):
     assert all(v["id"] != vac["id"] for v in inv2)
 
 
-def test_checkin_by_code_closes_shift(client):
+def test_mutual_checkin_closes_only_when_both_confirm(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
-    # Код прихода виден заведению, скрыт от работника.
-    em = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
-              if m["id"] == match_id)
-    code = em["checkin_code"]
+    code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+                if m["id"] == match_id)["checkin_code"]
     assert code and len(code) == 4
-    sm = next(m for m in client.get("/matches", headers=_hdr(seeker_token)).json()
-              if m["id"] == match_id)
-    assert sm["checkin_code"] is None
-    # Заведение не может отметиться за работника.
-    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(emp_token),
-                       json={"code": code}).status_code == 403
-    # Неверный код → 400.
-    wrong = "0000" if code != "0000" else "1111"
-    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                       json={"code": wrong}).status_code == 400
-    # Верный код → смена закрыта (completed, checked_in).
+    # Работник отметился (код) — но смена ещё НЕ закрыта, ждём заведение.
     r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                     json={"code": code})
     assert r.status_code == 200
-    assert r.json()["status"] == "completed" and r.json()["checked_in"] is True
+    assert r.json()["seeker_checked_in"] is True
+    assert r.json()["status"] == "confirmed" and r.json()["checked_in"] is False
+    # Заведение подтвердило «человек пришёл» → теперь обе стороны → completed.
+    a = client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                    json={"attended": True})
+    assert a.status_code == 200
+    done = next(m for m in client.get("/matches", headers=_hdr(seeker_token)).json()
+                if m["id"] == match_id)
+    assert done["status"] == "completed" and done["checked_in"] is True
 
 
-def test_checkin_by_geolocation_without_code(client):
-    # Работник может отметиться геолокацией, даже если заведение не назвало код.
+def test_checkin_geo_and_code_helpers(client):
     _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
-    far = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                      json={"lat": 55.0, "lng": 38.5})
-    assert far.status_code == 400  # не на месте
-    near = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                       json={"lat": 55.75, "lng": 37.61})  # координаты смены
-    assert near.status_code == 200 and near.json()["status"] == "completed"
+    # Гео вдалеке — отказ; на месте — отметка проходит.
+    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                       json={"lat": 55.0, "lng": 38.5}).status_code == 400
+    r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                    json={"lat": 55.75, "lng": 37.61})
+    assert r.status_code == 200 and r.json()["seeker_checked_in"] is True
+
+
+def test_conflict_creates_dispute(client):
+    emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+                if m["id"] == match_id)["checkin_code"]
+    client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                json={"code": code})
+    # Работник отметился, а заведение говорит «не вышел» → спор, не закрываем.
+    a = client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                    json={"attended": False})
+    assert a.json()["disputed"] is True
+    m = next(x for x in client.get("/matches", headers=_hdr(seeker_token)).json()
+             if x["id"] == match_id)
+    assert m["disputed"] is True and m["status"] != "completed"
+
+
+def test_dispute_endpoint_escalates(client):
+    _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    r = client.post(f"/matches/{match_id}/dispute", headers=_hdr(seeker_token),
+                    json={"note": "пришёл, заведение не открылось"})
+    assert r.status_code == 200 and r.json()["disputed"] is True
 
 
 def test_candidate_filters_role_district_available(client):

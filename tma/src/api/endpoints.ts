@@ -128,8 +128,7 @@ export async function markAttendance(
   await api.post(`/matches/${matchId}/attendance`, { attended });
 }
 
-/** Работник отмечается на смене: кодом от заведения ИЛИ геолокацией на месте
- *  (чтобы не зависеть от того, покажет ли заведение код). */
+/** Сторона работника во взаимном подтверждении: «я на смене» (код ИЛИ гео). */
 export async function checkinShift(
   matchId: string,
   body: { code?: string; lat?: number; lng?: number },
@@ -138,6 +137,19 @@ export async function checkinShift(
   const { data } = await api.post<MatchModel>(
     `/matches/${matchId}/checkin`,
     body,
+  );
+  return data;
+}
+
+/** Спор по смене («был/пришёл, но не могу подтвердить») → к оператору. */
+export async function disputeShift(
+  matchId: string,
+  note = "",
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.disputeShift(matchId, note);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/dispute`,
+    { note },
   );
   return data;
 }

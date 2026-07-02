@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..geo import distance_km
-from ..models import Match, Message, Vacancy
+from ..models import Match, Message, Report, Vacancy
+from ..notify import notify_admins, notify_owner
 from ..schemas import MatchOut
 from ..security import current_principal
 
@@ -22,11 +23,31 @@ class AttendanceIn(BaseModel):
 
 
 class CheckinIn(BaseModel):
-    # Отметиться можно ДВУМЯ путями: код от заведения ИЛИ геолокация на месте
-    # (чтобы работник не зависел от того, покажет ли заведение код).
+    # Помощники для отметки работника: код от заведения ИЛИ геолокация на месте.
     code: str | None = None
     lat: float | None = None
     lng: float | None = None
+
+
+class DisputeIn(BaseModel):
+    note: str = ""
+
+
+def _sys(db: Session, match_id: str, text: str) -> None:
+    db.add(Message(match_id=match_id, sender_id="system", text=text, is_system=True))
+
+
+def _maybe_complete(db: Session, m: Match) -> None:
+    """Смена закрывается ТОЛЬКО при взаимном подтверждении обеих сторон."""
+    if (
+        m.status == "confirmed"
+        and m.seeker_checked_in
+        and m.employer_checked_in
+        and not m.disputed
+    ):
+        m.status = "completed"
+        m.no_show = False
+        _sys(db, m.id, "Обе стороны подтвердили выход ✓ Смена закрыта.")
 
 
 @router.post("/{match_id}/attendance")
@@ -36,7 +57,9 @@ def mark_attendance(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
-    """Работодатель отмечает после смены: работник вышел или нет (надёжность)."""
+    """Заведение подтверждает выход. `attended=true` — «человек пришёл» (сторона
+    заведения во взаимном подтверждении). `attended=false` — «не вышел»: если
+    работник уже отметился, это КОНФЛИКТ → спор оператору; иначе — неявка."""
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
@@ -44,14 +67,25 @@ def mark_attendance(
         raise HTTPException(status_code=403, detail="Только работодатель смены")
     if m.status not in ("confirmed", "completed"):
         raise HTTPException(status_code=400, detail="Смена ещё не подтверждена")
-    m.no_show = not body.attended
+
+    if body.attended:
+        m.employer_checked_in = True
+        m.no_show = False
+        _maybe_complete(db, m)
+    elif m.seeker_checked_in:
+        # Работник говорит «был», заведение — «не вышел». Не решаем сами.
+        m.disputed = True
+        notify_admins(f"⚠️ Спор по смене {m.id[:8]}: работник отметился, "
+                      f"заведение говорит «не вышел». Разберите в админ-панели.")
+        _sys(db, m.id, "Спор по выходу — разбирает оператор StaffSwipe.")
+    else:
+        m.no_show = True  # согласованная неявка
     db.commit()
-    return {"ok": True, "noShow": m.no_show}
+    return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
 
 
 def _to_out(m: Match, role: str = "") -> MatchOut:
-    # Код прихода показываем ТОЛЬКО заведению и только пока смена подтверждена,
-    # но ещё не закрыта чек-ином. Работник узнаёт код у заведения на месте.
+    # Код прихода показываем ТОЛЬКО заведению как помощник, пока смена не закрыта.
     show_code = role == "employer" and m.status == "confirmed" and bool(m.checkin_code)
     return MatchOut(
         id=m.id,
@@ -63,6 +97,9 @@ def _to_out(m: Match, role: str = "") -> MatchOut:
         confirmed_by_employer=m.confirmed_by_employer,
         checkin_code=m.checkin_code if show_code else None,
         checked_in=m.status == "completed",
+        seeker_checked_in=m.seeker_checked_in,
+        employer_checked_in=m.employer_checked_in,
+        disputed=m.disputed,
     )
 
 
@@ -83,9 +120,9 @@ def checkin(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
-    """Работник отмечается на смене кодом, который назвало заведение на месте.
-    Доказательство, что смена состоялась через сервис (основа для комиссии и
-    честной надёжности). Закрывает смену как выполненную."""
+    """Сторона работника во взаимном подтверждении: «я на смене». Подтверждается
+    помощниками (код заведения ИЛИ геолокация на месте). Смена закрывается лишь
+    когда заведение тоже подтвердит. Не может отметиться → кнопка «Проблема»."""
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
@@ -94,8 +131,6 @@ def checkin(
     if m.status != "confirmed":
         raise HTTPException(status_code=400, detail="Смена не подтверждена")
 
-    # Путь 1 — код от заведения. Путь 2 — геолокация: работник физически на
-    # месте смены, даже если заведение код не назвало.
     by_code = bool(
         body.code and m.checkin_code and body.code.strip() == m.checkin_code
     )
@@ -109,12 +144,39 @@ def checkin(
             status_code=400,
             detail="Не удалось отметиться: неверный код или вы не на месте смены",
         )
-    m.status = "completed"
-    m.no_show = False
-    db.add(Message(
-        match_id=m.id, sender_id="system",
-        text="Работник отметился на смене ✓ Смена закрыта.", is_system=True,
+    m.seeker_checked_in = True
+    _sys(db, m.id, "Работник отметился: на месте. Ждём подтверждения заведения.")
+    _maybe_complete(db, m)
+    db.commit()
+    db.refresh(m)
+    return _to_out(m, principal["role"])
+
+
+@router.post("/{match_id}/dispute", response_model=MatchOut)
+def dispute(
+    match_id: str,
+    body: DisputeIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """«Пришёл/был, но не могу подтвердить» — эскалация к оператору. Доступна
+    обеим сторонам мэтча. Создаёт жалобу-разбор и сигналит админам."""
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["id"] not in (m.user_id, m.employer_id):
+        raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
+    m.disputed = True
+    who = "работник" if principal["id"] == m.user_id else "заведение"
+    note = (body.note or "").strip()[:300]
+    db.add(Report(
+        reporter_id=principal["id"], target_type="match", target_id=m.id,
+        reason="other", text=f"Спор по смене ({who}): {note}"[:1000],
     ))
+    _sys(db, m.id, "Открыт спор по смене — разбирает оператор StaffSwipe.")
+    other = m.employer_id if principal["id"] == m.user_id else m.user_id
+    notify_owner(db, other, "По вашей смене открыт спор — с вами свяжется оператор.")
+    notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
     db.commit()
     db.refresh(m)
     return _to_out(m, principal["role"])
@@ -139,16 +201,10 @@ def confirm(
 
     if m.confirmed_by_seeker and m.confirmed_by_employer and m.status == "matched":
         m.status = "confirmed"
-        m.checkin_code = f"{secrets.randbelow(10000):04d}"  # код прихода
-        db.add(
-            Message(
-                match_id=m.id,
-                sender_id="system",
-                text="Смена подтверждена. Заведение назовёт код прихода на месте — "
-                     "работник вводит его, чтобы отметиться.",
-                is_system=True,
-            )
-        )
+        m.checkin_code = f"{secrets.randbelow(10000):04d}"  # код-помощник
+        _sys(db, m.id,
+             "Смена подтверждена. В день смены отметятся обе стороны: работник — "
+             "«я на смене», заведение — «человек пришёл».")
     db.commit()
     db.refresh(m)
     return _to_out(m, principal["role"])

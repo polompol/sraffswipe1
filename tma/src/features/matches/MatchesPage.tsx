@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { checkinShift, fetchMatches, markAttendance } from "@/api/endpoints";
+import { checkinShift, disputeShift, fetchMatches, markAttendance } from "@/api/endpoints";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
@@ -43,6 +43,17 @@ export function MatchesPage() {
     } catch {
       haptic("error");
       toast("Неверный код прихода", "error");
+    }
+  }
+
+  async function doDispute(matchId: string) {
+    haptic("warning");
+    try {
+      await disputeShift(matchId);
+      toast("Спор открыт — с вами свяжется оператор", "success");
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    } catch {
+      toast("Не удалось открыть спор", "error");
     }
   }
 
@@ -110,75 +121,96 @@ export function MatchesPage() {
               </span>
               <span style={{ color: "var(--muted)", fontSize: 22 }}>›</span>
             </div>
+            {/* Спор — эскалация к оператору. */}
+            {m.disputed && !m.checkedIn && (
+              <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--crimson-dark)" }}>
+                <IconWarning size={16} /> <b>Спор по смене — разбирает оператор</b>
+              </div>
+            )}
+
+            {/* Смена закрыта: обе стороны подтвердили. */}
             {m.checkedIn && (
               <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--like)" }}>
-                <IconCheck size={16} /> <b>Смена закрыта — работник отметился</b>
+                <IconCheck size={16} /> <b>Смена закрыта — обе стороны подтвердили ✓</b>
               </div>
             )}
 
-            {/* Заведение: показывает код прихода, называет работнику на месте. */}
-            {role === "employer" && m.status === "confirmed" && m.checkinCode && (
-              <div
-                className="card"
-                style={{ marginTop: 12, background: "rgba(165,28,48,.05)", borderColor: "var(--gold)" }}
-              >
-                <div className="muted" style={{ fontSize: 13 }}>Код прихода — назовите работнику на месте:</div>
-                <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 6, color: "var(--gold)" }}>
-                  {m.checkinCode}
-                </div>
-              </div>
-            )}
-
-            {/* Работник: отметиться геолокацией (основной путь) или кодом. */}
-            {role === "seeker" && m.status === "confirmed" && (
+            {/* ВЗАИМНОЕ ПОДТВЕРЖДЕНИЕ выхода (день смены). */}
+            {m.status === "confirmed" && !m.disputed && (
               <div style={{ marginTop: 12 }}>
-                <button className="btn" onClick={() => checkinByGeo(m.id)}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <IconPin size={18} /> Я на смене — отметиться
-                  </span>
-                </button>
-                <div className="muted" style={{ fontSize: 13, margin: "12px 0 6px" }}>
-                  …или введите код, если заведение его назвало:
-                </div>
-                <div className="row" style={{ gap: 8 }}>
-                  <input
-                    className="input"
-                    inputMode="numeric"
-                    maxLength={4}
-                    placeholder="код"
-                    style={{ width: 110, letterSpacing: 4, fontWeight: 800 }}
-                    value={codes[m.id] ?? ""}
-                    onChange={(e) =>
-                      setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
-                    }
-                  />
-                  <button
-                    className="btn secondary"
-                    style={{ width: "auto", flex: 1 }}
-                    disabled={(codes[m.id] ?? "").length < 4}
-                    onClick={() => doCheckin(m.id)}
-                  >
-                    Отметиться кодом
-                  </button>
-                </div>
-              </div>
-            )}
+                {/* Заведение */}
+                {role === "employer" && (
+                  <>
+                    {m.checkinCode && !m.employerCheckedIn && (
+                      <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+                        Код-подсказка работнику (по желанию): <b style={{ color: "var(--gold)", letterSpacing: 3 }}>{m.checkinCode}</b>
+                      </div>
+                    )}
+                    {m.employerCheckedIn ? (
+                      <div className="muted">Вы подтвердили выход ✓ Ждём отметку работника.</div>
+                    ) : (
+                      <div className="row" style={{ gap: 8 }}>
+                        <button className="btn" style={{ width: "auto", flex: 1 }} onClick={() => mark(m.id, true)}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <IconCheck size={16} /> Человек пришёл
+                          </span>
+                        </button>
+                        <button className="btn secondary" style={{ width: "auto" }} onClick={() => mark(m.id, false)}>
+                          Не вышел
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
 
-            {role === "employer" && (m.status === "confirmed" || m.status === "completed") && (
-              <div className="row" style={{ gap: 8, marginTop: 12 }}>
+                {/* Работник */}
+                {role === "seeker" && (
+                  <>
+                    {m.seekerCheckedIn ? (
+                      <div className="muted">Вы отметились ✓ Ждём подтверждения заведения.</div>
+                    ) : (
+                      <>
+                        <button className="btn" onClick={() => checkinByGeo(m.id)}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            <IconPin size={18} /> Я на смене — отметиться
+                          </span>
+                        </button>
+                        <div className="muted" style={{ fontSize: 13, margin: "12px 0 6px" }}>
+                          …или введите код, если заведение его назвало:
+                        </div>
+                        <div className="row" style={{ gap: 8 }}>
+                          <input
+                            className="input"
+                            inputMode="numeric"
+                            maxLength={4}
+                            placeholder="код"
+                            style={{ width: 110, letterSpacing: 4, fontWeight: 800 }}
+                            value={codes[m.id] ?? ""}
+                            onChange={(e) =>
+                              setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
+                            }
+                          />
+                          <button
+                            className="btn secondary"
+                            style={{ width: "auto", flex: 1 }}
+                            disabled={(codes[m.id] ?? "").length < 4}
+                            onClick={() => doCheckin(m.id)}
+                          >
+                            Отметиться кодом
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {/* Путь спора — обеим сторонам. */}
                 <button
-                  className="tag"
-                  style={{ cursor: "pointer", color: "var(--super)", borderColor: "var(--super)" }}
-                  onClick={() => mark(m.id, true)}
+                  className="tab"
+                  style={{ width: "auto", marginTop: 10, color: "var(--muted)", fontSize: 13 }}
+                  onClick={() => doDispute(m.id)}
                 >
-                  <IconCheck size={13} /> Вышел
-                </button>
-                <button
-                  className="tag"
-                  style={{ cursor: "pointer", color: "var(--muted)", borderColor: "var(--border)" }}
-                  onClick={() => mark(m.id, false)}
-                >
-                  <IconWarning size={13} /> Не вышел
+                  Проблема — не получается подтвердить
                 </button>
               </div>
             )}
