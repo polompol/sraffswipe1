@@ -6,6 +6,7 @@ import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
+import { ReviewStars } from "@/components/ReviewStars";
 import { IconTabMatches, IconCheck, IconWarning, IconPin } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
@@ -128,11 +129,15 @@ export function MatchesPage() {
               </div>
             )}
 
-            {/* Смена закрыта: обе стороны подтвердили. */}
+            {/* Смена закрыта: обе стороны подтвердили. Сразу просим оценку —
+                момент наивысшей эмоции, отзывов собирается больше. */}
             {m.checkedIn && (
-              <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--like)" }}>
-                <IconCheck size={16} /> <b>Смена закрыта — обе стороны подтвердили ✓</b>
-              </div>
+              <>
+                <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--like)" }}>
+                  <IconCheck size={16} /> <b>Смена закрыта — обе стороны подтвердили ✓</b>
+                </div>
+                <ReviewStars matchId={m.id} />
+              </>
             )}
 
             {/* ВЗАИМНОЕ ПОДТВЕРЖДЕНИЕ выхода (день смены). */}

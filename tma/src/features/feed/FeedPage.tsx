@@ -194,9 +194,9 @@ export function FeedPage() {
         <span
           aria-hidden
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: 8,
+            width: 34,
+            height: 34,
+            borderRadius: 10,
             marginRight: 8,
             background: "linear-gradient(135deg,var(--gold-soft),var(--gold))",
             display: "inline-flex",
@@ -204,9 +204,9 @@ export function FeedPage() {
             justifyContent: "center",
           }}
         >
-          <Logo size={20} color="#fff" />
+          <Logo size={24} color="#fff" />
         </span>
-        <h2 className="h2" style={{ margin: 0, flex: 1 }}>
+        <h2 className="h2" style={{ margin: 0, flex: 1, fontSize: 26, letterSpacing: -0.3 }}>
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
         </h2>
         {isSeeker && (
