@@ -281,14 +281,15 @@ input:focus-visible {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-height: 58px;
+  gap: 5px;
+  /* Крупнее зона нажатия и подпись — «куда жать» видно без прищура. */
+  min-height: 64px;
   padding: 4px 0;
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 700;
   cursor: pointer;
 }
 .tab.active {
@@ -297,6 +298,15 @@ input:focus-visible {
 .tab .ico {
   display: inline-flex;
   line-height: 0;
+  padding: 5px 16px;
+  border-radius: 999px;
+}
+/* Активная вкладка — «таблетка» под иконкой: сразу видно, где ты. */
+.tab.active .ico {
+  background: rgba(165, 28, 48, 0.10);
+}
+[data-theme="dark"] .tab.active .ico {
+  background: rgba(210, 75, 96, 0.16);
 }
 
 /* Иконки-кнопки в шапке (фильтр, вид, тарифы) — крупная тап-зона ~44px */
@@ -625,9 +635,6 @@ body[data-large="1"] .act.sm {
 body[data-large="1"] .act-label {
   font-size: 15px;
 }
-body[data-large="1"] .tab {
-  font-size: 12.5px;
-}
 body[data-large="1"] .swipe-body {
   font-size: 17px;
 }
@@ -665,7 +672,7 @@ body[data-large="1"] .card-meta {
   font-size: 17px;
 }
 body[data-large="1"] .tab {
-  font-size: 14.5px;
+  font-size: 16px;
 }
 
 /* Чат */
