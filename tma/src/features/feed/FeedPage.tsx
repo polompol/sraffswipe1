@@ -271,7 +271,7 @@ export function FeedPage() {
             aria-pressed={todayOnly}
             style={{
               cursor: "pointer",
-              borderColor: todayOnly ? "var(--gold)" : "var(--border)",
+              borderColor: todayOnly ? "var(--gold)" : "var(--dislike)",
               background: todayOnly ? "var(--gold)" : "transparent",
               color: todayOnly ? "#fff" : "var(--text)",
             }}

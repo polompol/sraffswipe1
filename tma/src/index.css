@@ -238,12 +238,14 @@ input:focus-visible {
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
+  gap: 5px;
+  /* Читабельность чипов-фильтров: крупнее шрифт, толще рамка, выше зона тапа. */
+  font-size: 15px;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 8px 14px;
+  min-height: 38px;
   border-radius: 999px;
-  border: 1px solid;
+  border: 1.5px solid;
 }
 
 .input {
@@ -655,8 +657,8 @@ body[data-large="1"] .muted {
   font-size: 17px;
 }
 body[data-large="1"] .tag {
-  font-size: 15px;
-  padding: 7px 13px;
+  font-size: 17px;
+  padding: 10px 16px;
 }
 body[data-large="1"] .btn {
   font-size: 19px;

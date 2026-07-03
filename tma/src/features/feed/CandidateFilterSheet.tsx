@@ -31,7 +31,7 @@ export function CandidateFilterSheet({
           cursor: "pointer",
           background: on ? "var(--gold)" : "transparent",
           color: on ? "#fff" : "var(--text)",
-          borderColor: on ? "var(--gold)" : "var(--border)",
+          borderColor: on ? "var(--gold)" : "var(--dislike)",
         }}
         onClick={() => {
           haptic("select");
