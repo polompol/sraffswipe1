@@ -455,6 +455,26 @@ export async function adminGrant(ownerId: string, sku: string): Promise<void> {
   await api.post("/admin/grant", { owner_id: ownerId, sku });
 }
 
+export interface CommissionRow {
+  employerId: string;
+  company: string;
+  shifts: number;
+  amountRub: number;
+}
+
+/** Комиссия к счёту по заведениям (закрытые смены, ещё не оплачено). */
+export async function fetchCommissions(): Promise<CommissionRow[]> {
+  if (!USE_BACKEND) return mock.fetchCommissions();
+  const { data } = await api.get<CommissionRow[]>("/admin/commissions");
+  return data;
+}
+
+/** Отметить комиссию заведения оплаченной (после оплаты по счёту). */
+export async function settleCommission(employerId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.settleCommission(employerId);
+  await api.post(`/admin/commissions/${employerId}/settle`, {});
+}
+
 /** Заблокировать пользователя (соискателя/работодателя). */
 export async function blockUser(userId: string): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport("");

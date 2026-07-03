@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  fetchCommissions,
+  settleCommission,
   adminGrant,
   adminSearchUsers,
   blockUser,
@@ -92,6 +94,15 @@ export function AdminPage() {
     await adminGrant(id, sku);
     toast(`Выдано: ${label}`, "success");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
+  }
+
+  const comms = useQuery({ queryKey: ["admin-commissions"], queryFn: fetchCommissions });
+  const commTotal = (comms.data ?? []).reduce((s, c) => s + c.amountRub, 0);
+  async function settle(employerId: string) {
+    haptic("success");
+    await settleCommission(employerId);
+    toast("Отмечено оплаченным", "success");
+    qc.invalidateQueries({ queryKey: ["admin-commissions"] });
   }
 
   function refresh() {
@@ -208,6 +219,42 @@ export function AdminPage() {
             Активных подписок: <b style={{ color: "var(--text)" }}>Pro {rev.data.activePro}</b>
             {" · "}<b style={{ color: "var(--text)" }}>Business {rev.data.activeBusiness}</b>
           </div>
+        </div>
+      )}
+
+      <h2 className="h2" style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+        <IconMoney size={20} /> Комиссия к счёту
+      </h2>
+      {comms.data && comms.data.length === 0 && (
+        <div className="card muted" style={{ textAlign: "center", marginBottom: 18 }}>
+          Пока нет закрытых смен к оплате
+        </div>
+      )}
+      {comms.data && comms.data.length > 0 && (
+        <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
+          <div className="muted" style={{ fontSize: 13 }}>
+            Всего к счёту: <b style={{ color: "var(--gold)" }}>{commTotal.toLocaleString("ru-RU")} ₽</b> за закрытые смены
+          </div>
+          {comms.data.map((c) => (
+            <div key={c.employerId} className="card">
+              <div className="row">
+                <span style={{ flex: 1 }}>
+                  <b>{c.company}</b>
+                  <div className="muted" style={{ fontSize: 12 }}>{c.shifts} закрытых смен</div>
+                </span>
+                <span style={{ fontWeight: 900, color: "var(--gold)" }}>
+                  {c.amountRub.toLocaleString("ru-RU")} ₽
+                </span>
+              </div>
+              <button
+                className="tab"
+                style={{ width: "auto", marginTop: 6, color: "var(--like)", fontSize: 13 }}
+                onClick={() => settle(c.employerId)}
+              >
+                Отметить оплаченной
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..entitlements import get_or_create, plan_of
 from ..models import (
+    Commission,
     Employer,
     Match,
     Purchase,
@@ -481,3 +482,57 @@ def grant_entitlement(
         raise HTTPException(status_code=400, detail="Неизвестный SKU")
     _apply_effect(db, body.owner_id, body.sku)
     return {"ok": True, "sku": body.sku}
+
+
+# ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----
+
+
+class CommissionRow(BaseModel):
+    employerId: str
+    company: str
+    shifts: int          # закрытых смен (к оплате)
+    amountRub: int       # сумма комиссии к счёту, ₽
+
+
+@router.get("/commissions", response_model=list[CommissionRow])
+def commissions(
+    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
+):
+    """Сколько каждое заведение должно по комиссии за закрытые смены (pending)."""
+    rows = (
+        db.query(
+            Commission.employer_id,
+            func.count(Commission.id),
+            func.coalesce(func.sum(Commission.amount), 0),
+        )
+        .filter(Commission.status == "pending")
+        .group_by(Commission.employer_id)
+        .all()
+    )
+    out: list[CommissionRow] = []
+    for emp_id, shifts, total in rows:
+        emp = db.get(Employer, emp_id)
+        out.append(CommissionRow(
+            employerId=emp_id,
+            company=emp.company_name if emp else "—",
+            shifts=int(shifts or 0),
+            amountRub=int(total or 0),
+        ))
+    out.sort(key=lambda r: -r.amountRub)
+    return out
+
+
+@router.post("/commissions/{employer_id}/settle")
+def settle_commission(
+    employer_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Отметить комиссию заведения как оплаченную (после оплаты по счёту)."""
+    n = (
+        db.query(Commission)
+        .filter(Commission.employer_id == employer_id, Commission.status == "pending")
+        .update({Commission.status: "paid"}, synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "settled": n}

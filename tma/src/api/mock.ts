@@ -517,6 +517,16 @@ export function adminGrant(_ownerId: string, _sku: string): Promise<void> {
   void _sku;
   return Promise.resolve();
 }
+export function fetchCommissions() {
+  return Promise.resolve([
+    { employerId: "emp1", company: "Кофейня «Дрова»", shifts: 7, amountRub: 1960 },
+    { employerId: "emp2", company: "Бар «Полночь»", shifts: 3, amountRub: 1350 },
+  ]);
+}
+export function settleCommission(_employerId: string): Promise<void> {
+  void _employerId;
+  return Promise.resolve();
+}
 export function fetchAdminSubscriptions() {
   return Promise.resolve([
     { ownerId: "emp1", company: "Кофейня «Дрова»", plan: "pro", renewsAt: "2026-07-20" },

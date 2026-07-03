@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..geo import distance_km
-from ..models import Match, Message, Report, Vacancy
+from ..models import Commission, Match, Message, Report, Vacancy
 from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import MatchOut
@@ -38,6 +39,34 @@ def _sys(db: Session, match_id: str, text: str) -> None:
     db.add(Message(match_id=match_id, sender_id="system", text=text, is_system=True))
 
 
+def _shift_pay(v: Vacancy) -> int:
+    """Оплата смены, ₽ (зеркало estimatedPay в TMA)."""
+    if v.rate_type == "perShift":
+        return v.rate
+    mins = v.end_time - v.start_time
+    if mins <= 0:
+        mins += 1440  # ночная смена через полночь
+    return round(v.rate * mins / 60)
+
+
+def _accrue_commission(db: Session, m: Match) -> None:
+    """Начисляем комиссию за закрытую смену (учёт для счёта). Идемпотентно —
+    по одной записи на смену. Деньги не списываем: это включится с ЮKassa."""
+    if settings.commission_pct <= 0:
+        return
+    if db.query(Commission).filter(Commission.match_id == m.id).first():
+        return
+    v = db.get(Vacancy, m.vacancy_id)
+    if v is None:
+        return
+    pay = _shift_pay(v)
+    fee = round(pay * settings.commission_pct / 100)
+    amount = max(settings.commission_min_rub, fee)
+    db.add(Commission(
+        employer_id=m.employer_id, match_id=m.id, shift_pay=pay, amount=amount,
+    ))
+
+
 def _maybe_complete(db: Session, m: Match) -> None:
     """Смена закрывается ТОЛЬКО при взаимном подтверждении обеих сторон."""
     if (
@@ -48,6 +77,7 @@ def _maybe_complete(db: Session, m: Match) -> None:
     ):
         m.status = "completed"
         m.no_show = False
+        _accrue_commission(db, m)
         _sys(db, m.id, "Обе стороны подтвердили выход ✓ Смена закрыта.")
 
 

@@ -334,3 +334,18 @@ class Report(Base):
     text: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String, default="open")  # open|reviewed
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Commission(Base):
+    """Начисление комиссии за закрытую смену (для выставления счёта заведению).
+    Одна запись на смену. Списание денег — позже через ЮKassa; пока это учёт."""
+
+    __tablename__ = "commissions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    employer_id: Mapped[str] = mapped_column(String, index=True)
+    match_id: Mapped[str] = mapped_column(String, unique=True)  # 1 на смену
+    shift_pay: Mapped[int] = mapped_column(Integer, default=0)  # оплата смены, ₽
+    amount: Mapped[int] = mapped_column(Integer, default=0)     # комиссия, ₽
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending|paid
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

@@ -229,6 +229,23 @@ def test_checkin_geo_and_code_helpers(client):
     assert r.status_code == 200 and r.json()["seeker_checked_in"] is True
 
 
+def test_commission_accrued_on_close(client):
+    # Смена: бариста 350 ₽/час × 8ч = 2800 ₽ → комиссия 10% = 280 ₽.
+    emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+                if m["id"] == match_id)["checkin_code"]
+    client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                json={"code": code})
+    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                json={"attended": True})
+    rows = client.get("/admin/commissions", headers=_hdr(emp_token)).json()
+    assert rows and rows[0]["shifts"] == 1 and rows[0]["amountRub"] == 280
+    # Отметили оплаченной → к счёту больше не висит.
+    eid = rows[0]["employerId"]
+    client.post(f"/admin/commissions/{eid}/settle", headers=_hdr(emp_token))
+    assert client.get("/admin/commissions", headers=_hdr(emp_token)).json() == []
+
+
 def test_checkin_bruteforce_rate_limited(client):
     # 4-значный код нельзя перебрать: после 5 попыток в минуту — 429.
     _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)

@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     bot_username: str = "staffswipe_bot"
     # Бонус рефереру за приглашённого (супер-лайки).
     referral_bonus_superlikes: int = 3
+    # Комиссия сервиса с закрытой смены (% от оплаты). Только УЧЁТ для счёта —
+    # деньги не списываются автоматически до подключения ЮKassa. 0 = выключено.
+    commission_pct: int = 10
+    # Минимум комиссии за смену, ₽ (чтобы дешёвая смена не давала копейки).
+    commission_min_rub: int = 0
     # Разрешать вход без валидной подписи initData (ТОЛЬКО локальная отладка).
     allow_insecure_telegram_auth: bool = False
 
