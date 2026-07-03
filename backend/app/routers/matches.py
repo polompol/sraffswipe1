@@ -9,6 +9,7 @@ from ..db import get_db
 from ..geo import distance_km
 from ..models import Match, Message, Report, Vacancy
 from ..notify import notify_admins, notify_owner
+from ..ratelimit import rate_limit
 from ..schemas import MatchOut
 from ..security import current_principal
 
@@ -113,7 +114,13 @@ def list_matches(
     return [_to_out(m, principal["role"]) for m in rows]
 
 
-@router.post("/{match_id}/checkin", response_model=MatchOut)
+@router.post(
+    "/{match_id}/checkin",
+    response_model=MatchOut,
+    # Анти-перебор: 4-значный код нельзя подобрать скриптом —
+    # максимум 5 попыток в минуту на пользователя.
+    dependencies=[Depends(rate_limit("checkin", 5, 60))],
+)
 def checkin(
     match_id: str,
     body: CheckinIn,

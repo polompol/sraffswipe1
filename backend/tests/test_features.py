@@ -229,6 +229,18 @@ def test_checkin_geo_and_code_helpers(client):
     assert r.status_code == 200 and r.json()["seeker_checked_in"] is True
 
 
+def test_checkin_bruteforce_rate_limited(client):
+    # 4-значный код нельзя перебрать: после 5 попыток в минуту — 429.
+    _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    for _ in range(5):
+        r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                        json={"code": "9999"})
+        assert r.status_code == 400  # неверный код
+    r6 = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                     json={"code": "9999"})
+    assert r6.status_code == 429  # перебор заблокирован
+
+
 def test_conflict_creates_dispute(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
