@@ -342,32 +342,6 @@ export function track(name: string, props?: Record<string, unknown>): void {
 
 // --- Живая лента активности (социальное доказательство, FOMO) ---
 
-export interface ActivityItem {
-  kind: "closed" | "urgent";
-  text: string;
-  agoMin: number;
-}
-
-export interface ActivityFeed {
-  items: ActivityItem[];
-  searchingNow: number;
-  urgentToday: number;
-}
-
-export async function fetchActivity(): Promise<ActivityFeed> {
-  if (!USE_BACKEND) return mock.fetchActivity();
-  const { data } = await api.get<{
-    items: { kind: "closed" | "urgent"; text: string; ago_min: number }[];
-    searching_now: number;
-    urgent_today: number;
-  }>("/activity/recent");
-  return {
-    items: data.items.map((i) => ({ kind: i.kind, text: i.text, agoMin: i.ago_min })),
-    searchingNow: data.searching_now,
-    urgentToday: data.urgent_today,
-  };
-}
-
 export type Funnel = Record<string, number>;
 
 export async function fetchFunnel(): Promise<Funnel> {

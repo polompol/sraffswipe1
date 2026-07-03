@@ -377,8 +377,9 @@ input:focus-visible {
 /* Колода свайпа */
 .deck {
   position: relative;
-  height: 64vh;
-  min-height: 420px;
+  /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде. */
+  height: 68vh;
+  min-height: 460px;
 }
 .swipe-card {
   position: absolute;

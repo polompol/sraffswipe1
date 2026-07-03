@@ -17,7 +17,6 @@ import { todayISO, estimatedPay } from "@/lib/format";
 import { useGeo } from "@/lib/useGeo";
 import { CountUp } from "@/components/CountUp";
 import { pop } from "@/lib/sfx";
-import { LiveTicker } from "./LiveTicker";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
@@ -264,8 +263,6 @@ export function FeedPage() {
           <span className="money-near-sub">забери свою — листай ленту</span>
         </div>
       )}
-
-      {isSeeker && <LiveTicker />}
 
       {isSeeker && (
         <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
