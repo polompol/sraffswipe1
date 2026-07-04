@@ -475,6 +475,15 @@ export async function settleCommission(employerId: string): Promise<void> {
   await api.post(`/admin/commissions/${employerId}/settle`, {});
 }
 
+/** Оператор закрывает спор по смене: засчитать или зафиксировать неявку. */
+export async function resolveMatch(
+  matchId: string,
+  outcome: "completed" | "no_show",
+): Promise<void> {
+  if (!USE_BACKEND) return mock.resolveMatch(matchId, outcome);
+  await api.post(`/matches/${matchId}/resolve`, { outcome });
+}
+
 /** Заблокировать пользователя (соискателя/работодателя). */
 export async function blockUser(userId: string): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport("");

@@ -280,6 +280,39 @@ def test_dispute_endpoint_escalates(client):
     assert r.status_code == 200 and r.json()["disputed"] is True
 
 
+def test_operator_resolves_dispute_no_show(client):
+    # Спор → оператор фиксирует неявку. Смена НЕ засчитана, комиссии нет.
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    client.post(f"/matches/{match_id}/dispute", headers=_hdr(seeker_token),
+                json={"note": "спор"})
+    # Не-админ (вход по телефону, tg_id=None) не может разрешать спор.
+    code = client.post("/auth/request-code",
+                       json={"phone": "+79990001122"}).json()["dev_code"]
+    outsider = client.post("/auth/verify", json={
+        "phone": "+79990001122", "code": code, "role": "seeker"}).json()["access_token"]
+    assert client.post(f"/matches/{match_id}/resolve", headers=_hdr(outsider),
+                       json={"outcome": "no_show"}).status_code == 403
+    r = client.post(f"/matches/{match_id}/resolve", headers=ah,
+                    json={"outcome": "no_show"})
+    assert r.status_code == 200 and r.json()["disputed"] is False
+    assert client.get("/admin/commissions", headers=ah).json() == []
+
+
+def test_operator_resolves_dispute_completed_accrues(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    client.post(f"/matches/{match_id}/dispute", headers=_hdr(seeker_token),
+                json={"note": "спор"})
+    r = client.post(f"/matches/{match_id}/resolve", headers=ah,
+                    json={"outcome": "completed"})
+    assert r.status_code == 200 and r.json()["status"] == "completed"
+    rows = client.get("/admin/commissions", headers=ah).json()
+    assert rows and rows[0]["amountRub"] == 280
+
+
 def test_candidate_filters_role_district_available(client):
     seeker_token, sid = _auth(client, "seeker")
     client.put("/me", headers=_hdr(seeker_token), json={

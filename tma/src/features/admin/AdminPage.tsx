@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchCommissions,
   settleCommission,
+  resolveMatch,
   adminGrant,
   adminSearchUsers,
   blockUser,
@@ -102,6 +103,19 @@ export function AdminPage() {
     haptic("success");
     await settleCommission(employerId);
     toast("Отмечено оплаченным", "success");
+    qc.invalidateQueries({ queryKey: ["admin-commissions"] });
+  }
+
+  async function resolveDispute(
+    reportId: string,
+    matchId: string,
+    outcome: "completed" | "no_show",
+  ) {
+    haptic("success");
+    await resolveMatch(matchId, outcome);
+    await resolveReport(reportId);
+    toast(outcome === "completed" ? "Смена засчитана" : "Зафиксирована неявка", "success");
+    refresh();
     qc.invalidateQueries({ queryKey: ["admin-commissions"] });
   }
 
@@ -397,6 +411,26 @@ export function AdminPage() {
                         <IconWarning size={16} /> Заблокировать
                       </span>
                     </button>
+                  )}
+                  {r.targetType === "match" && (
+                    <>
+                      <button
+                        className="btn"
+                        style={{ width: "auto", background: "var(--like)" }}
+                        onClick={() => resolveDispute(r.id, r.targetId, "completed")}
+                      >
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <IconCheck size={16} /> Засчитать смену
+                        </span>
+                      </button>
+                      <button
+                        className="btn secondary"
+                        style={{ width: "auto" }}
+                        onClick={() => resolveDispute(r.id, r.targetId, "no_show")}
+                      >
+                        Зафиксировать неявку
+                      </button>
+                    </>
                   )}
                   {r.targetType !== "match" && (
                     <button

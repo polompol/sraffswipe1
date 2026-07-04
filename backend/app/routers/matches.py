@@ -13,6 +13,7 @@ from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import MatchOut
 from ..security import current_principal
+from .analytics import _is_admin
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
@@ -189,7 +190,11 @@ def checkin(
     return _to_out(m, principal["role"])
 
 
-@router.post("/{match_id}/dispute", response_model=MatchOut)
+@router.post(
+    "/{match_id}/dispute",
+    response_model=MatchOut,
+    dependencies=[Depends(rate_limit("dispute", 5, 300))],  # анти-спам
+)
 def dispute(
     match_id: str,
     body: DisputeIn,
@@ -203,6 +208,9 @@ def dispute(
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["id"] not in (m.user_id, m.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
+    # Повторный спор по той же смене не плодит жалобы/уведомления.
+    if m.disputed:
+        return _to_out(m, principal["role"])
     m.disputed = True
     who = "работник" if principal["id"] == m.user_id else "заведение"
     note = (body.note or "").strip()[:300]
@@ -214,6 +222,43 @@ def dispute(
     other = m.employer_id if principal["id"] == m.user_id else m.user_id
     notify_owner(db, other, "По вашей смене открыт спор — с вами свяжется оператор.")
     notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
+    db.commit()
+    db.refresh(m)
+    return _to_out(m, principal["role"])
+
+
+class ResolveMatchIn(BaseModel):
+    outcome: str  # "completed" | "no_show"
+
+
+@router.post("/{match_id}/resolve", response_model=MatchOut)
+def resolve_match(
+    match_id: str,
+    body: ResolveMatchIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Оператор закрывает спор по смене: засчитать смену (completed + комиссия)
+    ИЛИ зафиксировать неявку (no_show, бьёт по надёжности). Только админ —
+    иначе спор мог бы висеть вечно, а неявка мошенника не засчитывалась бы."""
+    if not _is_admin(db, principal):
+        raise HTTPException(status_code=403, detail="Только для оператора")
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    m.disputed = False
+    if body.outcome == "completed":
+        m.status = "completed"
+        m.no_show = False
+        m.seeker_checked_in = True
+        m.employer_checked_in = True
+        _accrue_commission(db, m)
+        _sys(db, m.id, "Оператор закрыл спор: смена засчитана ✓")
+    elif body.outcome == "no_show":
+        m.no_show = True  # засчитывается в надёжность работника
+        _sys(db, m.id, "Оператор закрыл спор: зафиксирована неявка.")
+    else:
+        raise HTTPException(status_code=400, detail="outcome: completed|no_show")
     db.commit()
     db.refresh(m)
     return _to_out(m, principal["role"])
