@@ -1,52 +1,192 @@
-# Деплой StaffSwipe (РФ)
+# Запуск StaffSwipe в прод (VPS + Docker)
 
-Три компонента: **backend** (FastAPI), **bot** (aiogram), **tma** (статика React).
-Рекомендуемый хостинг — РФ: Yandex Cloud / VK Cloud / Selectel / Timeweb.
+Пошаговый runbook. Считаем, что у тебя уже есть **токен бота** (@BotFather) и
+**домен**. Осталось: сервер, секреты, деплой, подключение Mini App, проверка.
+Ориентировочно **30–60 минут**.
 
-## 0. Что подготовить
-- Домен + HTTPS (Telegram Mini App требует https). Например, `api.example.ru`,
-  `app.example.ru`.
-- Бот в **@BotFather** → токен. В *Bot Settings → Configure Mini App* указать
-  URL `https://app.example.ru`.
-- Ключи: `TELEGRAM_BOT_TOKEN`, `YOOKASSA_SHOP_ID`/`YOOKASSA_SECRET_KEY`,
-  `DADATA_TOKEN`, случайные `JWT_SECRET` и `INTERNAL_API_SECRET`.
+Весь стек поднимается одной командой: Caddy (авто-HTTPS) + FastAPI + бот +
+PostgreSQL/PostGIS + собранный Mini App. Всё на одном домене, всё по HTTPS
+(требование Telegram Mini Apps).
 
-## 1. Backend + bot (docker-compose)
-```bash
-cd backend
-cp .env.example .env   # заполнить значения; ALLOW_INSECURE_TELEGRAM_AUTH=false
-docker compose up -d db redis api bot
+---
+
+## 0. Что понадобится
+
+- Токен бота из @BotFather — **есть**.
+- Домен (или поддомен), напр. `app.tvoy-domen.ru` — **есть**.
+- VPS с Ubuntu 22.04+ и публичным IP. 2 vCPU / 2 ГБ RAM хватит на пилот.
+  Подойдёт Timeweb, Selectel, Beget, Hetzner (~300–600 ₽/мес).
+
+---
+
+## 1. Домен → сервер (DNS)
+
+В панели регистратора домена создай **A-запись**:
+
 ```
-- В проде смените SQLite на PostgreSQL/PostGIS (`DATABASE_URL=postgresql+psycopg://...`).
-- `ALLOWED_ORIGINS=https://app.example.ru`.
-- За API поставьте reverse-proxy (nginx/Caddy) с TLS на `https://api.example.ru`.
-
-## 2. TMA (статика)
-```bash
-cd tma
-echo "VITE_API_BASE_URL=https://api.example.ru" > .env
-echo "VITE_USE_BACKEND=true" >> .env
-npm ci && npm run build      # dist/ → раздать через nginx/CDN/Pages
+app.tvoy-domen.ru   →   <IP твоего VPS>
 ```
-Либо образом: `docker build -t staffswipe-tma ./tma` (nginx со статикой).
 
-## 3. Платежи
-- **ЮKassa**: в ЛК укажите вебхук `https://api.example.ru/billing/yookassa/webhook?secret=<INTERNAL_API_SECRET>`
-  на событие `payment.succeeded`. Бэкенд создаёт платёж с `metadata={owner_id,sku}`
-  и начисляет права по вебхуку.
-- **Telegram Stars**: инвойсы создаёт бэкенд (`createInvoiceLink`), бот ловит
-  `successful_payment` и зовёт `/billing/fulfill` с `X-Internal-Token`.
+Проверить (с любого компьютера), что запись разошлась:
 
-## 4. Наблюдаемость
-- Логи: structured-логи с `X-Request-ID` (см. `app/main.py`).
-- Ошибки: задайте `SENTRY_DSN` (backend) и `VITE_SENTRY_DSN` (TMA), установите
-  `sentry-sdk` / `@sentry/react`.
-- Healthcheck: `GET /health` (используется в Dockerfile/compose).
+```
+ping app.tvoy-domen.ru      # должен отвечать IP сервера
+```
 
-## 5. Чеклист перед запуском
-- [ ] `ALLOW_INSECURE_TELEGRAM_AUTH=false`, секреты не дефолтные
-- [ ] `ALLOWED_ORIGINS` = домен Mini App
-- [ ] PostgreSQL вместо SQLite; бэкапы
-- [ ] HTTPS на api и app; вебхук ЮKassa добавлен
-- [ ] BotFather: Mini App URL установлен
-- [ ] Юр-документы (`docs/legal/`) опубликованы и ссылки в согласии актуальны
+DNS может обновляться до нескольких часов, но обычно 5–15 минут.
+
+---
+
+## 2. Подготовить сервер
+
+Зайти на сервер по SSH и поставить Docker:
+
+```sh
+ssh root@<IP сервера>
+
+curl -fsSL https://get.docker.com | sh          # Docker + compose-плагин
+```
+
+Открыть порты 80 и 443 (если включён фаервол ufw):
+
+```sh
+ufw allow 80
+ufw allow 443
+```
+
+---
+
+## 3. Забрать код
+
+```sh
+git clone https://github.com/polompol/sraffswipe1.git
+cd sraffswipe1
+# ВАЖНO: весь код пилота — на рабочей ветке, а не в main. Переключись на неё:
+git checkout claude/staffswipe-flutter-app-6oqk55
+```
+
+> Если позже смёржишь эту ветку в `main` — шаг с `git checkout` не нужен,
+> `git clone` сразу заберёт всё из `main`.
+
+---
+
+## 4. Секреты и .env
+
+Сгенерировать случайные секреты:
+
+```sh
+bash scripts/gen-secrets.sh
+```
+
+Скопировать шаблон и вписать значения:
+
+```sh
+cp .env.example .env
+nano .env
+```
+
+Заполнить как минимум:
+
+| Переменная            | Что вписать                                            |
+|-----------------------|--------------------------------------------------------|
+| `DOMAIN`              | `app.tvoy-domen.ru` (без https://)                     |
+| `TELEGRAM_BOT_TOKEN`  | токен из @BotFather                                    |
+| `BOT_USERNAME`        | имя бота без @ (напр. `staffswipe_bot`)                |
+| `POSTGRES_PASSWORD`   | из gen-secrets.sh                                      |
+| `JWT_SECRET`          | из gen-secrets.sh                                      |
+| `INTERNAL_API_SECRET` | из gen-secrets.sh                                      |
+
+Юридические ссылки (`VITE_OFFER_URL`, `VITE_PRIVACY_URL`) для закрытого пилота
+можно оставить пустыми, но **перед публичным запуском их надо заполнить**
+(152-ФЗ, оферта). Документы — в `docs/legal/`, опубликуй их (свой сайт или
+Telegra.ph) и вставь ссылки.
+
+> ⚠️ Файл `.env` содержит секреты — он уже в `.gitignore`, не коммить его.
+
+---
+
+## 5. Запуск
+
+```sh
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Первый раз собирает образы и берёт TLS-сертификат — 3–5 минут. Проверить:
+
+```sh
+docker compose -f docker-compose.prod.yml ps          # все сервисы Up
+curl -I https://app.tvoy-domen.ru                     # 200/301, валидный HTTPS
+curl https://app.tvoy-domen.ru/api/health             # {"status":"ok"} или похожее
+```
+
+Логи, если что-то не так:
+
+```sh
+docker compose -f docker-compose.prod.yml logs -f api
+docker compose -f docker-compose.prod.yml logs -f caddy   # проблемы с сертификатом
+```
+
+---
+
+## 6. Подключить Mini App к боту (@BotFather)
+
+1. Открой чат с **@BotFather** → `/mybots` → выбери бота.
+2. **Bot Settings → Menu Button → Configure menu button** →
+   введи URL: `https://app.tvoy-domen.ru` и текст кнопки (напр. «Открыть»).
+3. (Опционально) `/newapp` — создать именованное Mini App с тем же URL,
+   иконкой и описанием, чтобы работали прямые ссылки `t.me/<bot>/<app>`.
+
+Бот из стека уже шлёт кнопку запуска на `/start` — проверь: напиши боту
+`/start`, нажми кнопку, приложение должно открыться внутри Telegram.
+
+---
+
+## 7. Смоук-тест (5 минут)
+
+Внутри Telegram открой Mini App и пройди:
+
+- [ ] Онбординг → регистрация как **соискатель**.
+- [ ] Лента смен грузится (пока пусто — это норма, смен ещё нет).
+- [ ] Профиль открывается, виден процент заполненности.
+- [ ] Регистрация второго аккаунта как **заведение** → создать тестовую смену.
+- [ ] Соискателем свайпнуть эту смену вправо → у заведения появляется отклик.
+- [ ] Оба подтвердили → открылся чат, сообщения ходят (WebSocket).
+
+Если всё прошло — **ты в проде**. Дальше — заводить реальные заведения.
+
+---
+
+## 8. Обновления
+
+```sh
+cd sraffswipe1
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Миграции БД прогоняются автоматически при старте API.
+
+---
+
+## Частые проблемы
+
+- **Сертификат не выдаётся** → проверь, что A-запись указывает на этот сервер и
+  порты 80/443 открыты. Смотри `logs -f caddy`.
+- **502 на /api** → API ещё поднимается или упал на проверке конфига; смотри
+  `logs -f api` (частая причина — не заданы секреты при `DEV_MODE=false`).
+- **Кнопка в боте не открывает приложение** → в @BotFather проверь URL Menu
+  Button (ровно `https://ДОМЕН`, с https, без слэша на конце обязательно нет).
+- **Сменил домен** → пересобери tma (`--build`): адрес API «запечён» в бандл.
+
+---
+
+## Что НЕ входит в этот запуск (осознанно)
+
+- **Платежи в приложении (YooKassa)** — требуют ИП/ООО и модерации. Для пилота
+  не нужны: договорённость и оплата смены идут напрямую заведение ↔ соискатель.
+  Ключи `YOOKASSA_*` добавляются позже, когда оформишь юрлицо.
+- **Загрузка фото (S3)** — без ключей `S3_*` загрузка фото отдаёт 503, остальное
+  работает. Подключи Yandex Object Storage, когда понадобится.
+- **Redis / несколько воркеров** — на пилоте API работает в один процесс
+  (WEB_CONCURRENCY=1): WS-чат и рейт-лимит живут в памяти. Масштабирование —
+  отдельный шаг, когда нагрузка вырастет.
