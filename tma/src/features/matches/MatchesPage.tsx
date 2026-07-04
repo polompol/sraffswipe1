@@ -34,7 +34,7 @@ export function MatchesPage() {
 
   async function doCheckin(matchId: string) {
     const code = (codes[matchId] ?? "").trim();
-    if (code.length < 4) return;
+    if (code.length < 6) return;
     try {
       await checkinShift(matchId, { code });
       haptic("success");
@@ -187,7 +187,7 @@ export function MatchesPage() {
                           <input
                             className="input"
                             inputMode="numeric"
-                            maxLength={4}
+                            maxLength={6}
                             placeholder="код"
                             style={{ width: 110, letterSpacing: 4, fontWeight: 800 }}
                             value={codes[m.id] ?? ""}
@@ -198,7 +198,7 @@ export function MatchesPage() {
                           <button
                             className="btn secondary"
                             style={{ width: "auto", flex: 1 }}
-                            disabled={(codes[m.id] ?? "").length < 4}
+                            disabled={(codes[m.id] ?? "").length < 6}
                             onClick={() => doCheckin(m.id)}
                           >
                             Отметиться кодом

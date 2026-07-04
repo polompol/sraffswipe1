@@ -238,7 +238,9 @@ def confirm(
 
     if m.confirmed_by_seeker and m.confirmed_by_employer and m.status == "matched":
         m.status = "confirmed"
-        m.checkin_code = f"{secrets.randbelow(10000):04d}"  # код-помощник
+        # 6-значный код из криптостойкого генератора (secrets) — 1 000 000
+        # комбинаций; при лимите 5/мин перебор занял бы ~138 дней.
+        m.checkin_code = f"{secrets.randbelow(1000000):06d}"
         _sys(db, m.id,
              "Смена подтверждена. В день смены отметятся обе стороны: работник — "
              "«я на смене», заведение — «человек пришёл».")

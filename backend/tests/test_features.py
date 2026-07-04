@@ -203,7 +203,7 @@ def test_mutual_checkin_closes_only_when_both_confirm(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
-    assert code and len(code) == 4
+    assert code and len(code) == 6
     # Работник отметился (код) — но смена ещё НЕ закрыта, ждём заведение.
     r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                     json={"code": code})

@@ -285,7 +285,7 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
   if (!m) return Promise.reject(new Error("not found"));
   m.confirmedBySeeker = true;
   m.status = "confirmed";
-  m.checkinCode = "1234"; // демо-код прихода
+  m.checkinCode = "123456"; // демо-код прихода
   (messagesByMatch[matchId] ??= []).push({
     id: uid(),
     chatId: matchId,
@@ -318,7 +318,7 @@ export function checkinShift(
 ): Promise<MatchModel> {
   const m = matches.find((x) => x.id === matchId);
   if (!m) return Promise.reject(new Error("not found"));
-  const byCode = !!body.code && body.code.trim() === (m.checkinCode ?? "1234");
+  const byCode = !!body.code && body.code.trim() === (m.checkinCode ?? "123456");
   const byGeo = body.lat != null && body.lng != null; // в демо гео всегда «на месте»
   if (!byCode && !byGeo) return Promise.reject(new Error("bad checkin"));
   m.seekerCheckedIn = true;
