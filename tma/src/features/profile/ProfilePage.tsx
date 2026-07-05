@@ -55,7 +55,7 @@ function CommissionCard() {
       </div>
       <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
         {due
-          ? `За ${bill.pendingShifts} закрытых смен. Оплата по счёту или СБП — ` +
+          ? `Смен к оплате: ${bill.pendingShifts}. Оплата по счёту или СБП — ` +
             `реквизиты пришлёт оператор. Срок: ${bill.dueDays} дней.`
           : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
       </div>
