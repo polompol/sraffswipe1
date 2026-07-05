@@ -246,6 +246,63 @@ def test_commission_accrued_on_close(client):
     assert client.get("/admin/commissions", headers=_hdr(emp_token)).json() == []
 
 
+def _close_shift(client, emp_token, seeker_token, match_id):
+    """Взаимное подтверждение: работник по коду + заведение «пришёл»."""
+    code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+                if m["id"] == match_id)["checkin_code"]
+    client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                json={"code": code})
+    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                json={"attended": True})
+
+
+def test_employer_sees_own_commission_bill(client):
+    emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    bill = client.get("/billing/commission", headers=_hdr(emp_token)).json()
+    # 2800 ₽ смена × 10% = 280 ₽; счёт свежий — просрочки нет.
+    assert bill["pendingShifts"] == 1 and bill["pendingRub"] == 280
+    assert bill["overdue"] is False and bill["pct"] == 10
+    # Соискателю счёт заведения не отдаём.
+    r = client.get("/billing/commission", headers=_hdr(seeker_token))
+    assert r.status_code == 403
+
+
+def test_overdue_commission_blocks_new_vacancies(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Commission
+
+    emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    # Состариваем счёт за пределы срока оплаты (commission_due_days=7).
+    db = SessionLocal()
+    db.query(Commission).filter(Commission.employer_id == emp_id).update(
+        {Commission.created_at: datetime.now(UTC) - timedelta(days=10)},
+        synchronize_session=False,
+    )
+    db.commit()
+    db.close()
+    assert client.get("/billing/commission",
+                      headers=_hdr(emp_token)).json()["overdue"] is True
+    # Просроченный долг → публикация новой вакансии блокируется (402).
+    r = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "cook", "date": "2026-06-25", "start_time": 600,
+        "end_time": 1080, "rate": 300, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Тест",
+    })
+    assert r.status_code == 402
+    # Оператор отметил оплату → публикация снова доступна.
+    client.post(f"/admin/commissions/{emp_id}/settle", headers=_hdr(emp_token))
+    r2 = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "cook", "date": "2026-06-25", "start_time": 600,
+        "end_time": 1080, "rate": 300, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Тест",
+    })
+    assert r2.status_code == 201
+
+
 def test_checkin_bruteforce_rate_limited(client):
     # 4-значный код нельзя перебрать: после 5 попыток в минуту — 429.
     _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)

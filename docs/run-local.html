@@ -104,7 +104,17 @@ npm install</pre>
 <h2>Если что-то не так</h2>
 <div class="card">
   <ul>
-    <li><b>«npm не найден»</b> → Node.js не установился, повтори шаг 1 и перезапусти терминал.</li>
+    <li><b>Самое простое:</b> в корне проекта лежит <code>start-app.bat</code>
+      (Windows, двойной клик) и <code>start-app.sh</code> (Mac/Linux) — они сами
+      всё установят и запустят.</li>
+    <li><b>«npm не найден»</b> → Node.js не установился, повтори шаг 1 и
+      перезапусти терминал (и VS Code, если запускаешь из него).</li>
+    <li><b>«выполнение сценариев отключено в этой системе»</b> (PowerShell) →
+      запусти через <code>start-app.bat</code> ИЛИ выполни один раз
+      <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>.</li>
+    <li><b>«no such file or directory, open ... package.json»</b> → команда
+      запущена не из той папки: сначала <code>cd tma</code>, потом
+      <code>npm run dev</code>.</li>
     <li><b>Ошибки про доступ/EACCES (Mac)</b> → попробуй <code>sudo npm install</code>.</li>
     <li><b>Порт занят</b> → Vite сам предложит другой адрес (например <code>:5174</code>),
       просто открой его.</li>

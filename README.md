@@ -13,12 +13,33 @@
 
 Вход через Telegram (без SMS), нативные кнопки/хаптика, оплата внутри Telegram.
 
-```bash
-# Backend
-cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
+## 🚀 Запустить у себя (VS Code, самый простой способ)
 
-# Telegram Mini App
+Нужен только [Node.js LTS](https://nodejs.org) (после установки —
+**перезапустить VS Code**). Backend для просмотра НЕ нужен: приложение
+работает на демо-данных.
+
+- **Windows** — в терминале VS Code (`Ctrl+~`) выполни: `.\start-app.bat`
+  (или просто двойной клик по файлу `start-app.bat` в проводнике).
+- **Mac/Linux** — `bash start-app.sh`.
+
+Скрипт сам поставит зависимости и откроет http://localhost:5173/.
+
+Если запускаешь руками, частые ошибки:
+
+| Ошибка в терминале | Причина и лечение |
+| --- | --- |
+| `npm: не удается найти` / `not recognized` | Node.js не установлен или VS Code открыт до установки → установи LTS с nodejs.org и перезапусти VS Code |
+| `выполнение сценариев отключено` (PowerShell) | Политика PowerShell блокирует `npm.ps1` → запускай `.\start-app.bat` (он идёт через cmd) или выполни `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| `ENOENT: no such file... package.json` | Команда запущена из корня репозитория → сначала `cd tma` |
+| Порт занят / страница пустая | Vite напишет другой адрес (`:5174`) — открой его; страницу открывать в Chrome |
+
+```bash
+# То же самое руками:
 cd tma && npm install && npm run dev
+
+# Backend (не обязателен для просмотра):
+cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 ```
 
 Проверка всего проекта одной командой: `bash scripts/verify.sh`.

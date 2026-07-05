@@ -475,6 +475,21 @@ export async function settleCommission(employerId: string): Promise<void> {
   await api.post(`/admin/commissions/${employerId}/settle`, {});
 }
 
+export interface CommissionInfo {
+  pendingRub: number;
+  pendingShifts: number;
+  overdue: boolean;
+  dueDays: number;
+  pct: number;
+}
+
+/** Мой счёт по комиссии (для заведения): сколько накопилось и не просрочен ли. */
+export async function fetchMyCommission(): Promise<CommissionInfo> {
+  if (!USE_BACKEND) return mock.fetchMyCommission();
+  const { data } = await api.get<CommissionInfo>("/billing/commission");
+  return data;
+}
+
 /** Оператор закрывает спор по смене: засчитать или зафиксировать неявку. */
 export async function resolveMatch(
   matchId: string,

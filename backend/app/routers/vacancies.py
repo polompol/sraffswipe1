@@ -20,6 +20,7 @@ from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal, optional_principal
+from .billing import commission_overdue
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
@@ -274,6 +275,14 @@ def create_vacancy(
     emp = db.get(Employer, principal["id"])
     if emp is None:
         raise HTTPException(status_code=404, detail="Работодатель не найден")
+
+    # Просроченный долг по комиссии → новые вакансии не публикуем до оплаты.
+    if commission_overdue(db, emp.id):
+        raise HTTPException(
+            status_code=402,
+            detail="Есть неоплаченная комиссия за прошлые смены — "
+                   "оплатите счёт, чтобы публиковать новые вакансии.",
+        )
 
     # Лимит тарифа Free на число активных вакансий.
     limit = PLAN_VACANCY_LIMIT.get(plan_of(db, emp.id))

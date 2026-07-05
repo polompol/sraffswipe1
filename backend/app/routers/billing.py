@@ -12,12 +12,13 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Purchase, Subscription
+from ..models import Commission, Purchase, Subscription
 from ..security import current_principal
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -119,6 +120,60 @@ def get_entitlements(
         boostBalance=ent.boost_balance,
         seekerPremium=ent.seeker_premium,
         employerVerified=ent.employer_verified,
+    )
+
+
+def commission_overdue(db: Session, employer_id: str) -> bool:
+    """Просрочен ли счёт по комиссии: есть pending-начисления старше срока."""
+    if settings.commission_due_days <= 0:
+        return False
+    deadline = datetime.now(UTC) - timedelta(days=settings.commission_due_days)
+    row = (
+        db.query(Commission.id)
+        .filter(
+            Commission.employer_id == employer_id,
+            Commission.status == "pending",
+            Commission.created_at < deadline,
+        )
+        .first()
+    )
+    return row is not None
+
+
+class CommissionInfoOut(BaseModel):
+    pendingRub: int
+    pendingShifts: int
+    overdue: bool
+    dueDays: int
+    pct: int
+
+
+@router.get("/commission", response_model=CommissionInfoOut)
+def commission_info(
+    db: Session = Depends(get_db), principal: dict = Depends(current_principal)
+):
+    """Счёт заведения по комиссии за закрытые смены. Оплата — по счёту/СБП
+    оператору, тот отмечает «оплачено» в админке (позже — автосписание ЮKassa).
+    При просрочке публикация новых вакансий блокируется до оплаты."""
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    shifts, total = (
+        db.query(
+            func.count(Commission.id),
+            func.coalesce(func.sum(Commission.amount), 0),
+        )
+        .filter(
+            Commission.employer_id == principal["id"],
+            Commission.status == "pending",
+        )
+        .one()
+    )
+    return CommissionInfoOut(
+        pendingRub=int(total),
+        pendingShifts=int(shifts),
+        overdue=commission_overdue(db, principal["id"]),
+        dueDays=settings.commission_due_days,
+        pct=settings.commission_pct,
     )
 
 

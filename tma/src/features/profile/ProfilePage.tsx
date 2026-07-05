@@ -6,6 +6,7 @@ import {
   fetchAdminOverview,
   fetchEntitlements,
   fetchMe,
+  fetchMyCommission,
   fetchReferral,
   setAvailability,
   verifyEmployer,
@@ -27,6 +28,46 @@ import {
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
+
+function CommissionCard() {
+  const { data: bill } = useQuery({
+    queryKey: ["my-commission"],
+    queryFn: fetchMyCommission,
+  });
+  if (!bill) return null;
+  const due = bill.pendingRub > 0;
+  return (
+    <div
+      className="card"
+      style={{
+        marginBottom: 16,
+        ...(bill.overdue
+          ? { border: "1.5px solid var(--dislike)" }
+          : null),
+      }}
+    >
+      <div className="row">
+        <b>Комиссия сервиса · {bill.pct}%</b>
+        <span className="spacer" />
+        <b style={{ color: due ? "var(--gold)" : "var(--muted)" }}>
+          {bill.pendingRub.toLocaleString("ru-RU")} ₽
+        </b>
+      </div>
+      <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
+        {due
+          ? `За ${bill.pendingShifts} закрытых смен. Оплата по счёту или СБП — ` +
+            `реквизиты пришлёт оператор. Срок: ${bill.dueDays} дней.`
+          : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
+      </div>
+      {bill.overdue && (
+        <div style={{ marginTop: 8, fontSize: 14, color: "var(--dislike)", fontWeight: 700 }}>
+          Счёт просрочен — публикация новых смен приостановлена до оплаты.
+          Напишите в поддержку, если уже оплатили.
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EmployerVerify() {
   const [inn, setInn] = useState("");
@@ -447,6 +488,8 @@ export function ProfilePage() {
           <IconFire size={14} /> Boost: {ent?.boostBalance ?? 0}
         </div>
       </div>
+
+      {role === "employer" && <CommissionCard />}
 
       {role === "employer" && <EmployerVerify />}
 

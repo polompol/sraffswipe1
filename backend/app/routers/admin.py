@@ -535,4 +535,7 @@ def settle_commission(
         .update({Commission.status: "paid"}, synchronize_session=False)
     )
     db.commit()
+    if n:
+        notify_owner(db, employer_id,
+                     "Оплата комиссии получена, спасибо! Счёт закрыт ✓")
     return {"ok": True, "settled": n}

@@ -527,6 +527,11 @@ export function settleCommission(_employerId: string): Promise<void> {
   void _employerId;
   return Promise.resolve();
 }
+export function fetchMyCommission() {
+  return Promise.resolve({
+    pendingRub: 560, pendingShifts: 2, overdue: false, dueDays: 7, pct: 10,
+  });
+}
 export function resolveMatch(_matchId: string, _outcome: string): Promise<void> {
   void _matchId;
   void _outcome;
