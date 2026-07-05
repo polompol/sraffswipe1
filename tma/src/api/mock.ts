@@ -527,6 +527,13 @@ export function settleCommission(_employerId: string): Promise<void> {
   void _employerId;
   return Promise.resolve();
 }
+export function fetchSources() {
+  return Promise.resolve([
+    { source: "vk", seekers: 42, employers: 1 },
+    { source: "avito", seekers: 17, employers: 0 },
+    { source: "rayon_tg", seekers: 9, employers: 3 },
+  ]);
+}
 export function fetchMyCommission() {
   return Promise.resolve({
     pendingRub: 560, pendingShifts: 2, overdue: false, dueDays: 7, pct: 10,

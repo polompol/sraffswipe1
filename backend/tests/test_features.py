@@ -246,6 +246,27 @@ def test_commission_accrued_on_close(client):
     assert client.get("/admin/commissions", headers=_hdr(emp_token)).json() == []
 
 
+def test_traffic_source_attribution(client):
+    # Регистрация по ссылке t.me/<bot>?startapp=src_<канал> фиксирует источник.
+    r = client.post("/auth/telegram", json={
+        "init_data": "", "role": "seeker", "start_param": "src_vk",
+    })
+    seeker_token = r.json()["access_token"]
+    client.post("/auth/telegram", json={
+        "init_data": "", "role": "employer", "start_param": "src_avito",
+    })
+    rows = client.get("/admin/sources", headers=_hdr(seeker_token)).json()
+    by_src = {x["source"]: x for x in rows}
+    assert by_src["vk"]["seekers"] == 1 and by_src["vk"]["employers"] == 0
+    assert by_src["avito"]["employers"] == 1
+    # Повторный вход того же пользователя не плодит событий (атрибуция 1 раз).
+    client.post("/auth/telegram", json={
+        "init_data": "", "role": "seeker", "start_param": "src_vk",
+    })
+    rows2 = client.get("/admin/sources", headers=_hdr(seeker_token)).json()
+    assert {x["source"]: x for x in rows2}["vk"]["seekers"] == 1
+
+
 def _close_shift(client, emp_token, seeker_token, match_id):
     """Взаимное подтверждение: работник по коду + заведение «пришёл»."""
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()

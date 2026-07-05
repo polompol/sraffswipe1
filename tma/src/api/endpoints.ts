@@ -475,6 +475,19 @@ export async function settleCommission(employerId: string): Promise<void> {
   await api.post(`/admin/commissions/${employerId}/settle`, {});
 }
 
+export interface SourceRow {
+  source: string;
+  seekers: number;
+  employers: number;
+}
+
+/** Источники регистраций: ссылки t.me/<bot>?startapp=src_<канал>. */
+export async function fetchSources(): Promise<SourceRow[]> {
+  if (!USE_BACKEND) return mock.fetchSources();
+  const { data } = await api.get<SourceRow[]>("/admin/sources");
+  return data;
+}
+
 export interface CommissionInfo {
   pendingRub: number;
   pendingShifts: number;

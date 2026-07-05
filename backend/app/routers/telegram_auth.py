@@ -1,4 +1,6 @@
 """Авторизация через Telegram Mini App (initData → JWT). Замена SMS."""
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -6,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Employer, Entitlement, Referral, User
+from ..models import Employer, Entitlement, Event, Referral, User
 from ..schemas import TokenOut
 from ..security import create_token
 from ..streaks import touch_streak
@@ -44,6 +46,21 @@ def _apply_referral(db, referred_id: str, code: str) -> None:
     db.add(Referral(referrer_id=referrer_id, referred_id=referred_id, rewarded=True))
     ent = get_or_create(db, referrer_id)
     ent.superlike_balance += settings.referral_bonus_superlikes
+    db.commit()
+
+
+def _track_source(db, owner_id: str, code: str, role: str) -> None:
+    """Источник трафика: регистрация по ссылке t.me/<bot>?startapp=src_<канал>.
+    Пишется один раз — при создании аккаунта (атрибуция рекламных каналов)."""
+    if not code.startswith("src_"):
+        return
+    src = code[4:][:32].strip().lower()
+    if not src:
+        return
+    db.add(Event(
+        owner_id=owner_id, name="source",
+        props=json.dumps({"src": src, "role": role}, ensure_ascii=False),
+    ))
     db.commit()
 
 
@@ -86,6 +103,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
             db.commit()
             db.refresh(emp)
             _apply_referral(db, emp.id, ref_code)
+            _track_source(db, emp.id, ref_code, "employer")
         touch_streak(db, emp.id)
         return TokenOut(
             access_token=create_token(emp.id, "employer"),
@@ -109,6 +127,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         _apply_referral(db, user.id, ref_code)
+        _track_source(db, user.id, ref_code, "seeker")
     touch_streak(db, user.id)
     return TokenOut(
         access_token=create_token(user.id, "seeker"),

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchCommissions,
+  fetchSources,
   settleCommission,
   resolveMatch,
   adminGrant,
@@ -98,6 +99,7 @@ export function AdminPage() {
   }
 
   const comms = useQuery({ queryKey: ["admin-commissions"], queryFn: fetchCommissions });
+  const sources = useQuery({ queryKey: ["admin-sources"], queryFn: fetchSources });
   const commTotal = (comms.data ?? []).reduce((s, c) => s + c.amountRub, 0);
   async function settle(employerId: string) {
     haptic("success");
@@ -267,6 +269,26 @@ export function AdminPage() {
               >
                 Отметить оплаченной
               </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="h2" style={{ marginBottom: 8 }}>Источники регистраций</h2>
+      {sources.data && sources.data.length === 0 && (
+        <div className="card muted" style={{ textAlign: "center", marginBottom: 18 }}>
+          Пока нет регистраций по меткам. Давайте ссылки вида{" "}
+          <code>t.me/бот?startapp=src_vk</code> — канал появится здесь.
+        </div>
+      )}
+      {sources.data && sources.data.length > 0 && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          {sources.data.map((s) => (
+            <div key={s.source} className="row" style={{ padding: "5px 0" }}>
+              <b style={{ flex: 1 }}>{s.source}</b>
+              <span className="muted" style={{ fontSize: 13 }}>
+                работники {s.seekers} · заведения {s.employers}
+              </span>
             </div>
           ))}
         </div>

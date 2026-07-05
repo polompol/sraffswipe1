@@ -3,6 +3,8 @@
 Доступ — только Telegram-id из ADMIN_TG_IDS. На пилоте этого достаточно вместо
 полноценной back-office системы.
 """
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -13,6 +15,7 @@ from ..entitlements import get_or_create, plan_of
 from ..models import (
     Commission,
     Employer,
+    Event,
     Match,
     Purchase,
     Report,
@@ -485,6 +488,38 @@ def grant_entitlement(
 
 
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----
+
+
+class SourceRow(BaseModel):
+    source: str      # канал из ссылки t.me/<bot>?startapp=src_<канал>
+    seekers: int     # регистраций работников
+    employers: int   # регистраций заведений
+
+
+@router.get("/sources", response_model=list[SourceRow])
+def traffic_sources(
+    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
+):
+    """Откуда приходят регистрации (атрибуция рекламных каналов)."""
+    rows = db.query(Event.props).filter(Event.name == "source").all()
+    agg: dict[str, dict[str, int]] = {}
+    for (props,) in rows:
+        try:
+            p = json.loads(props or "{}")
+        except ValueError:
+            continue
+        src = str(p.get("src") or "").strip()
+        if not src:
+            continue
+        bucket = agg.setdefault(src, {"seekers": 0, "employers": 0})
+        key = "employers" if p.get("role") == "employer" else "seekers"
+        bucket[key] += 1
+    out = [
+        SourceRow(source=src, seekers=b["seekers"], employers=b["employers"])
+        for src, b in agg.items()
+    ]
+    out.sort(key=lambda r: -(r.seekers + r.employers))
+    return out
 
 
 class CommissionRow(BaseModel):
