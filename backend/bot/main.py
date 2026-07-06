@@ -13,7 +13,7 @@ import os
 
 import httpx
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -88,6 +88,33 @@ async def start(message: Message) -> None:
         "StaffSwipe — смены в общепите за один свайп.\n"
         "Нажмите кнопку ниже, чтобы начать.",
         reply_markup=kb,
+    )
+
+
+@dp.message(Command("help"))
+async def help_cmd(message: Message) -> None:
+    await send_typed(
+        message,
+        "Как это работает:\n"
+        "1. Открой приложение кнопкой в /start.\n"
+        "2. Свайпай смены (вправо — хочу), лови мэтч, договаривайся в чате.\n"
+        "3. В день смены отметься «Я на смене» — код скажет заведение.\n"
+        "4. Оплата — напрямую от заведения в день смены.\n\n"
+        "Сюда будут приходить уведомления о мэтчах и сменах.\n"
+        "Проблема или спор — /support.",
+    )
+
+
+@dp.message(Command("support"))
+async def support_cmd(message: Message) -> None:
+    await send_typed(
+        message,
+        "Поддержка StaffSwipe.\n"
+        "Опиши проблему одним сообщением в кнопку «Поддержка» внутри "
+        "приложения (профиль → Поддержка) — так оператор увидит твой "
+        "аккаунт и историю смены.\n"
+        "Потерял доступ к старому Telegram? Напиши в поддержку с нового — "
+        "оператор перенесёт аккаунт с рейтингом и историей.",
     )
 
 

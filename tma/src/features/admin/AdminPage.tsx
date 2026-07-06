@@ -8,6 +8,7 @@ import {
   resolveMatch,
   adminCreditWallet,
   adminGrant,
+  adminRelink,
   adminSearchUsers,
   blockUser,
   blockVacancy,
@@ -103,6 +104,23 @@ export function AdminPage() {
     haptic("success");
     await adminCreditWallet(id, amountRub);
     toast(`Баланс пополнен на ${amountRub.toLocaleString("ru-RU")} ₽`, "success");
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
+  }
+
+  // Перенос аккаунта на новый Telegram: id аккаунта → ввод нового tg_id.
+  const [relinkFor, setRelinkFor] = useState<string | null>(null);
+  const [relinkTgId, setRelinkTgId] = useState("");
+  async function relink(id: string) {
+    const tg = Number(relinkTgId.trim());
+    if (!tg) {
+      toast("Введите числовой Telegram-id (из @userinfobot)", "error");
+      return;
+    }
+    haptic("success");
+    await adminRelink(id, tg);
+    toast("Аккаунт перенесён на новый Telegram", "success");
+    setRelinkFor(null);
+    setRelinkTgId("");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
@@ -368,7 +386,35 @@ export function AdminPage() {
               >
                 + 5 срочных
               </button>
+              <button
+                className="tag"
+                style={{ cursor: "pointer" }}
+                onClick={() => {
+                  setRelinkFor(relinkFor === u.id ? null : u.id);
+                  setRelinkTgId("");
+                }}
+              >
+                ↔ Новый Telegram
+              </button>
             </div>
+            {relinkFor === u.id && (
+              <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  placeholder="Новый Telegram-id (@userinfobot)"
+                  value={relinkTgId}
+                  onChange={(e) => setRelinkTgId(e.target.value)}
+                />
+                <button
+                  className="btn"
+                  style={{ width: "auto", padding: "0 14px", height: 46 }}
+                  onClick={() => relink(u.id)}
+                >
+                  Перенести
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

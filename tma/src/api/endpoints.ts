@@ -514,6 +514,15 @@ export async function walletTopup(amountRub: number): Promise<PaymentUrl> {
   return data;
 }
 
+/** Перенос аккаунта на новый Telegram (потерян доступ). История сохраняется. */
+export async function adminRelink(
+  ownerId: string,
+  newTgId: number,
+): Promise<void> {
+  if (!USE_BACKEND) return mock.adminRelink(ownerId, newTgId);
+  await api.post("/admin/relink", { owner_id: ownerId, new_tg_id: newTgId });
+}
+
 /** Оператор зачисляет аванс на баланс заведения (принял СБП/счёт). */
 export async function adminCreditWallet(
   ownerId: string,

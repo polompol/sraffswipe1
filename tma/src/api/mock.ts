@@ -540,6 +540,14 @@ export function fetchMyCommission() {
     balanceRub: 1500,
   });
 }
+export function adminRelink(
+  _ownerId: string,
+  _newTgId: number,
+): Promise<void> {
+  void _ownerId;
+  void _newTgId;
+  return Promise.resolve();
+}
 export function adminCreditWallet(
   _ownerId: string,
   _amountRub: number,

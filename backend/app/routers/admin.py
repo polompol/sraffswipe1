@@ -492,6 +492,46 @@ def grant_entitlement(
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----
 
 
+class RelinkIn(BaseModel):
+    owner_id: str
+    new_tg_id: int
+
+
+@router.post("/relink")
+def relink_account(
+    body: RelinkIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Перенос аккаунта на новый Telegram (человек потерял аккаунт/сменил
+    телефон). История, рейтинг, смены и баланс сохраняются — меняется только
+    привязка tg_id. Если новый tg_id уже занят свежесозданным дублем —
+    дубль отвязывается и блокируется (его пустая история никому не нужна)."""
+    target = db.get(User, body.owner_id) or db.get(Employer, body.owner_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Аккаунт не найден")
+    for model in (User, Employer):
+        dup = db.query(model).filter(model.tg_id == body.new_tg_id).first()
+        if dup is not None and dup.id != target.id:
+            dup.tg_id = None
+            dup.blocked = True
+            # Освобождаем телефон-заглушку tg:<id>, чтобы не мешал будущим входам.
+            if (dup.phone or "").startswith("tg:"):
+                dup.phone = f"tg:retired:{dup.id[:8]}"
+    # Сначала отвязываем дубли в БД, потом занимаем tg_id/телефон целью —
+    # иначе UPDATE цели упрётся в UNIQUE, пока дубль ещё держит значения.
+    db.flush()
+    old_tg = target.tg_id
+    target.tg_id = body.new_tg_id
+    if target.phone == f"tg:{old_tg}":
+        target.phone = f"tg:{body.new_tg_id}"
+    db.commit()
+    notify_owner(db, target.id,
+                 "Аккаунт перенесён на этот Telegram ✓ Рейтинг, история смен "
+                 "и баланс сохранены.")
+    return {"ok": True}
+
+
 class WalletCreditIn(BaseModel):
     amount_rub: int
     note: str = ""

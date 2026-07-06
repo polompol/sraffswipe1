@@ -289,6 +289,28 @@ def test_employer_sees_own_commission_bill(client):
     assert r.status_code == 403
 
 
+def test_admin_relink_moves_account_to_new_telegram(client):
+    from app.db import SessionLocal
+    from app.models import Employer
+
+    seeker_token, _ = _auth(client, "seeker")  # админ (tg_id=0)
+    _, emp_a = _auth(client, "employer")       # заведение A, tg_id=0
+    # A потерял Telegram → оператор переносит на новый tg_id 555.
+    r = client.post("/admin/relink", headers=_hdr(seeker_token),
+                    json={"owner_id": emp_a, "new_tg_id": 555})
+    assert r.status_code == 200
+    # Повторный insecure-вход заведения (tg_id=0) создаёт дубль B.
+    _, emp_b = _auth(client, "employer")
+    assert emp_b != emp_a
+    # Переносим B туда же: A — дубль на 555 → отвязан и заблокирован.
+    client.post("/admin/relink", headers=_hdr(seeker_token),
+                json={"owner_id": emp_b, "new_tg_id": 555})
+    db = SessionLocal()
+    a, b = db.get(Employer, emp_a), db.get(Employer, emp_b)
+    assert b.tg_id == 555 and a.tg_id is None and a.blocked is True
+    db.close()
+
+
 def test_wallet_autopays_commission(client):
     # Аванс на балансе → комиссия за закрытую смену списывается сама.
     emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
