@@ -79,6 +79,17 @@
   cursor: default;
 }
 
+/* Доступность: видимый фокус при навигации с клавиатуры (не мешает тапам). */
+.btn:focus-visible,
+.tag:focus-visible,
+.tab:focus-visible,
+.icon-btn:focus-visible,
+.act:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -238,6 +249,7 @@ input:focus-visible {
 .tag {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   /* Читабельность чипов-фильтров: крупнее шрифт, толще рамка, выше зона тапа. */
   font-size: 15px;
@@ -246,6 +258,22 @@ input:focus-visible {
   min-height: 38px;
   border-radius: 999px;
   border: 1.5px solid;
+  background: transparent;
+  color: inherit;
+  transition: transform 0.08s ease, background 0.15s ease, opacity 0.15s ease;
+}
+/* Чип-кнопка (фильтры, быстрые действия): тактильный отклик при нажатии. */
+button.tag:active {
+  transform: scale(0.95);
+  background: rgba(165, 28, 48, 0.08);
+}
+button.tag:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+[data-theme="dark"] button.tag:active {
+  background: rgba(210, 75, 96, 0.14);
 }
 
 .input {
@@ -297,11 +325,15 @@ input:focus-visible {
 .tab.active {
   color: var(--gold);
 }
+.tab:active .ico {
+  transform: scale(0.9);
+}
 .tab .ico {
   display: inline-flex;
   line-height: 0;
   padding: 5px 16px;
   border-radius: 999px;
+  transition: transform 0.1s ease, background 0.15s ease;
 }
 /* Активная вкладка — «таблетка» под иконкой: сразу видно, где ты. */
 .tab.active .ico {
