@@ -350,6 +350,28 @@ def test_overdue_blocks_employer_positive_swipes(client):
     assert r2.status_code == 200
 
 
+def test_overdue_blocks_urgent_and_boost(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Commission
+
+    emp_token, emp_id, seeker_token, _, vac, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    db = SessionLocal()
+    db.query(Commission).filter(Commission.employer_id == emp_id).update(
+        {Commission.created_at: datetime.now(UTC) - timedelta(days=10)},
+        synchronize_session=False,
+    )
+    db.commit()
+    db.close()
+    # Должник не может ни продвигать вакансию, ни рассылать «Срочно».
+    assert client.post(f"/vacancies/{vac['id']}/urgent",
+                       headers=_hdr(emp_token)).status_code == 402
+    assert client.post(f"/vacancies/{vac['id']}/boost",
+                       headers=_hdr(emp_token)).status_code == 402
+
+
 def test_wallet_autopays_commission(client):
     # Аванс на балансе → комиссия за закрытую смену списывается сама.
     emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
@@ -372,6 +394,24 @@ def test_wallet_insufficient_falls_back_to_invoice(client):
     _close_shift(client, emp_token, seeker_token, match_id)
     bill = client.get("/billing/commission", headers=_hdr(emp_token)).json()
     assert bill["pendingRub"] == 280 and bill["balanceRub"] == 100
+
+
+def test_wallet_topup_webhook_rejects_over_cap(client):
+    # Утечка секрета не даёт неограниченной эмиссии: сумма выше потолка → 400.
+    _, emp_id = _auth(client, "employer")
+    payload = {
+        "event": "payment.succeeded",
+        "object": {
+            "id": "yk-huge", "amount": {"value": "9000000.00", "currency": "RUB"},
+            "metadata": {
+                "owner_id": emp_id, "sku": "wallet_topup",
+                "amount_rub": "9000000",
+            },
+        },
+    }
+    r = client.post("/billing/yookassa/webhook?secret=test-internal-secret",
+                    json=payload)
+    assert r.status_code == 400
 
 
 def test_wallet_topup_webhook_idempotent(client):

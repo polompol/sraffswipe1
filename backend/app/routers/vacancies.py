@@ -316,6 +316,12 @@ def boost_vacancy(
     """Поднять вакансию в топ ленты на 24 часа, списав 1 boost с баланса."""
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
+    if commission_overdue(db, principal["id"]):
+        raise HTTPException(
+            status_code=402,
+            detail="Есть просроченная комиссия — оплатите счёт, "
+                   "чтобы продвигать вакансии.",
+        )
     v = db.get(Vacancy, vacancy_id)
     if v is None or v.employer_id != principal["id"]:
         raise HTTPException(status_code=404, detail="Вакансия не найдена")
@@ -351,6 +357,12 @@ def urgent_ping(
     Рассылка через notify_owner (тихий no-op без токена бота)."""
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
+    if commission_overdue(db, principal["id"]):
+        raise HTTPException(
+            status_code=402,
+            detail="Есть просроченная комиссия — оплатите счёт, "
+                   "чтобы звать людей на смены.",
+        )
     v = db.get(Vacancy, vacancy_id)
     if v is None or v.employer_id != principal["id"]:
         raise HTTPException(status_code=404, detail="Вакансия не найдена")

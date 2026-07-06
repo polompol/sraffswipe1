@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Commission, Purchase, Subscription, WalletTxn
+from ..models import Commission, Entitlement, Purchase, Subscription, WalletTxn
 from ..security import current_principal
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -390,11 +390,19 @@ def wallet_topup(
 
 
 def credit_wallet(db: Session, owner_id: str, amount: int, note: str) -> int:
-    """Зачислить деньги на баланс + записать движение. Возвращает новый баланс."""
-    ent = get_or_create(db, owner_id)
-    ent.balance_rub += amount
+    """Зачислить деньги на баланс + записать движение. Возвращает новый баланс.
+    Инкремент — атомарным UPDATE (balance = balance + amount), а НЕ
+    read-modify-write: иначе гонка с автосписанием комиссии затёрла бы списание
+    (заведение получило бы смену бесплатно). Правило проекта: деньги — только
+    атомарными UPDATE с условием."""
+    get_or_create(db, owner_id)  # гарантируем строку прав
+    db.query(Entitlement).filter(Entitlement.owner_id == owner_id).update(
+        {Entitlement.balance_rub: Entitlement.balance_rub + amount},
+        synchronize_session=False,
+    )
     db.add(WalletTxn(owner_id=owner_id, amount=amount, kind="topup", note=note))
     db.commit()
+    ent = get_or_create(db, owner_id)
     return ent.balance_rub
 
 
@@ -422,6 +430,11 @@ def yookassa_webhook(
             rub = int(meta.get("amount_rub") or 0)
         except ValueError:
             rub = 0
+        # Потолок: сверка value↔metadata самореферентна (оба поля контролирует
+        # тот, кто знает секрет вебхука), поэтому единственная реальная защита от
+        # неограниченной эмиссии при утечке секрета — жёсткий лимит суммы.
+        if not 100 <= rub <= 100_000:
+            raise HTTPException(status_code=400, detail="Сумма вне лимита")
         amount = obj.get("amount", {})
         if (
             rub <= 0
