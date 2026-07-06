@@ -494,10 +494,12 @@ export function ProfilePage() {
       {role === "employer" && <EmployerVerify />}
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <b>Пригласить друзей</b>
+        <b>{role === "employer" ? "Пригласить коллег-рестораторов" : "Пригласить друзей"}</b>
         <div className="muted" style={{ margin: "6px 0 12px" }}>
-          За каждого по вашей ссылке — {ref?.bonusSuperlikes ?? 3} супер-лайка.
-          Уже пришло: {ref?.invited ?? 0}.
+          {role === "employer"
+            ? "За каждого пришедшего по вашей ссылке — Boost вакансии в подарок."
+            : `За каждого по вашей ссылке — ${ref?.bonusSuperlikes ?? 3} супер-лайка «Срочно».`}
+          {" "}Уже пришло: {ref?.invited ?? 0}.
         </div>
         <Button onClick={invite}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>

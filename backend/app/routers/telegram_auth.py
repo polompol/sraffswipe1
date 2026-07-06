@@ -31,7 +31,9 @@ def _owner_exists(db, owner_id: str) -> bool:
 
 
 def _apply_referral(db, referred_id: str, code: str) -> None:
-    """Бонус рефереру за нового приглашённого. Один раз на приглашённого."""
+    """Бонус рефереру за нового приглашённого. Один раз на приглашённого.
+    Валюта зависит от того, КТО пригласил: работнику — супер-лайки «Срочно»,
+    заведению — Boost вакансии (супер-лайки ему почти не нужны)."""
     if not code.startswith("ref_"):
         return
     referrer_id = code[4:]
@@ -45,7 +47,10 @@ def _apply_referral(db, referred_id: str, code: str) -> None:
         return
     db.add(Referral(referrer_id=referrer_id, referred_id=referred_id, rewarded=True))
     ent = get_or_create(db, referrer_id)
-    ent.superlike_balance += settings.referral_bonus_superlikes
+    if db.get(Employer, referrer_id) is not None:
+        ent.boost_balance += 1
+    else:
+        ent.superlike_balance += settings.referral_bonus_superlikes
     db.commit()
 
 
