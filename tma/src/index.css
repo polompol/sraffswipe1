@@ -1,0 +1,915 @@
+/* Утилитарные стили StaffSwipe TMA. */
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  flex: 1;
+  padding: 16px;
+  padding-bottom: 88px;
+}
+
+.h1 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin: 0 0 4px;
+}
+.h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.spacer {
+  flex: 1;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+  color: #fff;
+  font-size: 16.5px;
+  font-weight: 700;
+  padding: 16px 20px;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(165, 28, 48, 0.26);
+  transition: transform 0.08s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.btn:active {
+  transform: scale(0.97);
+  box-shadow: 0 3px 10px rgba(165, 28, 48, 0.22);
+}
+.btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(59, 42, 32, 0.06);
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+  box-shadow: none;
+}
+.btn:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+  cursor: default;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--elev-1);
+}
+
+/* ===== Единая кнопка <Button> (дизайн-система) ===== */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s ease, box-shadow 0.15s ease, opacity 0.15s ease,
+    background 0.15s ease;
+}
+.ui-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.ui-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ui-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(165, 28, 48, 0.28);
+}
+.ui-btn__icon {
+  display: inline-flex;
+}
+.ui-btn--primary {
+  background: var(--grad-brand);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(165, 28, 48, 0.26);
+}
+.ui-btn--secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--elev-1);
+}
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+}
+.ui-btn--danger {
+  background: var(--crimson-dark);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(124, 21, 38, 0.28);
+}
+@media (hover: hover) {
+  .ui-btn--primary:hover:not(:disabled),
+  .ui-btn--danger:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(165, 28, 48, 0.3);
+  }
+}
+
+/* Спиннер загрузки */
+.ui-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.ui-btn--secondary .ui-spinner,
+.ui-btn--ghost .ui-spinner {
+  border-color: rgba(165, 28, 48, 0.25);
+  border-top-color: var(--gold);
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Видимый фокус для доступности на интерактивных элементах */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Появление контента и пульс акцентных бейджей */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fadeUp 0.32s ease both;
+}
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 164, 65, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(217, 164, 65, 0);
+  }
+}
+.pulse {
+  animation: pulseGlow 1.8s ease-in-out infinite;
+}
+
+/* Stagger-появление списков (премиальный «прилёт» элементов) */
+.stagger > * {
+  animation: fadeUp 0.34s ease both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 45ms; }
+.stagger > *:nth-child(3) { animation-delay: 90ms; }
+.stagger > *:nth-child(4) { animation-delay: 135ms; }
+.stagger > *:nth-child(5) { animation-delay: 180ms; }
+.stagger > *:nth-child(6) { animation-delay: 225ms; }
+.stagger > *:nth-child(7) { animation-delay: 270ms; }
+.stagger > *:nth-child(n + 8) { animation-delay: 300ms; }
+
+/* Скелетоны загрузки */
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.skeleton {
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    rgba(255, 255, 255, 0.5) 37%,
+    var(--border) 63%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.3s linear infinite;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* Читабельность чипов-фильтров: крупнее шрифт, толще рамка, выше зона тапа. */
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 14px;
+  min-height: 38px;
+  border-radius: 999px;
+  border: 1.5px solid;
+}
+
+.input {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  font-size: 16px;
+  color: var(--text);
+  outline: none;
+}
+.input:focus {
+  border-color: var(--gold);
+}
+
+/* Нижняя навигация */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+  z-index: 30;
+}
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  /* Крупнее зона нажатия и подпись — «куда жать» видно без прищура. */
+  min-height: 64px;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tab.active {
+  color: var(--gold);
+}
+.tab .ico {
+  display: inline-flex;
+  line-height: 0;
+  padding: 5px 16px;
+  border-radius: 999px;
+}
+/* Активная вкладка — «таблетка» под иконкой: сразу видно, где ты. */
+.tab.active .ico {
+  background: rgba(165, 28, 48, 0.10);
+}
+[data-theme="dark"] .tab.active .ico {
+  background: rgba(210, 75, 96, 0.16);
+}
+
+/* Иконки-кнопки в шапке (фильтр, вид, тарифы) — крупная тап-зона ~44px */
+.icon-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.icon-btn:active {
+  transform: scale(0.92);
+  background: var(--border);
+}
+.icon-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+/* Нижний лист (фильтры): grabber, прокручиваемое тело, липкий футер */
+.sheet-grab {
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 10px auto 2px;
+  flex: none;
+}
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 20px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.sheet-foot {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.sheet-foot .btn {
+  margin: 0;
+}
+/* Строка локации/фильтра под шапкой — вся кликабельна */
+.feed-loc {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 2px 0 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Колода свайпа */
+.deck {
+  position: relative;
+  /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде. */
+  height: 68vh;
+  min-height: 460px;
+}
+.swipe-card {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #2a1d14;
+  box-shadow: var(--shadow);
+  touch-action: pan-y;
+  will-change: transform;
+}
+.swipe-photo {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+.swipe-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(30, 20, 14, 0.55) 70%,
+    rgba(20, 14, 10, 0.92) 100%
+  );
+}
+.swipe-body {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 22px;
+  color: #fff;
+}
+/* Чистые мета-строки карточки: иконка + текст, без рамок */
+.card-meta {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 15px;
+  opacity: 0.92;
+}
+.card-meta > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Изящный фолбэк, когда нет фото: бренд-градиент + крупный инициал */
+.swipe-photo-fallback {
+  background: linear-gradient(150deg, var(--crimson-dark), var(--gold-soft) 65%, var(--super));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* «Деньги рядом сейчас» — money-магнит наверху ленты */
+.money-near {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--crimson-dark), var(--gold));
+  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.22);
+  cursor: pointer;
+}
+.money-near-cap {
+  display: block;
+  font-size: 14px;
+  opacity: 0.92;
+}
+.money-near-sum {
+  display: block;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  margin: 2px 0;
+}
+.money-near-sub {
+  display: block;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+/* Демо-карточка свайпа на онбординге — мягко качается, подсказывая жест */
+@keyframes swipeDemo {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(-26px) rotate(-7deg); }
+  60% { transform: translateX(26px) rotate(7deg); }
+}
+.onb-demo {
+  position: relative;
+  width: 150px;
+  height: 200px;
+  border-radius: 24px;
+  background: var(--grad-brand);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: swipeDemo 3.2s ease-in-out infinite;
+}
+.onb-demo-skip,
+.onb-demo-like {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #fff;
+}
+.onb-demo-skip { left: -56px; border: 2px solid var(--dislike); color: var(--dislike); }
+.onb-demo-like { right: -56px; border: 2px solid var(--like); color: var(--like); }
+
+/* Мерцание-скелетон, пока грузится фото карточки (ощущение «дорого») */
+.photo-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 75%
+  );
+  background-size: 480px 100%;
+  animation: shimmer 1.3s infinite linear;
+}
+/* Картинка поверх градиента-фолбэка: плавно проявляется при загрузке */
+.swipe-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.45s ease;
+}
+.swipe-initial {
+  font-size: 140px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.18);
+  line-height: 1;
+}
+.glass {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.swipe-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.stamp {
+  position: absolute;
+  top: 28px;
+  padding: 6px 14px;
+  border: 4px solid;
+  border-radius: 12px;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+/* Кнопки действий свайпа */
+.actions {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 26px;
+  margin-top: 18px;
+}
+.act-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+.act {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.act.sm {
+  width: 60px;
+  height: 60px;
+}
+/* Высокий контраст: заливка + белая иконка — хорошо видно при слабом зрении */
+.act-like {
+  background: var(--like);
+  color: #fff;
+  border-color: var(--like);
+}
+.act-super {
+  background: var(--super);
+  color: #fff;
+  border-color: var(--super);
+}
+.act-skip {
+  background: var(--surface);
+  color: var(--dislike);
+  border-color: var(--dislike);
+}
+.act-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.act-label-like {
+  color: var(--like);
+}
+.act-label-super {
+  color: var(--super);
+}
+.act-label-skip {
+  color: var(--dislike);
+}
+/* Крупный режим (самостоятельная регулировка в профиле) — для слабого зрения */
+body[data-large="1"] .act {
+  width: 88px;
+  height: 88px;
+}
+body[data-large="1"] .act.sm {
+  width: 74px;
+  height: 74px;
+}
+body[data-large="1"] .act-label {
+  font-size: 15px;
+}
+body[data-large="1"] .swipe-body {
+  font-size: 17px;
+}
+body[data-large="1"] .feed-loc {
+  font-size: 15px;
+}
+/* Крупный режим масштабирует и основную типографику по всему интерфейсу */
+body[data-large="1"] {
+  font-size: 19px;
+}
+body[data-large="1"] .h1 {
+  font-size: 34px;
+}
+body[data-large="1"] .h2 {
+  font-size: 26px;
+}
+body[data-large="1"] .muted {
+  font-size: 17px;
+}
+body[data-large="1"] .tag {
+  font-size: 17px;
+  padding: 10px 16px;
+}
+body[data-large="1"] .btn {
+  font-size: 19px;
+  min-height: 56px;
+}
+body[data-large="1"] .input {
+  font-size: 18px;
+}
+body[data-large="1"] .bubble {
+  font-size: 19px;
+}
+body[data-large="1"] .card-meta {
+  font-size: 17px;
+}
+body[data-large="1"] .tab {
+  font-size: 16px;
+}
+
+/* Чат */
+.bubble {
+  max-width: 76%;
+  padding: 11px 15px;
+  border-radius: 16px;
+  margin: 4px 0;
+  font-size: 16px;
+}
+.bubble.mine {
+  margin-left: auto;
+  background: var(--gold);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.bubble.theirs {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+.bubble.system {
+  margin: 8px auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* Оверлей мэтча */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 14, 9, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  z-index: 50;
+  text-align: center;
+}
+.confetti {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  animation: fall linear forwards;
+}
+@keyframes fall {
+  to {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* ===== «Вау»-полировка: переходы и микро-взаимодействия ===== */
+
+/* Плавный въезд каждого экрана */
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page {
+  animation: pageIn 0.26s ease both;
+}
+
+/* Кнопки-действия свайпа (✕ ⚡ ♥) — мягкая тень + отклик на нажатие */
+.act {
+  box-shadow: 0 4px 14px rgba(124, 21, 38, 0.14);
+  transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.act:active {
+  transform: scale(0.88);
+}
+
+/* Вкладки — отклик и «всплытие» активной иконки */
+.tab {
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+.tab:active {
+  transform: scale(0.92);
+}
+.tab.active .ico {
+  transform: translateY(-1px) scale(1.08);
+  transition: transform 0.2s ease;
+}
+
+/* Поля ввода — фокус-свечение в фирменном цвете */
+.input {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input:focus {
+  box-shadow: 0 0 0 3px rgba(165, 28, 48, 0.12);
+}
+
+/* Карточки — плавная тень */
+.card {
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+/* Чат-пузыри появляются плавно */
+.bubble {
+  animation: fadeUp 0.22s ease both;
+}
+
+/* Оверлей мэтча — эффектный въезд */
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.overlay {
+  animation: overlayIn 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+/* Десктоп: лёгкий подъём кнопки/карточки при наведении */
+@media (hover: hover) {
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(165, 28, 48, 0.3);
+  }
+  .card:hover {
+    box-shadow: 0 8px 20px rgba(124, 21, 38, 0.1);
+  }
+}
+
+/* Мэтч: аватар заведения въезжает с лёгким «пружинным» масштабом */
+@keyframes matchPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.match-avatar {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--gold);
+  box-shadow: 0 12px 34px rgba(165, 28, 48, 0.45);
+  background: var(--grad-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  animation: matchPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* ===== Премиальная полировка «вау»: глянец, глубина, тактильность ===== */
+
+/* Главные CTA — лёгкий глянец сверху + фирменное свечение. «Дорого» на касание. */
+.btn,
+.ui-btn--primary {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0) 44%),
+    linear-gradient(135deg, var(--gold-soft), var(--gold));
+  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  letter-spacing: 0.2px;
+}
+.btn:active,
+.ui-btn--primary:active:not(:disabled) {
+  box-shadow: 0 3px 10px rgba(165, 28, 48, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20);
+}
+.btn.secondary,
+.btn.ghost {
+  background-image: none; /* глянец — только на главных действиях */
+  letter-spacing: 0.2px;
+}
+
+/* Круглые кнопки свайпа — объём: внутренняя подсветка + цветное свечение по смыслу. */
+.act-like {
+  background-image: linear-gradient(160deg, #c0334a, #a51c30);
+  box-shadow: 0 10px 24px rgba(165, 28, 48, 0.42),
+    inset 0 2px 4px rgba(255, 255, 255, 0.30);
+}
+.act-super {
+  background-image: linear-gradient(160deg, #d8b85a, #c39a3a);
+  box-shadow: 0 10px 24px rgba(195, 154, 58, 0.44),
+    inset 0 2px 4px rgba(255, 255, 255, 0.36);
+}
+.act-skip {
+  box-shadow: 0 6px 16px rgba(60, 40, 30, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.act:active {
+  transform: scale(0.9);
+}
+@media (hover: hover) {
+  .act:hover {
+    transform: translateY(-2px);
+  }
+  .act-like:hover {
+    box-shadow: 0 16px 32px rgba(165, 28, 48, 0.5),
+      inset 0 2px 4px rgba(255, 255, 255, 0.3);
+  }
+  .act-super:hover {
+    box-shadow: 0 16px 32px rgba(195, 154, 58, 0.52),
+      inset 0 2px 4px rgba(255, 255, 255, 0.36);
+  }
+}
+
+/* Карточки — мягче и «дороже» глубина. */
+.card {
+  box-shadow: 0 1px 2px rgba(60, 20, 25, 0.05),
+    0 6px 18px rgba(60, 20, 25, 0.07);
+}
+
+/* Уважаем настройку «уменьшить движение» (доступность) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,182 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import type { PriceItem } from "@/types/domain";
+import {
+  createStarsInvoice,
+  createYookassaPayment,
+  track,
+} from "@/api/endpoints";
+import { payWithStars, showBackButton, haptic } from "@/telegram/sdk";
+import { useSession } from "@/store/session";
+import { Button } from "@/components/Button";
+import { IconFire, IconBolt, IconShield, IconBriefcase } from "@/components/Icons";
+
+function categoryIcon(id: string) {
+  if (id.startsWith("boost")) return IconFire;
+  if (id.startsWith("super")) return IconBolt;
+  if (id.startsWith("verify")) return IconShield;
+  return IconBriefcase;
+}
+
+// Цифровые микро-фичи — Telegram Stars. Подписки/верификация — ЮKassa (рубли).
+const SUBSCRIPTIONS: PriceItem[] = [
+  { id: "sub_pro_week", title: "Pro · неделя", subtitle: "Безлимит вакансий, фильтры, 3 boost", priceRub: 690 },
+  { id: "sub_pro_month", title: "Pro · месяц", subtitle: "Всё из Pro + 10 boost, аналитика", priceRub: 1990, badge: "Хит" },
+  { id: "sub_business", title: "Business · месяц", subtitle: "Несколько точек, приоритет, 30 boost", priceRub: 4990 },
+];
+
+// Платим только с работодателей. Супер-лайки соискателям не продаём (не
+// добавляем трение той стороне, которую растим). Остаётся boost для заведений.
+const STARS: PriceItem[] = [
+  { id: "boost_24h", title: "Boost 24 часа", subtitle: "Вакансия в топе ленты сутки", priceStars: 150 },
+];
+
+const VERIFY: PriceItem = {
+  id: "verify_year",
+  title: "Верификация заведения",
+  subtitle: "Бейдж «Проверен» (DaData) + приоритет, на год",
+  priceRub: 2900,
+};
+
+export function PricingPage() {
+  const nav = useNavigate();
+  const role = useSession((s) => s.role);
+  const [status, setStatus] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+
+  useEffect(() => showBackButton(() => nav(-1)), [nav]);
+
+  async function buyStars(sku: string) {
+    haptic("medium");
+    track("purchase", { sku, provider: "stars" });
+    setStatus("Открываем оплату Stars…");
+    try {
+      const { link } = await createStarsInvoice(sku);
+      const res = await payWithStars(link);
+      setStatus(res === "paid" ? "Оплачено" : `Статус: ${res}`);
+    } catch {
+      haptic("error");
+      setStatus("Не удалось открыть оплату. Попробуйте ещё раз.");
+    }
+  }
+
+  async function buyRub(sku: string) {
+    haptic("medium");
+    track("purchase", { sku, provider: "yookassa" });
+    setStatus("Переходим в ЮKassa…");
+    try {
+      const { url } = await createYookassaPayment(sku, email.trim());
+      window.open(url, "_blank");
+      setStatus("Открыли страницу оплаты ЮKassa.");
+    } catch {
+      haptic("error");
+      setStatus("Не удалось перейти к оплате. Попробуйте ещё раз.");
+    }
+  }
+
+  // Для соискателей всё бесплатно — ничего не продаём (растим эту сторону).
+  if (role === "seeker") {
+    return (
+      <div className="app">
+        <div className="page">
+          <h1 className="h1" style={{ marginBottom: 4 }}>Для соискателей — бесплатно</h1>
+          <p className="muted" style={{ marginBottom: 16 }}>
+            Поиск смен, отклики, чат и акты — без оплаты и без ограничений.
+          </p>
+          <div className="card">
+            <b>Откликайтесь сколько хотите</b>
+            <div className="muted" style={{ marginTop: 6 }}>
+              Мы зарабатываем на заведениях, а не на тех, кто ищет работу.
+            </div>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <Button variant="secondary" onClick={() => nav("/feed")}>
+              К ленте смен
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <div className="page">
+        <h1 className="h1" style={{ marginBottom: 4 }}>Тарифы и буст</h1>
+        <p className="muted" style={{ marginBottom: 16 }}>
+          Подписки — в рублях через ЮKassa. Boost — за Telegram Stars.
+        </p>
+
+        <label className="muted" htmlFor="rcpt" style={{ display: "block", marginBottom: 4 }}>
+          Email для чека (необязательно)
+        </label>
+        <input
+          id="rcpt"
+          className="input"
+          type="email"
+          inputMode="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ marginBottom: 18 }}
+        />
+
+        <h2 className="h2">Подписки для работодателей</h2>
+        <div style={{ display: "grid", gap: 12, marginBottom: 24 }}>
+          {SUBSCRIPTIONS.map((p) => (
+            <PriceRow key={p.id} item={p} onBuy={() => buyRub(p.id)} cta={`${p.priceRub} ₽`} />
+          ))}
+        </div>
+
+        <h2 className="h2">Boost вакансий</h2>
+        <div style={{ display: "grid", gap: 12, marginBottom: 24 }}>
+          {STARS.map((p) => (
+            <PriceRow key={p.id} item={p} onBuy={() => buyStars(p.id)} cta={`${p.priceStars} ★`} />
+          ))}
+        </div>
+
+        <h2 className="h2">Доверие</h2>
+        <PriceRow item={VERIFY} onBuy={() => buyRub(VERIFY.id)} cta={`${VERIFY.priceRub} ₽`} />
+
+        {status && (
+          <div className="card" style={{ marginTop: 16, textAlign: "center" }}>{status}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PriceRow({
+  item,
+  onBuy,
+  cta,
+}: {
+  item: PriceItem;
+  onBuy: () => void;
+  cta: string;
+}) {
+  const Icon = categoryIcon(item.id);
+  return (
+    <div className="card row" style={{ gap: 12 }}>
+      <span style={{
+        width: 40, height: 40, borderRadius: 12, flex: "none",
+        background: "var(--gold-tint, rgba(165,28,48,.08))", color: "var(--gold)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <Icon size={21} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <div className="row" style={{ gap: 6 }}>
+          <b>{item.title}</b>
+          {item.badge && (
+            <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>{item.badge}</span>
+          )}
+        </div>
+        <div className="muted">{item.subtitle}</div>
+      </span>
+      <Button size="sm" block={false} onClick={onBuy} style={{ whiteSpace: "nowrap" }}>
+        {cta}
+      </Button>
+    </div>
+  );
+}

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StaffSwipe — превью «кримсон» темы</title>
+<style>
+  /* ПРЕВЬЮ. Это не приложение, а макет новой цветовой гаммы.
+     Палитра «Crimson»: безопасный собственный оттенок (не точный Гарвард). */
+  :root{
+    --crimson:#9E1B32;        /* основной — свой оттенок, не #A51C30 */
+    --crimson-dark:#7C1526;
+    --crimson-soft:#c65a6c;
+    --bg:#f6f1ea;             /* тёплая слоновая кость */
+    --card:#ffffff;
+    --ink:#201b18;            /* угольный текст */
+    --muted:#8b8078;
+    --line:#ece4d9;
+    --gold:#c7a24b;           /* акцент (премиальность) */
+    --ok:#3a8a4f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 16px 70px}
+  header{text-align:center;padding:18px 0}
+  .logo{display:inline-flex;align-items:center;gap:10px;font-weight:900;font-size:28px}
+  .badge{width:40px;height:40px;border-radius:11px;display:inline-flex;align-items:center;
+    justify-content:center;color:#fff;font-size:21px;
+    background:linear-gradient(135deg,var(--crimson-soft),var(--crimson))}
+  .sub{color:var(--muted);margin-top:6px;font-size:14px}
+  .swatches{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:14px 0 6px}
+  .sw{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--muted);width:78px}
+  .chip{width:54px;height:34px;border-radius:9px;border:1px solid var(--line);margin-bottom:4px}
+
+  .phones{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+  .phone{width:288px;background:var(--bg);border:10px solid #15110e;border-radius:36px;
+    overflow:hidden;box-shadow:0 18px 40px rgba(60,20,25,.18);position:relative}
+  .notch{height:24px;background:#15110e;border-radius:0 0 14px 14px;width:120px;margin:0 auto}
+  .screen{padding:14px 13px 16px;height:560px;overflow:hidden;position:relative}
+  .scr-title{font-size:11px;color:var(--muted);text-align:center;margin:8px 0 -2px;letter-spacing:.3px}
+
+  .topbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .topbar .l{display:flex;align-items:center;gap:7px;font-weight:900;font-size:18px}
+  .mini-badge{width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;
+    justify-content:center;color:#fff;font-size:13px;background:linear-gradient(135deg,var(--crimson-soft),var(--crimson))}
+  .spacer{flex:1}
+  .icobtn{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#fff;
+    display:flex;align-items:center;justify-content:center;color:var(--crimson);font-size:15px}
+  .meta{font-size:12px;color:var(--muted);margin:2px 0 10px}
+  .meta b{color:var(--crimson)}
+
+  /* карточка вакансии */
+  .vcard{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 6px 18px rgba(60,20,25,.08)}
+  .vphoto{height:188px;background:linear-gradient(135deg,#b9485a,var(--crimson-dark));
+    position:relative;color:#fff;display:flex;align-items:flex-end;padding:12px}
+  .vphoto .badge-v{position:absolute;top:10px;left:10px;background:rgba(255,255,255,.92);
+    color:var(--crimson);font-weight:800;font-size:11px;padding:3px 9px;border-radius:999px}
+  .vphoto .boost{position:absolute;top:10px;right:10px;background:var(--gold);color:#3a2c00;
+    font-weight:800;font-size:11px;padding:3px 9px;border-radius:999px}
+  .vname{font-weight:800;font-size:18px;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+  .vbody{padding:13px 14px 16px}
+  .vrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .role{display:inline-block;background:#f6e9eb;color:var(--crimson);font-weight:800;
+    font-size:12px;padding:4px 10px;border-radius:999px}
+  .rate{margin-left:auto;font-weight:900;color:var(--ink);font-size:18px}
+  .rate small{color:var(--muted);font-weight:600;font-size:12px}
+  .vmuted{color:var(--muted);font-size:12.5px;margin:3px 0}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tag{font-size:11px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;color:var(--muted)}
+
+  /* нижняя панель кнопок — крупные, по центру, удобно большим пальцем */
+  .actions{display:flex;justify-content:center;align-items:center;gap:18px;margin-top:16px}
+  .act{width:60px;height:60px;border-radius:50%;border:2px solid;background:#fff;font-size:24px;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(60,20,25,.12)}
+  .act.sm{width:50px;height:50px;font-size:19px}
+  .act.skip{border-color:#c9c1b8;color:#8b8078}
+  .act.super{border-color:var(--gold);color:var(--gold)}
+  .act.like{border-color:var(--crimson);color:var(--crimson)}
+  .hint{text-align:center;font-size:11px;color:var(--muted);margin-top:8px}
+
+  /* CTA-кнопка */
+  .btn{display:block;width:100%;text-align:center;background:var(--crimson);color:#fff;
+    font-weight:800;border:none;border-radius:14px;padding:14px;font-size:15px;
+    box-shadow:0 8px 18px rgba(158,27,50,.28)}
+  .btn.ghost{background:#fff;color:var(--crimson);border:1.5px solid var(--crimson);box-shadow:none}
+
+  /* экран мэтча */
+  .match{position:absolute;inset:0;background:linear-gradient(160deg,var(--crimson),var(--crimson-dark));
+    color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+  .match .big{font-size:30px;font-weight:900;margin:6px 0}
+  .ava{display:flex;gap:14px;margin:10px 0 16px}
+  .ava div{width:74px;height:74px;border-radius:50%;border:3px solid #fff;background:#e9c8cd;
+    display:flex;align-items:center;justify-content:center;font-size:34px}
+
+  /* pricing */
+  .plan{background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px 14px;margin-bottom:10px}
+  .plan.best{border-color:var(--crimson);box-shadow:0 6px 16px rgba(158,27,50,.12)}
+  .plan .h{display:flex;align-items:center;gap:8px}
+  .plan .price{margin-left:auto;font-weight:900}
+  .plan .best-tag{background:var(--crimson);color:#fff;font-size:10px;font-weight:800;
+    padding:2px 8px;border-radius:999px}
+
+  .note{max-width:760px;margin:26px auto 0;background:#fff;border:1px solid var(--line);
+    border-left:4px solid var(--crimson);border-radius:0 14px 14px 0;padding:14px 18px}
+  h2{font-size:19px;margin:30px 0 10px;text-align:center}
+  ul{max-width:760px;margin:8px auto;padding-left:22px} li{margin:6px 0}
+  @media(max-width:640px){.screen{height:540px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo"><span class="badge">⚡</span>Staff<span style="color:var(--crimson)">Swipe</span></div>
+  <div class="sub">Превью новой цветовой гаммы «Crimson» — это макет, приложение пока не менял</div>
+  <div class="swatches">
+    <div class="sw"><span class="chip" style="background:#9E1B32"></span>Кримсон #9E1B32</div>
+    <div class="sw"><span class="chip" style="background:#7C1526"></span>Тёмный #7C1526</div>
+    <div class="sw"><span class="chip" style="background:#f6f1ea"></span>Сл. кость</div>
+    <div class="sw"><span class="chip" style="background:#201b18"></span>Уголь (текст)</div>
+    <div class="sw"><span class="chip" style="background:#c7a24b"></span>Золото (акцент)</div>
+  </div>
+</header>
+
+<div class="phones">
+
+  <!-- ЭКРАН 1: ЛЕНТА -->
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="scr-title">Лента смен</div>
+    <div class="screen">
+      <div class="topbar">
+        <span class="l"><span class="mini-badge">⚡</span>Staff<span style="color:var(--crimson)">Swipe</span></span>
+        <span class="spacer"></span>
+        <span class="icobtn">☰</span>
+        <span class="icobtn">⚙</span>
+      </div>
+      <div class="meta">Смены · <b>Москва</b> · 12 · <span style="color:var(--crimson)">сменить город</span></div>
+      <div class="vcard">
+        <div class="vphoto">
+          <span class="badge-v">✓ Проверен</span>
+          <span class="boost">🔥 Boost</span>
+          <span class="vname">Кофейня «Дрова»</span>
+        </div>
+        <div class="vbody">
+          <div class="vrow">
+            <span class="role">☕ Бариста</span>
+            <span class="rate">350 <small>₽/час</small></span>
+          </div>
+          <div class="vmuted">📍 ул. Льва Толстого, 16 · 1.6 км</div>
+          <div class="vmuted">Завтра · 08:00–16:00</div>
+          <div class="tags"><span class="tag">Медкнижка</span><span class="tag">Можно без опыта</span><span class="tag">Питание</span></div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="act skip">✕</div>
+        <div class="act sm super">⚡</div>
+        <div class="act like">♥</div>
+      </div>
+      <div class="hint">✕ пропустить · ⚡ срочно · ♥ откликнуться</div>
+    </div>
+  </div>
+
+  <!-- ЭКРАН 2: МЭТЧ -->
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="scr-title">Мэтч</div>
+    <div class="screen" style="padding:0">
+      <div class="match">
+        <div style="font-size:13px;opacity:.9;letter-spacing:1px">ЭТО МЭТЧ</div>
+        <div class="big">Смена ваша! 🎉</div>
+        <div class="ava"><div>🙂</div><div>🏪</div></div>
+        <div style="opacity:.95;font-size:14px;margin-bottom:18px">Кофейня «Дрова» · Бариста<br>Договоритесь о деталях в чате</div>
+        <button class="btn" style="background:#fff;color:var(--crimson)">💬 Открыть чат</button>
+        <div style="height:10px"></div>
+        <button class="btn ghost" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.6)">Листать дальше</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ЭКРАН 3: ТАРИФЫ -->
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="scr-title">Тарифы (для заведений)</div>
+    <div class="screen">
+      <div class="topbar"><span class="l">Тарифы</span></div>
+      <div class="meta">Больше откликов — быстрее закрытые смены</div>
+      <div class="plan"><div class="h"><b>Free</b><span class="price">0 ₽</span></div>
+        <div class="vmuted">1 активная вакансия</div></div>
+      <div class="plan best"><div class="h"><b>Pro</b><span class="best-tag">ХИТ</span><span class="price">1 990 ₽</span></div>
+        <div class="vmuted">Безлимит вакансий · 10 boost · приоритет</div></div>
+      <div class="plan"><div class="h"><b>Business</b><span class="price">4 990 ₽</span></div>
+        <div class="vmuted">Всё из Pro · 30 boost · верификация</div></div>
+      <div style="height:6px"></div>
+      <button class="btn">Оформить Pro</button>
+      <div class="hint">Супер-лайки и Boost — за Telegram Stars ⭐</div>
+    </div>
+  </div>
+
+</div>
+
+<h2>Что улучшено в макете</h2>
+<ul>
+  <li><b>Цвет:</b> собственный кримсон <code>#9E1B32</code> + тёплая слоновая кость + угольный текст + золотой акцент. Премиально и «дорого», легко продаётся.</li>
+  <li><b>Кнопки действий</b> — крупные круглые, по центру внизу, под большой палец: <b>✕ пропустить · ⚡ срочно · ♥ откликнуться</b> с подписями.</li>
+  <li><b>Главная кнопка</b> (CTA) — во всю ширину, контрастная, с мягкой тенью: палец не промахнётся.</li>
+  <li><b>Город виден сверху</b> со ссылкой «сменить» — человек из любого города сразу понимает, что листает своё.</li>
+  <li><b>Тариф Pro</b> выделен рамкой и меткой «ХИТ» — мягко подталкивает к покупке.</li>
+</ul>
+
+<div class="note">
+  <b>Юридически безопасно:</b> используется <b>свой</b> оттенок кримсона (не точный
+  Гарвард <code>#A51C30</code>), без их логотипа, герба, названия и девиза. Один цвет
+  запатентовать в общем виде нельзя — претензий быть не может. При желании сдвину
+  оттенок ещё (бордовый/вишнёвый) — палитра меняется в одном файле темы.
+</div>
+
+<div class="note" style="border-left-color:var(--gold)">
+  Это <b>превью</b>. Само приложение я по твоей просьбе <b>не менял</b>. Скажешь «делай» —
+  переключу тему в коде (1 файл палитры), и все экраны станут такими; тесты и сборка
+  останутся зелёными.
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,79 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: staffswipe
+      POSTGRES_PASSWORD: staffswipe
+      POSTGRES_DB: staffswipe
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staffswipe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    environment:
+      # Значения берутся из backend/.env (скопируйте из .env.example).
+      DATABASE_URL: postgresql+psycopg://staffswipe:staffswipe@db:5432/staffswipe
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Для прода DEV_MODE=false (тогда нужны валидные секреты — защита от
+      # небезопасного запуска). Для локальной отладки поставьте true.
+      DEV_MODE: ${DEV_MODE:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      BOT_USERNAME: ${BOT_USERNAME:-staffswipe_bot}
+      MINI_APP_URL: ${MINI_APP_URL:-}
+      ALLOW_INSECURE_TELEGRAM_AUTH: ${ALLOW_INSECURE_TELEGRAM_AUTH:-false}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET in .env}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      DADATA_TOKEN: ${DADATA_TOKEN:-}
+      DADATA_SECRET: ${DADATA_SECRET:-}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      PAYMENT_RETURN_URL: ${PAYMENT_RETURN_URL:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_KEY: ${S3_KEY:-}
+      S3_SECRET: ${S3_SECRET:-}
+      S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
+      ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Телеграм-бот (уведомления + платежи Stars). Запускается при наличии токена.
+  bot:
+    image: python:3.12-slim
+    working_dir: /bot
+    volumes:
+      - ./bot:/bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      MINI_APP_URL: ${MINI_APP_URL:-}
+      API_BASE_URL: http://api:8000
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+    command: sh -c "pip install -q -r requirements.txt && python main.py"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Статика Telegram Mini App (nginx). В проде раздаётся по HTTPS.
+  tma:
+    build: ../tma
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

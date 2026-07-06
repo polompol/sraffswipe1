@@ -1,0 +1,108 @@
+/* Дизайн-токены StaffSwipe. Фирменная гамма: кримсон (в стиле классического
+   академического багрового) + фон «слоновая кость» + золотой акцент.
+   Поверхности заданы явно, чтобы бренд-вид был стабильным и красивым в любом
+   окружении (своя тёмная тема — переключателем в профиле). */
+
+:root {
+  /* Бренд — багровый кримсон + слоновая кость + золото */
+  --gold: #a51c30;        /* основной акцент: бренд, кнопки, лайк */
+  --gold-soft: #c0334a;   /* партнёр для градиентов (светлее кримсон) */
+  --crimson-dark: #7e1322;
+  --caramel: #b07a47;
+  --espresso: #2a1f1a;
+  --terracotta: #c0334a;
+  --like: #a51c30;
+  --dislike: #8a8073;     /* нейтральный тёплый серый — «пропустить» */
+  --super: #c39a3a;       /* золото — супер-лайк / boost / акценты */
+
+  /* Поверхности — слоновая кость (чуть глубже) + белые карточки */
+  --bg: #efe7d3;          /* слоновая кость, тёплая, чуть темнее */
+  --surface: #fffdf8;     /* почти белый с кремовым подтоном */
+  --card: #fffdf8;
+  --text: #241f1b;
+  --muted: #8a8073;
+  --border: #e4d9c2;
+  --link: var(--gold);
+
+  --radius: 16px;
+  --radius-lg: 24px;
+  --radius-sm: 12px;
+  --radius-pill: 999px;
+
+  /* Премиальные тени (3 уровня глубины) */
+  --shadow: 0 12px 28px rgba(124, 21, 38, 0.16);
+  --elev-1: 0 1px 2px rgba(60, 20, 25, 0.06), 0 2px 8px rgba(60, 20, 25, 0.05);
+  --elev-2: 0 4px 12px rgba(60, 20, 25, 0.08), 0 8px 24px rgba(60, 20, 25, 0.06);
+  --elev-3: 0 12px 32px rgba(124, 21, 38, 0.16);
+
+  /* Шкала отступов (8pt grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Типографическая шкала (крупнее для читабельности) */
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+
+  /* Слои z-index */
+  --z-sheet: 40;
+  --z-overlay: 50;
+  --z-toast: 60;
+
+  /* Премиальный градиент кнопки/бренда */
+  --grad-brand: linear-gradient(135deg, var(--gold-soft), var(--gold));
+}
+
+/* Тёмная «винная» тема (переключатель в профиле). */
+[data-theme="dark"] {
+  --bg: #160d0f;
+  --surface: #201316;
+  --card: #28171b;
+  --text: #f3e7e9;
+  --muted: #b8a7ab;
+  --border: #3a2329;
+  --gold: #d24b60;
+  --gold-soft: #e0697c;
+  --super: #d8b85a;
+  --link: #d24b60;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
+    "Segoe UI", Roboto, sans-serif;
+  /* Комфортнее для чтения: крупнее базовый кегль + больше межстрочного */
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+a {
+  color: var(--link);
+}
+
+button {
+  font-family: inherit;
+}

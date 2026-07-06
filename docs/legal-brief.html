@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StaffSwipe — ТЗ для юриста</title>
+<style>
+  :root{--bg:#f6f1ea;--card:#fff;--ink:#201b18;--muted:#8b8078;--crimson:#9e1b32;
+    --crimson-soft:#b9485a;--line:#ece4d9;--ok:#3a8a4f;--warn:#b5532a;--chip:#f3ece0}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:800px;margin:0 auto;padding:24px 18px 70px}
+  header{text-align:center;padding:22px 0}
+  .logo{display:inline-flex;align-items:center;gap:10px;font-weight:900;font-size:26px}
+  .badge{width:38px;height:38px;border-radius:11px;display:inline-flex;align-items:center;
+    justify-content:center;color:#fff;font-size:20px;background:linear-gradient(135deg,var(--crimson-soft),var(--crimson))}
+  .sub{color:var(--muted);margin-top:6px}
+  h2{font-size:20px;margin:30px 0 10px;padding-top:12px;border-top:2px solid var(--line)}
+  h3{font-size:16px;margin:16px 0 6px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:12px 0}
+  code{background:var(--chip);border-radius:6px;padding:2px 7px;font-size:14px;font-family:ui-monospace,Menlo,monospace}
+  ul,ol{padding-left:20px} li{margin:7px 0}
+  .note{border-left:4px solid var(--crimson);background:var(--card);padding:12px 16px;border-radius:0 12px 12px 0;margin:12px 0}
+  .warn{border-left-color:var(--warn);background:#fdf3ee}
+  .ok{border-left-color:var(--ok)}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:14.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-size:13px;text-transform:uppercase}
+  b.k{color:var(--crimson)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="logo"><span class="badge">⚖</span>Staff<span style="color:var(--crimson)">Swipe</span></div>
+  <div class="sub">Техническое задание для юриста</div>
+  <div class="sub" style="font-size:13px">Что проверить и подготовить перед запуском сервиса</div>
+</header>
+
+<div class="note">
+  <b>Что это за продукт.</b> StaffSwipe — Telegram Mini App (мини-приложение в Telegram),
+  агрегатор краткосрочных смен/подработок в общепите. Сервис <b>сводит</b> соискателей
+  (в т.ч. самозанятых) и заведения (кафе, бары, рестораны). Сервис <b>не является
+  работодателем</b> и не нанимает исполнителей — он информационный посредник.
+  Оплата сторон между собой проходит вне сервиса; внутри сервиса — только платные
+  функции (подписки заведений, продвижение).
+</div>
+
+<h2>1. Что нужно от вас (исполнителя/владельца)</h2>
+<div class="card">
+  <p>Заполнить реквизиты оператора в документах (черновики приложены — см. раздел 5):</p>
+  <table>
+    <tr><th>Поле</th><th>Значение</th></tr>
+    <tr><td>Форма</td><td>ИП или ООО (на старте — самозанятость/ИП)</td></tr>
+    <tr><td>Наименование / ФИО</td><td>__________</td></tr>
+    <tr><td>ИНН / ОГРН(ИП)</td><td>__________</td></tr>
+    <tr><td>Юр. адрес</td><td>__________</td></tr>
+    <tr><td>E-mail для обращений</td><td>__________</td></tr>
+    <tr><td>Домен сервиса</td><td>__________</td></tr>
+  </table>
+</div>
+
+<h2>2. Документы, которые нужно подготовить/проверить</h2>
+<div class="card">
+  <ol>
+    <li><b class="k">Публичная оферта</b> (пользовательское соглашение) — условия
+      использования, предмет (информационные услуги), ответственность,
+      что сервис не отвечает за действия сторон на смене.</li>
+    <li><b class="k">Политика обработки персональных данных</b> (152-ФЗ) — состав
+      данных, цели, сроки, права субъекта, оператор.</li>
+    <li><b class="k">Согласие на обработку ПДн</b> — текст галочки при входе.</li>
+    <li><b class="k">Правила сервиса</b> — что запрещено (фейковые вакансии,
+      дискриминация, обход оплаты), модерация, блокировки.</li>
+    <li><b class="k">Условия платных функций</b> — подписки/продвижение: цена,
+      порядок оплаты (ЮKassa и Telegram Stars), возвраты (ЗоЗПП).</li>
+  </ol>
+  <p class="muted">Черновики пунктов 1–4 уже есть в репозитории (<code>docs/legal/</code>),
+  помечены «ЗАГОТОВКА» — нужна проверка и доведение под актуальное законодательство.</p>
+</div>
+
+<h2>3. Ключевые вопросы под этот продукт (просьба проверить)</h2>
+<div class="card">
+  <h3>Статус сервиса и трудовое право</h3>
+  <ul>
+    <li>Корректно ли оформлено, что сервис — <b>информационный посредник</b>, а не
+      работодатель и не кадровое агентство? Нет ли рисков переквалификации в
+      трудовые отношения или в деятельность по предоставлению персонала
+      (ст. 18.1 ТК РФ / запрет заёмного труда)?</li>
+    <li>Исполнители — преимущественно <b>самозанятые (НПД)</b>. Сервис формирует
+      <b>акт выполненных работ (PDF)</b> между заведением и исполнителем. Проверить
+      формулировки акта и что чек НПД формирует сам исполнитель в «Мой налог».</li>
+  </ul>
+  <h3>Персональные данные (152-ФЗ)</h3>
+  <ul>
+    <li>Нужно ли <b>уведомление в Роскомнадзор</b> о намерении обрабатывать ПДн и
+      внесение в реестр операторов?</li>
+    <li>Данные хранятся <b>на серверах в РФ</b> (требование о локализации соблюдено).
+      Проверить состав собираемых данных: имя, телефон/Telegram, город, фото,
+      ИНН (для самозанятых), геолокация. Минимизировать лишнее.</li>
+    <li>Сервис <b>18+</b> (проверяется на сервере). Достаточно ли этого?</li>
+  </ul>
+  <h3>Платежи</h3>
+  <ul>
+    <li>Договор-оферта с ЮKassa, порядок возвратов, чеки (54-ФЗ): кто пробивает
+      чек по платным функциям сервиса?</li>
+    <li>Telegram Stars для цифровых функций — соответствие правилам Telegram и
+      порядок учёта дохода.</li>
+  </ul>
+  <h3>Доверие и безопасность</h3>
+  <ul>
+    <li>В сервисе есть <b>жалобы пользователей</b> и модерация. Достаточно ли этого
+      для снятия ответственности за контент третьих лиц (вакансии создают заведения)?</li>
+  </ul>
+</div>
+
+<h2>4. Где документы показываются пользователю (тех. часть)</h2>
+<div class="card">
+  <p>Готовые тексты публикуются по двум ссылкам, которые вписываются в конфиг
+  (<code>VITE_OFFER_URL</code> и <code>VITE_PRIVACY_URL</code>) и показываются при
+  входе рядом с галочкой согласия «Мне есть 18 лет, принимаю оферту и политику ПДн».</p>
+</div>
+
+<h2>5. Что передаётся юристу</h2>
+<div class="card">
+  <ul>
+    <li>Это ТЗ.</li>
+    <li>Черновики документов: <code>docs/legal/offer.md</code>,
+      <code>docs/legal/privacy.md</code>, <code>docs/legal/terms.md</code>.</li>
+    <li>Описание продукта и собираемых данных (разделы 1 и 3 выше).</li>
+  </ul>
+  <div class="note ok">Результат: финальные тексты оферты, политики ПДн, согласия и
+  правил с вашими реквизитами + рекомендация по уведомлению Роскомнадзора и схеме
+  чеков. После этого — публикуем тексты и вписываем ссылки в конфиг.</div>
+</div>
+
+<div class="note warn">
+  Этот документ — постановка задачи, а не юридическая консультация. Финальные
+  формулировки и оценку рисков даёт практикующий юрист по IT/защите данных.
+</div>
+
+</div>
+</body>
+</html>

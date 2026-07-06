@@ -1,0 +1,11 @@
+{
+  "name": "StaffSwipe",
+  "short_name": "StaffSwipe",
+  "description": "Подработка в общепите за один свайп",
+  "theme_color": "#9e1b32",
+  "background_color": "#f6f1ea",
+  "display": "standalone",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
