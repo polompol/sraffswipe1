@@ -101,9 +101,7 @@ ufw allow 80 && ufw allow 443 && ufw allow 22
 ```sh
 git clone https://github.com/polompol/sraffswipe1.git
 cd sraffswipe1
-git checkout claude/staffswipe-flutter-app-6oqk55
 ```
-⚠️ Третья команда обязательна — код лежит на этой ветке.
 
 Сгенерировать секреты (выведет три случайные строки):
 

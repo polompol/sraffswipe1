@@ -61,12 +61,7 @@ ufw allow 443
 ```sh
 git clone https://github.com/polompol/sraffswipe1.git
 cd sraffswipe1
-# ВАЖНO: весь код пилота — на рабочей ветке, а не в main. Переключись на неё:
-git checkout claude/staffswipe-flutter-app-6oqk55
 ```
-
-> Если позже смёржишь эту ветку в `main` — шаг с `git checkout` не нужен,
-> `git clone` сразу заберёт всё из `main`.
 
 ---
 
