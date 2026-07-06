@@ -214,6 +214,24 @@ class Entitlement(Base):
     boost_balance: Mapped[int] = mapped_column(Integer, default=0)
     seeker_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     employer_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Денежный баланс заведения, ₽ — аванс, с которого автоматически
+    # списывается комиссия за закрытые смены. Пополнение: оператор (принял
+    # СБП → зачислил в админке) или ЮKassa. История движений — WalletTxn.
+    balance_rub: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class WalletTxn(Base):
+    """Движение по денежному балансу (пополнение/списание) — след для споров
+    «куда делись деньги». amount со знаком: + пополнение, − списание."""
+
+    __tablename__ = "wallet_txns"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, index=True)
+    amount: Mapped[int] = mapped_column(Integer)  # ₽, со знаком
+    kind: Mapped[str] = mapped_column(String)  # topup|commission|adjust
+    note: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
 class Purchase(Base):

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Commission, Purchase, Subscription
+from ..models import Commission, Purchase, Subscription, WalletTxn
 from ..security import current_principal
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -146,15 +146,16 @@ class CommissionInfoOut(BaseModel):
     overdue: bool
     dueDays: int
     pct: int
+    balanceRub: int  # денежный баланс (аванс) — комиссия списывается сама
 
 
 @router.get("/commission", response_model=CommissionInfoOut)
 def commission_info(
     db: Session = Depends(get_db), principal: dict = Depends(current_principal)
 ):
-    """Счёт заведения по комиссии за закрытые смены. Оплата — по счёту/СБП
-    оператору, тот отмечает «оплачено» в админке (позже — автосписание ЮKassa).
-    При просрочке публикация новых вакансий блокируется до оплаты."""
+    """Счёт заведения по комиссии за закрытые смены. Если на балансе есть
+    аванс — комиссия списывается с него автоматически; иначе оплата по
+    счёту/СБП оператору. При просрочке публикация вакансий блокируется."""
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
     shifts, total = (
@@ -168,12 +169,14 @@ def commission_info(
         )
         .one()
     )
+    ent = get_or_create(db, principal["id"])
     return CommissionInfoOut(
         pendingRub=int(total),
         pendingShifts=int(shifts),
         overdue=commission_overdue(db, principal["id"]),
         dueDays=settings.commission_due_days,
         pct=settings.commission_pct,
+        balanceRub=ent.balance_rub,
     )
 
 
@@ -270,8 +273,12 @@ class PaymentOut(BaseModel):
     url: str
 
 
-def _yk_payload(owner_id: str, sku: str, rub: int, email: str | None) -> dict:
+def _yk_payload(
+    owner_id: str, sku: str, rub: int, email: str | None,
+    title: str | None = None, extra_meta: dict | None = None,
+) -> dict:
     """Тело запроса платежа ЮKassa (+ фискальный чек по 54-ФЗ, если включено)."""
+    desc = title or CATALOG[sku]["title"]
     payload = {
         "amount": {"value": f"{rub}.00", "currency": "RUB"},
         "capture": True,
@@ -279,15 +286,15 @@ def _yk_payload(owner_id: str, sku: str, rub: int, email: str | None) -> dict:
             "type": "redirect",
             "return_url": settings.payment_return_url or "https://t.me",
         },
-        "description": CATALOG[sku]["title"],
-        "metadata": {"owner_id": owner_id, "sku": sku},
+        "description": desc,
+        "metadata": {"owner_id": owner_id, "sku": sku, **(extra_meta or {})},
     }
     # 54-ФЗ: чек шлём, только если касса не фискализирует сама и есть контакт.
     if settings.yookassa_send_receipt and email:
         payload["receipt"] = {
             "customer": {"email": email},
             "items": [{
-                "description": CATALOG[sku]["title"][:128],
+                "description": desc[:128],
                 "quantity": "1.00",
                 "amount": {"value": f"{rub}.00", "currency": "RUB"},
                 "vat_code": settings.yookassa_vat_code,
@@ -299,12 +306,13 @@ def _yk_payload(owner_id: str, sku: str, rub: int, email: str | None) -> dict:
 
 
 def _create_yookassa_payment(
-    owner_id: str, sku: str, rub: int, email: str | None = None
+    owner_id: str, sku: str, rub: int, email: str | None = None,
+    title: str | None = None, extra_meta: dict | None = None,
 ) -> str | None:
     """Создаёт платёж в ЮKassa и возвращает confirmation_url (или None)."""
     creds = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
     auth = base64.b64encode(creds.encode()).decode()
-    payload = _yk_payload(owner_id, sku, rub, email)
+    payload = _yk_payload(owner_id, sku, rub, email, title, extra_meta)
     req = urllib.request.Request(
         "https://api.yookassa.ru/v3/payments",
         data=json.dumps(payload).encode(),
@@ -343,6 +351,44 @@ def yookassa_payment(
     return PaymentOut(url=f"{base}?sku={body.sku}&owner={principal['id']}")
 
 
+class TopupIn(BaseModel):
+    amount_rub: int
+    email: str | None = None  # для фискального чека
+
+
+@router.post("/wallet/topup", response_model=PaymentOut)
+def wallet_topup(
+    body: TopupIn,
+    principal: dict = Depends(current_principal),
+):
+    """Пополнение денежного баланса картой через ЮKassa. Зачисление — вебхуком
+    (идемпотентно). Без ключей ЮKassa — демо-ссылка; до подключения кассы
+    пополнение делает оператор через админку (принял СБП → зачислил)."""
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    if not 100 <= body.amount_rub <= 100_000:
+        raise HTTPException(status_code=400, detail="Сумма от 100 до 100 000 ₽")
+    if settings.yookassa_ready:
+        url = _create_yookassa_payment(
+            principal["id"], "wallet_topup", body.amount_rub, body.email,
+            title=f"Пополнение баланса StaffSwipe на {body.amount_rub} ₽",
+            extra_meta={"amount_rub": str(body.amount_rub)},
+        )
+        if url:
+            return PaymentOut(url=url)
+    base = settings.payment_return_url or "https://example.com/pay"
+    return PaymentOut(url=f"{base}?sku=wallet_topup&owner={principal['id']}")
+
+
+def credit_wallet(db: Session, owner_id: str, amount: int, note: str) -> int:
+    """Зачислить деньги на баланс + записать движение. Возвращает новый баланс."""
+    ent = get_or_create(db, owner_id)
+    ent.balance_rub += amount
+    db.add(WalletTxn(owner_id=owner_id, amount=amount, kind="topup", note=note))
+    db.commit()
+    return ent.balance_rub
+
+
 @router.post("/yookassa/webhook")
 def yookassa_webhook(
     payload: dict,
@@ -360,6 +406,33 @@ def yookassa_webhook(
     obj = payload.get("object", {})
     meta = obj.get("metadata", {})
     owner_id, sku = meta.get("owner_id"), meta.get("sku")
+
+    # Пополнение денежного баланса: сумма произвольная — сверяем с metadata.
+    if owner_id and sku == "wallet_topup":
+        try:
+            rub = int(meta.get("amount_rub") or 0)
+        except ValueError:
+            rub = 0
+        amount = obj.get("amount", {})
+        if (
+            rub <= 0
+            or str(amount.get("value")) != f"{rub}.00"
+            or amount.get("currency") != "RUB"
+        ):
+            raise HTTPException(status_code=400, detail="Сумма платежа не совпадает")
+        charge_id = obj.get("id")
+        if charge_id and db.query(Purchase).filter(
+            Purchase.provider_charge_id == charge_id
+        ).first():
+            return {"ok": True, "duplicate": True}
+        db.add(Purchase(
+            owner_id=owner_id, sku="wallet_topup", provider="yookassa",
+            amount=rub, currency="RUB", status="paid",
+            provider_charge_id=charge_id,
+        ))
+        credit_wallet(db, owner_id, rub, "Пополнение картой (ЮKassa)")
+        return {"ok": True}
+
     if not owner_id or sku not in CATALOG:
         raise HTTPException(status_code=400, detail="Некорректные metadata")
     # Сверяем фактически оплаченную сумму с ценой SKU (защита на случай утечки

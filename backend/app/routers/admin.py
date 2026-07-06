@@ -429,6 +429,7 @@ class AdminUserOut(BaseModel):
     plan: str
     boostBalance: int
     superlikeBalance: int
+    balanceRub: int = 0  # денежный баланс (аванс) заведения
 
 
 def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
@@ -440,6 +441,7 @@ def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
         plan=plan_of(db, obj.id),
         boostBalance=ent.boost_balance,
         superlikeBalance=ent.superlike_balance,
+        balanceRub=ent.balance_rub,
     )
 
 
@@ -488,6 +490,36 @@ def grant_entitlement(
 
 
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----
+
+
+class WalletCreditIn(BaseModel):
+    amount_rub: int
+    note: str = ""
+
+
+@router.post("/wallet/{owner_id}/credit")
+def wallet_credit(
+    owner_id: str,
+    body: WalletCreditIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Оператор зачисляет аванс на баланс заведения (принял перевод СБП/счёт).
+    Дальше комиссия за смены списывается с баланса автоматически."""
+    if not 1 <= body.amount_rub <= 500_000:
+        raise HTTPException(status_code=400, detail="Сумма от 1 до 500 000 ₽")
+    if db.get(Employer, owner_id) is None and db.get(User, owner_id) is None:
+        raise HTTPException(status_code=404, detail="Аккаунт не найден")
+    from .billing import credit_wallet
+
+    balance = credit_wallet(
+        db, owner_id, body.amount_rub,
+        (body.note or "Пополнение оператором (СБП/счёт)")[:200],
+    )
+    notify_owner(db, owner_id,
+                 f"Баланс пополнен на {body.amount_rub} ₽. "
+                 f"Теперь на счету {balance} ₽ — комиссия списывается сама.")
+    return {"ok": True, "balanceRub": balance}
 
 
 class SourceRow(BaseModel):

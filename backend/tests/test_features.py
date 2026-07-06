@@ -289,6 +289,57 @@ def test_employer_sees_own_commission_bill(client):
     assert r.status_code == 403
 
 
+def test_wallet_autopays_commission(client):
+    # Аванс на балансе → комиссия за закрытую смену списывается сама.
+    emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    r = client.post(f"/admin/wallet/{emp_id}/credit", headers=_hdr(emp_token),
+                    json={"amount_rub": 1000, "note": "СБП тест"})
+    assert r.status_code == 200 and r.json()["balanceRub"] == 1000
+    _close_shift(client, emp_token, seeker_token, match_id)
+    bill = client.get("/billing/commission", headers=_hdr(emp_token)).json()
+    # Комиссия 280 ₽ списана с баланса: долга нет, баланс 720.
+    assert bill["pendingRub"] == 0 and bill["balanceRub"] == 720
+    # В счёт оператору ничего не попало.
+    assert client.get("/admin/commissions", headers=_hdr(emp_token)).json() == []
+
+
+def test_wallet_insufficient_falls_back_to_invoice(client):
+    # Денег на балансе мало → баланс не трогаем, комиссия уходит в счёт.
+    emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    client.post(f"/admin/wallet/{emp_id}/credit", headers=_hdr(emp_token),
+                json={"amount_rub": 100})
+    _close_shift(client, emp_token, seeker_token, match_id)
+    bill = client.get("/billing/commission", headers=_hdr(emp_token)).json()
+    assert bill["pendingRub"] == 280 and bill["balanceRub"] == 100
+
+
+def test_wallet_topup_webhook_idempotent(client):
+    emp_token, emp_id = _auth(client, "employer")
+    payload = {
+        "event": "payment.succeeded",
+        "object": {
+            "id": "yk-topup-1",
+            "amount": {"value": "500.00", "currency": "RUB"},
+            "metadata": {
+                "owner_id": emp_id, "sku": "wallet_topup", "amount_rub": "500",
+            },
+        },
+    }
+    for _ in range(2):  # повторная доставка вебхука не удваивает деньги
+        r = client.post(
+            "/billing/yookassa/webhook?secret=test-internal-secret", json=payload,
+        )
+        assert r.status_code == 200
+    bill = client.get("/billing/commission", headers=_hdr(emp_token)).json()
+    assert bill["balanceRub"] == 500
+    # Подмена суммы (metadata 500, платёж 100) — отклоняется.
+    bad = {**payload, "object": {**payload["object"], "id": "yk-topup-2",
+           "amount": {"value": "100.00", "currency": "RUB"}}}
+    assert client.post(
+        "/billing/yookassa/webhook?secret=test-internal-secret", json=bad,
+    ).status_code == 400
+
+
 def test_overdue_commission_blocks_new_vacancies(client):
     from datetime import UTC, datetime, timedelta
 

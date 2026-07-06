@@ -440,6 +440,7 @@ export interface AdminUser {
   plan: string;
   boostBalance: number;
   superlikeBalance: number;
+  balanceRub: number;
 }
 
 /** Поиск людей/заведений в админке (по имени, @нику, телефону). */
@@ -494,6 +495,7 @@ export interface CommissionInfo {
   overdue: boolean;
   dueDays: number;
   pct: number;
+  balanceRub: number;
 }
 
 /** Мой счёт по комиссии (для заведения): сколько накопилось и не просрочен ли. */
@@ -501,6 +503,24 @@ export async function fetchMyCommission(): Promise<CommissionInfo> {
   if (!USE_BACKEND) return mock.fetchMyCommission();
   const { data } = await api.get<CommissionInfo>("/billing/commission");
   return data;
+}
+
+/** Пополнение денежного баланса картой (ЮKassa) — вернёт ссылку на оплату. */
+export async function walletTopup(amountRub: number): Promise<PaymentUrl> {
+  if (!USE_BACKEND) return { url: "https://example.com/pay/wallet_topup" };
+  const { data } = await api.post<PaymentUrl>("/billing/wallet/topup", {
+    amount_rub: amountRub,
+  });
+  return data;
+}
+
+/** Оператор зачисляет аванс на баланс заведения (принял СБП/счёт). */
+export async function adminCreditWallet(
+  ownerId: string,
+  amountRub: number,
+): Promise<void> {
+  if (!USE_BACKEND) return mock.adminCreditWallet(ownerId, amountRub);
+  await api.post(`/admin/wallet/${ownerId}/credit`, { amount_rub: amountRub });
 }
 
 /** Оператор закрывает спор по смене: засчитать или зафиксировать неявку. */

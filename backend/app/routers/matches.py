@@ -8,7 +8,15 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..geo import distance_km
-from ..models import Commission, Match, Message, Report, Vacancy
+from ..models import (
+    Commission,
+    Entitlement,
+    Match,
+    Message,
+    Report,
+    Vacancy,
+    WalletTxn,
+)
 from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import MatchOut
@@ -51,8 +59,9 @@ def _shift_pay(v: Vacancy) -> int:
 
 
 def _accrue_commission(db: Session, m: Match) -> None:
-    """Начисляем комиссию за закрытую смену (учёт для счёта). Идемпотентно —
-    по одной записи на смену. Деньги не списываем: это включится с ЮKassa."""
+    """Начисляем комиссию за закрытую смену. Идемпотентно — по одной записи
+    на смену. Если у заведения есть денежный баланс (аванс) — списываем сразу;
+    иначе комиссия висит pending и попадает в недельный счёт."""
     if settings.commission_pct <= 0:
         return
     if db.query(Commission).filter(Commission.match_id == m.id).first():
@@ -63,9 +72,30 @@ def _accrue_commission(db: Session, m: Match) -> None:
     pay = _shift_pay(v)
     fee = round(pay * settings.commission_pct / 100)
     amount = max(settings.commission_min_rub, fee)
-    db.add(Commission(
+    c = Commission(
         employer_id=m.employer_id, match_id=m.id, shift_pay=pay, amount=amount,
-    ))
+    )
+    # Атомарный UPDATE с условием «хватает денег» — двойное списание при
+    # гонке невозможно.
+    paid = (
+        db.query(Entitlement)
+        .filter(
+            Entitlement.owner_id == m.employer_id,
+            Entitlement.balance_rub >= amount,
+        )
+        .update(
+            {Entitlement.balance_rub: Entitlement.balance_rub - amount},
+            synchronize_session=False,
+        )
+    )
+    if paid:
+        c.status = "paid"
+        db.add(WalletTxn(
+            owner_id=m.employer_id, amount=-amount, kind="commission",
+            note=f"Комиссия за смену {m.id[:8]}",
+        ))
+        _sys(db, m.id, f"Комиссия {amount} ₽ списана с баланса заведения ✓")
+    db.add(c)
 
 
 def _maybe_complete(db: Session, m: Match) -> None:

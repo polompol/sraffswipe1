@@ -499,12 +499,12 @@ export function adminSearchUsers(q: string) {
     {
       id: "emp1", role: "employer" as const, name: "Кофейня «Дрова»",
       username: "drova", blocked: false, warnings: 0, plan: "pro",
-      boostBalance: 4, superlikeBalance: 0,
+      boostBalance: 4, superlikeBalance: 0, balanceRub: 1500,
     },
     {
       id: "seek1", role: "seeker" as const, name: "Мария", username: null,
       blocked: false, warnings: 1, plan: "free", boostBalance: 0,
-      superlikeBalance: 2,
+      superlikeBalance: 2, balanceRub: 0,
     },
   ];
   const ql = q.trim().toLowerCase();
@@ -537,7 +537,16 @@ export function fetchSources() {
 export function fetchMyCommission() {
   return Promise.resolve({
     pendingRub: 560, pendingShifts: 2, overdue: false, dueDays: 7, pct: 10,
+    balanceRub: 1500,
   });
+}
+export function adminCreditWallet(
+  _ownerId: string,
+  _amountRub: number,
+): Promise<void> {
+  void _ownerId;
+  void _amountRub;
+  return Promise.resolve();
 }
 export function resolveMatch(_matchId: string, _outcome: string): Promise<void> {
   void _matchId;

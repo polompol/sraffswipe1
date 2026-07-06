@@ -8,6 +8,7 @@ import {
   fetchMe,
   fetchMyCommission,
   fetchReferral,
+  walletTopup,
   setAvailability,
   verifyEmployer,
   type Me,
@@ -34,8 +35,24 @@ function CommissionCard() {
     queryKey: ["my-commission"],
     queryFn: fetchMyCommission,
   });
+  const [busy, setBusy] = useState(false);
   if (!bill) return null;
   const due = bill.pendingRub > 0;
+
+  async function topup(amount: number) {
+    setBusy(true);
+    try {
+      const { url } = await walletTopup(amount);
+      haptic("light");
+      window.open(url, "_blank");
+    } catch {
+      haptic("error");
+      toast("Не удалось открыть оплату", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div
       className="card"
@@ -65,6 +82,27 @@ function CommissionCard() {
           Напишите в поддержку, если уже оплатили.
         </div>
       )}
+      <div className="row" style={{ marginTop: 10 }}>
+        <span className="muted" style={{ fontSize: 14 }}>Баланс (аванс)</span>
+        <span className="spacer" />
+        <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
+      </div>
+      <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+        С баланса комиссия списывается сама — без счетов и напоминаний.
+      </div>
+      <div className="row" style={{ marginTop: 8, gap: 8 }}>
+        {[1000, 3000, 5000].map((a) => (
+          <button
+            key={a}
+            className="tag"
+            disabled={busy}
+            style={{ flex: 1, cursor: "pointer" }}
+            onClick={() => topup(a)}
+          >
+            +{a.toLocaleString("ru-RU")} ₽
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

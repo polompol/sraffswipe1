@@ -6,6 +6,7 @@ import {
   fetchSources,
   settleCommission,
   resolveMatch,
+  adminCreditWallet,
   adminGrant,
   adminSearchUsers,
   blockUser,
@@ -95,6 +96,13 @@ export function AdminPage() {
     haptic("success");
     await adminGrant(id, sku);
     toast(`Выдано: ${label}`, "success");
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
+  }
+
+  async function credit(id: string, amountRub: number) {
+    haptic("success");
+    await adminCreditWallet(id, amountRub);
+    toast(`Баланс пополнен на ${amountRub.toLocaleString("ru-RU")} ₽`, "success");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
@@ -318,6 +326,9 @@ export function AdminPage() {
                   {u.role === "employer" ? "заведение" : "соискатель"}
                   {u.username ? ` · @${u.username}` : ""} · {u.plan.toUpperCase()}
                   {" · "}Boost {u.boostBalance}
+                  {u.role === "employer"
+                    ? ` · Баланс ${u.balanceRub.toLocaleString("ru-RU")} ₽`
+                    : ""}
                   {u.warnings > 0 ? ` · ⚠ ${u.warnings}` : ""}
                 </div>
               </span>
@@ -339,6 +350,17 @@ export function AdminPage() {
                   + Pro (месяц)
                 </button>
               )}
+              {u.role === "employer" &&
+                [1000, 5000].map((a) => (
+                  <button
+                    key={a}
+                    className="tag"
+                    style={{ cursor: "pointer", color: "var(--like)", borderColor: "var(--like)" }}
+                    onClick={() => credit(u.id, a)}
+                  >
+                    Баланс +{a.toLocaleString("ru-RU")} ₽
+                  </button>
+                ))}
               <button
                 className="tag"
                 style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
