@@ -126,13 +126,13 @@ nano .env
 | `POSTGRES_PASSWORD=` | 1-я строка из gen-secrets.sh |
 | `JWT_SECRET=` | 2-я строка |
 | `INTERNAL_API_SECRET=` | 3-я строка |
-| `ADMIN_TG_IDS=` | твой Telegram-id (см. ниже) |
+| `ADMIN_TG_IDS=` | уже вписан твой id `7833280774` — не трогай |
 | `VITE_OFFER_URL=` | ссылка на оферту с telegra.ph (шаг 4) |
 | `VITE_PRIVACY_URL=` | ссылка на политику с telegra.ph |
 
-**Твой Telegram-id**: напиши в Telegram боту **@userinfobot** — он
-пришлёт число вида `123456789`. Это и вписывай в `ADMIN_TG_IDS`
-(так админ-панель будет доступна только тебе).
+**Твой Telegram-id** уже вписан в шаблон (`7833280774`) — админ-панель
+будет доступна только тебе. Захочешь добавить второго оператора — допиши
+его id через запятую (id узнаётся у бота **@userinfobot**).
 
 Сохранить и выйти из nano: **Ctrl+O → Enter → Ctrl+X**.
 
