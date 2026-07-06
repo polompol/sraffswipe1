@@ -481,7 +481,20 @@ export function ProfilePage() {
         </span>
       </div>
 
-      {me && <EarningsCard me={me} />}
+      {role === "seeker" && me && <EarningsCard me={me} />}
+
+      {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="row">
+            <b>Смен проведено</b>
+            <span className="spacer" />
+            <b style={{ color: "var(--gold)", fontSize: 20 }}>{me.shiftsDone}</b>
+          </div>
+          <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+            Закрытые смены формируют рейтинг и знак «Платит вовремя».
+          </div>
+        </div>
+      )}
 
       {role === "seeker" && me && (
         <ProfileMeter pct={me.profileCompletion ?? 100} />
