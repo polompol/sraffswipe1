@@ -311,6 +311,45 @@ def test_admin_relink_moves_account_to_new_telegram(client):
     db.close()
 
 
+def test_relink_to_admin_tg_id_forbidden(client):
+    # Эскалация прав: перенос на tg_id админа (0) отвязал бы аккаунт
+    # оператора и сделал бы цель админом. Должно отклоняться всегда.
+    seeker_token, _ = _auth(client, "seeker")  # админ (tg_id=0)
+    _, emp_id = _auth(client, "employer")
+    r = client.post("/admin/relink", headers=_hdr(seeker_token),
+                    json={"owner_id": emp_id, "new_tg_id": 0})
+    assert r.status_code == 400
+
+
+def test_overdue_blocks_employer_positive_swipes(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Commission
+
+    emp_token, emp_id, seeker_token, seeker_id, _, match_id = (
+        _full_shift_cycle(client)
+    )
+    _close_shift(client, emp_token, seeker_token, match_id)
+    db = SessionLocal()
+    db.query(Commission).filter(Commission.employer_id == emp_id).update(
+        {Commission.created_at: datetime.now(UTC) - timedelta(days=10)},
+        synchronize_session=False,
+    )
+    db.commit()
+    db.close()
+    # Должник не может лайкать новых кандидатов (обход блока вакансий)...
+    r = client.post("/swipes", headers=_hdr(emp_token), json={
+        "target_type": "user", "target_id": seeker_id, "direction": "like",
+    })
+    assert r.status_code == 402
+    # ...но дизлайк (не создаёт обязательств) работает.
+    r2 = client.post("/swipes", headers=_hdr(emp_token), json={
+        "target_type": "user", "target_id": seeker_id, "direction": "dislike",
+    })
+    assert r2.status_code == 200
+
+
 def test_wallet_autopays_commission(client):
     # Аванс на балансе → комиссия за закрытую смену списывается сама.
     emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)

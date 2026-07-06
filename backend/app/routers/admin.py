@@ -98,9 +98,15 @@ def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
         )
 
     def _sum(currency: str) -> int:
+        # Пополнения баланса — аванс (обязательство), не выручка: исключаем,
+        # чтобы «Всего получено» не завышалось.
         return int(
             db.query(func.coalesce(func.sum(Purchase.amount), 0))
-            .filter(Purchase.status == "paid", Purchase.currency == currency)
+            .filter(
+                Purchase.status == "paid",
+                Purchase.currency == currency,
+                Purchase.sku != "wallet_topup",
+            )
             .scalar()
             or 0
         )
@@ -507,6 +513,16 @@ def relink_account(
     телефон). История, рейтинг, смены и баланс сохраняются — меняется только
     привязка tg_id. Если новый tg_id уже занят свежесозданным дублем —
     дубль отвязывается и блокируется (его пустая история никому не нужна)."""
+    # Защита от эскалации прав: перенос на tg_id админа отвязал бы аккаунт
+    # оператора и сделал бы целевой аккаунт админом. Запрещено всегда.
+    from ..config import settings
+
+    admin_ids = {x.strip() for x in settings.admin_tg_ids.split(",") if x.strip()}
+    if str(body.new_tg_id) in admin_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Нельзя переносить аккаунт на Telegram-id администратора",
+        )
     target = db.get(User, body.owner_id) or db.get(Employer, body.owner_id)
     if target is None:
         raise HTTPException(status_code=404, detail="Аккаунт не найден")

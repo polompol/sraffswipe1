@@ -147,6 +147,7 @@ class CommissionInfoOut(BaseModel):
     dueDays: int
     pct: int
     balanceRub: int  # денежный баланс (аванс) — комиссия списывается сама
+    topupAvailable: bool  # оплата картой доступна (ЮKassa подключена / dev)
 
 
 @router.get("/commission", response_model=CommissionInfoOut)
@@ -177,6 +178,7 @@ def commission_info(
         dueDays=settings.commission_due_days,
         pct=settings.commission_pct,
         balanceRub=ent.balance_rub,
+        topupAvailable=settings.yookassa_ready or settings.dev_mode,
     )
 
 
@@ -368,6 +370,13 @@ def wallet_topup(
         raise HTTPException(status_code=403, detail="Только для работодателя")
     if not 100 <= body.amount_rub <= 100_000:
         raise HTTPException(status_code=400, detail="Сумма от 100 до 100 000 ₽")
+    if not settings.yookassa_ready and not settings.dev_mode:
+        # В проде без кассы кнопка не должна вести на заглушку.
+        raise HTTPException(
+            status_code=400,
+            detail="Оплата картой скоро. Пока — переводом СБП оператору, "
+                   "он зачислит на баланс.",
+        )
     if settings.yookassa_ready:
         url = _create_yookassa_payment(
             principal["id"], "wallet_topup", body.amount_rub, body.email,

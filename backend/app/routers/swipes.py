@@ -10,6 +10,7 @@ from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
 from ..security import current_principal
+from .billing import commission_overdue
 
 router = APIRouter(prefix="/swipes", tags=["swipes"])
 
@@ -74,6 +75,20 @@ def swipe(
     principal: dict = Depends(current_principal),
 ):
     me = principal["id"]
+
+    # Просроченный долг по комиссии: заведение не может звать НОВЫХ людей
+    # (позитивный свайп) — иначе блок публикации обходится старыми вакансиями,
+    # а долг растёт. Дизлайки и уже начатые смены работают.
+    if (
+        principal["role"] == "employer"
+        and body.direction in _POSITIVE
+        and commission_overdue(db, me)
+    ):
+        raise HTTPException(
+            status_code=402,
+            detail="Есть просроченная комиссия — оплатите счёт, "
+                   "чтобы приглашать новых людей.",
+        )
 
     # Сначала валидируем цель — чтобы при 404 не «сжечь» супер-лайк/не писать свайп.
     if body.target_type == "vacancy":

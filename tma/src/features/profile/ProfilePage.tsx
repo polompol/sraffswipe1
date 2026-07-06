@@ -90,19 +90,26 @@ function CommissionCard() {
       <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
         С баланса комиссия списывается сама — без счетов и напоминаний.
       </div>
-      <div className="row" style={{ marginTop: 8, gap: 8 }}>
-        {[1000, 3000, 5000].map((a) => (
-          <button
-            key={a}
-            className="tag"
-            disabled={busy}
-            style={{ flex: 1, cursor: "pointer" }}
-            onClick={() => topup(a)}
-          >
-            +{a.toLocaleString("ru-RU")} ₽
-          </button>
-        ))}
-      </div>
+      {bill.topupAvailable ? (
+        <div className="row" style={{ marginTop: 8, gap: 8 }}>
+          {[1000, 3000, 5000].map((a) => (
+            <button
+              key={a}
+              className="tag"
+              disabled={busy}
+              style={{ flex: 1, cursor: "pointer" }}
+              onClick={() => topup(a)}
+            >
+              +{a.toLocaleString("ru-RU")} ₽
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+          Пополнить: переводом СБП оператору (кнопка «Поддержка») —
+          зачислим на баланс. Оплата картой — скоро.
+        </div>
+      )}
     </div>
   );
 }

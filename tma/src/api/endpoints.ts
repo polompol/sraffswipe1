@@ -496,6 +496,7 @@ export interface CommissionInfo {
   dueDays: number;
   pct: number;
   balanceRub: number;
+  topupAvailable: boolean;
 }
 
 /** Мой счёт по комиссии (для заведения): сколько накопилось и не просрочен ли. */
