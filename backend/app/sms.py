@@ -3,13 +3,16 @@
 В dev-режиме реальная отправка не выполняется — код возвращается в ответе API.
 Подключение реального шлюза (МТС Exolve / SMS.RU / SMSC.ru) — в send_code().
 """
-import random
+import secrets
 
 from .config import settings
 
 
 def generate_code() -> str:
-    return f"{random.randint(0, 9999):04d}"
+    # 6 цифр из криптостойкого генератора (1 000 000 комбинаций). При лимите
+    # 5 попыток/мин на номер перебор занял бы сотни дней — против 4 цифр (random),
+    # которые подбирались за часы.
+    return f"{secrets.randbelow(1000000):06d}"
 
 
 def send_code(phone: str, code: str) -> None:

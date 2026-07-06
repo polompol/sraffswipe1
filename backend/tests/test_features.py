@@ -82,7 +82,13 @@ def _full_shift_cycle(client):
 
 
 def test_seeker_earnings_counted_after_shift(client):
-    _, _, seeker_token, _, vac, _ = _full_shift_cycle(client)
+    emp_token, _, seeker_token, _, vac, match_id = _full_shift_cycle(client)
+    # До закрытия смены (только confirmed) заработок НЕ засчитан — защита от
+    # накрутки фиктивными мэтчами.
+    pre = client.get("/me", headers=_hdr(seeker_token)).json()
+    assert pre["shiftsDone"] == 0 and pre["earnedRub"] == 0
+    # Закрываем смену взаимным подтверждением → теперь считается.
+    _close_shift(client, emp_token, seeker_token, match_id)
     me = client.get("/me", headers=_hdr(seeker_token)).json()
     # 350 ₽/час × 8 ч = 2800 ₽ за смену
     assert me["shiftsDone"] == 1
@@ -94,6 +100,7 @@ def test_employer_trust_aggregates_in_feed(client):
     # заведения видны рейтинг и счётчик смен. «Платит вовремя» ещё не выдаётся:
     # порог ≥3 закрытых смен не достигнут (знак не выдаётся «авансом»).
     emp_token, emp_id, seeker_token, _, vac, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
     client.post(f"/matches/{match_id}/review", headers=_hdr(seeker_token),
                 json={"stars": 5})
 
@@ -265,6 +272,43 @@ def test_traffic_source_attribution(client):
     })
     rows2 = client.get("/admin/sources", headers=_hdr(seeker_token)).json()
     assert {x["source"]: x for x in rows2}["vk"]["seekers"] == 1
+
+
+def test_reputation_not_farmable_without_completed_shift(client):
+    # Сговор «работник + фейковое заведение»: доводим до confirmed (два свайпа
+    # + два confirm), но БЕЗ реального выхода. Отзыв и заработок недоступны.
+    emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    r = client.post(f"/matches/{match_id}/review", headers=_hdr(seeker_token),
+                    json={"stars": 5})
+    assert r.status_code == 400  # смена не закрыта → накрутить рейтинг нельзя
+    me = client.get("/me", headers=_hdr(seeker_token)).json()
+    assert me["shiftsDone"] == 0 and me["earnedRub"] == 0
+
+
+def test_sms_code_is_six_digits(client):
+    from app.sms import generate_code
+
+    for _ in range(20):
+        c = generate_code()
+        assert len(c) == 6 and c.isdigit()
+
+
+def test_blocked_user_cannot_pull_act(client):
+    from app.db import SessionLocal
+    from app.models import Employer
+
+    emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    # Токен работодателя валиден, акт доступен...
+    ok = client.get(f"/matches/{match_id}/act.pdf?token={emp_token}")
+    assert ok.status_code == 200
+    # ...но после бана тот же query-токен больше не тянет акт с ИНН.
+    db = SessionLocal()
+    db.get(Employer, emp_id).blocked = True
+    db.commit()
+    db.close()
+    banned = client.get(f"/matches/{match_id}/act.pdf?token={emp_token}")
+    assert banned.status_code == 403
 
 
 def _close_shift(client, emp_token, seeker_token, match_id):
@@ -666,12 +710,12 @@ def test_attendance_and_reliability(client):
     assert me["shifts_total"] == 1
     assert me["shifts_attended"] == 0
 
-    # отметили «вышел» — счётчик обновился
-    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
-                json={"attended": True})
+    # «Вышел» засчитывается только при ЗАКРЫТОЙ смене (взаимное подтверждение):
+    # работник отмечается кодом, заведение подтверждает «пришёл» → completed.
+    _close_shift(client, emp_token, seeker_token, match_id)
     workers = client.get("/employer/workers", headers=_hdr(emp_token)).json()
     me = next(c for c in workers if c["id"] == sid)
-    assert me["shifts_attended"] == 1
+    assert me["shifts_attended"] == 1 and me["shifts_total"] == 1
 
 
 def test_my_workers_and_invite_again(client):

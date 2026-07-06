@@ -127,8 +127,10 @@ def mark_attendance(
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["role"] != "employer" or principal["id"] != m.employer_id:
         raise HTTPException(status_code=403, detail="Только работодатель смены")
-    if m.status not in ("confirmed", "completed"):
-        raise HTTPException(status_code=400, detail="Смена ещё не подтверждена")
+    # Уже закрытую смену не трогаем: иначе attended=false переоткрывал бы спор
+    # по completed-смене и спамил оператора ложными уведомлениями.
+    if m.status != "confirmed":
+        raise HTTPException(status_code=400, detail="Смена не в статусе подтверждённой")
 
     if body.attended:
         m.employer_checked_in = True
@@ -178,7 +180,7 @@ def list_matches(
 @router.post(
     "/{match_id}/checkin",
     response_model=MatchOut,
-    # Анти-перебор: 4-значный код нельзя подобрать скриптом —
+    # Анти-перебор: 6-значный код нельзя подобрать скриптом —
     # максимум 5 попыток в минуту на пользователя.
     dependencies=[Depends(rate_limit("checkin", 5, 60))],
 )

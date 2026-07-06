@@ -74,8 +74,11 @@ def leave_review(
     me = principal["id"]
     if me not in (match.user_id, match.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа")
-    if match.status not in ("confirmed", "completed"):
-        raise HTTPException(status_code=400, detail="Смена ещё не подтверждена")
+    # Отзыв — только за фактически состоявшуюся смену (обе стороны отметились),
+    # а не за «согласились выйти» (confirmed). Иначе рейтинг накручивается
+    # сговором «работник + фейковое заведение» без единой реальной смены.
+    if match.status != "completed":
+        raise HTTPException(status_code=400, detail="Смена ещё не закрыта")
     if db.query(Review).filter(
         Review.match_id == match_id, Review.rater_id == me
     ).first():
@@ -162,13 +165,14 @@ def _shift_pay(rate: int, rate_type: str, start: int, end: int) -> int:
 def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
     """(сколько смен закрыто, сколько заработано ₽).
 
-    Считаем по подтверждённым/завершённым мэтчам. Для соискателя — сумма
-    оплат по сменам (мотивация доходом). Для заведения — только счётчик смен."""
+    Считаем ТОЛЬКО по закрытым смёнам (completed = взаимно подтверждены). За
+    confirmed (только согласились) не начисляем — иначе «заработок» и счётчик
+    смен накручивались бы фиктивными мэтчами без реального выхода."""
     col = Match.employer_id if role == "employer" else Match.user_id
     rows = (
         db.query(Vacancy.rate, Vacancy.rate_type, Vacancy.start_time, Vacancy.end_time)
         .join(Match, Match.vacancy_id == Vacancy.id)
-        .filter(col == owner_id, Match.status.in_(("confirmed", "completed")))
+        .filter(col == owner_id, Match.status == "completed")
         .all()
     )
     shifts = len(rows)

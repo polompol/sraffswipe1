@@ -89,6 +89,18 @@ def test_review_updates_rating(client):
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(seeker_token))
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(emp_token))
 
+    # Отзыв разрешён только за ЗАКРЫТУЮ смену: на confirmed — 400.
+    early = client.post(f"/matches/{match_id}/review", headers=_hdr(seeker_token),
+                        json={"stars": 5})
+    assert early.status_code == 400
+    # Закрываем смену взаимной отметкой (код прихода → «человек пришёл»).
+    code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+                if m["id"] == match_id)["checkin_code"]
+    client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                json={"code": code})
+    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                json={"attended": True})
+
     r = client.post(f"/matches/{match_id}/review", headers=_hdr(seeker_token),
                     json={"stars": 5, "text": "Отлично!"})
     assert r.status_code == 200

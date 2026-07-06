@@ -1,7 +1,7 @@
 """Лента кандидатов для работодателя."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Integer, func
+from sqlalchemy import Integer, func, or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -49,7 +49,11 @@ def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]
         )
         .filter(
             Match.user_id.in_(user_ids),
-            Match.status.in_(("confirmed", "completed")),
+            # Надёжность считаем по РЕАЛЬНЫМ сменам: закрытая (completed = вышел)
+            # ИЛИ зафиксированная неявка (no_show). Голый confirmed без отметки
+            # не в счёт — иначе «вышел на N смен» накручивается фиктивными мэтчами.
+            # Накрутить хорошую статистику через no_show нельзя: он её ухудшает.
+            or_(Match.status == "completed", Match.no_show.is_(True)),
         )
         .group_by(Match.user_id)
         .all()

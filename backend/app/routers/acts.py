@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, Match, User, Vacancy
-from ..security import decode_token
+from ..security import _is_blocked, decode_token
 
 router = APIRouter(prefix="/matches", tags=["acts"])
 
@@ -49,6 +49,10 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     principal = decode_token(token)
     if principal is None:
         raise HTTPException(status_code=401, detail="Нужен токен")
+    # Query-токен идёт мимо current_principal — проверяем бан вручную, иначе
+    # забаненный по старому JWT (до 30 дней) тянул бы акт с ИНН обеих сторон.
+    if _is_blocked(db, principal):
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
