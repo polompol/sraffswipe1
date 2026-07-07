@@ -9,6 +9,7 @@ import { coin } from "@/lib/sfx";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Button } from "@/components/Button";
+import { toast } from "@/components/Toast";
 import { IconSend, IconBack, IconWarning, IconCheck } from "@/components/Icons";
 
 // Быстрые ответы — частые фразы в один тап (экономят время, снижают трение).
@@ -78,6 +79,7 @@ export function ChatPage() {
     } catch {
       haptic("error");
       setText(t); // вернуть текст, чтобы не потерять сообщение
+      toast("Не отправилось — нажмите отправить ещё раз", "error");
     }
   }
 
@@ -104,6 +106,7 @@ export function ChatPage() {
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
       haptic("error");
+      toast("Не удалось подтвердить смену. Попробуйте ещё раз", "error");
     }
   }
 

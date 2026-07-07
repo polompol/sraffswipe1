@@ -134,7 +134,7 @@ function EmployerVerify() {
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <b>Подтвердить компанию (DaData)</b>
+      <b>Подтвердить компанию по ИНН</b>
       <div className="row" style={{ marginTop: 10, gap: 8 }}>
         <input
           className="input"
@@ -449,6 +449,8 @@ export function ProfilePage() {
           className="tab"
           style={{ flex: "none", width: "auto", color: "var(--muted)" }}
           onClick={() => {
+            // Подтверждение: выход в один тап — случайно вылететь из аккаунта неприятно.
+            if (!window.confirm("Выйти из аккаунта?")) return;
             logout();
             nav("/onboarding", { replace: true });
           }}
@@ -532,11 +534,11 @@ export function ProfilePage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="row">
             <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <IconFire size={18} /> Boost: {ent?.boostBalance ?? 0}
+              <IconFire size={18} /> Поднятий в топ: {ent?.boostBalance ?? 0}
             </b>
             <span className="spacer" />
             <button className="btn ghost" style={{ width: "auto", padding: "8px 14px" }} onClick={() => nav("/pricing")}>
-              Ускорить смену
+              Поднять в топ
             </button>
           </div>
           <div className="muted" style={{ marginTop: 8, fontSize: 14 }}>
@@ -564,7 +566,7 @@ export function ProfilePage() {
         <b>{role === "employer" ? "Пригласить коллег-рестораторов" : "Пригласить друзей"}</b>
         <div className="muted" style={{ margin: "6px 0 12px" }}>
           {role === "employer"
-            ? "За каждого пришедшего по вашей ссылке — Boost вакансии в подарок."
+            ? "За каждого пришедшего по вашей ссылке — поднятие вакансии в топ в подарок."
             : `За каждого по вашей ссылке — ${ref?.bonusSuperlikes ?? 3} супер-лайка «Срочно».`}
           {" "}Уже пришло: {ref?.invited ?? 0}.
         </div>
@@ -578,7 +580,7 @@ export function ProfilePage() {
       <div style={{ marginBottom: 10 }}>
         <Button variant="secondary" onClick={() => nav("/settings")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconEdit size={18} /> Настройки — тема, крупный режим, звук
+            <IconEdit size={18} /> Настройки
           </span>
         </Button>
       </div>

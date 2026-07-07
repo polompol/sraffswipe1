@@ -110,6 +110,13 @@ class MeOut(BaseModel):
     shiftsDone: int = 0  # сколько смен закрыто
     availableToday: bool = False  # «Готов выйти сегодня» (только соискатель)
     profileCompletion: int = 100  # % заполненности анкеты соискателя
+    # Поля для предзаполнения экрана редактирования (свои данные, не публичные).
+    birthDate: str = ""
+    roles: list[str] = []
+    selfEmployed: bool = False
+    inn: str | None = None
+    about: str = ""
+    photoUrl: str = ""
 
 
 def _streak(db: Session, owner_id: str) -> int:
@@ -214,6 +221,8 @@ def me(
     if u is None:
         raise HTTPException(status_code=404, detail="Не найдено")
     shifts, earned = _earnings(db, "seeker", u.id)
+    roles = [r for r in (u.roles or "").split(",") if r]
+    photos = [p for p in (u.photo_urls or "").split(",") if p]
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
@@ -222,6 +231,9 @@ def me(
         earnedRub=earned, shiftsDone=shifts,
         availableToday=u.available_today,
         profileCompletion=_profile_completion(u),
+        birthDate=u.birth_date or "", roles=roles,
+        selfEmployed=u.self_employed, inn=u.inn,
+        about=u.about or "", photoUrl=photos[0] if photos else "",
     )
 
 

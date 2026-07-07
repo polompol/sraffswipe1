@@ -218,7 +218,7 @@ export function CreateVacancyPage() {
           onChange={(e) => setCity(e.target.value)}
         />
 
-        <label className="muted" htmlFor="addr">Адрес (подсказки DaData)</label>
+        <label className="muted" htmlFor="addr">Адрес</label>
         <input
           id="addr"
           className="input"

@@ -57,9 +57,11 @@ function Thumb({ src, initial }: { src?: string; initial: string }) {
 export function VacancyList({
   items,
   onAct,
+  hideSkip = false,
 }: {
   items: Vacancy[];
   onAct: (v: Vacancy, dir: SwipeDirection) => void;
+  hideSkip?: boolean; // в избранном «Пропустить» бессмысленна — прячем
 }) {
   const [reportId, setReportId] = useState<string | null>(null);
   const qc = useQueryClient();
@@ -142,13 +144,15 @@ export function VacancyList({
             </div>
           </div>
           <div className="row" style={{ gap: 8, marginTop: 12 }}>
-            <button
-              className="btn secondary"
-              style={{ minHeight: 44 }}
-              onClick={() => onAct(v, "dislike")}
-            >
-              Пропустить
-            </button>
+            {!hideSkip && (
+              <button
+                className="btn secondary"
+                style={{ minHeight: 44 }}
+                onClick={() => onAct(v, "dislike")}
+              >
+                Пропустить
+              </button>
+            )}
             <button
               className="btn"
               style={{ minHeight: 44 }}

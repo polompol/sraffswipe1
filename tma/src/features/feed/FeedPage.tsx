@@ -181,7 +181,7 @@ export function FeedPage() {
       if (status === 402) {
         toast("Срочные закончились — откликайтесь обычным лайком", "error");
       } else if (status === 429) {
-        toast("Слишком часто — притормозите", "error");
+        toast("Слишком много действий подряд — подождите пару секунд", "error");
       } else {
         toast("Не удалось отправить. Попробуйте ещё раз", "error");
       }
@@ -330,7 +330,7 @@ export function FeedPage() {
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <IconBell size={18} />
-                {subscribed ? "Подписка включена" : "Сообщить о новых сменах"}
+                {subscribed ? "Будем присылать новые смены" : "Присылать новые смены в бота"}
               </span>
             </button>
           )}

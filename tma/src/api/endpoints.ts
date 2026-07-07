@@ -184,6 +184,12 @@ export interface Me {
   shiftsDone?: number;
   availableToday?: boolean;
   profileCompletion?: number;
+  birthDate?: string;
+  roles?: string[];
+  selfEmployed?: boolean;
+  inn?: string | null;
+  about?: string;
+  photoUrl?: string;
 }
 
 export async function fetchMe(): Promise<Me> {

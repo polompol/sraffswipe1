@@ -20,7 +20,13 @@ export function PricingPage() {
     try {
       const { link } = await createStarsInvoice("boost_24h");
       const res = await payWithStars(link);
-      setStatus(res === "paid" ? "Готово — вакансия в топе!" : `Статус: ${res}`);
+      setStatus(
+        res === "paid"
+          ? "Готово — вакансия в топе ленты!"
+          : res === "cancelled"
+            ? "Оплата отменена"
+            : "Оплата не прошла. Попробуйте ещё раз",
+      );
     } catch {
       haptic("error");
       setStatus("Не удалось открыть оплату. Попробуйте ещё раз.");

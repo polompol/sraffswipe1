@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { Button } from "@/components/Button";
-import { updateMe } from "@/api/endpoints";
+import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
@@ -13,17 +13,30 @@ const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
 export function EditProfilePage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [name, setName] = useState("Алексей");
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
+  const [name, setName] = useState("");
   const [photo, setPhoto] = useState<string>("");
-  const [birthDate, setBirthDate] = useState("2000-04-12");
-  const [city, setCity] = useState("Москва");
+  const [birthDate, setBirthDate] = useState("");
+  const [city, setCity] = useState("");
   const [inn, setInn] = useState("");
   const [selfEmployed, setSelfEmployed] = useState(false);
-  const [roles, setRoles] = useState<StaffRole[]>(["waiter", "barista"]);
+  const [roles, setRoles] = useState<StaffRole[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
+
+  // Предзаполняем форму текущими данными пользователя (один раз при загрузке).
+  useEffect(() => {
+    if (!me) return;
+    setName(me.name === "Соискатель" ? "" : me.name ?? "");
+    setBirthDate(me.birthDate ?? "");
+    setCity(me.city ?? "");
+    setInn(me.inn ?? "");
+    setSelfEmployed(me.selfEmployed ?? false);
+    setRoles((me.roles ?? []) as StaffRole[]);
+    setPhoto(me.photoUrl ?? "");
+  }, [me]);
 
   function toggle(r: StaffRole) {
     haptic("select");

@@ -72,7 +72,7 @@ export function MyVacanciesPage() {
                   style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
                   onClick={() => doBoost(v.id)}
                 >
-                  <IconFire size={12} /> Поднять
+                  <IconFire size={12} /> Поднять в топ
                 </button>
               )}
             </div>

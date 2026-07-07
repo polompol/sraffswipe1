@@ -51,7 +51,7 @@ export function ShiftsPage() {
             <div style={{ marginTop: 12 }}>
               <Button variant="secondary" onClick={() => downloadAct(m.id)}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <IconDoc size={17} /> Сформировать акт (PDF)
+                  <IconDoc size={17} /> Скачать акт (PDF)
                 </span>
               </Button>
             </div>

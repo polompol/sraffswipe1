@@ -41,7 +41,9 @@ export function FavoritesPage() {
             text="Нажимайте на закладку у смены в списке — она сохранится здесь, чтобы откликнуться позже."
           />
         )}
-        {data && data.length > 0 && <VacancyList items={data} onAct={onAct} />}
+        {data && data.length > 0 && (
+          <VacancyList items={data} onAct={onAct} hideSkip />
+        )}
       </div>
     </div>
   );

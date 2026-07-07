@@ -22,6 +22,10 @@ export function MatchesPage() {
   });
 
   async function mark(matchId: string, attended: boolean) {
+    // «Не вышел» бьёт по надёжности человека — подтверждаем, чтобы не отметить
+    // случайным тапом.
+    if (!attended && !window.confirm("Отметить, что человек не вышел на смену?"))
+      return;
     haptic(attended ? "success" : "warning");
     try {
       await markAttendance(matchId, attended);
@@ -48,6 +52,7 @@ export function MatchesPage() {
   }
 
   async function doDispute(matchId: string) {
+    if (!window.confirm("Открыть спор по смене? Его разберёт оператор.")) return;
     haptic("warning");
     try {
       await disputeShift(matchId);

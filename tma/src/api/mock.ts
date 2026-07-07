@@ -355,6 +355,12 @@ const meProfile: Me = {
   shiftsDone: 7,
   availableToday: false,
   profileCompletion: 70,
+  birthDate: "2000-04-12",
+  roles: ["waiter", "barista"],
+  selfEmployed: true,
+  inn: "771298765432",
+  about: "",
+  photoUrl: "",
 };
 
 export function createVacancy(input: VacancyInput): Promise<Vacancy> {
