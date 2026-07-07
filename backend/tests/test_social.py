@@ -38,6 +38,16 @@ def test_update_me_persists_and_enforces_age(client):
     assert client.get("/me", headers=_hdr(token)).json()["name"] == "Алексей"
 
 
+def test_profile_rejects_oversized_fields(client):
+    token, _ = _auth(client, "seeker")
+    # Мегабайтное «о себе» отклоняется валидацией (анти-раздувание БД).
+    r = client.put("/me", headers=_hdr(token), json={"about": "x" * 5000})
+    assert r.status_code == 422
+    # Кривой ИНН — тоже 422.
+    assert client.put("/me", headers=_hdr(token),
+                      json={"inn": "не-число"}).status_code == 422
+
+
 def test_referral_link_and_bonus(client):
     # insecure-логины дают tg_id=0; разные роли → разные owner_id.
     # Реферер-ЗАВЕДЕНИЕ получает Boost вакансии (не супер-лайки).

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Entitlement, Match, Message, Swipe, User, Vacancy
+from ..models import Employer, Entitlement, Match, Message, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
@@ -15,6 +15,18 @@ from .billing import commission_overdue
 router = APIRouter(prefix="/swipes", tags=["swipes"])
 
 _POSITIVE = {"like", "superlike"}
+
+
+def _same_person(db: Session, user_id: str, employer_id: str) -> bool:
+    """Соискатель и заведение — один человек (совпадает Telegram-id)?
+    Само-мэтч даёт накрутку рейтинга/истории/комиссии сговором с самим собой.
+    tg_id=0 — dev/insecure-заглушка (в проде реальных нулевых id нет), её не
+    считаем совпадением, иначе сломались бы локальные тесты."""
+    u = db.get(User, user_id)
+    e = db.get(Employer, employer_id)
+    if u is None or e is None:
+        return False
+    return bool(u.tg_id and e.tg_id and u.tg_id == e.tg_id)
 
 
 def _ensure_match(
@@ -166,7 +178,7 @@ def swipe(
             )
             .first()
         )
-        if reciprocal:
+        if reciprocal and not _same_person(db, me, vac.employer_id):
             match, created = _ensure_match(db, me, vac.employer_id, vac.id)
             _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
@@ -189,7 +201,7 @@ def swipe(
             )
             .first()
         )
-        if seeker_like:
+        if seeker_like and not _same_person(db, body.target_id, me):
             match, created = _ensure_match(
                 db, body.target_id, me, seeker_like.target_id
             )

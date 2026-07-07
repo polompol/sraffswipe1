@@ -26,16 +26,18 @@ router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
 
 def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
-    """Сколько подтверждённых/завершённых смен у каждого работодателя.
+    """Сколько ЗАКРЫТЫХ смен (completed) у каждого работодателя.
 
-    Один групповой запрос на всю выборку — без N+1 на каждую вакансию."""
+    Только completed (не confirmed) — иначе публичный счётчик доверия
+    накручивался бы фиктивными мэтчами без реального выхода. Согласовано с
+    _earnings/_reliability. Один групповой запрос — без N+1 на каждую вакансию."""
     if not emp_ids:
         return {}
     rows = (
         db.query(Match.employer_id, func.count(Match.id))
         .filter(
             Match.employer_id.in_(emp_ids),
-            Match.status.in_(("confirmed", "completed")),
+            Match.status == "completed",
         )
         .group_by(Match.employer_id)
         .all()
@@ -347,7 +349,11 @@ def boost_vacancy(
     return {"ok": True, "boostBalance": ent.boost_balance, "expiresAt": expires}
 
 
-@router.post("/{vacancy_id}/urgent")
+@router.post(
+    "/{vacancy_id}/urgent",
+    # Анти-спам: рассылка «Срочно» всем доступным сегодня — не чаще 3/час.
+    dependencies=[Depends(rate_limit("urgent", 3, 3600))],
+)
 def urgent_ping(
     vacancy_id: str,
     db: Session = Depends(get_db),

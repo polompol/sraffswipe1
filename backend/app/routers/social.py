@@ -1,6 +1,8 @@
 """Социальные фичи: рефералы, отзывы/рейтинг, профиль текущего пользователя."""
+from typing import Annotated, Literal
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -41,8 +43,8 @@ def referral_me(
 
 
 class ReviewIn(BaseModel):
-    stars: int
-    text: str = ""
+    stars: Annotated[int, Field(ge=1, le=5)]
+    text: Annotated[str, StringConstraints(max_length=1000)] = ""
 
 
 def _recompute_rating(db: Session, ratee_id: str) -> float:
@@ -273,17 +275,23 @@ def _age_from_iso(iso: str) -> int | None:
 
 
 class MeUpdateIn(BaseModel):
-    name: str | None = None
-    birth_date: str | None = None  # ISO yyyy-mm-dd
-    city: str | None = None
-    district: str | None = None
-    roles: list[str] | None = None
-    med_book: str | None = None
+    # Лимиты длины — анти-абуз: без них можно записать мегабайтные строки в
+    # имя/«о себе» и раздуть БД.
+    name: Annotated[str, StringConstraints(max_length=80)] | None = None
+    birth_date: Annotated[
+        str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    ] | None = None
+    city: Annotated[str, StringConstraints(max_length=80)] | None = None
+    district: Annotated[str, StringConstraints(max_length=80)] | None = None
+    roles: Annotated[list[str], Field(max_length=12)] | None = None
+    med_book: Literal["yes", "no", "expired"] | None = None
     self_employed: bool | None = None
-    inn: str | None = None
-    about: str | None = None
-    photo_url: str | None = None
-    company_name: str | None = None
+    inn: Annotated[
+        str, StringConstraints(pattern=r"^\d{10,12}$")
+    ] | None = None
+    about: Annotated[str, StringConstraints(max_length=1000)] | None = None
+    photo_url: Annotated[str, StringConstraints(max_length=500)] | None = None
+    company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
 
 @router.put("/me", response_model=MeOut)

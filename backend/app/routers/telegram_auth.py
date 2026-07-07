@@ -30,6 +30,11 @@ def _owner_exists(db, owner_id: str) -> bool:
     )
 
 
+def _owner_tg_id(db, owner_id: str) -> int | None:
+    owner = db.get(User, owner_id) or db.get(Employer, owner_id)
+    return owner.tg_id if owner is not None else None
+
+
 def _apply_referral(db, referred_id: str, code: str) -> None:
     """Бонус рефереру за нового приглашённого. Один раз на приглашённого.
     Валюта зависит от того, КТО пригласил: работнику — супер-лайки «Срочно»,
@@ -42,6 +47,11 @@ def _apply_referral(db, referred_id: str, code: str) -> None:
         or referrer_id == referred_id
         or not _owner_exists(db, referrer_id)
     ):
+        return
+    # Само-реферал: два аккаунта одного человека (совпадает tg_id) — не бонусим.
+    ref_tg = _owner_tg_id(db, referrer_id)
+    new_tg = _owner_tg_id(db, referred_id)
+    if ref_tg and new_tg and ref_tg == new_tg:
         return
     if db.query(Referral).filter(Referral.referred_id == referred_id).first():
         return

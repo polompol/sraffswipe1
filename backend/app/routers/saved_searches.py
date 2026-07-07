@@ -12,6 +12,12 @@ from ..security import current_principal
 
 router = APIRouter(prefix="/saved-searches", tags=["saved-searches"])
 
+# Анти-абуз: потолок числа сохранённых поисков и размера фильтров. Без них
+# один пользователь мог наплодить тысячи тяжёлых поисков, а каждая публикация
+# вакансии линейно прогоняет их все (амплификация нагрузки/спам уведомлений).
+_MAX_SEARCHES = 25
+_MAX_FILTERS_CHARS = 2000
+
 
 class SavedSearchIn(BaseModel):
     title: str = "Мой поиск"
@@ -53,10 +59,23 @@ def create_search(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
+    count = (
+        db.query(SavedSearch)
+        .filter(SavedSearch.owner_id == principal["id"])
+        .count()
+    )
+    if count >= _MAX_SEARCHES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Слишком много сохранённых поисков (максимум {_MAX_SEARCHES})",
+        )
+    filters_json = json.dumps(body.filters, ensure_ascii=False)
+    if len(filters_json) > _MAX_FILTERS_CHARS:
+        raise HTTPException(status_code=400, detail="Слишком большой фильтр")
     s = SavedSearch(
         owner_id=principal["id"],
         title=body.title[:60],
-        filters=json.dumps(body.filters, ensure_ascii=False),
+        filters=filters_json,
         notify=body.notify,
     )
     db.add(s)

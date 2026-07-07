@@ -9,12 +9,16 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Event, User
+from ..ratelimit import hit
 from ..security import current_principal, optional_principal
 
 router = APIRouter(tags=["analytics"])
 
 # Ключевые шаги воронки.
 FUNNEL = ["open", "swipe", "match", "confirm", "purchase"]
+
+# Максимальный размер сериализованных props события (анти-раздувание БД).
+_MAX_PROPS_CHARS = 2000
 
 
 def _is_admin(db: Session, principal: dict) -> bool:
@@ -36,10 +40,17 @@ def track(
     db: Session = Depends(get_db),
     principal: dict | None = Depends(optional_principal),
 ):
+    # Защита от раздувания БД: (1) потолок размера props — каждая запись
+    # ограничена; (2) для авторизованных — рейт-лимит на принципала. Анонимный
+    # поток (событие «открыл» до входа) ограничивается на уровне прокси (Caddy),
+    # т.к. app-лимит без принципала завязан на IP, которого здесь нет.
+    if principal:
+        hit(f"events:{principal['id']}", 120, 60)
+    props = json.dumps(body.props or {}, ensure_ascii=False)[:_MAX_PROPS_CHARS]
     db.add(Event(
         owner_id=principal["id"] if principal else None,
         name=body.name[:64],
-        props=json.dumps(body.props or {}, ensure_ascii=False),
+        props=props,
     ))
     db.commit()
     return {"ok": True}

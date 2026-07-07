@@ -6,6 +6,12 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	# Анти-DoS: тело запроса до 2 МБ (фото грузятся напрямую в S3, не через API,
+	# поэтому большие тела на API не нужны). Отсекается ДО чтения в память.
+	request_body {
+		max_size 2MB
+	}
+
 	# Бэкенд. handle_path снимает префикс /api, дальше FastAPI видит свои пути
 	# (/me, /vacancies, /auth/..., /ws/chat/...).
 	handle_path /api/* {
