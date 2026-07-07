@@ -72,14 +72,14 @@ function CommissionCard() {
       </div>
       <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
         {due
-          ? `Смен к оплате: ${bill.pendingShifts}. Оплата по счёту или СБП — ` +
-            `реквизиты пришлёт оператор. Срок: ${bill.dueDays} дней.`
+          ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса ` +
+            `автоматически — пополните его картой ниже.`
           : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
       </div>
       {bill.overdue && (
         <div style={{ marginTop: 8, fontSize: 14, color: "var(--dislike)", fontWeight: 700 }}>
-          Счёт просрочен — публикация новых смен приостановлена до оплаты.
-          Напишите в поддержку, если уже оплатили.
+          Баланс закончился — публикация новых смен на паузе. Пополните
+          картой ниже, и всё сразу возобновится.
         </div>
       )}
       <div className="row" style={{ marginTop: 10 }}>
@@ -88,10 +88,11 @@ function CommissionCard() {
         <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
       </div>
       <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-        С баланса комиссия списывается сама — без счетов и напоминаний.
+        Комиссия списывается с баланса сама — без счетов, реквизитов
+        и переписки. Всё внутри приложения.
       </div>
       {bill.topupAvailable ? (
-        <div className="row" style={{ marginTop: 8, gap: 8 }}>
+        <div className="row" style={{ marginTop: 10, gap: 8 }}>
           {[1000, 3000, 5000].map((a) => (
             <button
               key={a}
@@ -100,14 +101,14 @@ function CommissionCard() {
               style={{ flex: 1, cursor: "pointer" }}
               onClick={() => topup(a)}
             >
-              +{a.toLocaleString("ru-RU")} ₽
+              Пополнить {a.toLocaleString("ru-RU")} ₽
             </button>
           ))}
         </div>
       ) : (
         <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-          Пополнить: переводом СБП оператору (кнопка «Поддержка») —
-          зачислим на баланс. Оплата картой — скоро.
+          Оплата картой внутри приложения подключается к запуску — тогда
+          баланс можно будет пополнить в один тап.
         </div>
       )}
     </div>
@@ -167,11 +168,6 @@ function EmployerVerify() {
   );
 }
 
-const PLAN_LABEL: Record<string, string> = {
-  free: "Free",
-  pro: "Pro",
-  business: "Business",
-};
 
 // «Готов выйти сегодня» — тумблер доступности. Заведения со срочной сменой
 // видят такого человека первым в ленте кандидатов.
@@ -532,20 +528,33 @@ export function ProfilePage() {
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
-          <b>Тариф: {PLAN_LABEL[ent?.plan ?? "free"]}</b>
-          <span className="spacer" />
-          <button className="btn ghost" style={{ width: "auto", padding: "8px 14px" }} onClick={() => nav("/pricing")}>
-            Улучшить
-          </button>
+      {role === "employer" && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="row">
+            <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <IconFire size={18} /> Boost: {ent?.boostBalance ?? 0}
+            </b>
+            <span className="spacer" />
+            <button className="btn ghost" style={{ width: "auto", padding: "8px 14px" }} onClick={() => nav("/pricing")}>
+              Ускорить смену
+            </button>
+          </div>
+          <div className="muted" style={{ marginTop: 8, fontSize: 14 }}>
+            Поднимает вакансию в топ ленты, когда человек нужен срочно.
+          </div>
         </div>
-        <div className="muted" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <IconBolt size={14} /> Супер-лайки: {ent?.superlikeBalance ?? 0}
-          <span style={{ opacity: 0.5 }}>·</span>
-          <IconFire size={14} /> Boost: {ent?.boostBalance ?? 0}
+      )}
+
+      {role === "seeker" && !!ent?.superlikeBalance && ent.superlikeBalance > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <IconBolt size={18} /> Супер-лайки «Срочно»: {ent.superlikeBalance}
+          </b>
+          <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
+            Покажут тебя заведению первым. Дарим за приглашённых друзей.
+          </div>
         </div>
-      </div>
+      )}
 
       {role === "employer" && <CommissionCard />}
 

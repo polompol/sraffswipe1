@@ -167,14 +167,13 @@ def _new_vacancy(client, headers, role="barista"):
     return client.post("/vacancies", json=payload, headers=headers)
 
 
-def test_free_plan_vacancy_limit(client):
+def test_vacancy_publishing_is_unlimited(client):
     r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    # Free-план на пилоте: до 5 активных вакансий (наполняем ленту сменами).
-    for _ in range(5):
+    # Модель — комиссия, а не подписка: публиковать смены можно без лимита
+    # (чем больше смен, тем больше потенциальной комиссии). 6+ вакансий проходят.
+    for _ in range(6):
         assert _new_vacancy(client, headers).status_code == 201
-    # Шестая вакансия на Free — запрещена (402).
-    assert _new_vacancy(client, headers).status_code == 402
 
 
 def test_boost_moves_vacancy_to_top(client):
