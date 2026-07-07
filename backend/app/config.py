@@ -98,6 +98,8 @@ class Settings(BaseSettings):
         problems: list[str] = []
         if self.jwt_secret == "dev-secret-change-me":
             problems.append("JWT_SECRET не задан (используется dev-значение)")
+        elif len(self.jwt_secret) < 32:
+            problems.append("JWT_SECRET слишком короткий (нужно ≥32 символов)")
         if not self.internal_api_secret:
             problems.append("INTERNAL_API_SECRET не задан")
         if self.allow_insecure_telegram_auth:

@@ -26,9 +26,10 @@ def test_health(client):
 
 
 def test_wrong_code_rejected(client):
+    # Разная длина/значение кода — compare_digest всё равно даёт отказ (400).
     client.post("/auth/request-code", json={"phone": "+70000000001"})
     r = client.post(
-        "/auth/verify", json={"phone": "+70000000001", "code": "0000"}
+        "/auth/verify", json={"phone": "+70000000001", "code": "000000"}
     )
     assert r.status_code == 400
 

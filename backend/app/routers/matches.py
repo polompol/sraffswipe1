@@ -1,4 +1,5 @@
 """Мэтчи и подтверждение смены."""
+import hmac
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -202,7 +203,9 @@ def checkin(
         raise HTTPException(status_code=400, detail="Смена не подтверждена")
 
     by_code = bool(
-        body.code and m.checkin_code and body.code.strip() == m.checkin_code
+        body.code
+        and m.checkin_code
+        and hmac.compare_digest(body.code.strip(), m.checkin_code)
     )
     by_geo = False
     if body.lat is not None and body.lng is not None:

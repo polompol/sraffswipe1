@@ -125,9 +125,20 @@ def test_production_safe_guard_rejects_default_secrets():
         raised = True
     assert raised
 
+    # Слишком короткий секрет тоже отклоняется (нужно ≥32 символов).
+    short = Settings(
+        dev_mode=False, jwt_secret="short", internal_api_secret="x",
+    )
+    try:
+        short.assert_production_safe()
+        short_raised = False
+    except RuntimeError:
+        short_raised = True
+    assert short_raised
+
     safe = Settings(
         dev_mode=False,
-        jwt_secret="a-real-long-secret",
+        jwt_secret="a-real-secret-at-least-32-characters-long",
         internal_api_secret="another-secret",
         allow_insecure_telegram_auth=False,
     )

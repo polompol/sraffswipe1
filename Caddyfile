@@ -20,6 +20,15 @@
 
 	# Всё остальное — собранный Mini App.
 	handle {
+		# Защитные заголовки для статики Mini App. CSP разрешает inline-стили
+		# (нужны Vite/приложению), картинки по https (фото заведений с S3/CDN),
+		# соединения к своему API и Telegram. Внешние скрипты запрещены.
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://{$DOMAIN} wss://{$DOMAIN} https://telegram.org; frame-ancestors https://web.telegram.org https://telegram.org"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			-Server
+		}
 		reverse_proxy tma:80
 	}
 }
