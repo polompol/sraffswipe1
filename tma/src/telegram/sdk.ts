@@ -14,6 +14,7 @@ import {
   backButton,
   hapticFeedback,
   retrieveRawInitData,
+  retrieveLaunchParams,
   openInvoice,
   shareURL,
   cloudStorage,
@@ -67,6 +68,24 @@ export function rawInitData(): string {
     return retrieveRawInitData() ?? "";
   } catch {
     return import.meta.env.VITE_DEV_INIT_DATA ?? "";
+  }
+}
+
+/** Метка запуска из ссылки t.me/<bot>?startapp=<param> (кампании/рефералы).
+ *  В Telegram берётся из launch params; в dev/браузере — из ?startapp= в URL. */
+export function startParam(): string {
+  try {
+    const lp = retrieveLaunchParams() as {
+      tgWebAppStartParam?: string;
+    };
+    if (lp.tgWebAppStartParam) return lp.tgWebAppStartParam;
+  } catch {
+    /* вне Telegram */
+  }
+  try {
+    return new URLSearchParams(window.location.search).get("startapp") ?? "";
+  } catch {
+    return "";
   }
 }
 

@@ -300,6 +300,8 @@ export function AdminPage() {
         </div>
       )}
 
+      <CampaignLinkMaker />
+
       <h2 className="h2" style={{ marginBottom: 8 }}>Источники регистраций</h2>
       {sources.data && sources.data.length === 0 && (
         <div className="card muted" style={{ textAlign: "center", marginBottom: 18 }}>
@@ -598,5 +600,49 @@ export function AdminPage() {
         </>
       )}
     </div>
+  );
+}
+
+// Генератор рекламных ссылок: оператор вводит название канала/ролика → готовая
+// ссылка t.me/<bot>?startapp=src_XXX для вставки под видео. Клик открытия по
+// ней сразу трекается в «Источники регистраций» и ведёт на цепляющий экран.
+function CampaignLinkMaker() {
+  const bot = import.meta.env.VITE_BOT_USERNAME ?? "staffswipe_bot";
+  const [name, setName] = useState("");
+  const code = name.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 40);
+  const link = code ? `https://t.me/${bot}?startapp=src_${code}` : "";
+
+  return (
+    <>
+      <h2 className="h2" style={{ marginBottom: 8 }}>Ссылка для рекламы</h2>
+      <div className="card" style={{ marginBottom: 18 }}>
+        <div className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
+          Впиши канал или ролик (напр. <b>shorts_waiter</b>) — получишь ссылку.
+          Ставь её под видео: клики соберутся в «Источники» ниже.
+        </div>
+        <input
+          className="input"
+          placeholder="например: shorts_waiter"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        {link && (
+          <div className="row" style={{ gap: 8, marginTop: 10 }}>
+            <code style={{ flex: 1, fontSize: 12, wordBreak: "break-all" }}>{link}</code>
+            <button
+              className="btn"
+              style={{ width: "auto", padding: "0 14px", height: 44 }}
+              onClick={() => {
+                navigator.clipboard?.writeText(link);
+                haptic("success");
+                toast("Ссылка скопирована", "success");
+              }}
+            >
+              Копировать
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

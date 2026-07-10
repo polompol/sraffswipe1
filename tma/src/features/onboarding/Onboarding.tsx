@@ -2,7 +2,59 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
-import { IconChat, IconDoc, IconMoney } from "@/components/Icons";
+import { IconChat, IconDoc, IconMoney, IconBolt } from "@/components/Icons";
+import { currentCampaign } from "@/lib/campaign";
+
+// Пришёл по рекламной ссылке (шортс/ролик) — показываем цепляющий экран под
+// обещание видео и один CTA. Обычный онбординг пропускаем: у зрителя ~3 секунды
+// внимания, ведём сразу к смене.
+function CampaignHook({ onStart }: { onStart: () => void }) {
+  const camp = currentCampaign()!;
+  return (
+    <div className="app">
+      <div
+        className="page"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          textAlign: "center",
+          gap: 16,
+        }}
+      >
+        <div className="onb-demo" aria-hidden style={{ marginBottom: 4 }}>
+          <Logo size={88} color="#fff" />
+          <span className="onb-demo-like">♥</span>
+        </div>
+        <h1 className="h1" style={{ maxWidth: 340 }}>{camp.title}</h1>
+        <p className="muted" style={{ fontSize: 16, maxWidth: 330 }}>{camp.sub}</p>
+        <span
+          className="tag"
+          style={{
+            color: "var(--super)", borderColor: "var(--super)",
+            fontWeight: 700, padding: "8px 14px", gap: 6,
+          }}
+        >
+          <IconBolt size={15} /> Оплата в день смены · без опыта берут
+        </span>
+        <p className="muted" style={{ fontSize: 12.5 }}>
+          ★ 4.8 · 1 200+ смен закрыто · заведения уже здесь
+        </p>
+        <button
+          className="btn"
+          style={{ maxWidth: 360, marginTop: 8 }}
+          onClick={() => {
+            haptic("light");
+            onStart();
+          }}
+        >
+          Смотреть смены рядом
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const SLIDES = [
   {
@@ -27,6 +79,9 @@ export function Onboarding() {
   const nav = useNavigate();
   const last = i === SLIDES.length - 1;
   const slide = SLIDES[i];
+
+  // Пришёл по рекламной ссылке → сразу цепляющий экран под ролик.
+  if (currentCampaign()) return <CampaignHook onStart={() => nav("/role")} />;
 
   return (
     <div className="app">
