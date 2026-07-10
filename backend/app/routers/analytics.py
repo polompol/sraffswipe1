@@ -46,10 +46,16 @@ def track(
     # т.к. app-лимит без принципала завязан на IP, которого здесь нет.
     if principal:
         hit(f"events:{principal['id']}", 120, 60)
+    # «source» — служебное имя атрибуции, пишется только при регистрации
+    # (_track_source). Не даём подделать его через публичный /events и
+    # засорить админ-статистику источников.
+    name = body.name[:64]
+    if name == "source":
+        raise HTTPException(status_code=400, detail="Зарезервированное имя")
     props = json.dumps(body.props or {}, ensure_ascii=False)[:_MAX_PROPS_CHARS]
     db.add(Event(
         owner_id=principal["id"] if principal else None,
-        name=body.name[:64],
+        name=name,
         props=props,
     ))
     db.commit()

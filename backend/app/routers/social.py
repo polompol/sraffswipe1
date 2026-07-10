@@ -314,10 +314,19 @@ def update_me(
         e = db.get(Employer, principal["id"])
         if e is None:
             raise HTTPException(status_code=404, detail="Не найдено")
+        # Правка названия/ИНН вручную СБРАСЫВАЕТ бейдж «Проверен»: верификация
+        # подтверждала конкретные данные из DaData. Иначе можно было бы
+        # подтвердиться, а потом переписать имя на чужой бренд с бейджем.
+        changed_identity = (
+            (body.company_name is not None and body.company_name != e.company_name)
+            or (body.inn is not None and body.inn != e.inn)
+        )
         if body.company_name is not None:
             e.company_name = body.company_name
         if body.inn is not None:
             e.inn = body.inn
+        if changed_identity and e.verified:
+            e.verified = False
         db.commit()
         return MeOut(
             id=e.id, role="employer", name=e.company_name,

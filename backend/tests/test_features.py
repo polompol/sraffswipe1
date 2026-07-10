@@ -440,6 +440,62 @@ def test_wallet_insufficient_falls_back_to_invoice(client):
     assert bill["pendingRub"] == 280 and bill["balanceRub"] == 100
 
 
+def test_edit_identity_drops_verified_badge(client):
+    from app.db import SessionLocal
+    from app.models import Employer
+
+    _, emp_id = _auth(client, "employer")
+    db = SessionLocal()
+    e = db.get(Employer, emp_id)
+    e.company_name = "Кофейня «Дрова»"
+    e.inn = "7712345678"
+    e.verified = True
+    db.commit()
+    db.close()
+    # Смена названия вручную снимает бейдж «Проверен» (данные больше не сверены).
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    tok = r.json()["access_token"]
+    client.put("/me", headers=_hdr(tok), json={"company_name": "Сбербанк"})
+    db = SessionLocal()
+    assert db.get(Employer, emp_id).verified is False
+    db.close()
+
+
+def test_swipe_role_must_match_target(client):
+    seeker_token, _ = _auth(client, "seeker")
+    _, other_seeker = _auth(client, "seeker")
+    # Работник не может лайкать другого работника (только вакансии).
+    r = client.post("/swipes", headers=_hdr(seeker_token), json={
+        "target_type": "user", "target_id": other_seeker, "direction": "like",
+    })
+    assert r.status_code == 400
+
+
+def test_events_reserved_source_name_rejected(client):
+    r = client.post("/events", json={"name": "source", "props": {"src": "x"}})
+    assert r.status_code == 400
+
+
+def test_overdue_blocks_invite_again(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Commission
+
+    emp_token, emp_id, seeker_token, sid, _, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    db = SessionLocal()
+    db.query(Commission).filter(Commission.employer_id == emp_id).update(
+        {Commission.created_at: datetime.now(UTC) - timedelta(days=10)},
+        synchronize_session=False,
+    )
+    db.commit()
+    db.close()
+    # Должник не может «позвать снова» (обход блока приглашений).
+    assert client.post(f"/employer/invite/{sid}",
+                       headers=_hdr(emp_token)).status_code == 402
+
+
 def test_wallet_topup_webhook_rejects_over_cap(client):
     # Утечка секрета не даёт неограниченной эмиссии: сумма выше потолка → 400.
     _, emp_id = _auth(client, "employer")
