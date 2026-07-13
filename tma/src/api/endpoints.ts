@@ -189,6 +189,7 @@ export interface Me {
   selfEmployed?: boolean;
   inn?: string | null;
   about?: string;
+  experienceTags?: string[];
   photoUrl?: string;
 }
 
@@ -217,6 +218,7 @@ export interface MeUpdate {
   self_employed?: boolean;
   inn?: string;
   about?: string;
+  experience_tags?: string[];
   photo_url?: string;
   company_name?: string;
 }

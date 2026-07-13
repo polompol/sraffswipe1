@@ -118,6 +118,7 @@ class MeOut(BaseModel):
     selfEmployed: bool = False
     inn: str | None = None
     about: str = ""
+    experienceTags: list[str] = []
     photoUrl: str = ""
 
 
@@ -224,6 +225,7 @@ def me(
         raise HTTPException(status_code=404, detail="Не найдено")
     shifts, earned = _earnings(db, "seeker", u.id)
     roles = [r for r in (u.roles or "").split(",") if r]
+    exp = [t for t in (u.experience_tags or "").split(",") if t]
     photos = [p for p in (u.photo_urls or "").split(",") if p]
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
@@ -235,7 +237,8 @@ def me(
         profileCompletion=_profile_completion(u),
         birthDate=u.birth_date or "", roles=roles,
         selfEmployed=u.self_employed, inn=u.inn,
-        about=u.about or "", photoUrl=photos[0] if photos else "",
+        about=u.about or "", experienceTags=exp,
+        photoUrl=photos[0] if photos else "",
     )
 
 
@@ -290,6 +293,7 @@ class MeUpdateIn(BaseModel):
         str, StringConstraints(pattern=r"^\d{10,12}$")
     ] | None = None
     about: Annotated[str, StringConstraints(max_length=1000)] | None = None
+    experience_tags: Annotated[list[str], Field(max_length=12)] | None = None
     photo_url: Annotated[str, StringConstraints(max_length=500)] | None = None
     company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
@@ -355,6 +359,8 @@ def update_me(
         u.inn = body.inn
     if body.about is not None:
         u.about = body.about
+    if body.experience_tags is not None:
+        u.experience_tags = ",".join(body.experience_tags)
     if body.photo_url is not None:
         u.photo_urls = body.photo_url
     db.commit()

@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { StaffRole } from "@/types/domain";
-import { STAFF_ROLE_LABELS } from "@/types/domain";
+import type { ExperienceTag, StaffRole } from "@/types/domain";
+import { EXPERIENCE_TAG_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import { Button } from "@/components/Button";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
+// Навыки для выбора (медкнижка/самозанятость задаются отдельными полями).
+const SKILLS: ExperienceTag[] = ["experienced", "english", "cashRegister"];
 
 export function EditProfilePage() {
   const nav = useNavigate();
@@ -21,6 +23,8 @@ export function EditProfilePage() {
   const [inn, setInn] = useState("");
   const [selfEmployed, setSelfEmployed] = useState(false);
   const [roles, setRoles] = useState<StaffRole[]>([]);
+  const [about, setAbout] = useState("");
+  const [skills, setSkills] = useState<ExperienceTag[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,12 +39,20 @@ export function EditProfilePage() {
     setInn(me.inn ?? "");
     setSelfEmployed(me.selfEmployed ?? false);
     setRoles((me.roles ?? []) as StaffRole[]);
+    setAbout(me.about ?? "");
+    setSkills((me.experienceTags ?? []).filter((t) =>
+      SKILLS.includes(t as ExperienceTag)) as ExperienceTag[]);
     setPhoto(me.photoUrl ?? "");
   }, [me]);
 
   function toggle(r: StaffRole) {
     haptic("select");
     setRoles((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
+  }
+
+  function toggleSkill(s: ExperienceTag) {
+    haptic("select");
+    setSkills((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
   }
 
   async function save() {
@@ -54,6 +66,8 @@ export function EditProfilePage() {
         roles,
         self_employed: selfEmployed,
         inn: selfEmployed ? inn : undefined,
+        about,
+        experience_tags: skills,
         photo_url: photo || undefined,
       });
       qc.invalidateQueries({ queryKey: ["me"] });
@@ -104,6 +118,36 @@ export function EditProfilePage() {
             </button>
           ))}
         </div>
+
+        <label className="muted">Опыт и навыки</label>
+        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+          {SKILLS.map((s) => (
+            <button
+              key={s}
+              className="tag"
+              style={{
+                cursor: "pointer",
+                background: skills.includes(s) ? "var(--gold)" : "transparent",
+                color: skills.includes(s) ? "#fff" : "var(--text)",
+                borderColor: skills.includes(s) ? "var(--gold)" : "var(--border)",
+              }}
+              onClick={() => toggleSkill(s)}
+            >
+              {EXPERIENCE_TAG_LABELS[s]}
+            </button>
+          ))}
+        </div>
+
+        <label className="muted" htmlFor="about">О себе и пожелания по выходу</label>
+        <textarea
+          id="about"
+          className="input"
+          style={{ marginBottom: 12, minHeight: 88, resize: "vertical", paddingTop: 12 }}
+          placeholder="Например: официант с опытом, выхожу по вечерам и в выходные, район Центр"
+          maxLength={1000}
+          value={about}
+          onChange={(e) => setAbout(e.target.value)}
+        />
 
         <div className="card" style={{ marginBottom: 16 }}>
           <label className="row" style={{ cursor: "pointer" }}>

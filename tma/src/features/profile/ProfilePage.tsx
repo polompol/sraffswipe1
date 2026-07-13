@@ -480,7 +480,7 @@ export function ProfilePage() {
         </span>
       </div>
 
-      {role === "seeker" && me && <EarningsCard me={me} />}
+      {role === "seeker" && me && !PILOT_MODE && <EarningsCard me={me} />}
 
       {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -499,7 +499,7 @@ export function ProfilePage() {
         <ProfileMeter pct={me.profileCompletion ?? 100} />
       )}
 
-      {role === "seeker" && me && <GoalCard earned={me.earnedRub ?? 0} />}
+      {role === "seeker" && me && !PILOT_MODE && <GoalCard earned={me.earnedRub ?? 0} />}
 
       {role === "seeker" && (
         <AvailabilityCard initial={me?.availableToday ?? false} />
