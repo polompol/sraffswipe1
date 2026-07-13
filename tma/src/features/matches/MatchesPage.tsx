@@ -18,12 +18,14 @@ export function MatchesPage() {
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
   const [codes, setCodes] = useState<Record<string, string>>({});
-  // Сумма для «денежного дождя», когда отметка работника закрыла смену.
-  const [celebrate, setCelebrate] = useState<number | null>(null);
+  // Экран закрытия смены (доход + оценка), когда отметка работника закрыла смену.
+  const [celebrate, setCelebrate] = useState<{ amount: number; matchId: string } | null>(null);
 
-  // Смена только что закрылась отметкой работника → празднуем доход.
+  // Смена только что закрылась отметкой работника → празднуем доход и оценку.
   function maybeCelebrate(m: MatchModel) {
-    if (m.checkedIn) setCelebrate(m.shiftPay && m.shiftPay > 0 ? m.shiftPay : 0);
+    if (m.checkedIn) {
+      setCelebrate({ amount: m.shiftPay && m.shiftPay > 0 ? m.shiftPay : 0, matchId: m.id });
+    }
   }
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["matches"],
@@ -103,7 +105,14 @@ export function MatchesPage() {
   return (
     <div className="page">
       {celebrate !== null && (
-        <MoneyRain amount={celebrate} onDone={() => setCelebrate(null)} />
+        <MoneyRain
+          amount={celebrate.amount}
+          matchId={celebrate.matchId}
+          onDone={() => {
+            setCelebrate(null);
+            qc.invalidateQueries({ queryKey: ["matches"] });
+          }}
+        />
       )}
       <h1 className="h1" style={{ marginBottom: 12 }}>Мэтчи</h1>
       {isLoading && <SkeletonList />}
