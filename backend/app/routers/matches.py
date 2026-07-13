@@ -149,9 +149,11 @@ def mark_attendance(
     return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
 
 
-def _to_out(m: Match, role: str = "") -> MatchOut:
+def _to_out(db: Session, m: Match, role: str = "") -> MatchOut:
     # Код прихода показываем ТОЛЬКО заведению как помощник, пока смена не закрыта.
     show_code = role == "employer" and m.status == "confirmed" and bool(m.checkin_code)
+    v = db.get(Vacancy, m.vacancy_id)
+    pay = _shift_pay(v) if v is not None else 0
     return MatchOut(
         id=m.id,
         user_id=m.user_id,
@@ -164,6 +166,7 @@ def _to_out(m: Match, role: str = "") -> MatchOut:
         checked_in=m.status == "completed",
         seeker_checked_in=m.seeker_checked_in,
         employer_checked_in=m.employer_checked_in,
+        shift_pay=pay,
         disputed=m.disputed,
     )
 
@@ -175,7 +178,7 @@ def list_matches(
 ):
     col = Match.user_id if principal["role"] == "seeker" else Match.employer_id
     rows = db.query(Match).filter(col == principal["id"]).all()
-    return [_to_out(m, principal["role"]) for m in rows]
+    return [_to_out(db, m, principal["role"]) for m in rows]
 
 
 @router.post(
@@ -222,7 +225,7 @@ def checkin(
     _maybe_complete(db, m)
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])
 
 
 @router.post(
@@ -245,7 +248,7 @@ def dispute(
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
     # Повторный спор по той же смене не плодит жалобы/уведомления.
     if m.disputed:
-        return _to_out(m, principal["role"])
+        return _to_out(db, m, principal["role"])
     m.disputed = True
     who = "работник" if principal["id"] == m.user_id else "заведение"
     note = (body.note or "").strip()[:300]
@@ -259,7 +262,7 @@ def dispute(
     notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])
 
 
 class ResolveMatchIn(BaseModel):
@@ -296,7 +299,7 @@ def resolve_match(
         raise HTTPException(status_code=400, detail="outcome: completed|no_show")
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])
 
 
 @router.post("/{match_id}/confirm", response_model=MatchOut)
@@ -326,4 +329,4 @@ def confirm(
              "«я на смене», заведение — «человек пришёл».")
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])

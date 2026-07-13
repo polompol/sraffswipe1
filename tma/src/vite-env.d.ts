@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_USE_BACKEND?: string;
   readonly VITE_DEV_INIT_DATA?: string;
   readonly VITE_BOT_USERNAME?: string;
+  readonly VITE_PILOT_MODE?: string;
 }
 
 interface ImportMeta {

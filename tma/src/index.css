@@ -764,6 +764,36 @@ body[data-large="1"] .tab {
   }
 }
 
+/* Денежный дождь при закрытии смены — фирменный момент радости */
+.money-rain {
+  overflow: hidden;
+}
+.money-rain .coin {
+  position: absolute;
+  top: -8%;
+  font-size: 26px;
+  font-weight: 900;
+  color: #f4cf6a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  animation-name: coinFall;
+  animation-timing-function: cubic-bezier(0.3, 0.1, 0.5, 1);
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes coinFall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg) scale(0.9);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(115vh) rotate(220deg) scale(1.05);
+    opacity: 0.9;
+  }
+}
+
 /* ===== «Вау»-полировка: переходы и микро-взаимодействия ===== */
 
 /* Плавный въезд каждого экрана */

@@ -5,6 +5,7 @@ import { payWithStars, showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { Button } from "@/components/Button";
 import { IconFire, IconCheck } from "@/components/Icons";
+import { PILOT_MODE } from "@/lib/flags";
 
 export function PricingPage() {
   const nav = useNavigate();
@@ -107,24 +108,26 @@ export function PricingPage() {
           ))}
         </div>
 
-        <div className="card" style={{ marginTop: 14, textAlign: "left" }}>
-          <div className="row" style={{ gap: 10 }}>
-            <span style={{ color: "var(--gold)", flex: "none" }}>
-              <IconFire size={20} />
-            </span>
-            <span style={{ flex: 1 }}>
-              <b>Boost на 24 часа</b>
-              <div className="muted" style={{ fontSize: 14 }}>
-                Поднять вакансию в топ ленты, если человек нужен срочно.
-              </div>
-            </span>
+        {!PILOT_MODE && (
+          <div className="card" style={{ marginTop: 14, textAlign: "left" }}>
+            <div className="row" style={{ gap: 10 }}>
+              <span style={{ color: "var(--gold)", flex: "none" }}>
+                <IconFire size={20} />
+              </span>
+              <span style={{ flex: 1 }}>
+                <b>Boost на 24 часа</b>
+                <div className="muted" style={{ fontSize: 14 }}>
+                  Поднять вакансию в топ ленты, если человек нужен срочно.
+                </div>
+              </span>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={buyBoost}>
+                Ускорить за 150 ★
+              </Button>
+            </div>
           </div>
-          <div style={{ marginTop: 12 }}>
-            <Button variant="secondary" onClick={buyBoost}>
-              Ускорить за 150 ★
-            </Button>
-          </div>
-        </div>
+        )}
 
         {status && (
           <div className="card" style={{ marginTop: 16 }}>{status}</div>

@@ -118,6 +118,7 @@ class MatchOut(BaseModel):
     seeker_checked_in: bool = False
     employer_checked_in: bool = False
     disputed: bool = False
+    shift_pay: int = 0  # оплата смены, ₽ (для празднования дохода в UI)
 
 
 # ---- chat ----

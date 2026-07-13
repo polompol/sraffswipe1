@@ -196,6 +196,7 @@ export interface MatchModel {
   seekerCheckedIn?: boolean;
   employerCheckedIn?: boolean;
   disputed?: boolean;
+  shiftPay?: number; // оплата смены, ₽ — для празднования дохода при закрытии
 }
 
 export interface Message {

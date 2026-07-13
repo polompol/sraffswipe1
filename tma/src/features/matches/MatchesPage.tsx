@@ -7,15 +7,24 @@ import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { ReviewStars } from "@/components/ReviewStars";
+import { MoneyRain } from "@/components/MoneyRain";
 import { IconTabMatches, IconCheck, IconWarning, IconPin } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
+import type { MatchModel } from "@/types/domain";
 
 export function MatchesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
   const [codes, setCodes] = useState<Record<string, string>>({});
+  // Сумма для «денежного дождя», когда отметка работника закрыла смену.
+  const [celebrate, setCelebrate] = useState<number | null>(null);
+
+  // Смена только что закрылась отметкой работника → празднуем доход.
+  function maybeCelebrate(m: MatchModel) {
+    if (m.checkedIn) setCelebrate(m.shiftPay && m.shiftPay > 0 ? m.shiftPay : 0);
+  }
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["matches"],
     queryFn: fetchMatches,
@@ -40,11 +49,12 @@ export function MatchesPage() {
     const code = (codes[matchId] ?? "").trim();
     if (code.length < 6) return;
     try {
-      await checkinShift(matchId, { code });
+      const m = await checkinShift(matchId, { code });
       haptic("success");
       toast("Вы отметились на смене ✓", "success");
       setCodes((c) => ({ ...c, [matchId]: "" }));
       qc.invalidateQueries({ queryKey: ["matches"] });
+      maybeCelebrate(m);
     } catch {
       haptic("error");
       toast("Неверный код прихода", "error");
@@ -72,13 +82,14 @@ export function MatchesPage() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          await checkinShift(matchId, {
+          const m = await checkinShift(matchId, {
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
           });
           haptic("success");
           toast("Вы отметились на смене ✓", "success");
           qc.invalidateQueries({ queryKey: ["matches"] });
+          maybeCelebrate(m);
         } catch {
           haptic("error");
           toast("Вы не на месте смены — попробуйте код", "error");
@@ -91,6 +102,9 @@ export function MatchesPage() {
 
   return (
     <div className="page">
+      {celebrate !== null && (
+        <MoneyRain amount={celebrate} onDone={() => setCelebrate(null)} />
+      )}
       <h1 className="h1" style={{ marginBottom: 12 }}>Мэтчи</h1>
       {isLoading && <SkeletonList />}
       {isError && <ErrorBox onRetry={() => refetch()} />}

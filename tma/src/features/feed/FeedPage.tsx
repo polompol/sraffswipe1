@@ -28,6 +28,7 @@ import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
+import { PILOT_MODE } from "@/lib/flags";
 import {
   IconSkip,
   IconSuper,
@@ -321,7 +322,7 @@ export function FeedPage() {
               ? "Оставь подписку — и мы напишем в бота, как только смена появится рядом"
               : "Загляните позже — появляются новые"}
           </p>
-          {isSeeker && (
+          {isSeeker && !PILOT_MODE && (
             <button
               className="btn"
               style={{ marginTop: 14 }}

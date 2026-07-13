@@ -29,6 +29,7 @@ import {
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
+import { PILOT_MODE } from "@/lib/flags";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -530,7 +531,7 @@ export function ProfilePage() {
         </div>
       )}
 
-      {role === "employer" && (
+      {role === "employer" && !PILOT_MODE && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="row">
             <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -560,7 +561,7 @@ export function ProfilePage() {
 
       {role === "employer" && <CommissionCard />}
 
-      {role === "employer" && <EmployerVerify />}
+      {role === "employer" && !PILOT_MODE && <EmployerVerify />}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <b>{role === "employer" ? "Пригласить коллег-рестораторов" : "Пригласить друзей"}</b>
