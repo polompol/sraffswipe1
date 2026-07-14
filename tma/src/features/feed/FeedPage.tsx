@@ -252,7 +252,7 @@ export function FeedPage() {
         <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>
       </button>
 
-      {isSeeker && moneyNear > 0 && !empty && (
+      {isSeeker && !PILOT_MODE && moneyNear > 0 && !empty && (
         <div
           className="money-near"
           onClick={() => haptic("light")}

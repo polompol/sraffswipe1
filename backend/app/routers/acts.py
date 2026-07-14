@@ -1,4 +1,6 @@
 """Генерация PDF-акта выполненных работ для самозанятого."""
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
@@ -13,30 +15,28 @@ router = APIRouter(prefix="/matches", tags=["acts"])
 # Перенос строки в fpdf2 без устаревшего ln=True.
 _NL = {"new_x": XPos.LMARGIN, "new_y": YPos.NEXT}
 
-# Встроенный шрифт Helvetica — latin-1, кириллицу не кодирует. Чтобы акт не
-# падал на русских названиях/именах, транслитерируем значения в латиницу.
-_TRANSLIT = {
-    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
-    "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
-    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
-    "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
-    "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+# Юникод-шрифт DejaVu (кириллица) — акт печатается нормальным русским, а не
+# транслитом. Шрифт лежит в репозитории (backend/app/fonts), чтобы работать и
+# в докер-образе без системных шрифтов.
+_FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"
+
+
+def _pdf() -> FPDF:
+    pdf = FPDF()
+    pdf.add_font("DejaVu", "", str(_FONT_DIR / "DejaVuSans.ttf"))
+    pdf.add_font("DejaVu", "B", str(_FONT_DIR / "DejaVuSans-Bold.ttf"))
+    pdf.add_page()
+    return pdf
+
+
+# Русские названия должностей для акта (ключи — как в вакансии).
+_ROLE_RU = {
+    "waiter": "Официант", "assistant_waiter": "Помощник официанта",
+    "barista": "Бариста", "cook": "Повар", "dishwasher": "Посудомойщик",
+    "hostess": "Хостес", "bartender": "Бармен", "hookah": "Кальянщик",
+    "florist": "Флорист", "administrator": "Администратор",
+    "courier": "Курьер", "cleaner": "Уборщик",
 }
-
-
-def _translit(text: str) -> str:
-    out: list[str] = []
-    for ch in text or "":
-        low = ch.lower()
-        rep = _TRANSLIT.get(low)
-        if rep is None:
-            out.append(ch)
-        elif ch.isupper():
-            out.append(rep.capitalize())
-        else:
-            out.append(rep)
-    # На всякий случай отбрасываем всё, что не кодируется latin-1.
-    return "".join(out).encode("latin-1", "ignore").decode("latin-1")
 
 
 def _fmt_time(minutes: int) -> str:
@@ -77,39 +77,39 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     pay = vac.rate if vac.rate_type == "perShift" else round(vac.rate * dur_min / 60)
     act_no = abs(hash(vac.id)) % 100000
 
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, f"ACT / AKT No {act_no}", **_NL)
-    pdf.set_font("Helvetica", size=11)
-    pdf.cell(0, 7, "vypolnennyh rabot (okazannyh uslug)", **_NL)
+    pdf = _pdf()
+    pdf.set_font("DejaVu", "B", 16)
+    pdf.cell(0, 10, f"Акт № {act_no}", **_NL)
+    pdf.set_font("DejaVu", size=11)
+    pdf.cell(0, 7, "выполненных работ (оказанных услуг)", **_NL)
     pdf.ln(4)
 
+    role_ru = _ROLE_RU.get(vac.role, vac.role)
     rows = [
-        ("Zakazchik / Customer", emp.company_name or "-"),
-        ("INN", emp.inn or "-"),
-        ("OGRN", emp.ogrn or "-"),
-        ("Ispolnitel / Contractor", user.name or "-"),
-        ("INN ispolnitelya", user.inn or "-"),
-        ("Status", "Samozanyatyy (NPD)" if user.self_employed else "Fiz. litso"),
-        ("Smena / Shift", vac.role),
-        ("Data / Date", vac.date),
-        ("Vremya / Time", f"{_fmt_time(vac.start_time)}-{_fmt_time(vac.end_time)}"),
-        ("Summa / Total, RUB", str(pay)),
+        ("Заказчик", emp.company_name or "-"),
+        ("ИНН заказчика", emp.inn or "-"),
+        ("ОГРН", emp.ogrn or "-"),
+        ("Исполнитель", user.name or "-"),
+        ("ИНН исполнителя", user.inn or "-"),
+        ("Статус", "Самозанятый (НПД)" if user.self_employed else "Физ. лицо"),
+        ("Смена", role_ru),
+        ("Дата", vac.date),
+        ("Время", f"{_fmt_time(vac.start_time)}–{_fmt_time(vac.end_time)}"),
+        ("Сумма, ₽", str(pay)),
     ]
     for label, value in rows:
-        pdf.set_font("Helvetica", size=11)
+        pdf.set_font("DejaVu", size=11)
         pdf.cell(70, 8, f"{label}:", border=0)
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, _translit(str(value)), **_NL)
+        pdf.set_font("DejaVu", "B", 11)
+        pdf.cell(0, 8, str(value), **_NL)
 
     pdf.ln(6)
-    pdf.set_font("Helvetica", size=10)
+    pdf.set_font("DejaVu", size=10)
     pdf.multi_cell(
         0,
         6,
-        "Uslugi okazany polnostyu i v srok. Chek NPD formiruetsya ispolnitelem "
-        "v prilozhenii 'Moy nalog'. Sformirovano v StaffSwipe.",
+        "Услуги оказаны полностью и в срок. Чек НПД формируется исполнителем "
+        "в приложении «Мой налог». Сформировано в StaffSwipe.",
     )
 
     data = pdf.output()

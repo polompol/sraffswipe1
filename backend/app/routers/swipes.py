@@ -148,7 +148,8 @@ def swipe(
             if not spent:
                 raise HTTPException(
                     status_code=402,
-                    detail="Закончились супер-лайки. Купите пакет «Срочно».",
+                    detail="Супер-лайки «Срочно» закончились. Их дарят за "
+                           "приглашённых друзей.",
                 )
 
         db.add(
