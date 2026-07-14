@@ -251,7 +251,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
       <SwipePhoto src={hasPhoto ? photos[0] : undefined} initial={(s.name || "?").charAt(0)} />
       <div className="swipe-shade" />
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8 }}>
-        <span className="glass">★ {s.rating.toFixed(1)}</span>
+        <span className="glass">{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
         {s.availableToday && (
           <span className="glass pulse" style={{ background: "rgba(199,162,75,.92)" }}>
             <IconBolt size={13} /> Готов сегодня

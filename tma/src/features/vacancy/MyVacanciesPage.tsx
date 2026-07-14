@@ -7,6 +7,7 @@ import { haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 import { IconFire, IconCalendar } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { PILOT_MODE } from "@/lib/flags";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
@@ -66,7 +67,7 @@ export function MyVacanciesPage() {
               <span className="spacer" />
               {v.boosted ? (
                 <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}><IconFire size={12} /> в топе</span>
-              ) : (
+              ) : !PILOT_MODE ? (
                 <button
                   className="tag"
                   style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
@@ -74,7 +75,7 @@ export function MyVacanciesPage() {
                 >
                   <IconFire size={12} /> Поднять в топ
                 </button>
-              )}
+              ) : null}
             </div>
             <div className="muted" style={{ marginTop: 6 }}>
               {fmtDate(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)} · {rateLabel(v.rate, v.rateType)}

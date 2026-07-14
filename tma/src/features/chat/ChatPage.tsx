@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Message } from "@/types/domain";
-import { confirmShift, fetchMessages, sendMessage, track } from "@/api/endpoints";
+import type { Message, MatchModel } from "@/types/domain";
+import { confirmShift, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
@@ -26,9 +26,12 @@ export function ChatPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const myId = useSession((s) => s.userId);
+  const role = useSession((s) => s.role);
   const [text, setText] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  // Подтверждение смены берём из данных сервера, а не из локального стейта —
+  // иначе при переоткрытии чата кнопка снова «Подтвердить», хотя ты уже нажал.
+  const [match, setMatchState] = useState<MatchModel | null>(null);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
@@ -36,6 +39,14 @@ export function ChatPage() {
     queryKey: ["messages", matchId],
     queryFn: () => fetchMessages(matchId),
   });
+
+  const { data: matches } = useQuery({ queryKey: ["matches"], queryFn: fetchMatches });
+  const srvMatch = match ?? matches?.find((m) => m.id === matchId) ?? null;
+  const iConfirmed = role === "employer"
+    ? !!srvMatch?.confirmedByEmployer
+    : !!srvMatch?.confirmedBySeeker;
+  const bothConfirmed =
+    !!srvMatch && srvMatch.confirmedBySeeker && srvMatch.confirmedByEmployer;
 
   // Добавить сообщение в кэш с дедупликацией по id (echo от WS не задвоит).
   function appendMessage(msg: Message) {
@@ -97,11 +108,17 @@ export function ChatPage() {
 
   async function doConfirm() {
     try {
-      await confirmShift(matchId);
+      const m = await confirmShift(matchId);
       track("confirm");
       haptic("success");
       coin();
-      setConfirmed(true);
+      setMatchState(m);
+      toast(
+        m.confirmedBySeeker && m.confirmedByEmployer
+          ? "Смена подтверждена обеими сторонами ✓"
+          : "Готово! Ждём подтверждения второй стороны",
+        "success",
+      );
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
@@ -167,10 +184,14 @@ export function ChatPage() {
           ))}
         </div>
         <div style={{ marginBottom: 8 }}>
-          <Button variant="ghost" disabled={confirmed} onClick={doConfirm}>
+          <Button variant="ghost" disabled={iConfirmed} onClick={doConfirm}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <IconCheck size={17} />
-              {confirmed ? "Вы подтвердили смену" : "Подтвердить смену"}
+              {bothConfirmed
+                ? "Смена подтверждена ✓"
+                : iConfirmed
+                  ? "Ждём подтверждения второй стороны"
+                  : "Подтвердить смену"}
             </span>
           </Button>
         </div>

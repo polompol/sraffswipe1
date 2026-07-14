@@ -60,7 +60,10 @@ export function VacancyList({
   hideSkip = false,
 }: {
   items: Vacancy[];
-  onAct: (v: Vacancy, dir: SwipeDirection) => void;
+  // Возвращает true, если по отклику стоит показать тост «Отклик отправлен»
+  // (успех и НЕ мэтч — при мэтче всплывает оверлей, тост не нужен). При ошибке
+  // или мэтче — ничего/false, чтобы не показать ложный успех до ответа сервера.
+  onAct: (v: Vacancy, dir: SwipeDirection) => void | boolean | Promise<void | boolean>;
   hideSkip?: boolean; // в избранном «Пропустить» бессмысленна — прячем
 }) {
   const [reportId, setReportId] = useState<string | null>(null);
@@ -156,9 +159,8 @@ export function VacancyList({
             <button
               className="btn"
               style={{ minHeight: 44 }}
-              onClick={() => {
-                onAct(v, "like");
-                toast("Отклик отправлен", "success");
+              onClick={async () => {
+                if (await onAct(v, "like")) toast("Отклик отправлен", "success");
               }}
             >
               Откликнуться

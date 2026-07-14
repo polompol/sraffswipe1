@@ -25,7 +25,7 @@ export function InvitesPage() {
     queryFn: fetchInvites,
   });
 
-  async function act(v: Vacancy, dir: SwipeDirection) {
+  async function act(v: Vacancy, dir: SwipeDirection): Promise<boolean> {
     track("swipe", { dir });
     try {
       const res = await sendSwipe(v.id, "vacancy", dir);
@@ -45,11 +45,13 @@ export function InvitesPage() {
           companyPhotoUrl: v.companyPhotoUrl,
           role: v.role,
         });
-      } else if (dir !== "dislike") {
-        toast("Отклик отправлен", "success");
+        return false; // мэтч → показываем оверлей, тост не нужен
       }
+      // Успешный отклик без мэтча → VacancyList покажет тост (не дублируем).
+      return dir !== "dislike";
     } catch {
       toast("Не удалось. Попробуйте ещё раз", "error");
+      return false;
     }
   }
 

@@ -8,6 +8,7 @@ import {
   createSavedSearch,
   fetchFeed,
   fetchMe,
+  fetchMyVacancies,
   listSavedSearches,
   sendSwipe,
   track,
@@ -28,6 +29,7 @@ import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
+import { Button } from "@/components/Button";
 import { PILOT_MODE } from "@/lib/flags";
 import {
   IconSkip,
@@ -154,7 +156,19 @@ export function FeedPage() {
     enabled: isSeeker,
   });
 
-  async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection) {
+  // Заведению без единой вакансии мэтч физически невозможен (мэтч ищется среди
+  // его смен). Лайкать кандидатов впустую — тупик, поэтому ведём разместить смену.
+  const { data: myVacs } = useQuery({
+    queryKey: ["my-vacancies"],
+    queryFn: fetchMyVacancies,
+    enabled: !isSeeker,
+  });
+  const employerNoVacancy = !isSeeker && myVacs != null && myVacs.length === 0;
+
+  // Возвращает true, если это был успешный отклик без мэтча — тогда список-вид
+  // покажет тост «Отклик отправлен». В колоде (свайп) результат игнорируется —
+  // там обратная связь — улетающая карточка.
+  async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection): Promise<boolean> {
     const targetType = isSeeker ? "vacancy" : "user";
     track("swipe", { dir });
     try {
@@ -175,7 +189,9 @@ export function FeedPage() {
           companyPhotoUrl: v.companyPhotoUrl,
           role: v.role,
         });
+        return false; // мэтч → оверлей, тост не нужен
       }
+      return dir === "like" || dir === "superlike";
     } catch (e) {
       // 402 — закончились супер-лайки (ведём в тарифы), 429 — слишком часто.
       const status = (e as { response?: { status?: number } })?.response?.status;
@@ -186,6 +202,7 @@ export function FeedPage() {
       } else {
         toast("Не удалось отправить. Попробуйте ещё раз", "error");
       }
+      return false;
     }
   }
 
@@ -251,6 +268,22 @@ export function FeedPage() {
         {typeof data?.length === "number" ? ` · ${data.length}` : ""}
         <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>
       </button>
+
+      {employerNoVacancy && (
+        <div
+          className="card"
+          style={{ marginBottom: 12, borderColor: "var(--gold)" }}
+        >
+          <b>Сначала разместите смену</b>
+          <p className="muted" style={{ margin: "6px 0 10px" }}>
+            Пока у вас нет ни одной смены, кандидаты не смогут откликнуться —
+            даже если вы их лайкнете. Опубликуйте смену, и пойдут отклики.
+          </p>
+          <Button size="sm" block={false} onClick={() => nav("/vacancy/new")}>
+            + Разместить смену
+          </Button>
+        </div>
+      )}
 
       {isSeeker && !PILOT_MODE && moneyNear > 0 && !empty && (
         <div
@@ -319,7 +352,9 @@ export function FeedPage() {
           </h2>
           <p className="muted">
             {isSeeker
-              ? "Оставь подписку — и мы напишем в бота, как только смена появится рядом"
+              ? PILOT_MODE
+                ? "Новые смены появляются каждый день — загляните чуть позже или измените фильтры"
+                : "Оставь подписку — и мы напишем в бота, как только смена появится рядом"
               : "Загляните позже — появляются новые"}
           </p>
           {isSeeker && !PILOT_MODE && (
@@ -335,9 +370,9 @@ export function FeedPage() {
               </span>
             </button>
           )}
-          {isSeeker && filters.city && (
+          {isSeeker && (
             <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => setFilterOpen(true)}>
-              Сменить город
+              {filters.city ? "Сменить город" : "Настроить фильтры"}
             </button>
           )}
         </div>

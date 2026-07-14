@@ -473,7 +473,7 @@ export function ProfilePage() {
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
           </div>
           <div className="muted">
-            {me ? `★ ${me.rating.toFixed(1)}` : "—"}
+            {me ? (me.rating > 0 ? `★ ${me.rating.toFixed(1)}` : "Новичок") : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
             {me?.shiftsDone ? ` · ${me.shiftsDone} смен` : ""}
           </div>

@@ -31,7 +31,7 @@ def _pdf() -> FPDF:
 
 # Русские названия должностей для акта (ключи — как в вакансии).
 _ROLE_RU = {
-    "waiter": "Официант", "assistant_waiter": "Помощник официанта",
+    "waiter": "Официант", "waiter_assistant": "Помощник официанта",
     "barista": "Бариста", "cook": "Повар", "dishwasher": "Посудомойщик",
     "hostess": "Хостес", "bartender": "Бармен", "hookah": "Кальянщик",
     "florist": "Флорист", "administrator": "Администратор",
