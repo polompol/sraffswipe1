@@ -107,6 +107,7 @@ class MeOut(BaseModel):
     tgUsername: str | None = None
     streak: int = 0
     city: str = ""
+    district: str = ""
     incomingLikes: int = 0  # «тебя хотят»: входящие лайки/отклики
     earnedRub: int = 0  # заработано через сервис (мотивация доходом)
     shiftsDone: int = 0  # сколько смен закрыто
@@ -230,7 +231,7 @@ def me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city,
+        streak=_streak(db, u.id), city=u.city, district=u.district,
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
         availableToday=u.available_today,

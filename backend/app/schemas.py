@@ -1,7 +1,7 @@
 """Pydantic-схемы запросов/ответов."""
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 Role = Literal["seeker", "employer"]
 Phone = Annotated[
@@ -57,6 +57,14 @@ class VacancyIn(BaseModel):
     address: Short = ""
     city: Short = ""
     interior_photo_url: Annotated[str, StringConstraints(max_length=500)] = ""
+
+    @model_validator(mode="after")
+    def _check_duration(self) -> "VacancyIn":
+        # У почасовой смены должна быть длительность. start==end трактовалось
+        # бы как «ночная через полночь» = 24 часа → завышенная оплата/комиссия.
+        if self.rate_type == "perHour" and self.start_time == self.end_time:
+            raise ValueError("Время начала и конца смены не должно совпадать")
+        return self
 
 
 class VacancyOut(BaseModel):

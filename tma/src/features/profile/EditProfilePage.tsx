@@ -20,6 +20,7 @@ export function EditProfilePage() {
   const [photo, setPhoto] = useState<string>("");
   const [birthDate, setBirthDate] = useState("");
   const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
   const [inn, setInn] = useState("");
   const [selfEmployed, setSelfEmployed] = useState(false);
   const [roles, setRoles] = useState<StaffRole[]>([]);
@@ -36,6 +37,7 @@ export function EditProfilePage() {
     setName(me.name === "Соискатель" ? "" : me.name ?? "");
     setBirthDate(me.birthDate ?? "");
     setCity(me.city ?? "");
+    setDistrict(me.district ?? "");
     setInn(me.inn ?? "");
     setSelfEmployed(me.selfEmployed ?? false);
     setRoles((me.roles ?? []) as StaffRole[]);
@@ -63,6 +65,7 @@ export function EditProfilePage() {
         name,
         birth_date: birthDate,
         city,
+        district,
         roles,
         self_employed: selfEmployed,
         inn: selfEmployed ? inn : undefined,
@@ -99,6 +102,9 @@ export function EditProfilePage() {
 
         <label className="muted" htmlFor="city">Город</label>
         <input id="city" className="input" style={{ marginBottom: 12 }} value={city} onChange={(e) => setCity(e.target.value)} />
+
+        <label className="muted" htmlFor="district">Район (чтобы звали на смены рядом)</label>
+        <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
 
         <label className="muted">Должности</label>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>

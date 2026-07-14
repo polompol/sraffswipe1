@@ -179,6 +179,7 @@ export interface Me {
   tgUsername?: string | null;
   streak?: number;
   city?: string;
+  district?: string;
   incomingLikes?: number;
   earnedRub?: number;
   shiftsDone?: number;

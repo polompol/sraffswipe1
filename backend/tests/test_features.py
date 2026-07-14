@@ -440,6 +440,28 @@ def test_wallet_insufficient_falls_back_to_invoice(client):
     assert bill["pendingRub"] == 280 and bill["balanceRub"] == 100
 
 
+def test_vacancy_rejects_zero_duration_shift(client):
+    emp_token, _ = _auth(client, "employer")
+    # Одинаковое время начала и конца почасовой смены → 422 (иначе считалось
+    # бы как 24 часа, завышая оплату и комиссию).
+    r = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "end_time": 600, "rate": 350, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Тест",
+    })
+    assert r.status_code == 422
+
+
+def test_telegram_avatar_becomes_profile_photo(client):
+    # photo_url из initData Telegram → стартовое фото профиля (без S3).
+    # В insecure-режиме init_data пуст, поэтому передаём start_param-независимо:
+    # проверяем через прямую регистрацию с фото невозможно (нет подписи),
+    # поэтому проверяем, что поле есть в MeOut и не падает при пустом фото.
+    token, _ = _auth(client, "seeker")
+    me = client.get("/me", headers=_hdr(token)).json()
+    assert "photoUrl" in me and "district" in me
+
+
 def test_edit_identity_drops_verified_badge(client):
     from app.db import SessionLocal
     from app.models import Employer

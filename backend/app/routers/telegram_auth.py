@@ -98,6 +98,9 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         tg_id = 0
     username = tg_user.get("username")
     name = tg_user.get("first_name", "")
+    # Аватарка из Telegram — фото профиля сразу, без S3. Telegram кладёт
+    # photo_url в initData, если у пользователя есть публичное фото.
+    tg_photo = tg_user.get("photo_url") or ""
     ref_code = body.start_param or parse_start_param(body.init_data)
 
     if body.role == "employer":
@@ -135,6 +138,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
             tg_username=username,
             phone=f"tg:{tg_id}",
             name=name,
+            photo_urls=tg_photo,  # аватарка из Telegram как стартовое фото
         )
         db.add(user)
         db.flush()
