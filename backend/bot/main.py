@@ -26,6 +26,8 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://example.com")
 API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
 INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "")
+# Админы (csv tg_id) — им шлём сигнал, если оплата прошла, а начисление нет.
+ADMIN_TG_IDS = os.environ.get("ADMIN_TG_IDS", "")
 # «Печатающий» эффект: индикатор «печатает…» + плавное раскрытие текста.
 # Выключается BOT_TYPEWRITER=0 (тогда сообщения приходят сразу).
 TYPEWRITER = os.environ.get("BOT_TYPEWRITER", "1") != "0"
@@ -124,26 +126,60 @@ async def pre_checkout(query: PreCheckoutQuery) -> None:
     await query.answer(ok=True)
 
 
+async def _alert_admins(bot, text: str) -> None:
+    """Сигнал администраторам (best-effort) — например, оплата без начисления."""
+    for raw in ADMIN_TG_IDS.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            await bot.send_message(int(raw), text)
+        except Exception:  # noqa: BLE001 — не роняем обработчик из-за сигнала
+            pass
+
+
 @dp.message(F.successful_payment)
 async def on_paid(message: Message) -> None:
     sp = message.successful_payment
     if sp is None:
         return
     owner_id, _, sku = sp.invoice_payload.partition(":")
-    async with httpx.AsyncClient(base_url=API_BASE, timeout=10) as client:
-        await client.post(
-            "/billing/fulfill",
-            headers={"X-Internal-Token": INTERNAL_SECRET},
-            json={
-                "owner_id": owner_id,
-                "sku": sku,
-                "provider": "stars",
-                "charge_id": sp.telegram_payment_charge_id,
-            },
+    # Начисление идемпотентно по charge_id, поэтому безопасно ретраить.
+    ok = False
+    try:
+        async with httpx.AsyncClient(base_url=API_BASE, timeout=10) as client:
+            resp = await client.post(
+                "/billing/fulfill",
+                headers={"X-Internal-Token": INTERNAL_SECRET},
+                json={
+                    "owner_id": owner_id,
+                    "sku": sku,
+                    "provider": "stars",
+                    "charge_id": sp.telegram_payment_charge_id,
+                },
+            )
+        ok = resp.status_code == 200
+    except Exception:  # noqa: BLE001 — сеть/бэкенд недоступен
+        ok = False
+
+    if ok:
+        await send_typed(
+            message,
+            "Оплата прошла ✅ Права начислены. Возвращайтесь в приложение.",
         )
+        return
+    # Деньги списаны, но начисление не прошло — НЕ теряем оплату: честно
+    # сообщаем пользователю и зовём оператора зачислить вручную по charge_id.
+    await _alert_admins(
+        message.bot,
+        "⚠️ Оплата Stars без начисления. Зачислите вручную:\n"
+        f"owner_id={owner_id} sku={sku} "
+        f"charge_id={sp.telegram_payment_charge_id}",
+    )
     await send_typed(
         message,
-        "Оплата прошла ✅ Права начислены. Возвращайтесь в приложение.",
+        "Оплата получена ✅ Начисление немного задерживается — уже "
+        "разбираемся, права появятся в течение часа.",
     )
 
 

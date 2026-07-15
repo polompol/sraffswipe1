@@ -82,6 +82,8 @@ services:
       MINI_APP_URL: https://${DOMAIN}
       API_BASE_URL: http://api:8000
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET in .env}
+      # Админы (csv tg_id) — сигнал «оплата прошла, а начисление нет».
+      ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
       # Эффект «печатает…» + плавное раскрытие текста бота (0 — выключить).
       BOT_TYPEWRITER: ${BOT_TYPEWRITER:-1}
     depends_on:
