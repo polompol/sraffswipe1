@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm --prefix tma install",
+  "buildCommand": "npm --prefix tma run build",
+  "outputDirectory": "tma/dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

@@ -266,9 +266,9 @@ username, оканчивающийся на `bot`. Сохрани токен.
 
 1. **vercel.com** → войти через GitHub → **Add New… → Project**.
 2. Импортировать `polompol/sraffswipe1`.
-3. **Root Directory: `tma`** (важно! иначе Vercel не найдёт, что собирать).
-   Framework определится сам — Vite.
-4. **Deploy**. Через 2 минуты получишь адрес вида `staffswipe-tma.vercel.app`.
+3. **Deploy** — больше ничего настраивать не нужно. В корне репозитория лежит
+   `vercel.json`, который уже говорит Vercel, что собирать (приложение из
+   папки `tma`). Через 2 минуты получишь адрес вида `staffswipe.vercel.app`.
 
 Переменные окружения задавать не нужно: без `VITE_USE_BACKEND=true`
 приложение само работает на демо-данных.
@@ -303,8 +303,10 @@ Configure menu button** → пришли адрес с Vercel → текст к�
 
 1. **vercel.com** → войти через GitHub → **Add New… → Project**.
 2. Импортировать репозиторий `polompol/sraffswipe1`.
-3. В настройках проекта указать **Root Directory: `landing`**,
+3. В настройках проекта указать **Root Directory: `landing`** и
    Framework Preset: **Other** (сборка не нужна) → **Deploy**.
+   Здесь Root Directory указать НУЖНО: по умолчанию корневой `vercel.json`
+   собирает приложение, а не лендинг.
 
 Через минуту получишь адрес вида `staffswipe.vercel.app`. Свой домен
 привязывается там же (Settings → Domains).
