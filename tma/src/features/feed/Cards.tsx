@@ -158,11 +158,11 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         )}
         <span className="spacer" />
         {urgent ? (
-          <span className="glass pulse" style={{ background: "rgba(165,28,48,.92)" }}>
+          <span className="glass pulse" style={{ background: "var(--gold)" }}>
             <IconFire size={13} /> Сегодня
           </span>
         ) : v.boosted ? (
-          <span className="glass pulse" style={{ background: "rgba(199,162,75,.92)" }}>
+          <span className="glass pulse" style={{ background: "var(--super)" }}>
             <IconFire size={13} /> ТОП
           </span>
         ) : null}
@@ -254,7 +254,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <span className="glass">{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
         {s.availableToday && (
-          <span className="glass pulse" style={{ background: "rgba(199,162,75,.92)" }}>
+          <span className="glass pulse" style={{ background: "var(--super)" }}>
             <IconBolt size={13} /> Готов сегодня
           </span>
         )}

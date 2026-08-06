@@ -48,9 +48,13 @@ export function ReportSheet({
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
+      {/* У этой панели нет отдельного прокручиваемого тела (.sheet-body), а
+          .sheet ограничен 90vh — поэтому прокрутку включаем на самом листе,
+          иначе на невысоком экране низ формы обрезался бы. */}
       <div
         className="fade-up sheet"
         style={{
+          overflowY: "auto",
           padding: 20,
           paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
         }}

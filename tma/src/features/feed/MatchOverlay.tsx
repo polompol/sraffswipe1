@@ -44,7 +44,9 @@ export function MatchOverlay({
           height: 320,
           borderRadius: "50%",
           background:
-            "radial-gradient(circle, rgba(217,164,65,0.45) 0%, rgba(217,164,65,0) 70%)",
+            // Оверлей всегда тёмный независимо от темы, поэтому свечение задаём
+            // фиксированным золотом (--super) — надёжнее color-mix в старых вебвью.
+            "radial-gradient(circle, rgba(195,154,58,0.45) 0%, rgba(195,154,58,0) 70%)",
           filter: "blur(8px)",
         }}
         className="pulse"
