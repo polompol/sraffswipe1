@@ -120,7 +120,7 @@ export function FilterSheet({
           onChange={(e) => set({ city: e.target.value || undefined })}
         />
 
-        <label className="form-label">Когда</label>
+        <div className="form-label">Когда</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           <Chip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
           <Chip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
@@ -128,7 +128,7 @@ export function FilterSheet({
           <Chip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
         </div>
 
-        <label className="form-label">Должность</label>
+        <div className="form-label">Должность</div>
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
@@ -149,14 +149,14 @@ export function FilterSheet({
           ))}
         </div>
 
-        <label className="form-label">Тип ставки</label>
+        <div className="form-label">Тип ставки</div>
         <div className="row" style={{ margin: "8px 0 16px" }}>
           <Chip on={!f.rate_type} label="Любая" onClick={() => set({ rate_type: undefined })} />
           <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
           <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
         </div>
 
-        <label className="form-label">Подойдёт мне</label>
+        <div className="form-label">Подойдёт мне</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           <Chip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
           <Chip on={!!f.no_experience} label="Без опыта" onClick={() => set({ no_experience: !f.no_experience })} />
@@ -175,7 +175,7 @@ export function FilterSheet({
           onChange={(e) => set({ min_rate: e.target.value ? Number(e.target.value) : undefined })}
         />
 
-        <label className="form-label">Сортировка</label>
+        <div className="form-label">Сортировка</div>
         <div className="row" style={{ margin: "8px 0 18px" }}>
           {SORTS.map((s) => (
             <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />

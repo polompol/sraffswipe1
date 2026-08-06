@@ -73,6 +73,22 @@ export function MatchesPage() {
       return Promise.resolve();
     }
     return new Promise<void>((resolve) => {
+      // Страховка: пока висит системный запрос разрешения, штатный timeout
+      // не тикает. Без своего таймера кнопка осталась бы со спиннером навсегда.
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const guard = setTimeout(() => {
+        toast("Не удалось определить геопозицию — введите код", "error");
+        done();
+      }, 12000);
+      const finish = () => {
+        clearTimeout(guard);
+        done();
+      };
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           try {
@@ -87,12 +103,12 @@ export function MatchesPage() {
             haptic("error");
             toast("Вы не на месте смены — попробуйте код", "error");
           } finally {
-            resolve();
+            finish();
           }
         },
         () => {
           toast("Нет доступа к геолокации — введите код", "error");
-          resolve();
+          finish();
         },
         { enableHighAccuracy: true, timeout: 8000 },
       );

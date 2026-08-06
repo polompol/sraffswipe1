@@ -61,7 +61,7 @@ function CommissionCard() {
       style={{
         marginBottom: 16,
         ...(bill.overdue
-          ? { border: "1.5px solid var(--dislike)" }
+          ? { border: "1.5px solid var(--danger)" }
           : null),
       }}
     >
@@ -79,7 +79,7 @@ function CommissionCard() {
           : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
       </div>
       {bill.overdue && (
-        <div style={{ marginTop: 8, fontSize: 14, color: "var(--dislike)", fontWeight: 700 }}>
+        <div style={{ marginTop: 8, fontSize: 14, color: "var(--danger)", fontWeight: 700 }}>
           Баланс закончился — публикация новых смен на паузе. Пополните
           картой ниже, и всё сразу возобновится.
         </div>
@@ -167,7 +167,7 @@ function EmployerVerify() {
           {res.found ? (
             <>
               {res.verified && (
-                <span style={{ color: "var(--super)", display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}>
+                <span style={{ color: "var(--super-text)", display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}>
                   <IconCheck size={15} />
                 </span>
               )}
@@ -616,7 +616,7 @@ export function ProfilePage() {
           />
         )}
         <MenuRow
-          icon={<IconEdit size={18} />}
+          icon={<IconShield size={18} />}
           label="Настройки"
           onClick={() => nav("/settings")}
         />
@@ -675,16 +675,21 @@ function MenuRow({
         background: "none",
         border: "none",
         borderBottom: last ? "none" : "1px solid var(--border)",
-        color: danger ? "var(--dislike)" : "var(--text)",
+        color: danger ? "var(--danger)" : "var(--text)",
         fontSize: 16,
         fontWeight: 600,
         textAlign: "left",
         cursor: "pointer",
       }}
     >
-      {icon && <span style={{ display: "inline-flex", color: "var(--gold)" }}>{icon}</span>}
+      {/* Плейсхолдер держит колонку иконок: без него строка без иконки
+          съезжала влево относительно остальных. */}
+      <span style={{ display: "inline-flex", width: 18, color: "var(--gold)" }}>
+        {icon}
+      </span>
       <span style={{ flex: 1 }}>{label}</span>
-      <IconChevronRight size={18} />
+      {/* Шеврон = «откроется экран». У «Выйти» экрана нет — там подтверждение. */}
+      {!danger && <IconChevronRight size={18} />}
     </button>
   );
 }

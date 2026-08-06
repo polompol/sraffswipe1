@@ -145,7 +145,7 @@
   border: 1.5px solid var(--gold);
 }
 .ui-btn--danger {
-  background: var(--crimson-dark);
+  background: var(--danger-bg);
   color: #fff;
   box-shadow: 0 6px 16px rgba(124, 21, 38, 0.28);
 }

@@ -55,7 +55,7 @@ export function Button({
       type="button"
       className={`ui-btn ui-btn--${variant}`}
       disabled={isDisabled}
-      aria-busy={loading}
+      aria-busy={busy}
       onClick={handle}
       // Внешний style ДОПОЛНЯЕТ размеры, а не заменяет их: раньше он шёл через
       // {...rest} после style и затирал minHeight — кнопка с внешним стилем

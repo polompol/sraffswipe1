@@ -294,6 +294,7 @@ export function FeedPage() {
       {isSeeker && !PILOT_MODE && moneyNear > 0 && !empty && (
         <button
           className="money-near"
+          aria-label="Настроить фильтры ленты"
           onClick={() => {
             haptic("light");
             setFilterOpen(true);
@@ -303,7 +304,7 @@ export function FeedPage() {
           <span className="money-near-sum">
             <CountUp value={moneyNear} /> ₽
           </span>
-          <span className="money-near-sub">забери свою — листай ленту</span>
+          <span className="money-near-sub">настроить, что показывать</span>
         </button>
       )}
 

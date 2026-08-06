@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   reportTarget,
   type ReportReason,
@@ -46,20 +47,18 @@ export function ReportSheet({
     }
   }
 
-  return (
+  // Портал в body: иначе панель наследует анимацию и задержку
+  // родительского списка (.stagger) и всплывает с запозданием.
+  return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
-      {/* У этой панели нет отдельного прокручиваемого тела (.sheet-body), а
-          .sheet ограничен 90vh — поэтому прокрутку включаем на самом листе,
-          иначе на невысоком экране низ формы обрезался бы. */}
+      {/* Структура как у остальных панелей: прокручиваемое тело + закреплённый
+          низ. Без этого на невысоком экране кнопка «Отправить» уезжала за
+          нижнюю кромку листа, и жалобу нельзя было отправить вообще. */}
       <div
         className="fade-up sheet"
-        style={{
-          overflowY: "auto",
-          padding: 20,
-          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
-        }}
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="sheet-body">
         <h2 className="h2">Пожаловаться</h2>
         <p className="muted" style={{ marginTop: 4 }}>
           Что не так? Мы проверим и примем меры.
@@ -100,7 +99,8 @@ export function ReportSheet({
           maxLength={1000}
           onChange={(e) => setText(e.target.value)}
         />
-        <div className="row" style={{ gap: 10 }}>
+        </div>
+        <div className="sheet-foot">
           <Button variant="secondary" onClick={onClose}>
             Отмена
           </Button>
@@ -109,6 +109,7 @@ export function ReportSheet({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

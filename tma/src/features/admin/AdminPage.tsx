@@ -340,7 +340,7 @@ export function AdminPage() {
               <span style={{ flex: 1 }}>
                 <b>{u.name}</b>
                 {u.blocked && (
-                  <span className="tag" style={{ marginLeft: 8, color: "var(--crimson)", borderColor: "var(--crimson)" }}>бан</span>
+                  <span className="tag" style={{ marginLeft: 8, color: "var(--crimson-dark)", borderColor: "var(--crimson-dark)" }}>бан</span>
                 )}
                 <div className="muted" style={{ fontSize: 12 }}>
                   {u.role === "employer" ? "заведение" : "соискатель"}
@@ -439,9 +439,9 @@ export function AdminPage() {
             className="tag"
             style={{
               cursor: "pointer",
-              background: period === p.id ? "var(--crimson)" : "transparent",
+              background: period === p.id ? "var(--crimson-dark)" : "transparent",
               color: period === p.id ? "#fff" : "var(--text)",
-              borderColor: period === p.id ? "var(--crimson)" : "var(--border)",
+              borderColor: period === p.id ? "var(--crimson-dark)" : "var(--border)",
             }}
             onClick={() => setPeriod(p.id)}
           >

@@ -33,8 +33,8 @@ export function toast(text: string, kind: ToastItem["kind"] = "info"): void {
 // совпадал с брендом. Разводим по смыслу: успех — зелёный, ошибка — тёмный
 // багровый, нейтральное — «эспрессо».
 const COLOR: Record<ToastItem["kind"], string> = {
-  success: "var(--success)",
-  error: "var(--crimson-dark)",
+  success: "var(--success-bg)",
+  error: "var(--danger-bg)",
   info: "var(--espresso)",
 };
 

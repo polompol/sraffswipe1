@@ -149,7 +149,7 @@ export function EditProfilePage() {
         <label className="form-label" htmlFor="district">Район (чтобы звали на смены рядом)</label>
         <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
 
-        <label className="form-label">Должности</label>
+        <div className="form-label">Должности</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {ROLES.map((r) => (
             <button
@@ -168,7 +168,7 @@ export function EditProfilePage() {
           ))}
         </div>
 
-        <label className="form-label">Опыт и навыки</label>
+        <div className="form-label">Опыт и навыки</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {SKILLS.map((s) => (
             <button
@@ -220,7 +220,7 @@ export function EditProfilePage() {
         )}
 
         {error && (
-          <div className="card" role="alert" style={{ marginBottom: 12, color: "var(--dislike)" }}>
+          <div className="card" role="alert" style={{ marginBottom: 12, color: "var(--danger)" }}>
             {error}
           </div>
         )}

@@ -102,7 +102,7 @@ export function VacancyList({
                   <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}><IconFire size={12} /> Сегодня</span>
                 )}
                 {v.boosted && (
-                  <span className="tag pulse" style={{ color: "var(--super)", borderColor: "var(--super)" }}><IconFire size={12} /> ТОП</span>
+                  <span className="tag pulse" style={{ color: "var(--super-text)", borderColor: "var(--super)" }}><IconFire size={12} /> ТОП</span>
                 )}
                 {/* .icon-btn — общая круглая кнопка 44×44 с фокус-стилем:
                     раньше здесь был padding:4 и зона тапа ~26px. */}
@@ -133,12 +133,12 @@ export function VacancyList({
               </div>
               <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                 {v.payMethod && (
-                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 13 }}>
+                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
                     {PAY_METHOD_SHORT[v.payMethod]}
                   </span>
                 )}
                 {v.employerPaysOnTime && (
-                  <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)", fontSize: 13 }}>
+                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
                     <IconCheck size={12} /> Платит вовремя
                   </span>
                 )}
