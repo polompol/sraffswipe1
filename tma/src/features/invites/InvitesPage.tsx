@@ -5,8 +5,10 @@ import type { MatchModel, SwipeDirection, Vacancy } from "@/types/domain";
 import { fetchInvites, sendSwipe, track } from "@/api/endpoints";
 import { VacancyList } from "../feed/VacancyList";
 import { MatchOverlay } from "../feed/MatchOverlay";
-import { ErrorBox, Loading } from "@/components/States";
+import { ErrorBox, SkeletonList } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/Button";
 import { pop } from "@/lib/sfx";
 import { showBackButton } from "@/telegram/sdk";
 import { IconBolt } from "@/components/Icons";
@@ -62,22 +64,18 @@ export function InvitesPage() {
         Заведения, которые уже лайкнули тебя. Откликнись — и сразу мэтч.
       </p>
 
-      {isLoading && <Loading />}
+      {/* Единый стиль состояний со всеми остальными экранами: раньше здесь
+          были текстовая «Загрузка…» и самодельное пустое состояние. */}
+      {isLoading && <SkeletonList rows={3} />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
 
       {!isLoading && !isError && data && data.length === 0 && (
-        <div className="card" style={{ textAlign: "center", padding: 32 }}>
-          <div style={{ color: "var(--gold)", display: "flex", justifyContent: "center" }}>
-            <IconBolt size={34} />
-          </div>
-          <h2 className="h2" style={{ marginTop: 10 }}>Пока никто не позвал</h2>
-          <p className="muted">
-            Листай ленту и откликайся — заведения начнут звать в ответ.
-          </p>
-          <button className="btn" style={{ marginTop: 12 }} onClick={() => nav("/feed")}>
-            Открыть ленту
-          </button>
-        </div>
+        <EmptyState
+          icon={<IconBolt size={34} />}
+          title="Пока никто не позвал"
+          text="Листай ленту и откликайся — заведения начнут звать в ответ."
+          action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
+        />
       )}
 
       {!isLoading && !isError && data && data.length > 0 && (

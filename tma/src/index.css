@@ -948,6 +948,11 @@ body[data-large="1"] .tab {
   box-shadow: 0 6px 16px rgba(60, 40, 30, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
+/* В тёмной теме белый блик превращался в светлую полоску по верху кнопки. */
+[data-theme="dark"] .act-skip {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
 .act:active {
   transform: scale(0.9);
 }

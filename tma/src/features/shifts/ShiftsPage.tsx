@@ -44,7 +44,16 @@ export function ShiftsPage() {
             <div className="row">
               <b>{m.companyName ?? "Заведение"}</b>
               <span className="spacer" />
-              <span className="tag" style={{ color: "var(--like)", borderColor: "var(--like)" }}>
+              {/* Разный цвет по смыслу: «подтверждена» — впереди, «завершена»
+                  — уже отработана. Раньше оба статуса были одинаковыми. */}
+              <span
+                className="tag"
+                style={
+                  m.status === "completed"
+                    ? { color: "var(--success)", borderColor: "var(--success)" }
+                    : { color: "var(--muted)", borderColor: "var(--border-strong)" }
+                }
+              >
                 {MATCH_STATUS_LABELS[m.status]}
               </span>
             </div>
@@ -55,7 +64,9 @@ export function ShiftsPage() {
                 </span>
               </Button>
             </div>
-            <ReviewStars matchId={m.id} />
+            {/* Оценку спрашиваем ТОЛЬКО за отработанную смену: у «подтверждена»
+                смена ещё впереди, и вопрос «как всё прошло?» сбивал с толку. */}
+            {m.status === "completed" && <ReviewStars matchId={m.id} />}
           </div>
         ))}
       </div>

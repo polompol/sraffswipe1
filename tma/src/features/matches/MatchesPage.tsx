@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ReviewStars } from "@/components/ReviewStars";
 import { IconTabMatches, IconCheck, IconWarning, IconPin } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
 import { haptic } from "@/telegram/sdk";
 
 export function MatchesPage() {
@@ -64,29 +65,38 @@ export function MatchesPage() {
   }
 
   // Отметиться геолокацией — работник физически на месте смены, код не нужен.
-  function checkinByGeo(matchId: string) {
+  // Возвращаем промис: определение координат занимает до 8 секунд, и без него
+  // кнопка не крутила спиннер — человек не понимал, идёт ли что-то, и жал ещё.
+  function checkinByGeo(matchId: string): Promise<void> {
     if (!("geolocation" in navigator)) {
       toast("Геолокация недоступна — введите код", "error");
-      return;
+      return Promise.resolve();
     }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await checkinShift(matchId, {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
-          haptic("success");
-          toast("Вы отметились на смене ✓", "success");
-          qc.invalidateQueries({ queryKey: ["matches"] });
-        } catch {
-          haptic("error");
-          toast("Вы не на месте смены — попробуйте код", "error");
-        }
-      },
-      () => toast("Нет доступа к геолокации — введите код", "error"),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
+    return new Promise<void>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            await checkinShift(matchId, {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            });
+            haptic("success");
+            toast("Вы отметились на смене ✓", "success");
+            qc.invalidateQueries({ queryKey: ["matches"] });
+          } catch {
+            haptic("error");
+            toast("Вы не на месте смены — попробуйте код", "error");
+          } finally {
+            resolve();
+          }
+        },
+        () => {
+          toast("Нет доступа к геолокации — введите код", "error");
+          resolve();
+        },
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    });
   }
 
   return (
@@ -109,16 +119,22 @@ export function MatchesPage() {
               style={{ gap: 12, cursor: "pointer" }}
               onClick={() => nav(`/chat/${m.id}`)}
             >
+              {/* Раньше сокращённое `background` шло ПОСЛЕ backgroundImage и
+                  затирало size/position, а без фото подставлялся url("").
+                  Теперь ветки не смешиваются. */}
               <span
                 style={{
                   width: 52,
                   height: 52,
                   borderRadius: 12,
                   flex: "none",
-                  backgroundImage: `url(${m.companyPhotoUrl ?? ""})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  background: m.companyPhotoUrl ? undefined : "var(--border)",
+                  ...(m.companyPhotoUrl
+                    ? {
+                        backgroundImage: `url(${m.companyPhotoUrl})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }
+                    : { background: "var(--border-strong)" }),
                 }}
               />
               <span style={{ flex: 1 }}>
@@ -182,14 +198,14 @@ export function MatchesPage() {
                       <div className="muted">Вы подтвердили выход ✓ Ждём отметку работника.</div>
                     ) : (
                       <div className="row" style={{ gap: 8 }}>
-                        <button className="btn" style={{ width: "auto", flex: 1 }} onClick={() => mark(m.id, true)}>
+                        <Button block={false} style={{ flex: 1 }} onClick={() => mark(m.id, true)}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <IconCheck size={16} /> Человек пришёл
                           </span>
-                        </button>
-                        <button className="btn secondary" style={{ width: "auto" }} onClick={() => mark(m.id, false)}>
+                        </Button>
+                        <Button variant="danger" block={false} onClick={() => mark(m.id, false)}>
                           Не вышел
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </>
@@ -202,11 +218,11 @@ export function MatchesPage() {
                       <div className="muted">Вы отметились ✓ Ждём подтверждения заведения.</div>
                     ) : (
                       <>
-                        <button className="btn" onClick={() => checkinByGeo(m.id)}>
+                        <Button onClick={() => checkinByGeo(m.id)}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                             <IconPin size={18} /> Я на смене — отметиться
                           </span>
-                        </button>
+                        </Button>
                         <div className="muted" style={{ fontSize: 13, margin: "12px 0 6px" }}>
                           …или введите код, если заведение его назвало:
                         </div>
@@ -222,14 +238,15 @@ export function MatchesPage() {
                               setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
                             }
                           />
-                          <button
-                            className="btn secondary"
-                            style={{ width: "auto", flex: 1 }}
+                          <Button
+                            variant="secondary"
+                            block={false}
+                            style={{ flex: 1 }}
                             disabled={(codes[m.id] ?? "").length < 6}
                             onClick={() => doCheckin(m.id)}
                           >
                             Отметиться кодом
-                          </button>
+                          </Button>
                         </div>
                       </>
                     )}

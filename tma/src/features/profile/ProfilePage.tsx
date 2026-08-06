@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
@@ -26,6 +26,7 @@ import {
   IconBriefcase,
   IconCheck,
   IconBookmark,
+  IconChevronRight,
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
@@ -93,19 +94,32 @@ function CommissionCard() {
         и переписки. Всё внутри приложения.
       </div>
       {bill.topupAvailable ? (
-        <div className="row" style={{ marginTop: 10, gap: 8 }}>
-          {[1000, 3000, 5000].map((a) => (
-            <button
-              key={a}
-              className="tag"
-              disabled={busy}
-              style={{ flex: 1, cursor: "pointer" }}
-              onClick={() => topup(a)}
-            >
-              Пополнить {a.toLocaleString("ru-RU")} ₽
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+            Пополнить баланс
+          </div>
+          {/* На чипе оставляем только сумму: «Пополнить 1 000 ₽» в трети
+              ширины экрана переносилось на 3-4 строки и ломало ряд. */}
+          <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+            {[1000, 3000, 5000].map((a) => (
+              <button
+                key={a}
+                className="tag"
+                disabled={busy}
+                style={{
+                  flex: 1,
+                  minWidth: 88,
+                  cursor: "pointer",
+                  borderColor: "var(--gold)",
+                  color: "var(--gold)",
+                }}
+                onClick={() => topup(a)}
+              >
+                {a.toLocaleString("ru-RU")} ₽
+              </button>
+            ))}
+          </div>
+        </>
       ) : (
         <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
           Оплата картой внутри приложения подключается к запуску — тогда
@@ -198,7 +212,9 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       style={{
         marginBottom: 16,
         border: on ? "1px solid var(--gold)" : undefined,
-        background: on ? "rgba(165,28,48,.06)" : undefined,
+        // --gold-tint: в тёмной теме прежние 6% багрового на тёмной карточке
+        // были неотличимы от выключенного состояния.
+        background: on ? "var(--gold-tint)" : undefined,
       }}
     >
       <span style={{ flex: 1 }}>
@@ -218,26 +234,43 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
         aria-label="Готов выйти сегодня"
         disabled={busy}
         onClick={toggle}
+        // Дорожка визуально 52×30, высота кнопки 44px — минимальная зона тапа.
         style={{
           width: 52,
-          height: 30,
+          height: 44,
+          padding: 0,
           borderRadius: 999,
           border: "none",
+          background: "none",
           cursor: "pointer",
-          background: on ? "var(--gold)" : "var(--border)",
           position: "relative",
-          transition: "background 0.2s",
+          flex: "none",
         }}
       >
         <span
+          aria-hidden
           style={{
             position: "absolute",
-            top: 3,
+            top: 7,
+            left: 0,
+            width: 52,
+            height: 30,
+            borderRadius: 999,
+            transition: "background 0.2s",
+            background: on ? "var(--gold)" : "var(--border-strong)",
+          }}
+        />
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 10,
             left: on ? 25 : 3,
             width: 24,
             height: 24,
             borderRadius: "50%",
-            background: "#fff",
+            background: "var(--surface)",
+            boxShadow: "0 1px 3px rgba(60,20,25,.35)",
             transition: "left 0.2s",
           }}
         />
@@ -443,21 +476,10 @@ export function ProfilePage() {
 
   return (
     <div className="page">
+      {/* «Выйти» переехал в конец списка внизу: деструктивное действие не
+          должно быть самым заметным элементом шапки. */}
       <div className="row" style={{ marginBottom: 16 }}>
         <h1 className="h1" style={{ margin: 0 }}>Профиль</h1>
-        <span className="spacer" />
-        <button
-          className="tab"
-          style={{ flex: "none", width: "auto", color: "var(--muted)" }}
-          onClick={() => {
-            // Подтверждение: выход в один тап — случайно вылететь из аккаунта неприятно.
-            if (!window.confirm("Выйти из аккаунта?")) return;
-            logout();
-            nav("/onboarding", { replace: true });
-          }}
-        >
-          Выйти
-        </button>
       </div>
 
       <div className="card row" style={{ gap: 14, marginBottom: 16 }}>
@@ -578,47 +600,91 @@ export function ProfilePage() {
         </Button>
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <Button variant="secondary" onClick={() => nav("/settings")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconEdit size={18} /> Настройки
-          </span>
-        </Button>
+      {/* Раньше здесь стоял столбик из 4-5 одинаковых полноширинных кнопок —
+          читалось как отладочное меню. Теперь это один список со строками. */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <MenuRow
+          icon={<IconEdit size={18} />}
+          label="Редактировать профиль"
+          onClick={() => nav("/profile/edit")}
+        />
+        {role === "seeker" && (
+          <MenuRow
+            icon={<IconBookmark size={18} />}
+            label="Избранные смены"
+            onClick={() => nav("/favorites")}
+          />
+        )}
+        <MenuRow
+          icon={<IconEdit size={18} />}
+          label="Настройки"
+          onClick={() => nav("/settings")}
+        />
+        <MenuRow
+          icon={<IconHelp size={18} />}
+          label="Помощь и поддержка"
+          onClick={() => nav("/support")}
+        />
+        {isAdmin && (
+          <MenuRow
+            icon={<IconShield size={18} />}
+            label="Админ-панель"
+            onClick={() => nav("/admin")}
+          />
+        )}
+        <MenuRow
+          label="Выйти из аккаунта"
+          danger
+          last
+          onClick={() => {
+            // Подтверждение: случайно вылететь из аккаунта неприятно.
+            if (!window.confirm("Выйти из аккаунта?")) return;
+            logout();
+            nav("/onboarding", { replace: true });
+          }}
+        />
       </div>
-
-      {role === "seeker" && (
-        <div style={{ marginBottom: 10 }}>
-          <Button variant="secondary" onClick={() => nav("/favorites")}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconBookmark size={18} /> Избранные смены
-            </span>
-          </Button>
-        </div>
-      )}
-
-      <Button variant="secondary" onClick={() => nav("/profile/edit")}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <IconEdit size={18} /> Редактировать профиль
-        </span>
-      </Button>
-
-      <div style={{ marginTop: 10 }}>
-        <Button variant="ghost" onClick={() => nav("/support")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconHelp size={18} /> Помощь и поддержка
-          </span>
-        </Button>
-      </div>
-
-      {isAdmin && (
-        <div style={{ marginTop: 10 }}>
-          <Button variant="ghost" onClick={() => nav("/admin")}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconShield size={18} /> Админ-панель
-            </span>
-          </Button>
-        </div>
-      )}
     </div>
+  );
+}
+
+/** Строка списка в профиле: иконка — подпись — шеврон. Высота ≥52px. */
+function MenuRow({
+  icon,
+  label,
+  onClick,
+  danger = false,
+  last = false,
+}: {
+  icon?: ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        width: "100%",
+        minHeight: 54,
+        padding: "0 18px",
+        background: "none",
+        border: "none",
+        borderBottom: last ? "none" : "1px solid var(--border)",
+        color: danger ? "var(--dislike)" : "var(--text)",
+        fontSize: 16,
+        fontWeight: 600,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      {icon && <span style={{ display: "inline-flex", color: "var(--gold)" }}>{icon}</span>}
+      <span style={{ flex: 1 }}>{label}</span>
+      <IconChevronRight size={18} />
+    </button>
   );
 }
