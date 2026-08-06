@@ -2,7 +2,14 @@ import { useNavigate } from "react-router-dom";
 import type { MatchModel } from "@/types/domain";
 import { IconTabMatches, IconChat } from "@/components/Icons";
 
-const COLORS = ["#a51c30", "#c0334a", "#c39a3a", "#7e1322", "#d2546a"];
+// Конфетти — фирменными токенами, чтобы в тёмной теме они светлели вместе
+// с брендом, а не оставались отдельной светлой палитрой.
+const COLORS = [
+  "var(--gold)",
+  "var(--gold-soft)",
+  "var(--super)",
+  "var(--crimson-dark)",
+];
 
 export function MatchOverlay({
   match,
@@ -80,7 +87,18 @@ export function MatchOverlay({
             <IconChat size={18} /> Перейти в чат
           </span>
         </button>
-        <button className="btn secondary" style={{ color: "#e6dccd", borderColor: "rgba(255,255,255,.25)" }} onClick={onClose}>
+        {/* Оверлей всегда тёмный, поэтому вторая кнопка — прозрачная с белым
+            текстом. Раньше она была светлой на светлом фоне (контраст ~1.3:1)
+            и выглядела пустой плашкой на самом важном экране. */}
+        <button
+          className="btn secondary"
+          style={{
+            background: "transparent",
+            color: "#fff",
+            borderColor: "rgba(255,255,255,.45)",
+          }}
+          onClick={onClose}
+        >
           Продолжить листать
         </button>
       </div>

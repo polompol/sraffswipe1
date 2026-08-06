@@ -421,9 +421,10 @@ button.tag:disabled {
 /* Колода свайпа */
 .deck {
   position: relative;
-  /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде. */
-  height: 68vh;
-  min-height: 460px;
+  /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде.
+     Жёсткий min-height:460px на экранах ~640px уводил кнопки «Пропустить/
+     Отклик» под сгиб — теперь высота ужимается вместе с экраном. */
+  height: clamp(320px, 68vh, 560px);
 }
 .swipe-card {
   position: absolute;
@@ -716,6 +717,10 @@ body[data-large="1"] .tab {
   border-radius: 16px;
   margin: 4px 0;
   font-size: 16px;
+  /* Длинная ссылка/слово без пробелов иначе распирает пузырь и даёт
+     горизонтальный скролл всей страницы; переводы строк сохраняем. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .bubble.mine {
   margin-left: auto;

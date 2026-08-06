@@ -97,24 +97,28 @@ export function VacancyList({
             <Thumb src={v.interiorPhotoUrl} initial={(v.companyName || "С").charAt(0)} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="row">
-                <b style={{ flex: 1 }}>{v.companyName}</b>
+                <b style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{v.companyName}</b>
                 {isUrgentShift(v.date) && (
                   <span className="tag pulse" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}><IconFire size={12} /> Сегодня</span>
                 )}
                 {v.boosted && (
                   <span className="tag pulse" style={{ color: "var(--super)", borderColor: "var(--super)" }}><IconFire size={12} /> ТОП</span>
                 )}
+                {/* .icon-btn — общая круглая кнопка 44×44 с фокус-стилем:
+                    раньше здесь был padding:4 и зона тапа ~26px. */}
                 <button
+                  className="icon-btn"
                   aria-label={saved.has(v.id) ? "Убрать из избранного" : "В избранное"}
                   aria-pressed={saved.has(v.id)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: saved.has(v.id) ? "var(--gold)" : "var(--muted)", display: "inline-flex", padding: 4 }}
+                  style={{ color: saved.has(v.id) ? "var(--gold)" : "var(--muted)" }}
                   onClick={() => toggleFav(v.id)}
                 >
                   <IconBookmark size={18} filled={saved.has(v.id)} />
                 </button>
                 <button
+                  className="icon-btn"
                   aria-label="Поделиться сменой"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", display: "inline-flex", padding: 4 }}
+                  style={{ color: "var(--muted)" }}
                   onClick={() => shareVacancy(v)}
                 >
                   <IconShare size={18} />
@@ -167,7 +171,7 @@ export function VacancyList({
             </button>
           </div>
           <button
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5 }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, marginTop: 4, padding: "10px 4px", display: "inline-flex", alignItems: "center", gap: 5 }}
             onClick={() => setReportId(v.id)}
           >
             <IconWarning size={13} /> Пожаловаться на вакансию

@@ -10,7 +10,9 @@ import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
-import { IconSend, IconBack, IconWarning, IconCheck } from "@/components/Icons";
+import { ErrorBox, SkeletonList } from "@/components/States";
+import { EmptyState } from "@/components/EmptyState";
+import { IconSend, IconBack, IconWarning, IconCheck, IconChat } from "@/components/Icons";
 
 // Быстрые ответы — частые фразы в один тап (экономят время, снижают трение).
 const QUICK_REPLIES = [
@@ -35,7 +37,7 @@ export function ChatPage() {
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
-  const { data: messages } = useQuery({
+  const { data: messages, isLoading, isError, refetch } = useQuery({
     queryKey: ["messages", matchId],
     queryFn: () => fetchMessages(matchId),
   });
@@ -145,6 +147,16 @@ export function ChatPage() {
           </button>
         </div>
 
+        {isLoading && <SkeletonList rows={4} />}
+        {isError && <ErrorBox onRetry={() => refetch()} />}
+        {!isLoading && !isError && messages && messages.length === 0 && (
+          <EmptyState
+            icon={<IconChat size={34} />}
+            title="Напишите первым"
+            text="Спросите про адрес, время и что взять с собой — заведение ответит здесь."
+          />
+        )}
+
         {messages?.map((m: Message) => {
           if (m.isSystem) return <div key={m.id} className="bubble system">{m.text}</div>;
           const mine = m.senderId === (myId ?? "me");
@@ -183,8 +195,14 @@ export function ChatPage() {
             </button>
           ))}
         </div>
+        {/* Подтверждение смены — главное действие экрана, поэтому primary.
+            После подтверждения гасим до secondary: это уже статус, а не CTA. */}
         <div style={{ marginBottom: 8 }}>
-          <Button variant="ghost" disabled={iConfirmed} onClick={doConfirm}>
+          <Button
+            variant={iConfirmed ? "secondary" : "primary"}
+            disabled={iConfirmed}
+            onClick={doConfirm}
+          >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <IconCheck size={17} />
               {bothConfirmed

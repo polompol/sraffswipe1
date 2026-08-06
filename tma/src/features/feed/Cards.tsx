@@ -88,8 +88,8 @@ function CardFavButton({ id }: { id: string }) {
       onPointerDown={(e) => e.stopPropagation()}
       onClick={toggle}
       style={{
-        width: 38,
-        height: 38,
+        width: 44,
+        height: 44,
         borderRadius: "50%",
         border: "1px solid rgba(255,255,255,.18)",
         background: "rgba(0,0,0,0.45)",
@@ -137,7 +137,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
       <div className="swipe-shade" />
 
       {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
-      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8 }}>
+      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <span className="glass">
           <IconMoney size={14} /> {rateLabel(v.rate, v.rateType)}
         </span>
@@ -148,7 +148,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDetails(v); }}
             style={{
-              width: 38, height: 38, borderRadius: "50%",
+              width: 44, height: 44, borderRadius: "50%",
               border: "1px solid rgba(255,255,255,.18)", background: "rgba(0,0,0,0.45)",
               color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
             }}
@@ -185,8 +185,8 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           )}
         </div>
 
-        <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
-          <span>{v.companyName}</span>
+        <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{v.companyName}</span>
           {v.employerVerified && <VerifiedDot title="Проверенное заведение" />}
         </div>
 
@@ -195,7 +195,8 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
             <IconCalendar size={15} /> {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
           </div>
           <div>
-            <IconPin size={15} /> {v.address}
+            <IconPin size={15} />
+            <span style={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.address}</span>
           </div>
           {(v.employerShiftsDone || v.employerRating) ? (
             <div>
@@ -206,7 +207,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         </div>
 
         {v.description && (
-          <div style={{ marginTop: 8, opacity: 0.92, fontSize: 15, lineHeight: 1.45 }}>
+          <div style={{ marginTop: 8, opacity: 0.92, fontSize: 15, lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {v.description}
           </div>
         )}
@@ -250,7 +251,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
     <>
       <SwipePhoto src={hasPhoto ? photos[0] : undefined} initial={(s.name || "?").charAt(0)} />
       <div className="swipe-shade" />
-      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8 }}>
+      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <span className="glass">{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
         {s.availableToday && (
           <span className="glass pulse" style={{ background: "rgba(199,162,75,.92)" }}>
@@ -281,7 +282,11 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
             </span>
           ))}
         </div>
-        {s.about && <div style={{ marginTop: 8, opacity: 0.95 }}>{s.about}</div>}
+        {s.about && (
+          <div style={{ marginTop: 8, opacity: 0.95, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {s.about}
+          </div>
+        )}
         <div className="card-meta" style={{ marginTop: 10 }}>
           {!!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>

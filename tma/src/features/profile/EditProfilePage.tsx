@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { showBackButton, haptic } from "@/telegram/sdk";
+import { useSession } from "@/store/session";
 
 const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
 // Навыки для выбора (медкнижка/самозанятость задаются отдельными полями).
@@ -15,6 +16,10 @@ const SKILLS: ExperienceTag[] = ["experienced", "english", "cashRegister"];
 export function EditProfilePage() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  // Форма у ролей разная: заведение правит название и ИНН (это всё, что
+  // принимает сервер), соискатель — свою анкету. Без ветвления владелец кафе
+  // видел «дату рождения» и «должности» и не мог переименовать заведение.
+  const isEmployer = useSession((s) => s.role) === "employer";
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState<string>("");
@@ -34,7 +39,10 @@ export function EditProfilePage() {
   // Предзаполняем форму текущими данными пользователя (один раз при загрузке).
   useEffect(() => {
     if (!me) return;
-    setName(me.name === "Соискатель" ? "" : me.name ?? "");
+    // Имя-заглушка («Соискатель»/«Заведение») показываем как пустое поле,
+    // чтобы человек вписал своё, а не правил подставленное слово.
+    const stub = me.name === "Соискатель" || me.name === "Заведение";
+    setName(stub ? "" : me.name ?? "");
     setBirthDate(me.birthDate ?? "");
     setCity(me.city ?? "");
     setDistrict(me.district ?? "");
@@ -61,18 +69,22 @@ export function EditProfilePage() {
     setSaving(true);
     setError(null);
     try {
-      await updateMe({
-        name,
-        birth_date: birthDate,
-        city,
-        district,
-        roles,
-        self_employed: selfEmployed,
-        inn: selfEmployed ? inn : undefined,
-        about,
-        experience_tags: skills,
-        photo_url: photo || undefined,
-      });
+      await updateMe(
+        isEmployer
+          ? { company_name: name, inn: inn || undefined }
+          : {
+              name,
+              birth_date: birthDate,
+              city,
+              district,
+              roles,
+              self_employed: selfEmployed,
+              inn: selfEmployed ? inn : undefined,
+              about,
+              experience_tags: skills,
+              photo_url: photo || undefined,
+            },
+      );
       qc.invalidateQueries({ queryKey: ["me"] });
       haptic("success");
       nav(-1);
@@ -90,8 +102,39 @@ export function EditProfilePage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 16 }}>Профиль</h1>
+        <h1 className="h1" style={{ marginBottom: 16 }}>
+          {isEmployer ? "Профиль заведения" : "Редактировать профиль"}
+        </h1>
 
+        {isEmployer ? (
+          <>
+            <label className="muted" htmlFor="name">Название заведения</label>
+            <input
+              id="name"
+              className="input"
+              style={{ marginBottom: 12 }}
+              placeholder="например: Кофемания на Тверской"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+
+            <label className="muted" htmlFor="inn">ИНН (необязательно)</label>
+            <input
+              id="inn"
+              className="input"
+              style={{ marginBottom: 12 }}
+              inputMode="numeric"
+              placeholder="Нужен для актов и бейджа «Проверено»"
+              value={inn}
+              onChange={(e) => setInn(e.target.value)}
+            />
+            <p className="muted" style={{ marginTop: 0 }}>
+              Название видят работники в ленте. Если поменять название или ИНН,
+              бейдж «Проверено» слетит — его нужно будет получить заново.
+            </p>
+          </>
+        ) : (
+          <>
         <PhotoUpload label="Фото профиля" value={photo} onChange={setPhoto} />
 
         <label className="muted" htmlFor="name">Имя</label>
@@ -116,7 +159,7 @@ export function EditProfilePage() {
                 cursor: "pointer",
                 background: roles.includes(r) ? "var(--gold)" : "transparent",
                 color: roles.includes(r) ? "#fff" : "var(--text)",
-                borderColor: roles.includes(r) ? "var(--gold)" : "var(--border)",
+                borderColor: roles.includes(r) ? "var(--gold)" : "var(--border-strong)",
               }}
               onClick={() => toggle(r)}
             >
@@ -135,7 +178,7 @@ export function EditProfilePage() {
                 cursor: "pointer",
                 background: skills.includes(s) ? "var(--gold)" : "transparent",
                 color: skills.includes(s) ? "#fff" : "var(--text)",
-                borderColor: skills.includes(s) ? "var(--gold)" : "var(--border)",
+                borderColor: skills.includes(s) ? "var(--gold)" : "var(--border-strong)",
               }}
               onClick={() => toggleSkill(s)}
             >
@@ -170,6 +213,8 @@ export function EditProfilePage() {
             />
           )}
         </div>
+          </>
+        )}
 
         {error && (
           <div className="card" role="alert" style={{ marginBottom: 12, color: "var(--dislike)" }}>

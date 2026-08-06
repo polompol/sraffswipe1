@@ -27,26 +27,45 @@ function Toggle({
         aria-checked={on}
         aria-label={aria}
         onClick={onToggle}
+        // Дорожка визуально 52×30, но высота кнопки 44px — зона тапа.
         style={{
           width: 52,
-          height: 30,
+          height: 44,
+          padding: 0,
           borderRadius: 999,
           border: "none",
+          background: "none",
           cursor: "pointer",
           position: "relative",
-          transition: "background 0.2s",
-          background: on ? "var(--gold)" : "var(--border)",
+          flex: "none",
         }}
       >
         <span
+          aria-hidden
           style={{
             position: "absolute",
-            top: 3,
+            top: 7,
+            left: 0,
+            width: 52,
+            height: 30,
+            borderRadius: 999,
+            transition: "background 0.2s",
+            // Выключенная дорожка — --border-strong: светлая --border на
+            // кремовой карточке почти сливалась, и «выкл» читалось как пустота.
+            background: on ? "var(--gold)" : "var(--border-strong)",
+          }}
+        />
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 10,
             left: on ? 25 : 3,
             width: 24,
             height: 24,
             borderRadius: "50%",
-            background: "#fff",
+            background: "var(--surface)",
+            boxShadow: "0 1px 3px rgba(60,20,25,.35)",
             transition: "left 0.2s",
           }}
         />
@@ -66,7 +85,10 @@ export function SettingsPage() {
   );
 
   return (
-    <div className="page">
+    // .app даёт max-width 520 и центрирование — без него на планшете
+    // тумблеры растягивались во всю ширину (единственная такая страница).
+    <div className="app">
+      <div className="page">
       <h1 className="h1">Настройки</h1>
 
       <Toggle
@@ -114,6 +136,7 @@ export function SettingsPage() {
           else localStorage.setItem("ss_sound", "off");
         }}
       />
+      </div>
     </div>
   );
 }

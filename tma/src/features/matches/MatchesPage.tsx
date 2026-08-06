@@ -151,9 +151,31 @@ export function MatchesPage() {
                 {/* Заведение */}
                 {role === "employer" && (
                   <>
+                    {/* Код заведение диктует работнику вслух — поэтому цифры
+                        крупные и читаемые, а не мелкой серой строкой. */}
                     {m.checkinCode && !m.employerCheckedIn && (
-                      <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
-                        Код-подсказка работнику (по желанию): <b style={{ color: "var(--gold)", letterSpacing: 3 }}>{m.checkinCode}</b>
+                      <div
+                        style={{
+                          marginBottom: 12,
+                          padding: "10px 14px",
+                          border: "1px solid var(--border-strong)",
+                          borderRadius: "var(--radius-sm)",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div className="muted" style={{ fontSize: 13 }}>
+                          Назовите этот код работнику
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "var(--text-2xl)",
+                            fontWeight: 800,
+                            letterSpacing: 6,
+                            color: "var(--gold)",
+                          }}
+                        >
+                          {m.checkinCode}
+                        </div>
                       </div>
                     )}
                     {m.employerCheckedIn ? (
@@ -215,9 +237,12 @@ export function MatchesPage() {
                 )}
 
                 {/* Путь спора — обеим сторонам. */}
+                {/* Раньше здесь стоял класс .tab — это класс нижней навигации
+                    (колонка, min-height 64). Защитная механика должна быть
+                    читаемой кнопкой, а не мелким серым текстом. */}
                 <button
-                  className="tab"
-                  style={{ width: "auto", marginTop: 10, color: "var(--muted)", fontSize: 13 }}
+                  className="btn ghost"
+                  style={{ marginTop: 10, minHeight: 44, fontSize: 14 }}
                   onClick={() => doDispute(m.id)}
                 >
                   Проблема — не получается подтвердить
