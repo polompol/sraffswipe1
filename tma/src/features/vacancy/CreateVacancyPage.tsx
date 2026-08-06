@@ -116,7 +116,7 @@ export function CreateVacancyPage() {
           </p>
         )}
 
-        <label className="muted">Должность</label>
+        <label className="form-label">Должность</label>
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
@@ -144,21 +144,21 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <label className="muted">Дата смены</label>
+        <label className="form-label">Дата смены</label>
         <input className="input" type="date" style={{ marginBottom: 12 }} value={date} onChange={(e) => setDate(e.target.value)} />
 
         <div className="row" style={{ marginBottom: 12 }}>
           <span style={{ flex: 1 }}>
-            <label className="muted">Начало</label>
+            <label className="form-label">Начало</label>
             <input className="input" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
           </span>
           <span style={{ flex: 1 }}>
-            <label className="muted">Конец</label>
+            <label className="form-label">Конец</label>
             <input className="input" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
           </span>
         </div>
 
-        <label className="muted">Ставка</label>
+        <label className="form-label">Ставка</label>
         <div className="row" style={{ marginBottom: 12 }}>
           <input className="input" type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
           <button
@@ -170,7 +170,7 @@ export function CreateVacancyPage() {
           </button>
         </div>
 
-        <label className="muted">Как и когда платите</label>
+        <label className="form-label">Как и когда платите</label>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((p) => (
             <button
@@ -189,7 +189,7 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <label className="muted">Чаевые (платят гости)</label>
+        <label className="form-label">Чаевые (платят гости)</label>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {(Object.keys(TIPS_LABELS) as TipsMode[]).map((t) => (
             <button
@@ -208,7 +208,7 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <label className="muted" htmlFor="city">Город</label>
+        <label className="form-label" htmlFor="city">Город</label>
         <input
           id="city"
           className="input"
@@ -218,7 +218,7 @@ export function CreateVacancyPage() {
           onChange={(e) => setCity(e.target.value)}
         />
 
-        <label className="muted" htmlFor="addr">Адрес</label>
+        <label className="form-label" htmlFor="addr">Адрес</label>
         <input
           id="addr"
           className="input"
@@ -264,7 +264,7 @@ export function CreateVacancyPage() {
           </span>
         </div>
 
-        <label className="muted">Описание</label>
+        <label className="form-label">Описание</label>
         <textarea
           className="input"
           style={{ marginBottom: 16, minHeight: 90 }}

@@ -46,8 +46,8 @@ export function RolePage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginTop: 24 }}>Кто вы?</h1>
-        <p className="muted">Это можно будет поменять позже</p>
+        <h1 className="h1" style={{ marginTop: 24 }}>С чего начнём?</h1>
+        <p className="muted">Это можно поменять позже</p>
 
         <label
           className="card row"

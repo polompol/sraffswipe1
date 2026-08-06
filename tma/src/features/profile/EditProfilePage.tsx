@@ -108,7 +108,7 @@ export function EditProfilePage() {
 
         {isEmployer ? (
           <>
-            <label className="muted" htmlFor="name">Название заведения</label>
+            <label className="form-label" htmlFor="name">Название заведения</label>
             <input
               id="name"
               className="input"
@@ -118,7 +118,7 @@ export function EditProfilePage() {
               onChange={(e) => setName(e.target.value)}
             />
 
-            <label className="muted" htmlFor="inn">ИНН (необязательно)</label>
+            <label className="form-label" htmlFor="inn">ИНН (необязательно)</label>
             <input
               id="inn"
               className="input"
@@ -137,19 +137,19 @@ export function EditProfilePage() {
           <>
         <PhotoUpload label="Фото профиля" value={photo} onChange={setPhoto} />
 
-        <label className="muted" htmlFor="name">Имя</label>
+        <label className="form-label" htmlFor="name">Имя</label>
         <input id="name" className="input" style={{ marginBottom: 12 }} value={name} onChange={(e) => setName(e.target.value)} />
 
-        <label className="muted" htmlFor="bdate">Дата рождения (только 18+)</label>
+        <label className="form-label" htmlFor="bdate">Дата рождения (только 18+)</label>
         <input id="bdate" className="input" type="date" style={{ marginBottom: 12 }} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
 
-        <label className="muted" htmlFor="city">Город</label>
+        <label className="form-label" htmlFor="city">Город</label>
         <input id="city" className="input" style={{ marginBottom: 12 }} value={city} onChange={(e) => setCity(e.target.value)} />
 
-        <label className="muted" htmlFor="district">Район (чтобы звали на смены рядом)</label>
+        <label className="form-label" htmlFor="district">Район (чтобы звали на смены рядом)</label>
         <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
 
-        <label className="muted">Должности</label>
+        <label className="form-label">Должности</label>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {ROLES.map((r) => (
             <button
@@ -168,7 +168,7 @@ export function EditProfilePage() {
           ))}
         </div>
 
-        <label className="muted">Опыт и навыки</label>
+        <label className="form-label">Опыт и навыки</label>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {SKILLS.map((s) => (
             <button
@@ -187,7 +187,7 @@ export function EditProfilePage() {
           ))}
         </div>
 
-        <label className="muted" htmlFor="about">О себе и пожелания по выходу</label>
+        <label className="form-label" htmlFor="about">О себе и пожелания по выходу</label>
         <textarea
           id="about"
           className="input"
@@ -197,6 +197,9 @@ export function EditProfilePage() {
           value={about}
           onChange={(e) => setAbout(e.target.value)}
         />
+        <div className="muted" style={{ fontSize: 13, textAlign: "right", marginBottom: 12 }}>
+          {about.length} / 1000
+        </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
           <label className="row" style={{ cursor: "pointer" }}>

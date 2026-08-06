@@ -117,7 +117,7 @@ export function Onboarding() {
               style={{
                 width: 110,
                 height: 110,
-                borderRadius: 30,
+                borderRadius: "var(--radius-lg)",
                 background: "var(--grad-brand)",
                 color: "#fff",
                 display: "flex",

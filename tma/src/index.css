@@ -276,6 +276,16 @@ button.tag:disabled {
   background: rgba(210, 75, 96, 0.14);
 }
 
+/* Подпись поля формы. Раньше подписи были просто .muted и липли к полю:
+   не было ни блочного поведения, ни отступа. */
+.form-label {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
 .input {
   width: 100%;
   min-height: 50px;
@@ -501,9 +511,16 @@ button.tag:disabled {
   overflow: hidden;
 }
 /* «Деньги рядом сейчас» — money-магнит наверху ленты */
+/* Это настоящая кнопка (ведёт в фильтры) — сбрасываем стили кнопки, чтобы
+   выглядела как блок, но оставалась доступной с клавиатуры. */
 .money-near {
   position: relative;
   overflow: hidden;
+  display: block;
+  width: 100%;
+  border: none;
+  font-family: inherit;
+  text-align: left;
   border-radius: var(--radius);
   padding: 16px 18px;
   margin-bottom: 12px;

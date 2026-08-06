@@ -56,7 +56,7 @@ export function CandidateFilterSheet({
         <div className="sheet-body">
           <h2 className="h2" style={{ marginTop: 0 }}>Кто нужен</h2>
 
-          <label className="muted">Должность</label>
+          <label className="form-label">Должность</label>
           <div style={{ margin: "8px 0 16px" }}>
             {ROLE_FAMILY_ORDER.map((fam) => (
               <div key={fam} style={{ marginBottom: 10 }}>
@@ -77,7 +77,7 @@ export function CandidateFilterSheet({
             ))}
           </div>
 
-          <label className="muted" htmlFor="district">Район</label>
+          <label className="form-label" htmlFor="district">Район</label>
           <input
             id="district"
             className="input"
@@ -87,7 +87,7 @@ export function CandidateFilterSheet({
             onChange={(e) => set({ district: e.target.value || undefined })}
           />
 
-          <label className="muted">Показать</label>
+          <label className="form-label">Показать</label>
           <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 18px" }}>
             <Chip
               on={!!f.available_today}

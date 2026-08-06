@@ -286,16 +286,19 @@ export function FeedPage() {
       )}
 
       {isSeeker && !PILOT_MODE && moneyNear > 0 && !empty && (
-        <div
+        <button
           className="money-near"
-          onClick={() => haptic("light")}
+          onClick={() => {
+            haptic("light");
+            setFilterOpen(true);
+          }}
         >
           <span className="money-near-cap">Рядом сейчас смен на</span>
           <span className="money-near-sum">
             <CountUp value={moneyNear} /> ₽
           </span>
           <span className="money-near-sub">забери свою — листай ленту</span>
-        </div>
+        </button>
       )}
 
       {isSeeker && (
