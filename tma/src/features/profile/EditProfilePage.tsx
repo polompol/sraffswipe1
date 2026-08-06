@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExperienceTag, StaffRole } from "@/types/domain";
@@ -36,9 +36,12 @@ export function EditProfilePage() {
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
-  // Предзаполняем форму текущими данными пользователя (один раз при загрузке).
+  // Предзаполняем форму РОВНО ОДИН раз. Иначе повторная загрузка профиля
+  // (рефетч при возврате на вкладку) затирала бы уже введённый текст.
+  const prefilled = useRef(false);
   useEffect(() => {
-    if (!me) return;
+    if (!me || prefilled.current) return;
+    prefilled.current = true;
     // Имя-заглушка («Соискатель»/«Заведение») показываем как пустое поле,
     // чтобы человек вписал своё, а не правил подставленное слово.
     const stub = me.name === "Соискатель" || me.name === "Заведение";
