@@ -65,31 +65,48 @@ def send_digest(db: Session, limit: int = 3) -> int:
     return sent
 
 
-def build_reminders(db: Session) -> list[tuple[str, str]]:
-    """Напоминания о подтверждённых сменах на сегодня: (user_id, текст)."""
+def build_reminders(db: Session) -> list[tuple[str, str, str]]:
+    """Напоминания о сменах на сегодня: (match_id, user_id, текст).
+    Берём только смены, по которым работник ЕЩЁ НЕ отметился, и по которым
+    сегодня ещё не напоминали."""
     today = _today()
     rows = (
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
-            Match.status.in_(("confirmed", "completed")),
+            Match.status == "confirmed",
+            Match.seeker_checked_in.is_(False),
+            Match.reminded_on != today,
             Vacancy.date == today,
         )
         .all()
     )
-    result: list[tuple[str, str]] = []
+    result: list[tuple[str, str, str]] = []
     for m, v in rows:
+        where = v.address or v.city or ""
         text = (
-            f"Сегодня смена в {_fmt_time(v.start_time)}. "
-            f"Не забудьте — вас ждут! ({v.role}, {v.address or v.city})"
+            f"Сегодня смена в {_fmt_time(v.start_time)}"
+            + (f", {where}" if where else "")
+            + ".\n\nКогда придёте — отметьтесь: кнопка ниже, «Я на смене». "
+            "Гео определится само, либо введите код, который назовёт "
+            "заведение. Без отметки смена не закроется."
         )
-        result.append((m.user_id, text))
+        result.append((m.id, m.user_id, text))
     return result
 
 
 def send_reminders(db: Session) -> int:
-    """Разослать напоминания о смене на сегодня. Возвращает число отправленных."""
+    """Разослать напоминания о сменах на сегодня. Возвращает число отправленных.
+
+    Повторный запуск в тот же день ничего не дублирует: у мэтча проставляется
+    дата напоминания. Поэтому вызывать можно и вручную из админки, и по крону.
+    """
+    today = _today()
     reminders = build_reminders(db)
-    for user_id, text in reminders:
-        notify_owner(db, user_id, text)
+    for match_id, user_id, text in reminders:
+        notify_owner(db, user_id, text, open_app="Я на смене — отметиться")
+        m = db.get(Match, match_id)
+        if m is not None:
+            m.reminded_on = today
+    db.commit()
     return len(reminders)

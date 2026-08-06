@@ -548,6 +548,17 @@ export function adminSearchUsers(q: string) {
     ql ? all.filter((u) => u.name.toLowerCase().includes(ql)) : all,
   );
 }
+export function fetchRepeatPairs() {
+  return Promise.resolve([
+    { employer: "Кофейня «Дрова»", worker: "Мария", shifts: 4 },
+    { employer: "Бар «Полночь»", worker: "Алексей", shifts: 2 },
+  ]);
+}
+
+export function sendShiftReminders(): Promise<number> {
+  return Promise.resolve(3);
+}
+
 export function adminGrant(
   _ownerId: string,
   _boost: number,

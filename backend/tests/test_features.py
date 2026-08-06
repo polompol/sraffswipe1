@@ -878,7 +878,10 @@ def test_digest_and_reminders_logic(client):
         client.post(f"/matches/{mid}/confirm", headers=_hdr(emp_token))
 
         reminders = digest.build_reminders(db)
-        assert any(uid == sid for uid, _ in reminders)
+        assert any(uid == sid for _, uid, _ in reminders)
         assert digest.send_reminders(db) >= 1
+        # Повторный запуск в тот же день НЕ дублирует напоминание.
+        assert digest.send_reminders(db) == 0
+        assert digest.build_reminders(db) == []
     finally:
         db.close()

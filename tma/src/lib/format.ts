@@ -47,3 +47,13 @@ export function estimatedPay(v: Vacancy): number {
   if (mins <= 0) mins += 1440;
   return Math.round((v.rate * mins) / 60);
 }
+
+/** Русское склонение по числу: 1 смена, 2 смены, 5 смен. */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b > 1 && b < 5) return few;
+  if (b === 1) return one;
+  return many;
+}

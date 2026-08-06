@@ -470,6 +470,72 @@ def grant_entitlement(
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----
 
 
+@router.post("/reminders/send")
+def send_shift_reminders(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Разослать напоминания о сегодняшних сменах — с кнопкой «Я на смене».
+
+    Раньше рассылка была написана, но её никто не вызывал: напоминания не
+    уходили вообще. Повторный запуск в тот же день дублей не создаёт, поэтому
+    кнопку можно жать спокойно, а позже повесить на крон.
+    """
+    from ..digest import send_reminders
+
+    return {"sent": send_reminders(db)}
+
+
+class RepeatPairOut(BaseModel):
+    """Пара «заведение ↔ работник», закрывшая больше одной смены."""
+
+    employer: str
+    worker: str
+    shifts: int
+
+
+@router.get("/repeat-pairs", response_model=list[RepeatPairOut])
+def repeat_pairs(
+    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
+):
+    """Кто вернулся за второй сменой. Главный вопрос экономики: если пары
+    закрывают одну смену и исчезают — люди договариваются мимо сервиса, и
+    дело не в проценте комиссии, а в том, что дальше сервис не нужен."""
+    rows = (
+        db.query(
+            Match.employer_id,
+            Match.user_id,
+            func.count(Match.id).label("shifts"),
+        )
+        .filter(Match.status == "completed")
+        .group_by(Match.employer_id, Match.user_id)
+        .having(func.count(Match.id) > 1)
+        .order_by(func.count(Match.id).desc())
+        .limit(50)
+        .all()
+    )
+    emp_names = {
+        e.id: e.company_name
+        for e in db.query(Employer).filter(
+            Employer.id.in_([r[0] for r in rows] or ["__none__"])
+        )
+    }
+    usr_names = {
+        u.id: u.name
+        for u in db.query(User).filter(
+            User.id.in_([r[1] for r in rows] or ["__none__"])
+        )
+    }
+    return [
+        RepeatPairOut(
+            employer=emp_names.get(eid, "—"),
+            worker=usr_names.get(uid, "—"),
+            shifts=int(n),
+        )
+        for eid, uid, n in rows
+    ]
+
+
 class RelinkIn(BaseModel):
     owner_id: str
     new_tg_id: int

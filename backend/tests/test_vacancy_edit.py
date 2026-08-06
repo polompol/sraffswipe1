@@ -127,3 +127,23 @@ def test_past_shift_disappears_from_feed(client):
 
     # В своих вакансиях заведение прошедшую смену по-прежнему видит (история).
     assert past["id"] in {x["id"] for x in _mine(client, h)}
+
+
+def test_admin_can_send_reminders_without_duplicates(client):
+    """Рассылка напоминаний доступна оператору и не дублирует сообщения."""
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = _hdr(admin.json()["access_token"])
+    first = client.post("/admin/reminders/send", headers=ah)
+    assert first.status_code == 200
+    assert "sent" in first.json()
+    # Повторный запуск не падает и не шлёт заново.
+    assert client.post("/admin/reminders/send", headers=ah).json()["sent"] == 0
+
+
+def test_repeat_pairs_endpoint(client):
+    """Счётчик повторных пар доступен оператору (пустой, пока смен нет)."""
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = _hdr(admin.json()["access_token"])
+    r = client.get("/admin/repeat-pairs", headers=ah)
+    assert r.status_code == 200
+    assert r.json() == []

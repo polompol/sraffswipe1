@@ -470,6 +470,26 @@ export async function adminSearchUsers(q: string): Promise<AdminUser[]> {
 }
 
 /** Бесплатно выдать буст/подписку/супер-лайки (комп, поддержка). */
+export interface RepeatPair {
+  employer: string;
+  worker: string;
+  shifts: number;
+}
+
+/** Пары, закрывшие больше одной смены: возвращаются ли люди к нам. */
+export async function fetchRepeatPairs(): Promise<RepeatPair[]> {
+  if (!USE_BACKEND) return mock.fetchRepeatPairs();
+  const { data } = await api.get<RepeatPair[]>("/admin/repeat-pairs");
+  return data;
+}
+
+/** Разослать напоминания о сегодняшних сменах (с кнопкой «Я на смене»). */
+export async function sendShiftReminders(): Promise<number> {
+  if (!USE_BACKEND) return mock.sendShiftReminders();
+  const { data } = await api.post<{ sent: number }>("/admin/reminders/send", {});
+  return data.sent;
+}
+
 export async function adminGrant(
   ownerId: string,
   boost: number,

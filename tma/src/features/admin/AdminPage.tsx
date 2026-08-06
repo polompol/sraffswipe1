@@ -8,6 +8,8 @@ import {
   resolveMatch,
   adminCreditWallet,
   adminGrant,
+  fetchRepeatPairs,
+  sendShiftReminders,
   adminRelink,
   adminSearchUsers,
   blockUser,
@@ -24,6 +26,8 @@ import {
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { Loading } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
+import { plural } from "@/lib/format";
 import { IconShield, IconMoney, IconCheck, IconWarning } from "@/components/Icons";
 
 const REASON_LABEL: Record<string, string> = {
@@ -82,6 +86,25 @@ export function AdminPage() {
     });
   };
   const blocked = useQuery({ queryKey: ["admin-blocked"], queryFn: fetchBlocked });
+  const pairs = useQuery({ queryKey: ["admin-pairs"], queryFn: fetchRepeatPairs });
+  const [remindBusy, setRemindBusy] = useState(false);
+
+  async function remind() {
+    setRemindBusy(true);
+    try {
+      const n = await sendShiftReminders();
+      haptic("success");
+      toast(
+        n > 0 ? `Напоминания отправлены: ${n}` : "Сегодня напоминать некому",
+        "success",
+      );
+    } catch {
+      haptic("error");
+      toast("Не удалось разослать", "error");
+    } finally {
+      setRemindBusy(false);
+    }
+  }
   const users = useQuery({
     queryKey: ["admin-users", userQ],
     queryFn: () => adminSearchUsers(userQ),
@@ -539,6 +562,46 @@ export function AdminPage() {
           </div>
         ))}
       </div>
+
+      {/* Ежедневное действие оператора: напомнить о сменах на сегодня.
+          В сообщении — кнопка «Я на смене», отметка в один тап из бота. */}
+      <h2 className="h2" style={{ margin: "18px 0 8px" }}>Смены сегодня</h2>
+      <div className="card" style={{ marginBottom: 18 }}>
+        <p className="muted" style={{ margin: "0 0 12px" }}>
+          Разошлём напоминание всем, у кого сегодня подтверждённая смена и кто
+          ещё не отметился. В сообщении — кнопка «Я на смене».
+          Повторное нажатие дублей не создаёт.
+        </p>
+        <Button loading={remindBusy} onClick={remind}>
+          Напомнить о сменах на сегодня
+        </Button>
+      </div>
+
+      <h2 className="h2" style={{ margin: "18px 0 8px" }}>Вернулись за второй сменой</h2>
+      <p className="muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+        Главная цифра экономики: если пары закрывают одну смену и исчезают —
+        договариваются мимо сервиса.
+      </p>
+      {pairs.data && pairs.data.length === 0 && (
+        <div className="card muted" style={{ textAlign: "center", marginBottom: 18 }}>
+          Повторных пар пока нет
+        </div>
+      )}
+      {pairs.data && pairs.data.length > 0 && (
+        <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
+          {pairs.data.map((p) => (
+            <div key={`${p.employer}-${p.worker}`} className="card row">
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <b>{p.employer}</b>
+                <div className="muted" style={{ fontSize: 13 }}>{p.worker}</div>
+              </span>
+              <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
+                {p.shifts} {plural(p.shifts, "смена", "смены", "смен")}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {blocked.data && blocked.data.length > 0 && (
         <>
