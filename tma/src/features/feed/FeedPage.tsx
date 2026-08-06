@@ -261,19 +261,53 @@ export function FeedPage() {
         </button>
       </div>
 
-      <button
-        className="feed-loc"
-        onClick={() => setFilterOpen(true)}
-        aria-label={isSeeker ? "Сменить город и фильтры" : "Фильтры кандидатов"}
-      >
-        {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
-        {isSeeker && filters.city ? ` · ${filters.city}` : ""}
-        {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
-        {typeof data?.length === "number" ? ` · ${data.length}` : ""}
-        <span style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
-          <IconChevronRight size={16} />
-        </span>
-      </button>
+      {/* Один ряд вместо трёх: город, «Сегодня» и сохранённые поиски раньше
+          шли отдельными строками и съедали ~54px над карточкой — а карточка
+          и есть продукт. */}
+      <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        <button
+          className="feed-loc"
+          onClick={() => setFilterOpen(true)}
+          aria-label={isSeeker ? "Сменить город и фильтры" : "Фильтры кандидатов"}
+        >
+          {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
+          {isSeeker && filters.city ? ` · ${filters.city}` : ""}
+          {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
+          {typeof data?.length === "number" ? ` · ${data.length}` : ""}
+          <span style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
+            <IconChevronRight size={16} />
+          </span>
+        </button>
+
+        {isSeeker && <span className="spacer" />}
+
+        {isSeeker && (
+          <button
+            className="tag"
+            aria-pressed={todayOnly}
+            style={{
+              cursor: "pointer",
+              borderColor: todayOnly ? "var(--gold)" : "var(--border-strong)",
+              background: todayOnly ? "var(--gold)" : "transparent",
+              color: todayOnly ? "#fff" : "var(--text)",
+            }}
+            onClick={toggleToday}
+          >
+            <IconFire size={14} /> Сегодня
+          </button>
+        )}
+
+        {isSeeker && searches?.map((s) => (
+          <button
+            key={s.id}
+            className="tag"
+            style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+            onClick={() => applyFilters(s.filters)}
+          >
+            <IconBell size={13} /> {s.title}
+          </button>
+        ))}
+      </div>
 
       {employerNoVacancy && (
         <div
@@ -306,39 +340,6 @@ export function FeedPage() {
           </span>
           <span className="money-near-sub">настроить, что показывать</span>
         </button>
-      )}
-
-      {isSeeker && (
-        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-          <button
-            className="tag"
-            aria-pressed={todayOnly}
-            style={{
-              cursor: "pointer",
-              borderColor: todayOnly ? "var(--gold)" : "var(--border-strong)",
-              background: todayOnly ? "var(--gold)" : "transparent",
-              color: todayOnly ? "#fff" : "var(--text)",
-            }}
-            onClick={toggleToday}
-          >
-            <IconFire size={14} /> Сегодня
-          </button>
-        </div>
-      )}
-
-      {isSeeker && searches && searches.length > 0 && (
-        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-          {searches.map((s) => (
-            <button
-              key={s.id}
-              className="tag"
-              style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
-              onClick={() => applyFilters(s.filters)}
-            >
-              <IconBell size={13} /> {s.title}
-            </button>
-          ))}
-        </div>
       )}
 
       {isLoading && <SkeletonCard />}

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { applyTheme, currentTheme } from "@/lib/theme";
 import { haptic, showBackButton } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
+import { IconHelp } from "@/components/Icons";
 
 function Toggle({
   on,
@@ -136,6 +138,30 @@ export function SettingsPage() {
           else localStorage.setItem("ss_sound", "off");
         }}
       />
+
+      {/* Экран заканчивался тремя переключателями и пустотой. Версия здесь
+          не для красоты: её называют в поддержке, чтобы понять, какая
+          сборка у человека на телефоне. */}
+      <div className="card" style={{ marginTop: 8 }}>
+        <div className="row">
+          <span className="muted">Версия приложения</span>
+          <span className="spacer" />
+          <b>{__APP_VERSION__}</b>
+        </div>
+        <p className="muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
+          Если что-то работает не так — напишите в поддержку и назовите эту
+          версию, так проблему найдут быстрее.
+        </p>
+        <Button
+          variant="ghost"
+          style={{ marginTop: 12 }}
+          onClick={() => nav("/support")}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <IconHelp size={18} /> Помощь и поддержка
+          </span>
+        </Button>
+      </div>
       </div>
     </div>
   );
