@@ -2,14 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExperienceTag, StaffRole } from "@/types/domain";
-import { EXPERIENCE_TAG_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
+import {
+  EXPERIENCE_TAG_LABELS,
+  ROLE_FAMILIES,
+  ROLE_FAMILY_LABELS,
+  ROLE_FAMILY_ORDER,
+  STAFF_ROLE_LABELS,
+} from "@/types/domain";
 import { Button } from "@/components/Button";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 
-const ROLES = Object.keys(STAFF_ROLE_LABELS) as StaffRole[];
 // Навыки для выбора (медкнижка/самозанятость задаются отдельными полями).
 const SKILLS: ExperienceTag[] = ["experienced", "english", "cashRegister"];
 
@@ -152,22 +157,34 @@ export function EditProfilePage() {
         <label className="form-label" htmlFor="district">Район (чтобы звали на смены рядом)</label>
         <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
 
+        {/* Группировка «Зал/Бар/Кухня/Хозяйство» — как при создании смены.
+            Раньше здесь была плоская простыня из 12 чипов, и один и тот же
+            выбор в двух местах приложения выглядел по-разному. */}
         <div className="form-label">Должности</div>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-          {ROLES.map((r) => (
-            <button
-              key={r}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: roles.includes(r) ? "var(--gold)" : "transparent",
-                color: roles.includes(r) ? "#fff" : "var(--text)",
-                borderColor: roles.includes(r) ? "var(--gold)" : "var(--border-strong)",
-              }}
-              onClick={() => toggle(r)}
-            >
-              {STAFF_ROLE_LABELS[r]}
-            </button>
+        <div style={{ margin: "8px 0 16px" }}>
+          {ROLE_FAMILY_ORDER.map((fam) => (
+            <div key={fam} style={{ marginBottom: 10 }}>
+              <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
+                {ROLE_FAMILY_LABELS[fam]}
+              </div>
+              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+                {ROLE_FAMILIES[fam].map((r) => (
+                  <button
+                    key={r}
+                    className="tag"
+                    style={{
+                      cursor: "pointer",
+                      background: roles.includes(r) ? "var(--gold)" : "transparent",
+                      color: roles.includes(r) ? "#fff" : "var(--text)",
+                      borderColor: roles.includes(r) ? "var(--gold)" : "var(--border-strong)",
+                    }}
+                    onClick={() => toggle(r)}
+                  >
+                    {STAFF_ROLE_LABELS[r]}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 

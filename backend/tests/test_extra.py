@@ -1,5 +1,19 @@
 """Тесты аналитики, вебхука ЮKassa и DaData-degradation."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 INTERNAL = {"X-Internal-Token": "test-internal-secret"}
 
 
@@ -208,7 +222,7 @@ def test_admin_block_user_and_vacancy(client):
     eid = emp.json()["user_id"]
     eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     vac = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
     }).json()
     # Снять вакансию → исчезает из ленты.
@@ -238,7 +252,7 @@ def test_blocked_user_denied_with_existing_token(client):
     # После бана тот же токен получает 403 на любом защищённом эндпоинте.
     assert client.get("/me", headers=eh).status_code == 403
     assert client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
     }).status_code == 403
 
@@ -266,7 +280,7 @@ def test_admin_warn_increments_and_closes(client):
     eid = emp.json()["user_id"]
     eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     vac = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
     }).json()
     client.post("/reports", headers=ah, json={
@@ -348,7 +362,7 @@ def test_autoflag_scam_vacancy(client):
     emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
         "description": "Срочно! Внеси предоплату за форму и выходи на смену.",
     })

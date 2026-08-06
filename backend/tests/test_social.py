@@ -1,5 +1,19 @@
 """Тесты рефералов, отзывов и /me."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 def _auth(client, role="seeker", start_param=""):
     r = client.post(
@@ -81,7 +95,7 @@ def test_review_updates_rating(client):
     # Полный цикл до подтверждённой смены, затем отзыв соискателя о работодателе.
     emp_token, emp_id = _auth(client, "employer")
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()

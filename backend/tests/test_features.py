@@ -1,5 +1,19 @@
 """Тесты новых фич: прозрачность оплаты, доверие заведения, доход, доступность."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 def _auth(client, role="seeker"):
     r = client.post("/auth/telegram", json={"init_data": "", "role": role})
@@ -12,7 +26,7 @@ def _hdr(token):
 
 def _make_vacancy(client, emp_token, pay_method="cash"):
     return client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "rate_type": "perHour",
         "pay_method": pay_method, "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
@@ -31,7 +45,7 @@ def test_pay_method_roundtrips(client):
 def test_pay_method_defaults_to_cash(client):
     emp_token, _ = _auth(client, "employer")
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "waiter", "date": "2026-06-21", "start_time": 600,
+        "role": "waiter", "date": SOON_1, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
@@ -42,14 +56,14 @@ def test_pay_method_defaults_to_cash(client):
 def test_tips_roundtrips(client):
     emp_token, _ = _auth(client, "employer")
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "waiter", "date": "2026-06-22", "start_time": 600,
+        "role": "waiter", "date": SOON_2, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "tips": "shared", "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
     assert vac["tips"] == "shared"
     # вторая смена — без чаевых
     client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "cook", "date": "2026-06-22", "start_time": 600,
+        "role": "cook", "date": SOON_2, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест2",
     })
@@ -445,7 +459,7 @@ def test_vacancy_rejects_zero_duration_shift(client):
     # Одинаковое время начала и конца почасовой смены → 422 (иначе считалось
     # бы как 24 часа, завышая оплату и комиссию).
     r = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 600, "rate": 350, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     })
@@ -583,7 +597,7 @@ def test_overdue_commission_blocks_new_vacancies(client):
                       headers=_hdr(emp_token)).json()["overdue"] is True
     # Просроченный долг → публикация новой вакансии блокируется (402).
     r = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "cook", "date": "2026-06-25", "start_time": 600,
+        "role": "cook", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     })
@@ -591,7 +605,7 @@ def test_overdue_commission_blocks_new_vacancies(client):
     # Оператор отметил оплату → публикация снова доступна.
     client.post(f"/admin/commissions/{emp_id}/settle", headers=_hdr(emp_token))
     r2 = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "cook", "date": "2026-06-25", "start_time": 600,
+        "role": "cook", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     })
@@ -694,12 +708,12 @@ def test_candidate_filters_role_district_available(client):
 def test_feed_radius_filters_by_distance(client):
     emp_token, _ = _auth(client, "employer")
     near = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "lat": 55.75, "lng": 37.61,
         "address": "Рядом",
     }).json()
     far = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "lat": 56.30, "lng": 38.60,
         "address": "Далеко",
     }).json()
@@ -812,7 +826,7 @@ def test_my_workers_and_invite_again(client):
 def test_urgent_ping(client):
     emp_token, _ = _auth(client, "employer")
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "waiter", "date": "2026-06-25", "start_time": 600,
+        "role": "waiter", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour", "city": "Москва",
         "lat": 55.75, "lng": 37.61, "address": "Тверская, 1",
     }).json()

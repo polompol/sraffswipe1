@@ -156,6 +156,11 @@ def list_vacancies(
         query = query.filter(Vacancy.require_med_book.is_(False))
     if no_experience:
         query = query.filter(Vacancy.require_experience.is_(False))
+    # Прошедшие смены не показываем НИКОГДА: раньше отсечка работала только
+    # если человек сам выставил фильтр по датам, и вчерашние смены висели в
+    # ленте вечно — на них откликались, а они давно прошли.
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    query = query.filter(Vacancy.date >= today)
     if date_from:
         query = query.filter(Vacancy.date >= date_from)
     if date_to:
@@ -307,6 +312,77 @@ def create_vacancy(
 
     auto_flag(db, "vacancy", v.id, body.description, body.role)
     return _to_out(v, emp, None)
+
+
+def _own_vacancy_or_404(db: Session, vacancy_id: str, principal: dict) -> Vacancy:
+    """Своя вакансия работодателя. Чужую не отдаём и не даём трогать."""
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    v = db.get(Vacancy, vacancy_id)
+    if v is None or v.employer_id != principal["id"]:
+        raise HTTPException(status_code=404, detail="Смена не найдена")
+    return v
+
+
+def _blocked_by_matches(db: Session, vacancy_id: str) -> bool:
+    """Есть ли отклики. Вакансия с мэтчем — это уже договорённость с
+    конкретным человеком: по ней считается оплата и комиссия. Менять или
+    удалять её задним числом нельзя — иначе можно снизить ставку после
+    того, как работник согласился."""
+    return db.query(Match.id).filter(Match.vacancy_id == vacancy_id).first() is not None
+
+
+@router.put("/{vacancy_id}", response_model=VacancyOut)
+def update_vacancy(
+    vacancy_id: str,
+    body: VacancyIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Исправить свою смену (опечатка в ставке, времени, адресе).
+    Доступно, пока по ней нет откликов."""
+    v = _own_vacancy_or_404(db, vacancy_id, principal)
+    if _blocked_by_matches(db, vacancy_id):
+        raise HTTPException(
+            status_code=409,
+            detail="По смене уже есть отклик — условия менять нельзя. "
+                   "Договоритесь в чате или снимите смену после её закрытия.",
+        )
+    for field, value in body.model_dump().items():
+        setattr(v, field, value)
+    db.commit()
+    db.refresh(v)
+
+    from ..moderation import auto_flag
+
+    auto_flag(db, "vacancy", v.id, body.description, body.role)
+    emp = db.get(Employer, v.employer_id)
+    return _to_out(v, emp, None)
+
+
+@router.delete("/{vacancy_id}", status_code=204)
+def delete_vacancy(
+    vacancy_id: str,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Снять свою смену с публикации. Доступно, пока нет откликов —
+    иначе человек, который уже договорился, потерял бы смену молча."""
+    v = _own_vacancy_or_404(db, vacancy_id, principal)
+    if _blocked_by_matches(db, vacancy_id):
+        raise HTTPException(
+            status_code=409,
+            detail="По смене уже есть отклик — снять нельзя. "
+                   "Напишите человеку в чате, если планы поменялись.",
+        )
+    # Свайпы по снятой смене больше не нужны: без них цель «висит» в истории
+    # и мешает, если заведение позже создаст похожую.
+    db.query(Swipe).filter(
+        Swipe.target_id == vacancy_id, Swipe.target_type == "vacancy"
+    ).delete(synchronize_session=False)
+    db.delete(v)
+    db.commit()
+    return None
 
 
 @router.post("/{vacancy_id}/boost")

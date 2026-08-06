@@ -315,6 +315,22 @@ export async function createVacancy(input: VacancyInput): Promise<Vacancy> {
   return data;
 }
 
+/** Исправить свою смену. 409 — по ней уже есть отклик, условия менять нельзя. */
+export async function updateVacancy(
+  id: string,
+  input: VacancyInput,
+): Promise<Vacancy> {
+  if (!USE_BACKEND) return mock.updateVacancy(id, input);
+  const { data } = await api.put<Vacancy>(`/vacancies/${id}`, input);
+  return data;
+}
+
+/** Снять свою смену с публикации. 409 — по ней уже есть отклик. */
+export async function deleteVacancy(id: string): Promise<void> {
+  if (!USE_BACKEND) return mock.deleteVacancy(id);
+  await api.delete(`/vacancies/${id}`);
+}
+
 /** Собственные вакансии работодателя (любой статус). */
 export async function fetchMyVacancies(): Promise<Vacancy[]> {
   if (!USE_BACKEND) return mock.fetchMyVacancies();

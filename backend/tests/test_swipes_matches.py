@@ -1,5 +1,19 @@
 """Тесты ленты кандидатов, расхода супер-лайков и доступа к подтверждению."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 def _auth(client, role="seeker"):
     r = client.post("/auth/telegram", json={"init_data": "", "role": role})
@@ -24,7 +38,7 @@ def _superlike_balance(client, token):
 
 def _vacancy(client, headers):
     return client.post("/vacancies", headers=headers, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
@@ -39,11 +53,11 @@ def test_vacancy_filters(client):
                 json={"owner_id": owner, "sku": "sub_pro_month",
                       "provider": "yookassa", "charge_id": "f1"})
     cheap = client.post("/vacancies", headers=eh, json={
-        "role": "dishwasher", "date": "2026-06-20", "start_time": 600,
+        "role": "dishwasher", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 250, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "A"}).json()
     pricey = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-25", "start_time": 600,
+        "role": "barista", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 500, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "B"}).json()
 
@@ -53,7 +67,7 @@ def test_vacancy_filters(client):
     by_rate = client.get("/vacancies?min_rate=400").json()
     assert cheap["id"] not in {v["id"] for v in by_rate}
 
-    by_date = client.get("/vacancies?date_from=2026-06-23").json()
+    by_date = client.get(f"/vacancies?date_from={_d(6)}").json()
     assert {v["id"] for v in by_date} == {pricey["id"]}
 
     # Сортировка по ставке (по убыванию) — дорогая выше.
@@ -192,10 +206,10 @@ def test_feed_filters_by_city(client):
                 json={"owner_id": owner, "sku": "sub_pro_month",
                       "provider": "yookassa", "charge_id": "city1"})
     msk = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва", "address": "A"}).json()
     kzn = client.post("/vacancies", headers=eh, json={
-        "role": "waiter", "date": "2026-06-20", "start_time": 600,
+        "role": "waiter", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Казань", "address": "B"}).json()
 
     # Регистронезависимый фильтр по городу (кириллица).
@@ -215,7 +229,7 @@ def test_city_only_vacancy_visible_with_geo_search(client):
                 json={"owner_id": owner, "sku": "sub_pro_month",
                       "provider": "yookassa", "charge_id": "geo1"})
     v = client.post("/vacancies", headers=_hdr(e_token), json={
-        "role": "florist", "date": "2026-06-20", "start_time": 600,
+        "role": "florist", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 400, "city": "Казань", "address": "Без точки",
     }).json()  # lat/lng = 0,0 по умолчанию
     feed = client.get("/vacancies?lat=55.75&lng=37.61&radius_km=10&city=Казань").json()

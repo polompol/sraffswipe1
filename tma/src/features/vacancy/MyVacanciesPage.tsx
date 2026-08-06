@@ -1,11 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { boostVacancy, fetchEntitlements, fetchMyVacancies, urgentPing } from "@/api/endpoints";
+import {
+  boostVacancy,
+  deleteVacancy,
+  fetchEntitlements,
+  fetchMyVacancies,
+  urgentPing,
+} from "@/api/endpoints";
 import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
-import { IconFire, IconCalendar } from "@/components/Icons";
+import { IconFire, IconCalendar, IconEdit, IconWarning } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
 
@@ -30,6 +36,23 @@ export function MyVacanciesPage() {
     await boostVacancy(id);
     qc.invalidateQueries({ queryKey: ["my-vacancies"] });
     qc.invalidateQueries({ queryKey: ["entitlements"] });
+  }
+
+  async function doRemove(id: string, title: string) {
+    if (!window.confirm(`Снять смену «${title}» с публикации?`)) return;
+    haptic("warning");
+    try {
+      await deleteVacancy(id);
+      toast("Смена снята", "success");
+      qc.invalidateQueries({ queryKey: ["my-vacancies"] });
+      qc.invalidateQueries({ queryKey: ["feed"] });
+    } catch (e) {
+      haptic("error");
+      // 409 — по смене уже откликнулись: сервер объясняет, почему нельзя.
+      const detail = (e as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      toast(detail ?? "Не удалось снять смену", "error");
+    }
   }
 
   async function doUrgent(id: string) {
@@ -95,6 +118,22 @@ export function MyVacanciesPage() {
                 onClick={() => doUrgent(v.id)}
               >
                 <IconFire size={13} /> Срочно: позвать рядом
+              </button>
+              {/* Исправить и снять — пока по смене нет отклика. После отклика
+                  сервер ответит 409 и объяснит: условия уже согласованы. */}
+              <button
+                className="tag"
+                style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
+                onClick={() => nav("/vacancy/new", { state: { edit: v } })}
+              >
+                <IconEdit size={13} /> Исправить
+              </button>
+              <button
+                className="tag"
+                style={{ cursor: "pointer", borderColor: "var(--danger)", color: "var(--danger)" }}
+                onClick={() => doRemove(v.id, STAFF_ROLE_LABELS[v.role])}
+              >
+                <IconWarning size={13} /> Снять
               </button>
             </div>
           </div>

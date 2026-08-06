@@ -1,5 +1,19 @@
 """Сквозные тесты основных сценариев StaffSwipe API."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 def _auth(client, phone: str, role: str) -> tuple[str, str]:
     """Возвращает (token, user_id) после прохождения авторизации."""
@@ -38,7 +52,7 @@ def test_employer_creates_vacancy_and_seeker_sees_it(client):
     emp_token, _ = _auth(client, "+79990000001", "employer")
     payload = {
         "role": "barista",
-        "date": "2026-06-20",
+        "date": SOON,
         "start_time": 480,
         "end_time": 960,
         "rate": 350,
@@ -65,7 +79,7 @@ def test_full_match_flow(client):
         "/vacancies",
         json={
             "role": "waiter",
-            "date": "2026-06-21",
+            "date": SOON_1,
             "start_time": 600,
             "end_time": 1200,
             "rate": 300,

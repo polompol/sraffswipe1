@@ -392,6 +392,36 @@ export function createVacancy(input: VacancyInput): Promise<Vacancy> {
   return Promise.resolve(v);
 }
 
+export function updateVacancy(id: string, input: VacancyInput): Promise<Vacancy> {
+  const i = VACANCIES.findIndex((v) => v.id === id);
+  if (i < 0) return Promise.reject(new Error("Смена не найдена"));
+  const v: Vacancy = {
+    ...VACANCIES[i]!,
+    role: input.role as Vacancy["role"],
+    date: input.date,
+    startTime: input.start_time,
+    endTime: input.end_time,
+    rate: input.rate,
+    rateType: input.rate_type as Vacancy["rateType"],
+    payMethod: (input.pay_method as Vacancy["payMethod"]) ?? "cash",
+    tips: (input.tips as Vacancy["tips"]) ?? "none",
+    description: input.description ?? "",
+    requireMedBook: input.require_med_book ?? false,
+    lat: input.lat ?? 0,
+    lng: input.lng ?? 0,
+    address: input.address ?? "",
+    city: input.city ?? "",
+  };
+  VACANCIES[i] = v;
+  return Promise.resolve(v);
+}
+
+export function deleteVacancy(id: string): Promise<void> {
+  const i = VACANCIES.findIndex((v) => v.id === id);
+  if (i >= 0) VACANCIES.splice(i, 1);
+  return Promise.resolve();
+}
+
 export function fetchMe(): Promise<Me> {
   return Promise.resolve({ ...meProfile });
 }

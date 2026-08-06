@@ -12,6 +12,7 @@ import {
 } from "@/types/domain";
 import {
   createVacancy,
+  updateVacancy,
   suggestAddress,
   track,
   type AddressSuggestion,
@@ -32,10 +33,16 @@ const fromMinutes = (m: number): string =>
 export function CreateVacancyPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  // «Повторить смену»: префилл всех полей из прошлой вакансии (кроме даты).
-  const pre = (useLocation().state as { prefill?: Vacancy } | null)?.prefill;
+  // Экран работает в двух режимах:
+  //   prefill — «повторить смену»: копируем поля, дату просим выбрать заново;
+  //   edit    — «исправить смену»: копируем всё вместе с датой и сохраняем поверх.
+  const navState = useLocation().state as
+    | { prefill?: Vacancy; edit?: Vacancy }
+    | null;
+  const editing = navState?.edit ?? null;
+  const pre = editing ?? navState?.prefill;
   const [role, setRole] = useState<StaffRole>(pre?.role ?? "waiter");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(editing?.date ?? "");
   const [start, setStart] = useState(pre ? fromMinutes(pre.startTime) : "10:00");
   const [end, setEnd] = useState(pre ? fromMinutes(pre.endTime) : "22:00");
   const [rate, setRate] = useState(pre ? String(pre.rate) : "350");
@@ -63,7 +70,7 @@ export function CreateVacancyPage() {
     }
     setBusy(true);
     try {
-      await createVacancy({
+      const payload = {
         role,
         date,
         start_time: toMinutes(start),
@@ -78,15 +85,33 @@ export function CreateVacancyPage() {
         city: city.trim(),
         lat: coords?.lat,
         lng: coords?.lng,
-      });
+      };
+      if (editing) {
+        await updateVacancy(editing.id, payload);
+        toast("Смена обновлена", "success");
+      } else {
+        await createVacancy(payload);
+        track("vacancy_publish", { role });
+        toast("Вакансия опубликована", "success");
+      }
       haptic("success");
-      track("vacancy_publish", { role });
-      toast("Вакансия опубликована", "success");
       qc.invalidateQueries({ queryKey: ["feed"] });
+      qc.invalidateQueries({ queryKey: ["my-vacancies"] });
       nav(-1);
-    } catch {
+    } catch (e) {
       haptic("error");
-      toast("Не удалось опубликовать. Проверьте поля.", "error");
+      // 409 — по смене уже откликнулись: сервер объясняет причину, покажем её.
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      const detail = (e as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      toast(
+        status === 409 && detail
+          ? detail
+          : editing
+            ? "Не удалось сохранить. Проверьте поля."
+            : "Не удалось опубликовать. Проверьте поля.",
+        "error",
+      );
     } finally {
       setBusy(false);
     }
@@ -108,9 +133,15 @@ export function CreateVacancyPage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>
-          {pre ? "Повторить смену" : "Новая вакансия"}
+          {editing ? "Исправить смену" : pre ? "Повторить смену" : "Новая вакансия"}
         </h1>
-        {pre && (
+        {editing && (
+          <p className="muted" style={{ marginBottom: 16 }}>
+            Правки видны в ленте сразу. Если по смене уже откликнулись,
+            менять условия нельзя — договоритесь в чате.
+          </p>
+        )}
+        {pre && !editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
             Поля заполнены по прошлой смене — укажите новую дату.
           </p>
@@ -274,7 +305,7 @@ export function CreateVacancyPage() {
         />
 
         <Button loading={busy} onClick={publish}>
-          Опубликовать вакансию
+          {editing ? "Сохранить изменения" : "Опубликовать вакансию"}
         </Button>
       </div>
     </div>

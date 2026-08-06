@@ -2,9 +2,22 @@
 import hashlib
 import hmac
 import time
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from app.telegram import validate_init_data
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
 
 INTERNAL = {"X-Internal-Token": "test-internal-secret"}
 
@@ -160,7 +173,7 @@ def test_fulfill_requires_internal_secret(client):
 
 def _new_vacancy(client, headers, role="barista"):
     payload = {
-        "role": role, "date": "2026-06-20", "start_time": 600, "end_time": 1080,
+        "role": role, "date": SOON, "start_time": 600, "end_time": 1080,
         "rate": 350, "rate_type": "perHour", "lat": 55.75, "lng": 37.61,
         "address": "Тест",
     }
