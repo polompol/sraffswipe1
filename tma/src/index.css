@@ -255,7 +255,9 @@ input:focus-visible {
   font-size: 15px;
   font-weight: 600;
   padding: 8px 14px;
-  min-height: 38px;
+  /* 44px — минимальная комфортная зона нажатия пальцем (чипы фильтров,
+     быстрые ответы в чате). Раньше было 38px. */
+  min-height: 44px;
   border-radius: 999px;
   border: 1.5px solid;
   background: transparent;

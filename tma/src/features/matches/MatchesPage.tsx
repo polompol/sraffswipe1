@@ -7,7 +7,7 @@ import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { ReviewStars } from "@/components/ReviewStars";
-import { IconTabMatches, IconCheck, IconWarning, IconPin } from "@/components/Icons";
+import { IconTabMatches, IconCheck, IconWarning, IconPin, IconChevronRight } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
 import { haptic } from "@/telegram/sdk";
@@ -114,9 +114,23 @@ export function MatchesPage() {
       <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {data?.map((m) => (
           <div key={m.id} className="card">
-            <div
+            {/* Настоящая кнопка, а не div с onClick: переход в чат теперь
+                доступен с клавиатуры и озвучивается скринридером. Кнопки
+                действий лежат ниже, вложенности кнопок не возникает. */}
+            <button
               className="row"
-              style={{ gap: 12, cursor: "pointer" }}
+              aria-label={`Открыть чат: ${m.companyName ?? "Заведение"}`}
+              style={{
+                gap: 12,
+                cursor: "pointer",
+                width: "100%",
+                background: "none",
+                border: "none",
+                padding: 0,
+                textAlign: "left",
+                font: "inherit",
+                color: "inherit",
+              }}
               onClick={() => nav(`/chat/${m.id}`)}
             >
               {/* Раньше сокращённое `background` шло ПОСЛЕ backgroundImage и
@@ -141,8 +155,10 @@ export function MatchesPage() {
                 <div style={{ fontWeight: 700 }}>{m.companyName ?? "Заведение"}</div>
                 <div className="muted">{MATCH_STATUS_LABELS[m.status]}</div>
               </span>
-              <span style={{ color: "var(--muted)", fontSize: 22 }}>›</span>
-            </div>
+              <span style={{ color: "var(--muted)", display: "inline-flex" }}>
+                <IconChevronRight size={20} />
+              </span>
+            </button>
             {/* Спор — эскалация к оператору. */}
             {m.disputed && !m.checkedIn && (
               <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--crimson-dark)" }}>

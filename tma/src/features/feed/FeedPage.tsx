@@ -41,7 +41,7 @@ import {
   IconCards,
   IconFire,
   IconBell,
-  IconCheck,
+  IconChevronRight,
 } from "@/components/Icons";
 
 export function FeedPage() {
@@ -252,7 +252,11 @@ export function FeedPage() {
             <span className="icon-badge">{activeFilterCount}</span>
           )}
         </button>
-        <button className="icon-btn" aria-label="Тарифы и буст" onClick={() => nav("/pricing")}>
+        <button
+          className="icon-btn"
+          aria-label={isSeeker ? "Условия сервиса" : "Тарифы и комиссия"}
+          onClick={() => nav("/pricing")}
+        >
           <IconBolt size={22} />
         </button>
       </div>
@@ -266,7 +270,9 @@ export function FeedPage() {
         {isSeeker && filters.city ? ` · ${filters.city}` : ""}
         {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
         {typeof data?.length === "number" ? ` · ${data.length}` : ""}
-        <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>
+        <span style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
+          <IconChevronRight size={16} />
+        </span>
       </button>
 
       {employerNoVacancy && (
@@ -344,7 +350,7 @@ export function FeedPage() {
             background: "var(--grad-brand)", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <IconCheck size={34} />
+            {isSeeker ? <IconFilter size={34} /> : <IconBell size={34} />}
           </div>
           <h2 className="h2" style={{ marginTop: 12 }}>
             {isSeeker
