@@ -12,10 +12,8 @@ import {
   adminSearchUsers,
   blockUser,
   blockVacancy,
-  cancelSubscription,
   fetchAdminOverview,
   fetchAdminReports,
-  fetchAdminSubscriptions,
   fetchBlocked,
   fetchRevenue,
   resolveReport,
@@ -83,19 +81,22 @@ export function AdminPage() {
       day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
     });
   };
-  const subs = useQuery({
-    queryKey: ["admin-subs"],
-    queryFn: fetchAdminSubscriptions,
-  });
   const blocked = useQuery({ queryKey: ["admin-blocked"], queryFn: fetchBlocked });
   const users = useQuery({
     queryKey: ["admin-users", userQ],
     queryFn: () => adminSearchUsers(userQ),
   });
 
-  async function grant(id: string, sku: string, label: string) {
+  // Компенсация оператора: выдаём буст и срочные явными числами —
+  // платного каталога больше нет, единственный платёж это пополнение баланса.
+  async function grant(
+    id: string,
+    label: string,
+    boost = 0,
+    superlikes = 0,
+  ) {
     haptic("success");
-    await adminGrant(id, sku);
+    await adminGrant(id, boost, superlikes);
     toast(`Выдано: ${label}`, "success");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
@@ -160,14 +161,6 @@ export function AdminPage() {
     else await unblockUser(id);
     toast("Разблокировано", "success");
     refresh();
-  }
-
-  async function cancelSub(ownerId: string) {
-    haptic("success");
-    await cancelSubscription(ownerId);
-    toast("Подписка отменена (доступ → Free)", "success");
-    qc.invalidateQueries({ queryKey: ["admin-subs"] });
-    qc.invalidateQueries({ queryKey: ["admin-overview"] });
   }
 
   async function resolve(id: string) {
@@ -245,21 +238,32 @@ export function AdminPage() {
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="row">
             <span style={{ flex: 1 }}>
-              <div className="muted" style={{ fontSize: 12 }}>Оценка дохода в месяц</div>
+              <div className="muted" style={{ fontSize: 12 }}>Комиссия начислена</div>
               <div style={{ fontSize: 24, fontWeight: 900, color: "var(--gold)" }}>
-                {rev.data.estMonthlyRub.toLocaleString("ru-RU")} ₽
+                {rev.data.commissionAccruedRub.toLocaleString("ru-RU")} ₽
               </div>
             </span>
             <span style={{ textAlign: "right" }}>
-              <div className="muted" style={{ fontSize: 12 }}>Всего получено</div>
+              <div className="muted" style={{ fontSize: 12 }}>Оплачено</div>
               <div style={{ fontWeight: 800 }}>
-                {rev.data.totalPaidRub.toLocaleString("ru-RU")} ₽ · {rev.data.totalStars} ★
+                {rev.data.commissionPaidRub.toLocaleString("ru-RU")} ₽
               </div>
             </span>
           </div>
           <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-            Активных подписок: <b style={{ color: "var(--text)" }}>Pro {rev.data.activePro}</b>
-            {" · "}<b style={{ color: "var(--text)" }}>Business {rev.data.activeBusiness}</b>
+            К оплате сейчас:{" "}
+            <b style={{ color: "var(--text)" }}>
+              {rev.data.commissionPendingRub.toLocaleString("ru-RU")} ₽
+            </b>
+            {" · "}смен с комиссией:{" "}
+            <b style={{ color: "var(--text)" }}>{rev.data.shiftsBilled}</b>
+          </div>
+          <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
+            Пополнено баланса:{" "}
+            <b style={{ color: "var(--text)" }}>
+              {rev.data.topupsRub.toLocaleString("ru-RU")} ₽
+            </b>{" "}
+            — это аванс заведений, а не заработок сервиса.
           </div>
         </div>
       )}
@@ -357,19 +361,10 @@ export function AdminPage() {
               <button
                 className="tag"
                 style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                onClick={() => grant(u.id, "boost_24h", "Boost 24ч")}
+                onClick={() => grant(u.id, "буст на 1 вакансию", 1, 0)}
               >
                 + Boost
               </button>
-              {u.role === "employer" && (
-                <button
-                  className="tag"
-                  style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                  onClick={() => grant(u.id, "sub_pro_month", "Pro на месяц")}
-                >
-                  + Pro (месяц)
-                </button>
-              )}
               {u.role === "employer" &&
                 [1000, 5000].map((a) => (
                   <button
@@ -384,7 +379,7 @@ export function AdminPage() {
               <button
                 className="tag"
                 style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                onClick={() => grant(u.id, "super_5", "5 срочных")}
+                onClick={() => grant(u.id, "5 срочных", 0, 5)}
               >
                 + 5 срочных
               </button>
@@ -541,36 +536,6 @@ export function AdminPage() {
             ) : (
               <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>✓ Закрыта</div>
             )}
-          </div>
-        ))}
-      </div>
-
-      <h2 className="h2" style={{ marginBottom: 8 }}>Активные подписки</h2>
-      {subs.isLoading && <Loading />}
-      {subs.data && subs.data.length === 0 && (
-        <div className="card muted" style={{ textAlign: "center" }}>Платящих заведений пока нет</div>
-      )}
-      <div style={{ display: "grid", gap: 10 }}>
-        {subs.data?.map((s) => (
-          <div key={s.ownerId} className="card">
-            <div className="row">
-              <span style={{ flex: 1 }}>
-                <b>{s.company}</b>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {s.renewsAt ? `до ${s.renewsAt.slice(0, 10)}` : "—"}
-                </div>
-              </span>
-              <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
-                {s.plan.toUpperCase()}
-              </span>
-            </div>
-            <button
-              className="tab"
-              style={{ width: "auto", marginTop: 6, color: "var(--muted)", fontSize: 12 }}
-              onClick={() => cancelSub(s.ownerId)}
-            >
-              Отменить подписку (после возврата денег)
-            </button>
           </div>
         ))}
       </div>

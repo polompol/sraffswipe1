@@ -53,36 +53,6 @@ def test_funnel_forbidden_for_non_admin(client):
     assert r.status_code == 403
 
 
-def test_yookassa_webhook_grants_plan(client):
-    token, owner = _auth(client, "employer")
-    payload = {
-        "event": "payment.succeeded",
-        "object": {
-            "id": "yk-evt-1",
-            "amount": {"value": "1990.00", "currency": "RUB"},
-            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
-        },
-    }
-    # Без секрета — 401.
-    assert client.post("/billing/yookassa/webhook", json=payload).status_code == 401
-    # С секретом — начисление тарифа.
-    ok = client.post(
-        "/billing/yookassa/webhook?secret=test-internal-secret", json=payload
-    )
-    assert ok.status_code == 200
-    ent = client.get("/billing/entitlements", headers=_hdr(token)).json()
-    assert ent["plan"] == "pro"
-
-    # Идемпотентность по charge_id.
-    client.post(
-        "/billing/yookassa/webhook?secret=test-internal-secret", json=payload
-    )
-    boost = client.get("/billing/entitlements", headers=_hdr(token)).json()[
-        "boostBalance"
-    ]
-    assert boost == ent["boostBalance"]  # не удвоилось
-
-
 def test_employer_verify_without_dadata(client):
     token, _ = _auth(client, "employer")
     r = client.post("/employer/verify", headers=_hdr(token), json={"inn": "7707083893"})
@@ -325,21 +295,21 @@ def test_admin_search_and_grant(client):
     # Поиск находит заведение среди пользователей.
     users = client.get("/admin/users", headers=ah).json()
     assert any(u["id"] == eid and u["role"] == "employer" for u in users)
-    # Бесплатная выдача буста — баланс растёт.
+    # Компенсация от оператора: выдаём буст и супер-лайки явными числами.
     g = client.post("/admin/grant", headers=ah,
-                    json={"owner_id": eid, "sku": "boost_24h"})
+                    json={"owner_id": eid, "boost": 2, "superlikes": 3})
     assert g.status_code == 200
+    assert g.json()["boostBalance"] == 2
     by_id = {u["id"]: u for u in client.get("/admin/users", headers=ah).json()}
-    assert by_id[eid]["boostBalance"] == 1
-    # Выдача подписки → план обновился.
-    client.post("/admin/grant", headers=ah,
-                json={"owner_id": eid, "sku": "sub_pro_month"})
-    by_id = {u["id"]: u for u in client.get("/admin/users", headers=ah).json()}
-    assert by_id[eid]["plan"] == "pro"
-    # Неизвестный SKU → 400.
+    assert by_id[eid]["boostBalance"] == 2
+    # Пустая выдача бессмысленна → 400.
     assert client.post(
-        "/admin/grant", headers=ah, json={"owner_id": eid, "sku": "nope"}
+        "/admin/grant", headers=ah, json={"owner_id": eid}
     ).status_code == 400
+    # Отрицательные значения не принимаем.
+    assert client.post(
+        "/admin/grant", headers=ah, json={"owner_id": eid, "boost": -5}
+    ).status_code == 422
 
 
 def test_admin_users_forbidden_for_non_admin(client):
@@ -385,29 +355,26 @@ def test_admin_unblock(client):
     assert all(b["id"] != sid for b in blocked2)
 
 
-def test_admin_cancel_subscription_and_purchases(client):
+def test_admin_sees_topup_in_purchases(client):
+    """Журнал платежей админа: пополнение баланса видно как оплаченное."""
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
     emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
-    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     owner = emp.json()["user_id"]
-    # Оплата Pro через вебхук → подписка активна.
     client.post("/billing/yookassa/webhook?secret=test-internal-secret", json={
         "event": "payment.succeeded",
         "object": {
-            "id": "ref-1",
-            "amount": {"value": "1990.00", "currency": "RUB"},
-            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+            "id": "pur-1",
+            "amount": {"value": "3000.00", "currency": "RUB"},
+            "metadata": {
+                "owner_id": owner, "sku": "wallet_topup", "amount_rub": "3000",
+            },
         },
     })
-    assert client.get("/billing/entitlements", headers=eh).json()["plan"] == "pro"
-    # Платёж виден в журнале админа.
-    purch = client.get("/admin/purchases", headers=ah).json()
-    assert any(p["ownerId"] == owner and p["status"] == "paid" for p in purch)
-    # Возврат: отменяем подписку → доступ падает на free.
-    cancel = client.post(f"/admin/subscriptions/{owner}/cancel", headers=ah)
-    assert cancel.status_code == 200
-    assert client.get("/billing/entitlements", headers=eh).json()["plan"] == "free"
+    purchases = client.get("/admin/purchases", headers=ah).json()
+    mine = [p for p in purchases if p["ownerId"] == owner]
+    assert mine and mine[0]["sku"] == "wallet_topup"
+    assert mine[0]["amount"] == 3000
 
 
 def test_admin_revenue(client):
@@ -419,33 +386,15 @@ def test_admin_revenue(client):
         "event": "payment.succeeded",
         "object": {
             "id": "rev-1",
-            "amount": {"value": "1990.00", "currency": "RUB"},
-            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+            "amount": {"value": "1000.00", "currency": "RUB"},
+            "metadata": {
+                "owner_id": owner, "sku": "wallet_topup", "amount_rub": "1000",
+            },
         },
     })
     rev = client.get("/admin/revenue", headers=ah).json()
-    assert rev["activePro"] == 1
-    assert rev["estMonthlyRub"] == 1990
-    assert rev["totalPaidRub"] == 1990
+    assert rev["topupsRub"] == 1000
+    assert rev["commissionAccruedRub"] == 0
+    # Пополнение — аванс, а не заработок сервиса: в выручку не идёт.
+    assert rev["shiftsBilled"] == 0
 
-
-def test_cancel_subscription_revokes_verification_badge(client):
-    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
-    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
-    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
-    owner = emp.json()["user_id"]
-    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
-    # Покупка верификации → бейдж выдан.
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "verify_year", "provider": "yookassa",
-        "charge_id": "vrf-1",
-    })
-    assert client.get("/billing/entitlements", headers=eh).json()["employerVerified"]
-    # Отмена (после возврата) снимает и бейдж.
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "sub_pro_month", "provider": "yookassa",
-        "charge_id": "vrf-2",
-    })
-    client.post(f"/admin/subscriptions/{owner}/cancel", headers=ah)
-    ent = client.get("/billing/entitlements", headers=eh).json()
-    assert ent["employerVerified"] is False

@@ -164,12 +164,6 @@ export interface InvoiceLink {
   link: string;
 }
 
-/** Запрос ссылки на оплату Stars (XTR) с backend. */
-export async function createStarsInvoice(sku: string): Promise<InvoiceLink> {
-  if (!USE_BACKEND) return { link: `mock-invoice:${sku}` };
-  const { data } = await api.post<InvoiceLink>("/billing/stars/invoice", { sku });
-  return data;
-}
 
 export interface Me {
   id: string;
@@ -406,11 +400,11 @@ export interface AdminBlocked {
 }
 
 export interface AdminRevenue {
-  activePro: number;
-  activeBusiness: number;
-  estMonthlyRub: number;
-  totalPaidRub: number;
-  totalStars: number;
+  commissionAccruedRub: number;
+  commissionPaidRub: number;
+  commissionPendingRub: number;
+  shiftsBilled: number;
+  topupsRub: number;
 }
 
 export interface AdminSubscription {
@@ -476,9 +470,17 @@ export async function adminSearchUsers(q: string): Promise<AdminUser[]> {
 }
 
 /** Бесплатно выдать буст/подписку/супер-лайки (комп, поддержка). */
-export async function adminGrant(ownerId: string, sku: string): Promise<void> {
-  if (!USE_BACKEND) return mock.adminGrant(ownerId, sku);
-  await api.post("/admin/grant", { owner_id: ownerId, sku });
+export async function adminGrant(
+  ownerId: string,
+  boost: number,
+  superlikes: number,
+): Promise<void> {
+  if (!USE_BACKEND) return mock.adminGrant(ownerId, boost, superlikes);
+  await api.post("/admin/grant", {
+    owner_id: ownerId,
+    boost,
+    superlikes,
+  });
 }
 
 export interface CommissionRow {
@@ -595,11 +597,6 @@ export async function fetchBlocked(): Promise<AdminBlocked[]> {
   return data;
 }
 
-/** Отозвать подписку (после возврата денег) — доступ падает на Free. */
-export async function cancelSubscription(ownerId: string): Promise<void> {
-  if (!USE_BACKEND) return mock.cancelSubscription(ownerId);
-  await api.post(`/admin/subscriptions/${ownerId}/cancel`, {});
-}
 
 export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {
   if (!USE_BACKEND) return mock.fetchAdminSubscriptions();

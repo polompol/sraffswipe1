@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     dadata_secret: str = ""
 
     # --- Telegram ---
-    # Токен бота (BotFather). Нужен для валидации initData и платежей Stars.
+    # Токен бота (BotFather). Нужен для валидации initData и уведомлений.
     telegram_bot_token: str = ""
     # Публичный URL Mini App (для кнопки запуска и реф-ссылок).
     mini_app_url: str = ""

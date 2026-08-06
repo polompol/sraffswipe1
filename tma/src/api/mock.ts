@@ -509,11 +509,11 @@ export function fetchAdminReports(status = "open") {
 }
 export function fetchRevenue() {
   return Promise.resolve({
-    activePro: 8,
-    activeBusiness: 3,
-    estMonthlyRub: 8 * 1990 + 3 * 4990,
-    totalPaidRub: 47230,
-    totalStars: 5400,
+    commissionAccruedRub: 12400,
+    commissionPaidRub: 9100,
+    commissionPendingRub: 3300,
+    shiftsBilled: 31,
+    topupsRub: 18000,
   });
 }
 export function resolveReport(id: string): Promise<void> {
@@ -548,9 +548,11 @@ export function adminSearchUsers(q: string) {
     ql ? all.filter((u) => u.name.toLowerCase().includes(ql)) : all,
   );
 }
-export function adminGrant(_ownerId: string, _sku: string): Promise<void> {
-  void _ownerId;
-  void _sku;
+export function adminGrant(
+  _ownerId: string,
+  _boost: number,
+  _superlikes: number,
+): Promise<void> {
   return Promise.resolve();
 }
 export function fetchCommissions() {
@@ -606,10 +608,6 @@ export function fetchAdminSubscriptions() {
 export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);
 }
-export function cancelSubscription(_ownerId: string): Promise<void> {
-  return Promise.resolve();
-}
-
 export function boostVacancy(vacancyId: string): Promise<void> {
   const vac = VACANCIES.find((v) => v.id === vacancyId);
   if (vac) vac.boosted = true;

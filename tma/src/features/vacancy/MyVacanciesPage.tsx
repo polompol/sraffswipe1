@@ -9,10 +9,11 @@ import {
 } from "@/api/endpoints";
 import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
-import { haptic } from "@/telegram/sdk";
+import { haptic, confirmAction } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 import { IconFire, IconCalendar, IconEdit, IconWarning } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { EmptyState } from "@/components/EmptyState";
 import { PILOT_MODE } from "@/lib/flags";
 
 export function MyVacanciesPage() {
@@ -39,7 +40,7 @@ export function MyVacanciesPage() {
   }
 
   async function doRemove(id: string, title: string) {
-    if (!window.confirm(`Снять смену «${title}» с публикации?`)) return;
+    if (!(await confirmAction(`Снять смену «${title}» с публикации?`, "Снять"))) return;
     haptic("warning");
     try {
       await deleteVacancy(id);
@@ -81,6 +82,21 @@ export function MyVacanciesPage() {
       >
         Мои работники — позвать снова
       </button>
+
+      {/* Раньше новое заведение видело заголовок и пустоту — непонятно,
+          что делать дальше. Теперь экран сам ведёт к размещению смены. */}
+      {data && data.length === 0 && (
+        <EmptyState
+          icon={<IconCalendar size={34} />}
+          title="Смен пока нет"
+          text="Разместите первую смену — она появится в ленте у работников рядом, и пойдут отклики."
+          action={
+            <Button block={false} onClick={() => nav("/vacancy/new")}>
+              + Разместить смену
+            </Button>
+          }
+        />
+      )}
 
       <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {data?.map((v) => (

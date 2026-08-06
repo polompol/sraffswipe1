@@ -14,7 +14,7 @@ import {
   type Me,
   type VerifyResult,
 } from "@/api/endpoints";
-import { share, haptic } from "@/telegram/sdk";
+import { share, haptic, confirmAction } from "@/telegram/sdk";
 import {
   IconBolt,
   IconFire,
@@ -636,9 +636,9 @@ export function ProfilePage() {
           label="Выйти из аккаунта"
           danger
           last
-          onClick={() => {
+          onClick={async () => {
             // Подтверждение: случайно вылететь из аккаунта неприятно.
-            if (!window.confirm("Выйти из аккаунта?")) return;
+            if (!(await confirmAction("Выйти из аккаунта?", "Выйти"))) return;
             logout();
             nav("/onboarding", { replace: true });
           }}

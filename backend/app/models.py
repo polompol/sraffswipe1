@@ -235,14 +235,14 @@ class WalletTxn(Base):
 
 
 class Purchase(Base):
-    """Журнал покупок (Stars/ЮKassa). Идемпотентность по provider_charge_id."""
+    """Журнал платежей ЮKassa. Идемпотентность по provider_charge_id."""
 
     __tablename__ = "purchases"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     owner_id: Mapped[str] = mapped_column(String, index=True)
     sku: Mapped[str] = mapped_column(String)
-    provider: Mapped[str] = mapped_column(String)  # stars|yookassa
+    provider: Mapped[str] = mapped_column(String)  # yookassa
     amount: Mapped[int] = mapped_column(Integer, default=0)
     currency: Mapped[str] = mapped_column(String, default="XTR")
     # pending|paid|failed

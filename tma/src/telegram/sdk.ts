@@ -15,8 +15,9 @@ import {
   hapticFeedback,
   retrieveRawInitData,
   retrieveLaunchParams,
-  openInvoice,
   shareURL,
+  showPopup,
+  isPopupSupported,
   cloudStorage,
 } from "@telegram-apps/sdk-react";
 
@@ -133,15 +134,31 @@ export function showBackButton(onClick: () => void): () => void {
   }
 }
 
-// --- Платежи Telegram Stars ---
+// --- Подтверждение действия ---
 
-/** Открыть инвойс Stars. `link` — invoice link, полученный с backend. */
-export async function payWithStars(link: string): Promise<string> {
+/** Родное окно подтверждения Telegram. Браузерный `confirm` внутри Mini App
+ *  выглядит чужеродно — серое системное окно поверх фирменного экрана, причём
+ *  в момент ответственного решения (неявка, спор, снятие смены). Вне Telegram
+ *  и на старых клиентах откатываемся на `confirm`, чтобы поток не сломался. */
+export async function confirmAction(
+  message: string,
+  confirmText = "Да",
+): Promise<boolean> {
   try {
-    return await openInvoice(link, "url");
-  } catch (e) {
-    return e instanceof Error ? `failed:${e.message}` : "failed";
+    if (isPopupSupported()) {
+      const id = await showPopup({
+        message,
+        buttons: [
+          { id: "ok", type: "default", text: confirmText },
+          { id: "cancel", type: "cancel" },
+        ],
+      });
+      return id === "ok";
+    }
+  } catch {
+    /* не поддержано — падаем в обычный confirm */
   }
+  return window.confirm(message);
 }
 
 // --- Шеринг для реферальной программы ---

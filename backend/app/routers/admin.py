@@ -4,9 +4,10 @@
 полноценной back-office системы.
 """
 import json
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -76,48 +77,35 @@ def overview(db: Session = Depends(get_db), _admin: dict = Depends(require_admin
 
 
 class RevenueOut(BaseModel):
-    activePro: int
-    activeBusiness: int
-    estMonthlyRub: int  # оценка дохода в месяц по активным подпискам
-    totalPaidRub: int   # всего получено рублями (за всё время)
-    totalStars: int     # всего получено Telegram Stars
+    """Деньги сервиса. Модель одна — комиссия за закрытую смену."""
 
-
-# Месячные цены тарифов — для оценки регулярного дохода.
-_PLAN_RUB = {"pro": 1990, "business": 4990}
+    commissionAccruedRub: int   # начислено за всё время
+    commissionPaidRub: int      # из них оплачено
+    commissionPendingRub: int   # к оплате сейчас
+    shiftsBilled: int           # смен, за которые начислена комиссия
+    topupsRub: int              # пополнений баланса (аванс, НЕ выручка)
 
 
 @router.get("/revenue", response_model=RevenueOut)
 def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)):
-    def _subs(plan: str) -> int:
-        return (
-            db.query(func.count(Subscription.id))
-            .filter(Subscription.active.is_(True), Subscription.plan == plan)
-            .scalar()
-            or 0
-        )
+    def _commission(status: str | None = None) -> int:
+        q = db.query(func.coalesce(func.sum(Commission.amount), 0))
+        if status:
+            q = q.filter(Commission.status == status)
+        return int(q.scalar() or 0)
 
-    def _sum(currency: str) -> int:
-        # Пополнения баланса — аванс (обязательство), не выручка: исключаем,
-        # чтобы «Всего получено» не завышалось.
-        return int(
-            db.query(func.coalesce(func.sum(Purchase.amount), 0))
-            .filter(
-                Purchase.status == "paid",
-                Purchase.currency == currency,
-                Purchase.sku != "wallet_topup",
-            )
-            .scalar()
-            or 0
-        )
-
-    pro, business = _subs("pro"), _subs("business")
     return RevenueOut(
-        activePro=pro,
-        activeBusiness=business,
-        estMonthlyRub=pro * _PLAN_RUB["pro"] + business * _PLAN_RUB["business"],
-        totalPaidRub=_sum("RUB"),
-        totalStars=_sum("XTR"),
+        commissionAccruedRub=_commission(),
+        commissionPaidRub=_commission("paid"),
+        commissionPendingRub=_commission("pending"),
+        shiftsBilled=int(db.query(func.count(Commission.id)).scalar() or 0),
+        # Аванс — это обязательство перед заведением, а не заработок сервиса.
+        topupsRub=int(
+            db.query(func.coalesce(func.sum(Purchase.amount), 0))
+            .filter(Purchase.status == "paid", Purchase.sku == "wallet_topup")
+            .scalar()
+            or 0
+        ),
     )
 
 
@@ -366,30 +354,6 @@ def list_subscriptions(
     return out
 
 
-@router.post("/subscriptions/{owner_id}/cancel")
-def cancel_subscription(
-    owner_id: str,
-    db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
-):
-    """Отозвать подписку (после возврата денег в ЮKassa) — доступ падает на Free
-    и снимается платный бейдж «Проверен»."""
-    subs = (
-        db.query(Subscription).filter(Subscription.owner_id == owner_id).all()
-    )
-    if not subs:
-        raise HTTPException(status_code=404, detail="Подписка не найдена")
-    for sub in subs:
-        sub.active = False
-        sub.plan = "free"
-    # Снимаем и одноразовый платный перк (верификацию), чтобы возврат не оставлял
-    # оплаченные привилегии.
-    ent = get_or_create(db, owner_id)
-    ent.employer_verified = False
-    db.commit()
-    return {"ok": True, "plan": "free"}
-
-
 class PurchaseOut(BaseModel):
     id: str
     ownerId: str
@@ -476,7 +440,11 @@ def search_users(
 
 class GrantIn(BaseModel):
     owner_id: str
-    sku: str
+    # Сколько выдать. Раньше выдавали «пакетами» из каталога товаров, но
+    # каталога больше нет: платный рельс один — пополнение баланса. Оператор
+    # компенсирует напрямую, без выдуманных SKU.
+    boost: Annotated[int, Field(ge=0, le=100)] = 0
+    superlikes: Annotated[int, Field(ge=0, le=100)] = 0
 
 
 @router.post("/grant")
@@ -485,14 +453,18 @@ def grant_entitlement(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Бесплатно выдать буст/подписку/супер-лайки (комп заведению, поддержка).
-    Переиспользует ту же логику начисления, что и оплата."""
-    from .billing import CATALOG, _apply_effect
-
-    if body.sku not in CATALOG:
-        raise HTTPException(status_code=400, detail="Неизвестный SKU")
-    _apply_effect(db, body.owner_id, body.sku)
-    return {"ok": True, "sku": body.sku}
+    """Компенсация от оператора: выдать буст и/или супер-лайки бесплатно."""
+    if body.boost == 0 and body.superlikes == 0:
+        raise HTTPException(status_code=400, detail="Нечего выдавать")
+    ent = get_or_create(db, body.owner_id)
+    ent.boost_balance += body.boost
+    ent.superlike_balance += body.superlikes
+    db.commit()
+    return {
+        "ok": True,
+        "boostBalance": ent.boost_balance,
+        "superlikeBalance": ent.superlike_balance,
+    }
 
 
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----

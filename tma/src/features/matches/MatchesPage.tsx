@@ -10,7 +10,7 @@ import { ReviewStars } from "@/components/ReviewStars";
 import { IconTabMatches, IconCheck, IconWarning, IconPin, IconChevronRight } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
-import { haptic } from "@/telegram/sdk";
+import { haptic, confirmAction } from "@/telegram/sdk";
 
 export function MatchesPage() {
   const nav = useNavigate();
@@ -25,8 +25,13 @@ export function MatchesPage() {
   async function mark(matchId: string, attended: boolean) {
     // «Не вышел» бьёт по надёжности человека — подтверждаем, чтобы не отметить
     // случайным тапом.
-    if (!attended && !window.confirm("Отметить, что человек не вышел на смену?"))
-      return;
+    if (
+      !attended
+      && !(await confirmAction(
+        "Отметить, что человек не вышел на смену? Это повлияет на его надёжность.",
+        "Отметить",
+      ))
+    ) return;
     haptic(attended ? "success" : "warning");
     try {
       await markAttendance(matchId, attended);
@@ -53,7 +58,7 @@ export function MatchesPage() {
   }
 
   async function doDispute(matchId: string) {
-    if (!window.confirm("Открыть спор по смене? Его разберёт оператор.")) return;
+    if (!(await confirmAction("Открыть спор по смене? Его разберёт оператор.", "Открыть спор"))) return;
     haptic("warning");
     try {
       await disputeShift(matchId);

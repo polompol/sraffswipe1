@@ -1,38 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createStarsInvoice, track } from "@/api/endpoints";
-import { payWithStars, showBackButton, haptic } from "@/telegram/sdk";
+import { showBackButton } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { Button } from "@/components/Button";
-import { IconFire, IconCheck } from "@/components/Icons";
-import { PILOT_MODE } from "@/lib/flags";
+import { IconCheck } from "@/components/Icons";
 
 export function PricingPage() {
   const nav = useNavigate();
   const role = useSession((s) => s.role);
-  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
-
-  async function buyBoost() {
-    haptic("medium");
-    track("purchase", { sku: "boost_24h", provider: "stars" });
-    setStatus("Открываем оплату…");
-    try {
-      const { link } = await createStarsInvoice("boost_24h");
-      const res = await payWithStars(link);
-      setStatus(
-        res === "paid"
-          ? "Готово — вакансия в топе ленты!"
-          : res === "cancelled"
-            ? "Оплата отменена"
-            : "Оплата не прошла. Попробуйте ещё раз",
-      );
-    } catch {
-      haptic("error");
-      setStatus("Не удалось открыть оплату. Попробуйте ещё раз.");
-    }
-  }
 
   // Соискателям всё бесплатно — растим эту сторону, трения не добавляем.
   if (role === "seeker") {
@@ -107,27 +84,6 @@ export function PricingPage() {
             </div>
           ))}
         </div>
-
-        {!PILOT_MODE && (
-          <div className="card" style={{ marginTop: 14, textAlign: "left" }}>
-            <div className="row" style={{ gap: 10 }}>
-              <span style={{ color: "var(--gold)", flex: "none" }}>
-                <IconFire size={20} />
-              </span>
-              <span style={{ flex: 1 }}>
-                <b>Boost на 24 часа</b>
-                <div className="muted" style={{ fontSize: 14 }}>
-                  Поднять вакансию в топ ленты, если человек нужен срочно.
-                </div>
-              </span>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <Button variant="secondary" onClick={buyBoost}>
-                Ускорить за 150 ★
-              </Button>
-            </div>
-          </div>
-        )}
 
         {status && (
           <div className="card" style={{ marginTop: 16 }}>{status}</div>
