@@ -6,6 +6,7 @@ import {
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 
 const REASONS: { id: ReportReason; label: string }[] = [
   { id: "fake", label: "Фейковая вакансия" },
@@ -46,26 +47,10 @@ export function ReportSheet({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(20,14,9,0.5)",
-        display: "flex",
-        alignItems: "flex-end",
-        zIndex: 50,
-      }}
-      onClick={onClose}
-    >
+    <div className="sheet-backdrop" onClick={onClose}>
       <div
-        className="fade-up"
+        className="fade-up sheet"
         style={{
-          width: "100%",
-          maxWidth: 520,
-          margin: "0 auto",
-          background: "var(--surface)",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
           padding: 20,
           paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
         }}
@@ -75,15 +60,22 @@ export function ReportSheet({
         <p className="muted" style={{ marginTop: 4 }}>
           Что не так? Мы проверим и примем меры.
         </p>
-        <div style={{ display: "grid", gap: 8, margin: "12px 0 14px" }}>
+        <div
+          role="radiogroup"
+          aria-label="Причина жалобы"
+          style={{ display: "grid", gap: 8, margin: "12px 0 14px" }}
+        >
           {REASONS.map((r) => (
             <button
               key={r.id}
               className="card"
+              role="radio"
+              aria-checked={reason === r.id}
               style={{
                 textAlign: "left",
                 cursor: "pointer",
-                borderColor: reason === r.id ? "var(--gold)" : "var(--border)",
+                minHeight: 48,
+                borderColor: reason === r.id ? "var(--gold)" : "var(--border-strong)",
                 color: reason === r.id ? "var(--gold)" : "var(--text)",
               }}
               onClick={() => {
@@ -105,12 +97,12 @@ export function ReportSheet({
           onChange={(e) => setText(e.target.value)}
         />
         <div className="row" style={{ gap: 10 }}>
-          <button className="btn secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             Отмена
-          </button>
-          <button className="btn" disabled={!reason || busy} onClick={submit}>
-            {busy ? "Отправляем…" : "Отправить"}
-          </button>
+          </Button>
+          <Button loading={busy} disabled={!reason} onClick={submit}>
+            Отправить
+          </Button>
         </div>
       </div>
     </div>

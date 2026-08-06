@@ -99,29 +99,11 @@ export function FilterSheet({
 
   return createPortal(
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(20,14,9,0.5)",
-        display: "flex",
-        alignItems: "flex-end",
-        zIndex: 100,
-      }}
+      className="sheet-backdrop"
       onClick={onClose}
     >
       <div
         className="fade-up sheet"
-        style={{
-          width: "100%",
-          maxWidth: 520,
-          margin: "0 auto",
-          maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column",
-          background: "var(--surface)",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grab" aria-hidden />

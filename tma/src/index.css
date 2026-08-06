@@ -377,7 +377,27 @@ button.tag:disabled {
   line-height: 16px;
   text-align: center;
 }
-/* Нижний лист (фильтры): grabber, прокручиваемое тело, липкий футер */
+/* Нижний лист (фильтры, детали смены): grabber, прокручиваемое тело, футер.
+   Подложка и сам лист раньше были скопированы инлайном в трёх файлах, причём
+   с z-index: 100 мимо токена --z-sheet и радиусом 20 мимо шкалы. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(20, 14, 9, 0.5);
+  z-index: var(--z-sheet);
+}
+.sheet {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
 .sheet-grab {
   width: 40px;
   height: 5px;
