@@ -167,6 +167,11 @@ class Match(Base):
     # Взаимное подтверждение выхода: закрываем смену, только когда ОБЕ стороны
     # подтвердили (противоположные стимулы → сами полицейские друг другу).
     seeker_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Отметился ли работник ИМЕННО КОДОМ. Код знает только заведение, поэтому
+    # введённый код — доказательство выхода, и по нему смену можно закрыть
+    # автоматически, если заведение молчит. Гео — доказательство слабее
+    # (рядом можно оказаться и не работая), по нему авто-закрытия нет.
+    checkin_by_code: Mapped[bool] = mapped_column(Boolean, default=False)
     employer_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
     # Спор (стороны не сошлись / работник не может отметиться) → к оператору.
     disputed: Mapped[bool] = mapped_column(Boolean, default=False)

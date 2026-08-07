@@ -147,3 +147,94 @@ def test_repeat_pairs_endpoint(client):
     r = client.get("/admin/repeat-pairs", headers=ah)
     assert r.status_code == 200
     assert r.json() == []
+
+
+def _match_ready_for_checkin(client):
+    """Доводит пару до подтверждённой смены на сегодня и возвращает данные."""
+    emp = _hdr(_auth(client, role="employer"))
+    v = _make(client, emp, date=_d(0))
+    seeker = _hdr(_auth(client, role="seeker"))
+    client.post("/swipes", headers=seeker, json={
+        "target_id": v["id"], "target_type": "vacancy", "direction": "like"})
+    me = client.get("/me", headers=seeker).json()
+    sw = client.post("/swipes", headers=emp, json={
+        "target_id": me["id"], "target_type": "user", "direction": "like"}).json()
+    mid = sw["match_id"]
+    client.post(f"/matches/{mid}/confirm", headers=seeker)
+    client.post(f"/matches/{mid}/confirm", headers=emp)
+    return emp, seeker, mid
+
+
+def _code_of(client, emp, mid):
+    rows = client.get("/matches", headers=emp).json()
+    return [m for m in rows if m["id"] == mid][0]["checkin_code"]
+
+
+def test_shift_with_code_checkin_auto_closes_when_venue_silent(client):
+    """Работник отметился кодом, заведение молчит — смена закрывается сама.
+    Раньше это был самый частый спор: правило разбора однозначное, но
+    исполнял его оператор вручную."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.digest import auto_close_shifts
+    from app.models import Match, Vacancy
+
+    emp, seeker, mid = _match_ready_for_checkin(client)
+    code = _code_of(client, emp, mid)
+    assert client.post(f"/matches/{mid}/checkin", headers=seeker,
+                       json={"code": code}).status_code == 200
+
+    db = SessionLocal()
+    try:
+        # Смена ещё не закончилась — закрывать рано.
+        assert auto_close_shifts(db) == 0
+        # Отматываем смену во вчера, чтобы срок ожидания истёк.
+        m = db.get(Match, mid)
+        v = db.get(Vacancy, m.vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+
+        assert auto_close_shifts(db) == 1
+        db.refresh(m)
+        assert m.status == "completed"
+        assert m.no_show is False
+        # Повторный запуск ничего не делает — смена уже закрыта.
+        assert auto_close_shifts(db) == 0
+    finally:
+        db.close()
+
+
+def test_geo_checkin_never_auto_closes(client):
+    """По гео смена сама НЕ закрывается: рядом с кафе можно оказаться и не
+    работая, это слабое доказательство — такие случаи решает оператор."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.digest import auto_close_shifts
+    from app.models import Match, Vacancy
+
+    emp, seeker, mid = _match_ready_for_checkin(client)
+    r = client.post(f"/matches/{mid}/checkin", headers=seeker,
+                    json={"lat": 55.75, "lng": 37.61})
+    assert r.status_code == 200
+
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        v = db.get(Vacancy, m.vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
+        db.commit()
+        assert auto_close_shifts(db) == 0
+        db.refresh(m)
+        assert m.status == "confirmed"
+    finally:
+        db.close()
+
+
+def test_auto_close_endpoint_available_to_operator(client):
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = _hdr(admin.json()["access_token"])
+    r = client.post("/admin/shifts/auto-close", headers=ah)
+    assert r.status_code == 200
+    assert "closed" in r.json()

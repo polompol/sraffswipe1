@@ -555,6 +555,10 @@ export function fetchRepeatPairs() {
   ]);
 }
 
+export function autoCloseShifts(): Promise<number> {
+  return Promise.resolve(1);
+}
+
 export function sendShiftReminders(): Promise<number> {
   return Promise.resolve(3);
 }

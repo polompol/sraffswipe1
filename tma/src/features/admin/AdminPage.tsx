@@ -10,6 +10,7 @@ import {
   adminGrant,
   fetchRepeatPairs,
   sendShiftReminders,
+  autoCloseShifts,
   adminRelink,
   adminSearchUsers,
   blockUser,
@@ -88,6 +89,25 @@ export function AdminPage() {
   const blocked = useQuery({ queryKey: ["admin-blocked"], queryFn: fetchBlocked });
   const pairs = useQuery({ queryKey: ["admin-pairs"], queryFn: fetchRepeatPairs });
   const [remindBusy, setRemindBusy] = useState(false);
+  const [closeBusy, setCloseBusy] = useState(false);
+
+  async function closeHanging() {
+    setCloseBusy(true);
+    try {
+      const n = await autoCloseShifts();
+      haptic("success");
+      toast(
+        n > 0 ? `Закрыто смен: ${n}` : "Зависших смен нет",
+        "success",
+      );
+      qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    } catch {
+      haptic("error");
+      toast("Не удалось закрыть", "error");
+    } finally {
+      setCloseBusy(false);
+    }
+  }
 
   async function remind() {
     setRemindBusy(true);
@@ -574,6 +594,14 @@ export function AdminPage() {
         </p>
         <Button loading={remindBusy} onClick={remind}>
           Напомнить о сменах на сегодня
+        </Button>
+        <p className="muted" style={{ margin: "16px 0 12px" }}>
+          Работник отметился кодом заведения, а подтверждения так и не было?
+          Такие смены закрываются сами — код знает только заведение, значит
+          человек был на месте. Спор для этого больше не нужен.
+        </p>
+        <Button variant="secondary" loading={closeBusy} onClick={closeHanging}>
+          Закрыть зависшие смены
         </Button>
       </div>
 

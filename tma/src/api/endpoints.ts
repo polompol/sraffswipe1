@@ -483,6 +483,13 @@ export async function fetchRepeatPairs(): Promise<RepeatPair[]> {
   return data;
 }
 
+/** Закрыть смены, где работник отметился кодом, а заведение промолчало. */
+export async function autoCloseShifts(): Promise<number> {
+  if (!USE_BACKEND) return mock.autoCloseShifts();
+  const { data } = await api.post<{ closed: number }>("/admin/shifts/auto-close", {});
+  return data.closed;
+}
+
 /** Разослать напоминания о сегодняшних сменах (с кнопкой «Я на смене»). */
 export async function sendShiftReminders(): Promise<number> {
   if (!USE_BACKEND) return mock.sendShiftReminders();

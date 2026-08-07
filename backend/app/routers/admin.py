@@ -486,6 +486,22 @@ def send_shift_reminders(
     return {"sent": send_reminders(db)}
 
 
+@router.post("/shifts/auto-close")
+def auto_close_hanging_shifts(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Закрыть смены, где работник отметился кодом, а заведение промолчало.
+
+    Раньше такие смены висели, работник открывал спор, и оператор звонил
+    обеим сторонам — хотя правило разбора однозначное: код знало только
+    заведение. Теперь правило исполняет код.
+    """
+    from ..digest import auto_close_shifts
+
+    return {"closed": auto_close_shifts(db)}
+
+
 class RepeatPairOut(BaseModel):
     """Пара «заведение ↔ работник», закрывшая больше одной смены."""
 

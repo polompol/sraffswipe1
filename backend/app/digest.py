@@ -4,7 +4,7 @@
 через notify_owner (тихий no-op без токена). В проде вызывается планировщиком
 (cron): `build_*` собирает, `send_*` рассылает.
 """
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -110,3 +110,69 @@ def send_reminders(db: Session) -> int:
             m.reminded_on = today
     db.commit()
     return len(reminders)
+
+
+def _shift_end(v: Vacancy) -> datetime:
+    """Момент окончания смены в UTC. Ночная смена (20:00→04:00) заканчивается
+    на следующий день — иначе закрывали бы её на сутки раньше срока."""
+    day = datetime.strptime(v.date, "%Y-%m-%d").replace(tzinfo=UTC)
+    end = v.end_time if v.end_time > v.start_time else v.end_time + 1440
+    return day + timedelta(minutes=end)
+
+
+# Сколько ждём подтверждения заведения, прежде чем закрыть смену самим.
+AUTO_CLOSE_AFTER_HOURS = 12
+
+
+def auto_close_shifts(db: Session) -> int:
+    """Закрыть смены, где работник отметился КОДОМ, а заведение молчит.
+
+    Оператор в споре всё равно решает по правилу «код знал только
+    работодатель → раз код введён, работник был на месте → засчитать».
+    Правило однозначное, значит его должен исполнять код, а не человек:
+    это снимает самый частый класс споров и разгружает оператора.
+
+    Гео-отметка сюда НЕ попадает: рядом с кафе можно оказаться и не работая.
+    Спорные смены тоже не трогаем — их разбирает оператор.
+    """
+    from .routers.matches import _accrue_commission, _sys
+
+    deadline = datetime.now(UTC) - timedelta(hours=AUTO_CLOSE_AFTER_HOURS)
+    rows = (
+        db.query(Match, Vacancy)
+        .join(Vacancy, Match.vacancy_id == Vacancy.id)
+        .filter(
+            Match.status == "confirmed",
+            Match.seeker_checked_in.is_(True),
+            Match.checkin_by_code.is_(True),
+            Match.employer_checked_in.is_(False),
+            Match.disputed.is_(False),
+        )
+        .all()
+    )
+    closed = 0
+    for m, v in rows:
+        try:
+            if _shift_end(v) > deadline:
+                continue
+        except ValueError:  # некорректная дата в вакансии — пропускаем
+            continue
+        m.status = "completed"
+        m.no_show = False
+        m.employer_checked_in = True
+        _accrue_commission(db, m)
+        _sys(
+            db, m.id,
+            "Смена закрыта автоматически: работник отметился кодом заведения, "
+            f"подтверждения не было {AUTO_CLOSE_AFTER_HOURS} часов. "
+            "Если это ошибка — напишите в поддержку.",
+        )
+        notify_owner(db, m.employer_id,
+                     "Смена закрыта автоматически: работник отметился вашим "
+                     "кодом, а подтверждения не поступило. Комиссия начислена.")
+        notify_owner(db, m.user_id,
+                     "Ваша смена закрыта ✓ Заведение не подтвердило вовремя, "
+                     "но код прихода это подтверждает.")
+        closed += 1
+    db.commit()
+    return closed
