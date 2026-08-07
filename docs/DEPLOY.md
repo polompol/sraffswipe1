@@ -163,6 +163,56 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ---
 
+## 9. Бэкапы — настроить в первый же день
+
+Весь бизнес живёт в одном контейнере Postgres на одном сервере: мэтчи,
+переписка, балансы заведений и начисленная комиссия. Умер диск — долги
+заведений не восстановить ничем. Это самый дешёвый способ потерять всё.
+
+Проверить, что дамп снимается:
+
+```sh
+cd sraffswipe1
+bash scripts/backup.sh
+```
+
+Скрипт кладёт сжатый дамп в `/var/backups/staffswipe`, проверяет, что архив
+читается и в нём есть таблицы (пустой бэкап хуже отсутствия бэкапа — он даёт
+ложное спокойствие), и удаляет копии старше 14 дней.
+
+Поставить на автомат — каждую ночь в 4:00:
+
+```sh
+crontab -e
+```
+
+Добавить строку (путь замени на свой, если клонировал не в `/root`):
+
+```
+0 4 * * * cd /root/sraffswipe1 && bash scripts/backup.sh >> /var/log/staffswipe-backup.log 2>&1
+```
+
+Проверить через сутки: `ls -lh /var/backups/staffswipe`.
+
+**Копия вне сервера.** Бэкап на том же диске не спасает от гибели самого
+сервера. Поставь `rclone`, подключи любое облако (Яндекс.Диск, S3) и укажи
+`RCLONE_REMOTE` — скрипт сам будет отправлять копию наружу:
+
+```
+0 4 * * * cd /root/sraffswipe1 && RCLONE_REMOTE=yadisk:staffswipe bash scripts/backup.sh >> /var/log/staffswipe-backup.log 2>&1
+```
+
+**Восстановление** (проверь его один раз заранее, а не в день аварии):
+
+```sh
+docker compose -f docker-compose.prod.yml stop api bot
+zcat /var/backups/staffswipe/staffswipe_2026-08-07_0400.sql.gz \
+  | docker compose -f docker-compose.prod.yml exec -T db psql -U staffswipe staffswipe
+docker compose -f docker-compose.prod.yml start api bot
+```
+
+---
+
 ## Частые проблемы
 
 - **Сертификат не выдаётся** → проверь, что A-запись указывает на этот сервер и

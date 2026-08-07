@@ -69,11 +69,13 @@ services:
       S3_SECRET: ${S3_SECRET:-}
       S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # Часовой пояс смен: сервер в UTC, а «10:00–18:00» — местное время.
+      BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
     depends_on:
       db:
         condition: service_healthy
 
-  # Telegram-бот: кнопка запуска Mini App, платежи Stars, уведомления.
+  # Telegram-бот: кнопка запуска Mini App и уведомления.
   bot:
     build: ./backend/bot
     restart: unless-stopped

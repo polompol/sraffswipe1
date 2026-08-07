@@ -1,9 +1,13 @@
 """Правка и снятие смены + отсечение прошедших смен из ленты."""
-from datetime import UTC, datetime, timedelta
+from datetime import date, timedelta
+
+from app.timeutil import local_today
 
 
 def _d(days: int) -> str:
-    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+    """Дата смены относительно «сегодня» — по местному времени, как её
+    видит человек: у сервера в UTC с 21:00 уже другая дата."""
+    return (date.fromisoformat(local_today()) + timedelta(days=days)).isoformat()
 
 
 def _auth(client, role="employer"):

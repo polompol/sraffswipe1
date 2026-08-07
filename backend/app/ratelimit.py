@@ -6,7 +6,7 @@
 import time
 from collections import defaultdict
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from .security import current_principal
 
@@ -41,6 +41,33 @@ def hit(bucket: str, limit: int, window: float) -> None:
     recent.append(now)
     _hits[bucket] = recent
     _maybe_sweep(window)
+
+
+def client_ip(request: Request) -> str:
+    """IP клиента с учётом того, что перед API стоит Caddy.
+
+    Прокси кладёт исходный адрес в X-Forwarded-For; берём ПЕРВЫЙ элемент —
+    остальные может дописать кто угодно. Без прокси (локально, тесты) —
+    адрес соединения. Пусто — общая корзина «unknown»: лучше ограничить
+    всех вместе, чем не ограничивать никого.
+    """
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()[:64] or "unknown"
+    return (request.client.host if request.client else "") or "unknown"
+
+
+def rate_limit_ip(key: str, limit: int, window: float):
+    """Зависимость FastAPI для ручек БЕЗ авторизации: ограничение по IP.
+
+    Нужна там, где принципала ещё нет, — вход через Telegram. Иначе один
+    скрипт может бесконечно дёргать вход, нагружая проверку подписи и базу.
+    """
+
+    def dep(request: Request) -> None:
+        hit(f"{key}:{client_ip(request)}", limit, window)
+
+    return dep
 
 
 def rate_limit(key: str, limit: int, window: float):

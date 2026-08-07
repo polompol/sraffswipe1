@@ -4,6 +4,7 @@ import { applyTheme, currentTheme } from "@/lib/theme";
 import { haptic, showBackButton } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 import { IconHelp } from "@/components/Icons";
+import { LEGAL_LINKS } from "@/lib/legal";
 
 function Toggle({
   on,
@@ -161,6 +162,28 @@ export function SettingsPage() {
             <IconHelp size={18} /> Помощь и поддержка
           </span>
         </Button>
+      </div>
+
+      {/* По 152-ФЗ документы должны быть доступны всегда, а не только галочкой
+          при первом входе: человек согласился месяц назад и уже не помнит, на
+          что именно. Здесь их можно перечитать в любой момент. */}
+      <div className="card" style={{ marginTop: 8 }}>
+        <div className="row" style={{ marginBottom: 8 }}>
+          <b>Документы</b>
+        </div>
+        <div style={{ display: "grid", gap: 10 }}>
+          {LEGAL_LINKS.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              target="_blank"
+              rel="noreferrer"
+              style={{ minHeight: 44, display: "flex", alignItems: "center" }}
+            >
+              {l.title}
+            </a>
+          ))}
+        </div>
       </div>
       </div>
     </div>

@@ -1,0 +1,82 @@
+name: Security
+
+# Проверки безопасности, которые должны идти сами, а не «когда вспомнили».
+# Раз в неделю — потому что уязвимость находят не в день, когда мы правим код:
+# зависимость может стать опасной, пока в репозитории вообще ничего не менялось.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # каждый понедельник, 06:00 UTC (09:00 МСК)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Секреты в истории
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # нужна ВСЯ история: удалить файл мало, коммит остаётся
+
+      - name: Поиск секретов (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  python-deps:
+    name: Уязвимости зависимостей (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - name: pip-audit
+        run: pip-audit -r backend/requirements.txt --progress-spinner off
+
+  js-deps:
+    name: Уязвимости зависимостей (npm)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tma
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: tma/package-lock.json
+      - run: npm ci
+      # Проверяем то, что реально уезжает пользователю: dev-инструменты в
+      # браузер не попадают, и падать из-за них незачем.
+      - name: npm audit (прод-зависимости)
+        run: npm audit --omit=dev --audit-level=moderate
+
+  codeql:
+    name: Анализ кода (CodeQL)
+    runs-on: ubuntu-latest
+    # CodeQL бесплатен для публичных репозиториев. Если сделать репозиторий
+    # приватным, он станет платным и job начнёт падать — не блокируем из-за
+    # этого остальные проверки, они важнее и работают всегда.
+    continue-on-error: true
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python", "javascript-typescript"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3

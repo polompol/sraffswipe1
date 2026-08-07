@@ -20,6 +20,7 @@ from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal, optional_principal
+from ..timeutil import local_today
 from .billing import commission_overdue
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
@@ -159,8 +160,9 @@ def list_vacancies(
     # Прошедшие смены не показываем НИКОГДА: раньше отсечка работала только
     # если человек сам выставил фильтр по датам, и вчерашние смены висели в
     # ленте вечно — на них откликались, а они давно прошли.
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
-    query = query.filter(Vacancy.date >= today)
+    # Дата смены — местная (см. timeutil): по часам сервера вчерашние
+    # смены висели бы в ленте ещё три часа после полуночи в Москве.
+    query = query.filter(Vacancy.date >= local_today())
     if date_from:
         query = query.filter(Vacancy.date >= date_from)
     if date_to:

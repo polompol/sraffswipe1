@@ -699,6 +699,137 @@ def commissions(
     return out
 
 
+class EraseOut(BaseModel):
+    ok: bool
+    kind: str          # user|employer
+    removed: dict      # что и сколько удалено — оператору для ответа человеку
+
+
+@router.post("/users/{owner_id}/erase", response_model=EraseOut)
+def erase_account(
+    owner_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Удаление персональных данных по заявлению (152-ФЗ, ст. 14).
+
+    Политика обещает удалить данные по обращению, а инструкция оператору
+    предлагала руками выполнить `DELETE FROM users` на боевой базе. Это и
+    опасно (одна опечатка в WHERE — и стёрт не тот человек), и неверно:
+    строку нельзя просто удалить, на неё ссылаются смены, переписка и
+    начисленная комиссия — бухгалтерские записи, которые обязаны остаться.
+
+    Поэтому не удаляем строку, а обезличиваем её: из профиля вычищается всё,
+    по чему человека можно узнать, привязка к Telegram снимается (войти в
+    этот аккаунт больше нельзя), а поведенческие данные — свайпы, избранное,
+    сохранённые поиски, аналитика, жалобы — удаляются полностью.
+
+    Операция идемпотентна: повторный вызов ничего не ломает.
+    """
+    from ..config import settings
+    from ..models import (
+        Entitlement,
+        Favorite,
+        Message,
+        Referral,
+        Review,
+        SavedSearch,
+        Streak,
+    )
+
+    target = db.get(User, owner_id)
+    kind = "user"
+    if target is None:
+        target = db.get(Employer, owner_id)
+        kind = "employer"
+    if target is None:
+        raise HTTPException(status_code=404, detail="Аккаунт не найден")
+
+    # Стереть аккаунт оператора — значит остаться без админки: доступ
+    # выдаётся по tg_id, а мы его как раз снимаем. Запрещаем.
+    admin_ids = {x.strip() for x in settings.admin_tg_ids.split(",") if x.strip()}
+    if target.tg_id is not None and str(target.tg_id) in admin_ids:
+        raise HTTPException(
+            status_code=400, detail="Нельзя стирать аккаунт администратора"
+        )
+
+    removed: dict[str, int] = {}
+
+    def _drop(model, *conditions) -> int:
+        from sqlalchemy import or_
+        cond = conditions[0] if len(conditions) == 1 else or_(*conditions)
+        return db.query(model).filter(cond).delete(synchronize_session=False)
+
+    removed["свайпы"] = _drop(Swipe, Swipe.swiper_id == owner_id,
+                              Swipe.target_id == owner_id)
+    removed["избранное"] = _drop(Favorite, Favorite.owner_id == owner_id)
+    removed["сохранённые поиски"] = _drop(SavedSearch,
+                                          SavedSearch.owner_id == owner_id)
+    removed["события аналитики"] = _drop(Event, Event.owner_id == owner_id)
+    removed["жалобы"] = _drop(Report, Report.reporter_id == owner_id)
+    removed["серии заходов"] = _drop(Streak, Streak.owner_id == owner_id)
+    removed["рефералы"] = _drop(Referral, Referral.referrer_id == owner_id,
+                                Referral.referred_id == owner_id)
+    removed["права/баланс"] = _drop(Entitlement, Entitlement.owner_id == owner_id)
+    # Текст отзыва — свободный, там может быть что угодно про человека.
+    # Оценку оставляем: она уже вошла в рейтинг второй стороны.
+    removed["тексты отзывов"] = (
+        db.query(Review)
+        .filter(Review.rater_id == owner_id)
+        .update({Review.text: ""}, synchronize_session=False)
+    )
+    # Переписка — доказательство в спорах по уже закрытым сменам, поэтому не
+    # удаляем целиком, а обезличиваем содержимое сообщений этого человека.
+    removed["сообщения"] = (
+        db.query(Message)
+        .filter(Message.sender_id == owner_id, Message.is_system.is_(False))
+        .update({Message.text: "[сообщение удалено по заявлению]"},
+                synchronize_session=False)
+    )
+
+    # Профиль: снимаем привязку к Telegram и вычищаем всё личное.
+    # Телефон обязан остаться уникальным — ставим технический маркер.
+    target.tg_id = None
+    target.tg_username = None
+    target.phone = f"erased:{owner_id[:12]}"
+    target.blocked = True
+    if kind == "user":
+        target.name = "Профиль удалён"
+        target.birth_date = ""
+        target.city = ""
+        target.district = ""
+        target.lat = 0.0
+        target.lng = 0.0
+        target.roles = ""
+        target.med_book = "no"
+        target.self_employed = False
+        target.inn = None
+        target.experience_tags = ""
+        target.photo_urls = ""
+        target.about = ""
+        target.available_today = False
+    else:
+        target.company_name = "Профиль удалён"
+        target.inn = ""
+        target.ogrn = ""
+        target.address = ""
+        target.lat = 0.0
+        target.lng = 0.0
+        target.contact_phone = ""
+        target.photo_url = ""
+        # Смены удалённого заведения нельзя оставлять в ленте: на них
+        # откликаются, а отвечать уже некому.
+        removed["смены сняты с публикации"] = (
+            db.query(Vacancy)
+            .filter(Vacancy.employer_id == owner_id, Vacancy.status == "active")
+            .update({Vacancy.status: "blocked"}, synchronize_session=False)
+        )
+
+    db.commit()
+    return EraseOut(ok=True, kind=kind,
+                    removed={k: int(v) for k, v in removed.items()})
+
+
 @router.post("/commissions/{employer_id}/settle")
 def settle_commission(
     employer_id: str,

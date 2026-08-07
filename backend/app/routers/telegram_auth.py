@@ -9,6 +9,7 @@ from ..config import settings
 from ..db import get_db
 from ..entitlements import get_or_create
 from ..models import Employer, Entitlement, Event, Referral, User
+from ..ratelimit import rate_limit_ip
 from ..schemas import TokenOut
 from ..security import create_token
 from ..streaks import touch_streak
@@ -79,7 +80,15 @@ def _track_source(db, owner_id: str, code: str, role: str) -> None:
     db.commit()
 
 
-@router.post("/telegram", response_model=TokenOut)
+@router.post(
+    "/telegram",
+    response_model=TokenOut,
+    # Вход не требует авторизации, поэтому ограничиваем по IP:
+    # иначе скрипт бесконечно дёргает проверку подписи и базу.
+    # 30 в минуту — с запасом для человека, который переоткрывает
+    # приложение, и мало для перебора.
+    dependencies=[Depends(rate_limit_ip("tg-login", 30, 60))],
+)
 def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     valid = validate_init_data(
         body.init_data, settings.telegram_bot_token,

@@ -3,6 +3,28 @@
 #   https://ДОМЕН/*      → статика Telegram Mini App (nginx)
 # WebSocket-чат (/api/ws/...) проксируется тем же reverse_proxy автоматически.
 # Домен подставляется из переменной DOMAIN (см. .env).
+
+# Заголовки, которые должны стоять на КАЖДОМ ответе — и на страницах, и на
+# ответах API. Раньше они висели только на статике: ответы API уходили без
+# защиты от подмены типа содержимого и без HSTS.
+(security_headers) {
+	header {
+		# Год HTTPS: браузер больше не пойдёт на этот домен по http, даже если
+		# кто-то подсунет такую ссылку. Без preload — его отзывать долго.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Не угадывать тип содержимого: загруженный «текст» не станет скриптом.
+		X-Content-Type-Options "nosniff"
+		# В чужой домен утекает только адрес сайта, без пути и параметров.
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Гео нужно для отметки «я на смене» — оставляем себе. Камера,
+		# микрофон и оплата приложению не нужны: пусть будут запрещены,
+		# чтобы встроенный сторонний код не смог их запросить.
+		Permissions-Policy "geolocation=(self), camera=(), microphone=(), payment=(), usb=(), midi=(), magnetometer=()"
+		# Не сообщаем, на чём работает сервер.
+		-Server
+	}
+}
+
 {$DOMAIN} {
 	encode zstd gzip
 
@@ -15,19 +37,25 @@
 	# Бэкенд. handle_path снимает префикс /api, дальше FastAPI видит свои пути
 	# (/me, /vacancies, /auth/..., /ws/chat/...).
 	handle_path /api/* {
+		import security_headers
 		reverse_proxy api:8000
 	}
 
 	# Всё остальное — собранный Mini App.
 	handle {
-		# Защитные заголовки для статики Mini App. CSP разрешает inline-стили
-		# (нужны Vite/приложению), картинки по https (фото заведений с S3/CDN),
-		# соединения к своему API и Telegram. Внешние скрипты запрещены.
+		import security_headers
+		# CSP для страницы приложения. Скрипты — только свои: внешний скрипт
+		# не подключить, даже если он как-то попадёт в разметку.
+		#   style-src unsafe-inline — Vite и приложение задают стили инлайном;
+		#   img-src https: data: — фото заведений с S3/CDN и встроенные иконки;
+		#   connect-src — свой API, свой WebSocket, Telegram и Sentry: без
+		#     последнего отчёты об ошибках молча не уходили бы, а в консоли
+		#     висело нарушение CSP;
+		#   frame-ancestors — открывать приложение вправе только Telegram;
+		#   base-uri/form-action/object-src — закрываем классические способы
+		#     увести переходы и данные на чужой адрес.
 		header {
-			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://{$DOMAIN} wss://{$DOMAIN} https://telegram.org; frame-ancestors https://web.telegram.org https://telegram.org"
-			X-Content-Type-Options "nosniff"
-			Referrer-Policy "strict-origin-when-cross-origin"
-			-Server
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://{$DOMAIN} wss://{$DOMAIN} https://telegram.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io; frame-ancestors https://web.telegram.org https://telegram.org https://*.telegram.org; base-uri 'self'; form-action 'self'; object-src 'none'"
 		}
 		reverse_proxy tma:80
 	}

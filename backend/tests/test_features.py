@@ -842,13 +842,13 @@ def test_urgent_ping(client):
 
 
 def test_digest_and_reminders_logic(client):
-    from datetime import UTC, datetime
-
     from app import digest
     from app.db import SessionLocal
+    from app.timeutil import local_today
 
     emp_token, _ = _auth(client, "employer")
-    today = datetime.now(UTC).date().isoformat()
+    # «Сегодня» — по Москве, как его видит человек, а не по часам сервера.
+    today = local_today()
     # активная смена на сегодня в Москве
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
         "role": "barista", "date": today, "start_time": 600, "end_time": 1080,

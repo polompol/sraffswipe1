@@ -7,6 +7,7 @@ import {
   settleCommission,
   resolveMatch,
   adminCreditWallet,
+  adminEraseAccount,
   adminGrant,
   fetchRepeatPairs,
   sendShiftReminders,
@@ -149,6 +150,27 @@ export function AdminPage() {
     await adminCreditWallet(id, amountRub);
     toast(`Баланс пополнен на ${amountRub.toLocaleString("ru-RU")} ₽`, "success");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
+  }
+
+  // Удаление данных по заявлению (152-ФЗ). Необратимо, поэтому в два тапа:
+  // первый показывает предупреждение, второй выполняет.
+  const [eraseFor, setEraseFor] = useState<string | null>(null);
+  const [eraseBusy, setEraseBusy] = useState(false);
+  async function erase(id: string) {
+    setEraseBusy(true);
+    try {
+      const removed = await adminEraseAccount(id);
+      const total = Object.values(removed).reduce((s, n) => s + n, 0);
+      haptic("success");
+      toast(`Данные удалены, записей затронуто: ${total}`, "success");
+      setEraseFor(null);
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch {
+      haptic("error");
+      toast("Не удалось удалить — попробуйте ещё раз", "error");
+    } finally {
+      setEraseBusy(false);
+    }
   }
 
   // Перенос аккаунта на новый Telegram: id аккаунта → ввод нового tg_id.
@@ -436,7 +458,39 @@ export function AdminPage() {
               >
                 ↔ Новый Telegram
               </button>
+              <button
+                className="tag"
+                style={{ cursor: "pointer", color: "var(--danger)", borderColor: "var(--danger)" }}
+                onClick={() => setEraseFor(eraseFor === u.id ? null : u.id)}
+              >
+                Удалить данные
+              </button>
             </div>
+            {eraseFor === u.id && (
+              <div
+                className="card"
+                style={{ marginTop: 8, borderColor: "var(--danger)" }}
+              >
+                <p className="muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+                  Удалить персональные данные по заявлению (152-ФЗ). Из профиля
+                  исчезнет всё личное, войти в аккаунт будет нельзя.{" "}
+                  <b>Отменить это нельзя.</b> Смены, отзывы и начисленная
+                  комиссия останутся — это бухгалтерия.
+                </p>
+                <div className="row" style={{ gap: 8 }}>
+                  <Button
+                    variant="danger"
+                    loading={eraseBusy}
+                    onClick={() => erase(u.id)}
+                  >
+                    Да, удалить данные
+                  </Button>
+                  <Button variant="ghost" onClick={() => setEraseFor(null)}>
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            )}
             {relinkFor === u.id && (
               <div className="row" style={{ gap: 8, marginTop: 8 }}>
                 <input

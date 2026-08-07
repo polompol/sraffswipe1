@@ -1,10 +1,11 @@
 """Логика ежедневных серий (стриков) + награда за 7 дней."""
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
 from .entitlements import get_or_create
 from .models import Streak
+from .timeutil import local_today
 
 
 def touch_streak(db: Session, owner_id: str) -> int:
@@ -12,7 +13,9 @@ def touch_streak(db: Session, owner_id: str) -> int:
 
     +1 супер-лайк за каждые полные 7 дней серии.
     """
-    today = datetime.now(UTC).date()
+    # День серии считаем по местному времени: иначе заход в 01:00 по
+    # Москве попадал бы во вчерашний день и рвал серию.
+    today = date.fromisoformat(local_today())
     s = db.get(Streak, owner_id)
     if s is None:
         s = Streak(owner_id=owner_id, count=1, last_active=today.isoformat())
