@@ -7,3 +7,6 @@ dist/
 .vite/
 
 *.tsbuildinfo
+
+# Юридические страницы собираются из docs/legal/ при сборке
+public/legal/

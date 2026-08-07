@@ -5,12 +5,9 @@ import { useSession } from "@/store/session";
 import { authTelegram, track } from "@/api/endpoints";
 import { rawInitData, haptic } from "@/telegram/sdk";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
+import { OFFER_URL, PRIVACY_URL } from "@/lib/legal";
 import type { ComponentType } from "react";
 
-// Юридические документы (152-ФЗ) — задаются через env. ОБЯЗАТЕЛЬНО укажите
-// реальные ссылки перед запуском, иначе согласие будет ссылаться в никуда.
-const OFFER_URL = import.meta.env.VITE_OFFER_URL || "#";
-const PRIVACY_URL = import.meta.env.VITE_PRIVACY_URL || "#";
 
 export function RolePage() {
   const nav = useNavigate();

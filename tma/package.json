@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "npm run legal && vite",
+    "legal": "node scripts/build-legal.mjs",
+    "build": "npm run legal && tsc -b && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "lint": "eslint .",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@testing-library/react": "^16.0.1",
+    "@types/node": "^26.2.0",
     "@types/react": "^18.3.4",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

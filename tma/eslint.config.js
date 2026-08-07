@@ -23,4 +23,15 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Сборочные скрипты (сборка юридических страниц) исполняет Node, а не
+    // браузер: там свои глобальные объекты — console, process, fs.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // Тесты в окружении Node: читают файлы и запускают сборочные скрипты.
+    files: ["src/**/*.test.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.node } },
+  },
 );
