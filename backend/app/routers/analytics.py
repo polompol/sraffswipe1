@@ -1,7 +1,7 @@
 """Аналитика воронки: приём событий + агрегаты."""
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Event, User
-from ..ratelimit import hit
+from ..ratelimit import client_ip, hit
 from ..security import current_principal, optional_principal
 
 router = APIRouter(tags=["analytics"])
@@ -37,15 +37,18 @@ class EventIn(BaseModel):
 @router.post("/events")
 def track(
     body: EventIn,
+    request: Request,
     db: Session = Depends(get_db),
     principal: dict | None = Depends(optional_principal),
 ):
-    # Защита от раздувания БД: (1) потолок размера props — каждая запись
-    # ограничена; (2) для авторизованных — рейт-лимит на принципала. Анонимный
-    # поток (событие «открыл» до входа) ограничивается на уровне прокси (Caddy),
-    # т.к. app-лимит без принципала завязан на IP, которого здесь нет.
+    # Защита от раздувания БД: потолок размера props + частота.
+    # Раньше комментарий обещал, что анонимный поток ограничит Caddy, — но
+    # никакого лимита на прокси нет, и это была единственная ручка без
+    # авторизации, которая ПИШЕТ в базу. Теперь аноним ограничен по адресу.
     if principal:
         hit(f"events:{principal['id']}", 120, 60)
+    else:
+        hit(f"events-ip:{client_ip(request)}", 120, 60)
     # «source» — служебное имя атрибуции, пишется только при регистрации
     # (_track_source). Не даём подделать его через публичный /events и
     # засорить админ-статистику источников.

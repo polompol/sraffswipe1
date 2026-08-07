@@ -264,8 +264,13 @@ def yookassa_webhook(
             or amount.get("currency") != "RUB"
         ):
             raise HTTPException(status_code=400, detail="Сумма платежа не совпадает")
+        # Без id платежа защита от повтора не работает: столбец уникален, но
+        # NULL не конфликтует с NULL, и один и тот же вебхук зачислялся бы
+        # снова и снова. Настоящая ЮKassa id присылает всегда.
         charge_id = obj.get("id")
-        if charge_id and db.query(Purchase).filter(
+        if not charge_id:
+            raise HTTPException(status_code=400, detail="Нет id платежа")
+        if db.query(Purchase).filter(
             Purchase.provider_charge_id == charge_id
         ).first():
             return {"ok": True, "duplicate": True}

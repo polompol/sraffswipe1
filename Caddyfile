@@ -28,6 +28,23 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	# Журнал доступа пишет адрес запроса целиком, а секреты у нас приходят
+	# именно в адресе: токен для скачивания акта и токен WebSocket-чата (иначе
+	# их некуда положить), секрет вебхука ЮKassa (касса не умеет заголовки).
+	# Без этой замены они лежали бы открытым текстом в логе на сервере —
+	# и в любой копии логов. Значения вырезаем, сам факт запроса остаётся.
+	log {
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+					replace secret REDACTED
+				}
+			}
+		}
+	}
+
 	# Анти-DoS: тело запроса до 2 МБ (фото грузятся напрямую в S3, не через API,
 	# поэтому большие тела на API не нужны). Отсекается ДО чтения в память.
 	request_body {
@@ -48,14 +65,17 @@
 		# не подключить, даже если он как-то попадёт в разметку.
 		#   style-src unsafe-inline — Vite и приложение задают стили инлайном;
 		#   img-src https: data: — фото заведений с S3/CDN и встроенные иконки;
-		#   connect-src — свой API, свой WebSocket, Telegram и Sentry: без
-		#     последнего отчёты об ошибках молча не уходили бы, а в консоли
-		#     висело нарушение CSP;
+		#   connect-src — свой API, свой WebSocket, Telegram, Sentry и хранилище
+		#     фото. Их легко забыть, а эффект тихий: браузер режет запрос молча,
+		#     нарушение видно только в консоли. Так уже было с Sentry (отчёты об
+		#     ошибках не уходили бы) и с загрузкой фото — она шлёт файл прямо в
+		#     хранилище, мимо нашего домена. Адрес хранилища задаётся в
+		#     UPLOAD_ORIGIN (пусто = загрузка фото не подключена);
 		#   frame-ancestors — открывать приложение вправе только Telegram;
 		#   base-uri/form-action/object-src — закрываем классические способы
 		#     увести переходы и данные на чужой адрес.
 		header {
-			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://{$DOMAIN} wss://{$DOMAIN} https://telegram.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io; frame-ancestors https://web.telegram.org https://telegram.org https://*.telegram.org; base-uri 'self'; form-action 'self'; object-src 'none'"
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://{$DOMAIN} wss://{$DOMAIN} https://telegram.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io {$UPLOAD_ORIGIN:}; frame-ancestors https://web.telegram.org https://telegram.org https://*.telegram.org; base-uri 'self'; form-action 'self'; object-src 'none'"
 		}
 		reverse_proxy tma:80
 	}

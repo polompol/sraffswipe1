@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ..db import SessionLocal, get_db
 from ..models import Match, Message
 from ..notify import notify_owner
-from ..ratelimit import rate_limit
+from ..ratelimit import hit, rate_limit
 from ..schemas import MessageIn, MessageOut
 from ..security import _is_blocked, current_principal, decode_token
 
@@ -143,6 +143,17 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
             raw = data.get("text", "")
             text = raw.strip()[:2000] if isinstance(raw, str) else ""
             if not text:
+                continue
+            # Та же частота, что и на REST-пути (30 в минуту). Раньше лимит
+            # стоял только на REST, и через сокет тот же участник мог лить
+            # сообщения без ограничений — точно такой же обход, как когда-то
+            # с длиной текста.
+            try:
+                hit(f"msg:{sender}", 30, 60)
+            except HTTPException:
+                await websocket.send_json(
+                    {"error": "Слишком часто. Подождите немного."}
+                )
                 continue
             db = SessionLocal()
             try:

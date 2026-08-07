@@ -287,14 +287,22 @@ class MeUpdateIn(BaseModel):
     ] | None = None
     city: Annotated[str, StringConstraints(max_length=80)] | None = None
     district: Annotated[str, StringConstraints(max_length=80)] | None = None
-    roles: Annotated[list[str], Field(max_length=12)] | None = None
+    # max_length у списка ограничивает ЧИСЛО элементов, а не их длину:
+    # двенадцать строк по мегабайту проходили проверку. Ограничиваем и то, и то.
+    roles: Annotated[
+        list[Annotated[str, StringConstraints(max_length=40)]],
+        Field(max_length=12),
+    ] | None = None
     med_book: Literal["yes", "no", "expired"] | None = None
     self_employed: bool | None = None
     inn: Annotated[
         str, StringConstraints(pattern=r"^\d{10,12}$")
     ] | None = None
     about: Annotated[str, StringConstraints(max_length=1000)] | None = None
-    experience_tags: Annotated[list[str], Field(max_length=12)] | None = None
+    experience_tags: Annotated[
+        list[Annotated[str, StringConstraints(max_length=40)]],
+        Field(max_length=12),
+    ] | None = None
     photo_url: Annotated[str, StringConstraints(max_length=500)] | None = None
     company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 

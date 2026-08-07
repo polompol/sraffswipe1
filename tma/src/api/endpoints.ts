@@ -732,19 +732,36 @@ export async function verifyEmployer(inn: string): Promise<VerifyResult> {
   return data;
 }
 
-/** Загрузка фото: presigned URL → прямой PUT в S3 → публичный URL. */
+/**
+ * Загрузка фото: подписанная форма → прямая отправка в хранилище → публичный URL.
+ *
+ * Форма (а не PUT) нужна ради ограничения размера: подписанный PUT принимает
+ * файл ЛЮБОГО объёма, и одним запросом можно было забить хранилище. Условие
+ * на размер проверяет само хранилище, обойти его нельзя.
+ */
 export async function uploadPhoto(file: File): Promise<string> {
   if (!USE_BACKEND) {
     throw new Error("Загрузка фото доступна только с backend");
   }
-  const { data } = await api.post<{ upload_url: string; public_url: string }>(
-    "/uploads/photo-url",
-    { content_type: file.type },
-  );
-  // Прямой PUT в S3 — без наших интерсепторов/JWT.
-  await axios.put(data.upload_url, file, {
-    headers: { "Content-Type": file.type },
-  });
+  const { data } = await api.post<{
+    upload_url: string;
+    fields: Record<string, string>;
+    public_url: string;
+    max_bytes: number;
+  }>("/uploads/photo-url", { content_type: file.type });
+
+  if (file.size > data.max_bytes) {
+    throw new Error(
+      `Фото больше ${Math.round(data.max_bytes / 1024 / 1024)} МБ — выберите поменьше`,
+    );
+  }
+
+  const form = new FormData();
+  // Поля от хранилища идут ПЕРЕД файлом — иначе подпись не проверится.
+  Object.entries(data.fields).forEach(([k, v]) => form.append(k, v));
+  form.append("file", file);
+  // Прямая отправка в хранилище — без наших интерсепторов и JWT.
+  await axios.post(data.upload_url, form);
   return data.public_url;
 }
 
