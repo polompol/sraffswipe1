@@ -601,6 +601,12 @@ export function adminRelink(
   void _newTgId;
   return Promise.resolve();
 }
+export function adminEraseAccount(
+  _ownerId: string,
+): Promise<Record<string, number>> {
+  void _ownerId;
+  return Promise.resolve({ "свайпы": 0, "избранное": 0, "сообщения": 0 });
+}
 export function adminCreditWallet(
   _ownerId: string,
   _amountRub: number,

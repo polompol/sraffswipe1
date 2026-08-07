@@ -578,6 +578,22 @@ export async function adminRelink(
   await api.post("/admin/relink", { owner_id: ownerId, new_tg_id: newTgId });
 }
 
+/**
+ * Удаление персональных данных по заявлению (152-ФЗ). Необратимо: профиль
+ * обезличивается, привязка к Telegram снимается. Смены и начисленная
+ * комиссия остаются — это бухгалтерия.
+ */
+export async function adminEraseAccount(
+  ownerId: string,
+): Promise<Record<string, number>> {
+  if (!USE_BACKEND) return mock.adminEraseAccount(ownerId);
+  const { data } = await api.post<{ removed: Record<string, number> }>(
+    `/admin/users/${ownerId}/erase`,
+    {},
+  );
+  return data.removed;
+}
+
 /** Оператор зачисляет аванс на баланс заведения (принял СБП/счёт). */
 export async function adminCreditWallet(
   ownerId: string,
