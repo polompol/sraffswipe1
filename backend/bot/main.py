@@ -2,30 +2,24 @@
 
 Запускается отдельным процессом от API.
 - /start — кнопка запуска Mini App.
-- Платежи Telegram Stars: pre_checkout → successful_payment → начисление прав
-  через backend `/billing/fulfill`.
-- Уведомления (мэтч, сообщение, оплата) отправляются функцией notify().
+- Уведомления (мэтч, сообщение, смена) шлёт API напрямую (app/notify.py).
 
 Зависимости: см. bot/requirements.txt. Не импортируется приложением API.
 """
 import asyncio
 import os
 
-import httpx
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
-    PreCheckoutQuery,
     WebAppInfo,
 )
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://example.com")
-API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
-INTERNAL_SECRET = os.environ.get("INTERNAL_API_SECRET", "")
 # «Печатающий» эффект: индикатор «печатает…» + плавное раскрытие текста.
 # Выключается BOT_TYPEWRITER=0 (тогда сообщения приходят сразу).
 TYPEWRITER = os.environ.get("BOT_TYPEWRITER", "1") != "0"
@@ -115,35 +109,6 @@ async def support_cmd(message: Message) -> None:
         "аккаунт и историю смены.\n"
         "Потерял доступ к старому Telegram? Напиши в поддержку с нового — "
         "оператор перенесёт аккаунт с рейтингом и историей.",
-    )
-
-
-@dp.pre_checkout_query()
-async def pre_checkout(query: PreCheckoutQuery) -> None:
-    # Подтверждаем все корректные инвойсы Stars.
-    await query.answer(ok=True)
-
-
-@dp.message(F.successful_payment)
-async def on_paid(message: Message) -> None:
-    sp = message.successful_payment
-    if sp is None:
-        return
-    owner_id, _, sku = sp.invoice_payload.partition(":")
-    async with httpx.AsyncClient(base_url=API_BASE, timeout=10) as client:
-        await client.post(
-            "/billing/fulfill",
-            headers={"X-Internal-Token": INTERNAL_SECRET},
-            json={
-                "owner_id": owner_id,
-                "sku": sku,
-                "provider": "stars",
-                "charge_id": sp.telegram_payment_charge_id,
-            },
-        )
-    await send_typed(
-        message,
-        "Оплата прошла ✅ Права начислены. Возвращайтесь в приложение.",
     )
 
 

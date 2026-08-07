@@ -1,6 +1,8 @@
 """Социальные фичи: рефералы, отзывы/рейтинг, профиль текущего пользователя."""
+from typing import Annotated, Literal
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -41,8 +43,8 @@ def referral_me(
 
 
 class ReviewIn(BaseModel):
-    stars: int
-    text: str = ""
+    stars: Annotated[int, Field(ge=1, le=5)]
+    text: Annotated[str, StringConstraints(max_length=1000)] = ""
 
 
 def _recompute_rating(db: Session, ratee_id: str) -> float:
@@ -74,8 +76,11 @@ def leave_review(
     me = principal["id"]
     if me not in (match.user_id, match.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа")
-    if match.status not in ("confirmed", "completed"):
-        raise HTTPException(status_code=400, detail="Смена ещё не подтверждена")
+    # Отзыв — только за фактически состоявшуюся смену (обе стороны отметились),
+    # а не за «согласились выйти» (confirmed). Иначе рейтинг накручивается
+    # сговором «работник + фейковое заведение» без единой реальной смены.
+    if match.status != "completed":
+        raise HTTPException(status_code=400, detail="Смена ещё не закрыта")
     if db.query(Review).filter(
         Review.match_id == match_id, Review.rater_id == me
     ).first():
@@ -102,11 +107,20 @@ class MeOut(BaseModel):
     tgUsername: str | None = None
     streak: int = 0
     city: str = ""
+    district: str = ""
     incomingLikes: int = 0  # «тебя хотят»: входящие лайки/отклики
     earnedRub: int = 0  # заработано через сервис (мотивация доходом)
     shiftsDone: int = 0  # сколько смен закрыто
     availableToday: bool = False  # «Готов выйти сегодня» (только соискатель)
     profileCompletion: int = 100  # % заполненности анкеты соискателя
+    # Поля для предзаполнения экрана редактирования (свои данные, не публичные).
+    birthDate: str = ""
+    roles: list[str] = []
+    selfEmployed: bool = False
+    inn: str | None = None
+    about: str = ""
+    experienceTags: list[str] = []
+    photoUrl: str = ""
 
 
 def _streak(db: Session, owner_id: str) -> int:
@@ -162,13 +176,14 @@ def _shift_pay(rate: int, rate_type: str, start: int, end: int) -> int:
 def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
     """(сколько смен закрыто, сколько заработано ₽).
 
-    Считаем по подтверждённым/завершённым мэтчам. Для соискателя — сумма
-    оплат по сменам (мотивация доходом). Для заведения — только счётчик смен."""
+    Считаем ТОЛЬКО по закрытым смёнам (completed = взаимно подтверждены). За
+    confirmed (только согласились) не начисляем — иначе «заработок» и счётчик
+    смен накручивались бы фиктивными мэтчами без реального выхода."""
     col = Match.employer_id if role == "employer" else Match.user_id
     rows = (
         db.query(Vacancy.rate, Vacancy.rate_type, Vacancy.start_time, Vacancy.end_time)
         .join(Match, Match.vacancy_id == Vacancy.id)
-        .filter(col == owner_id, Match.status.in_(("confirmed", "completed")))
+        .filter(col == owner_id, Match.status == "completed")
         .all()
     )
     shifts = len(rows)
@@ -210,14 +225,21 @@ def me(
     if u is None:
         raise HTTPException(status_code=404, detail="Не найдено")
     shifts, earned = _earnings(db, "seeker", u.id)
+    roles = [r for r in (u.roles or "").split(",") if r]
+    exp = [t for t in (u.experience_tags or "").split(",") if t]
+    photos = [p for p in (u.photo_urls or "").split(",") if p]
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city,
+        streak=_streak(db, u.id), city=u.city, district=u.district,
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
         availableToday=u.available_today,
         profileCompletion=_profile_completion(u),
+        birthDate=u.birth_date or "", roles=roles,
+        selfEmployed=u.self_employed, inn=u.inn,
+        about=u.about or "", experienceTags=exp,
+        photoUrl=photos[0] if photos else "",
     )
 
 
@@ -257,17 +279,24 @@ def _age_from_iso(iso: str) -> int | None:
 
 
 class MeUpdateIn(BaseModel):
-    name: str | None = None
-    birth_date: str | None = None  # ISO yyyy-mm-dd
-    city: str | None = None
-    district: str | None = None
-    roles: list[str] | None = None
-    med_book: str | None = None
+    # Лимиты длины — анти-абуз: без них можно записать мегабайтные строки в
+    # имя/«о себе» и раздуть БД.
+    name: Annotated[str, StringConstraints(max_length=80)] | None = None
+    birth_date: Annotated[
+        str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    ] | None = None
+    city: Annotated[str, StringConstraints(max_length=80)] | None = None
+    district: Annotated[str, StringConstraints(max_length=80)] | None = None
+    roles: Annotated[list[str], Field(max_length=12)] | None = None
+    med_book: Literal["yes", "no", "expired"] | None = None
     self_employed: bool | None = None
-    inn: str | None = None
-    about: str | None = None
-    photo_url: str | None = None
-    company_name: str | None = None
+    inn: Annotated[
+        str, StringConstraints(pattern=r"^\d{10,12}$")
+    ] | None = None
+    about: Annotated[str, StringConstraints(max_length=1000)] | None = None
+    experience_tags: Annotated[list[str], Field(max_length=12)] | None = None
+    photo_url: Annotated[str, StringConstraints(max_length=500)] | None = None
+    company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
 
 @router.put("/me", response_model=MeOut)
@@ -290,10 +319,19 @@ def update_me(
         e = db.get(Employer, principal["id"])
         if e is None:
             raise HTTPException(status_code=404, detail="Не найдено")
+        # Правка названия/ИНН вручную СБРАСЫВАЕТ бейдж «Проверен»: верификация
+        # подтверждала конкретные данные из DaData. Иначе можно было бы
+        # подтвердиться, а потом переписать имя на чужой бренд с бейджем.
+        changed_identity = (
+            (body.company_name is not None and body.company_name != e.company_name)
+            or (body.inn is not None and body.inn != e.inn)
+        )
         if body.company_name is not None:
             e.company_name = body.company_name
         if body.inn is not None:
             e.inn = body.inn
+        if changed_identity and e.verified:
+            e.verified = False
         db.commit()
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
@@ -322,6 +360,8 @@ def update_me(
         u.inn = body.inn
     if body.about is not None:
         u.about = body.about
+    if body.experience_tags is not None:
+        u.experience_tags = ",".join(body.experience_tags)
     if body.photo_url is not None:
         u.photo_urls = body.photo_url
     db.commit()

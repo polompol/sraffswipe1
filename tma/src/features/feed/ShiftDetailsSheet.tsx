@@ -46,12 +46,11 @@ export function ShiftDetailsSheet({ v, onClose }: { v: Vacancy; onClose: () => v
 
   return createPortal(
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(20,14,9,0.5)", display: "flex", alignItems: "flex-end", zIndex: 100 }}
+      className="sheet-backdrop"
       onClick={onClose}
     >
       <div
         className="fade-up sheet"
-        style={{ width: "100%", maxWidth: 520, margin: "0 auto", maxHeight: "90vh", display: "flex", flexDirection: "column", background: "var(--surface)", borderTopLeftRadius: 20, borderTopRightRadius: 20 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grab" aria-hidden />
@@ -94,7 +93,7 @@ export function ShiftDetailsSheet({ v, onClose }: { v: Vacancy; onClose: () => v
             <div className="muted" style={{ marginTop: 14, lineHeight: 1.5 }}>{v.description}</div>
           )}
 
-          <div className="card" style={{ marginTop: 16, background: "rgba(165,28,48,.05)", borderColor: "var(--gold)" }}>
+          <div className="card" style={{ marginTop: 16, background: "var(--gold-tint)", borderColor: "var(--gold)" }}>
             <div className="row" style={{ gap: 8 }}>
               <span style={{ color: "var(--gold)", display: "inline-flex" }}><IconCheck size={16} /></span>
               <span className="muted">Оплату получаете напрямую от заведения. Никаких предоплат — это мошенничество.</span>

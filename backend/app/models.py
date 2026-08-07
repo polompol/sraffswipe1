@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -90,9 +91,16 @@ class Vacancy(Base):
     """Вакансия/смена (коллекция vacancies)."""
 
     __tablename__ = "vacancies"
+    # Лента — самый частый запрос сервиса, и он всегда фильтрует по этой паре:
+    # активные смены, дата не в прошлом. Составной индекс закрывает оба условия.
+    __table_args__ = (Index("ix_vacancy_status_date", "status", "date"),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    employer_id: Mapped[str] = mapped_column(ForeignKey("employers.id"))
+    # Индекс: лента фильтрует по employer_id (свои смены, поиск встречного
+    # лайка). Внешний ключ индекс НЕ создаёт — в PostgreSQL это отдельная вещь.
+    employer_id: Mapped[str] = mapped_column(
+        ForeignKey("employers.id"), index=True
+    )
     role: Mapped[str] = mapped_column(String)
     date: Mapped[str] = mapped_column(String)  # ISO yyyy-mm-dd
     start_time: Mapped[int] = mapped_column(Integer)  # минуты от полуночи
@@ -159,9 +167,17 @@ class Match(Base):
     # Взаимное подтверждение выхода: закрываем смену, только когда ОБЕ стороны
     # подтвердили (противоположные стимулы → сами полицейские друг другу).
     seeker_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Отметился ли работник ИМЕННО КОДОМ. Код знает только заведение, поэтому
+    # введённый код — доказательство выхода, и по нему смену можно закрыть
+    # автоматически, если заведение молчит. Гео — доказательство слабее
+    # (рядом можно оказаться и не работая), по нему авто-закрытия нет.
+    checkin_by_code: Mapped[bool] = mapped_column(Boolean, default=False)
     employer_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
     # Спор (стороны не сошлись / работник не может отметиться) → к оператору.
     disputed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Дата последнего напоминания о смене (YYYY-MM-DD). Нужна, чтобы повторный
+    # запуск рассылки (оператор нажал дважды / крон) не слал людям дубли.
+    reminded_on: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -235,14 +251,14 @@ class WalletTxn(Base):
 
 
 class Purchase(Base):
-    """Журнал покупок (Stars/ЮKassa). Идемпотентность по provider_charge_id."""
+    """Журнал платежей ЮKassa. Идемпотентность по provider_charge_id."""
 
     __tablename__ = "purchases"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     owner_id: Mapped[str] = mapped_column(String, index=True)
     sku: Mapped[str] = mapped_column(String)
-    provider: Mapped[str] = mapped_column(String)  # stars|yookassa
+    provider: Mapped[str] = mapped_column(String)  # yookassa
     amount: Mapped[int] = mapped_column(Integer, default=0)
     currency: Mapped[str] = mapped_column(String, default="XTR")
     # pending|paid|failed

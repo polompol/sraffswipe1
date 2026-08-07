@@ -355,6 +355,12 @@ const meProfile: Me = {
   shiftsDone: 7,
   availableToday: false,
   profileCompletion: 70,
+  birthDate: "2000-04-12",
+  roles: ["waiter", "barista"],
+  selfEmployed: true,
+  inn: "771298765432",
+  about: "",
+  photoUrl: "",
 };
 
 export function createVacancy(input: VacancyInput): Promise<Vacancy> {
@@ -384,6 +390,36 @@ export function createVacancy(input: VacancyInput): Promise<Vacancy> {
   };
   VACANCIES.unshift(v);
   return Promise.resolve(v);
+}
+
+export function updateVacancy(id: string, input: VacancyInput): Promise<Vacancy> {
+  const i = VACANCIES.findIndex((v) => v.id === id);
+  if (i < 0) return Promise.reject(new Error("Смена не найдена"));
+  const v: Vacancy = {
+    ...VACANCIES[i]!,
+    role: input.role as Vacancy["role"],
+    date: input.date,
+    startTime: input.start_time,
+    endTime: input.end_time,
+    rate: input.rate,
+    rateType: input.rate_type as Vacancy["rateType"],
+    payMethod: (input.pay_method as Vacancy["payMethod"]) ?? "cash",
+    tips: (input.tips as Vacancy["tips"]) ?? "none",
+    description: input.description ?? "",
+    requireMedBook: input.require_med_book ?? false,
+    lat: input.lat ?? 0,
+    lng: input.lng ?? 0,
+    address: input.address ?? "",
+    city: input.city ?? "",
+  };
+  VACANCIES[i] = v;
+  return Promise.resolve(v);
+}
+
+export function deleteVacancy(id: string): Promise<void> {
+  const i = VACANCIES.findIndex((v) => v.id === id);
+  if (i >= 0) VACANCIES.splice(i, 1);
+  return Promise.resolve();
 }
 
 export function fetchMe(): Promise<Me> {
@@ -473,11 +509,11 @@ export function fetchAdminReports(status = "open") {
 }
 export function fetchRevenue() {
   return Promise.resolve({
-    activePro: 8,
-    activeBusiness: 3,
-    estMonthlyRub: 8 * 1990 + 3 * 4990,
-    totalPaidRub: 47230,
-    totalStars: 5400,
+    commissionAccruedRub: 12400,
+    commissionPaidRub: 9100,
+    commissionPendingRub: 3300,
+    shiftsBilled: 31,
+    topupsRub: 18000,
   });
 }
 export function resolveReport(id: string): Promise<void> {
@@ -512,9 +548,26 @@ export function adminSearchUsers(q: string) {
     ql ? all.filter((u) => u.name.toLowerCase().includes(ql)) : all,
   );
 }
-export function adminGrant(_ownerId: string, _sku: string): Promise<void> {
-  void _ownerId;
-  void _sku;
+export function fetchRepeatPairs() {
+  return Promise.resolve([
+    { employer: "Кофейня «Дрова»", worker: "Мария", shifts: 4 },
+    { employer: "Бар «Полночь»", worker: "Алексей", shifts: 2 },
+  ]);
+}
+
+export function autoCloseShifts(): Promise<number> {
+  return Promise.resolve(1);
+}
+
+export function sendShiftReminders(): Promise<number> {
+  return Promise.resolve(3);
+}
+
+export function adminGrant(
+  _ownerId: string,
+  _boost: number,
+  _superlikes: number,
+): Promise<void> {
   return Promise.resolve();
 }
 export function fetchCommissions() {
@@ -570,10 +623,6 @@ export function fetchAdminSubscriptions() {
 export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);
 }
-export function cancelSubscription(_ownerId: string): Promise<void> {
-  return Promise.resolve();
-}
-
 export function boostVacancy(vacancyId: string): Promise<void> {
   const vac = VACANCIES.find((v) => v.id === vacancyId);
   if (vac) vac.boosted = true;

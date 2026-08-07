@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
@@ -14,7 +14,7 @@ import {
   type Me,
   type VerifyResult,
 } from "@/api/endpoints";
-import { share, haptic } from "@/telegram/sdk";
+import { share, haptic, confirmAction } from "@/telegram/sdk";
 import {
   IconBolt,
   IconFire,
@@ -26,9 +26,11 @@ import {
   IconBriefcase,
   IconCheck,
   IconBookmark,
+  IconChevronRight,
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
+import { PILOT_MODE } from "@/lib/flags";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -59,7 +61,7 @@ function CommissionCard() {
       style={{
         marginBottom: 16,
         ...(bill.overdue
-          ? { border: "1.5px solid var(--dislike)" }
+          ? { border: "1.5px solid var(--danger)" }
           : null),
       }}
     >
@@ -72,14 +74,14 @@ function CommissionCard() {
       </div>
       <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
         {due
-          ? `Смен к оплате: ${bill.pendingShifts}. Оплата по счёту или СБП — ` +
-            `реквизиты пришлёт оператор. Срок: ${bill.dueDays} дней.`
+          ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса ` +
+            `автоматически — пополните его картой ниже.`
           : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
       </div>
       {bill.overdue && (
-        <div style={{ marginTop: 8, fontSize: 14, color: "var(--dislike)", fontWeight: 700 }}>
-          Счёт просрочен — публикация новых смен приостановлена до оплаты.
-          Напишите в поддержку, если уже оплатили.
+        <div style={{ marginTop: 8, fontSize: 14, color: "var(--danger)", fontWeight: 700 }}>
+          Баланс закончился — публикация новых смен на паузе. Пополните
+          картой ниже, и всё сразу возобновится.
         </div>
       )}
       <div className="row" style={{ marginTop: 10 }}>
@@ -88,26 +90,40 @@ function CommissionCard() {
         <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
       </div>
       <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-        С баланса комиссия списывается сама — без счетов и напоминаний.
+        Комиссия списывается с баланса сама — без счетов, реквизитов
+        и переписки. Всё внутри приложения.
       </div>
       {bill.topupAvailable ? (
-        <div className="row" style={{ marginTop: 8, gap: 8 }}>
-          {[1000, 3000, 5000].map((a) => (
-            <button
-              key={a}
-              className="tag"
-              disabled={busy}
-              style={{ flex: 1, cursor: "pointer" }}
-              onClick={() => topup(a)}
-            >
-              +{a.toLocaleString("ru-RU")} ₽
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+            Пополнить баланс
+          </div>
+          {/* На чипе оставляем только сумму: «Пополнить 1 000 ₽» в трети
+              ширины экрана переносилось на 3-4 строки и ломало ряд. */}
+          <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+            {[1000, 3000, 5000].map((a) => (
+              <button
+                key={a}
+                className="tag"
+                disabled={busy}
+                style={{
+                  flex: 1,
+                  minWidth: 88,
+                  cursor: "pointer",
+                  borderColor: "var(--gold)",
+                  color: "var(--gold)",
+                }}
+                onClick={() => topup(a)}
+              >
+                {a.toLocaleString("ru-RU")} ₽
+              </button>
+            ))}
+          </div>
+        </>
       ) : (
         <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-          Пополнить: переводом СБП оператору (кнопка «Поддержка») —
-          зачислим на баланс. Оплата картой — скоро.
+          Оплата картой внутри приложения подключается к запуску — тогда
+          баланс можно будет пополнить в один тап.
         </div>
       )}
     </div>
@@ -133,7 +149,7 @@ function EmployerVerify() {
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <b>Подтвердить компанию (DaData)</b>
+      <b>Подтвердить компанию по ИНН</b>
       <div className="row" style={{ marginTop: 10, gap: 8 }}>
         <input
           className="input"
@@ -151,7 +167,7 @@ function EmployerVerify() {
           {res.found ? (
             <>
               {res.verified && (
-                <span style={{ color: "var(--super)", display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}>
+                <span style={{ color: "var(--super-text)", display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}>
                   <IconCheck size={15} />
                 </span>
               )}
@@ -167,11 +183,6 @@ function EmployerVerify() {
   );
 }
 
-const PLAN_LABEL: Record<string, string> = {
-  free: "Free",
-  pro: "Pro",
-  business: "Business",
-};
 
 // «Готов выйти сегодня» — тумблер доступности. Заведения со срочной сменой
 // видят такого человека первым в ленте кандидатов.
@@ -201,7 +212,9 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       style={{
         marginBottom: 16,
         border: on ? "1px solid var(--gold)" : undefined,
-        background: on ? "rgba(165,28,48,.06)" : undefined,
+        // --gold-tint: в тёмной теме прежние 6% багрового на тёмной карточке
+        // были неотличимы от выключенного состояния.
+        background: on ? "var(--gold-tint)" : undefined,
       }}
     >
       <span style={{ flex: 1 }}>
@@ -211,7 +224,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
         </b>
         <div className="muted">
           {on
-            ? "Вы наверху ленты — заведения зовут вас на срочные смены первыми"
+            ? "Ты наверху ленты — на срочные смены зовут первым"
             : "Включите — и срочные смены найдут вас быстрее"}
         </div>
       </span>
@@ -221,26 +234,43 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
         aria-label="Готов выйти сегодня"
         disabled={busy}
         onClick={toggle}
+        // Дорожка визуально 52×30, высота кнопки 44px — минимальная зона тапа.
         style={{
           width: 52,
-          height: 30,
+          height: 44,
+          padding: 0,
           borderRadius: 999,
           border: "none",
+          background: "none",
           cursor: "pointer",
-          background: on ? "var(--gold)" : "var(--border)",
           position: "relative",
-          transition: "background 0.2s",
+          flex: "none",
         }}
       >
         <span
+          aria-hidden
           style={{
             position: "absolute",
-            top: 3,
+            top: 7,
+            left: 0,
+            width: 52,
+            height: 30,
+            borderRadius: 999,
+            transition: "background 0.2s",
+            background: on ? "var(--gold)" : "var(--border-strong)",
+          }}
+        />
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 10,
             left: on ? 25 : 3,
             width: 24,
             height: 24,
             borderRadius: "50%",
-            background: "#fff",
+            background: "var(--surface)",
+            boxShadow: "0 1px 3px rgba(60,20,25,.35)",
             transition: "left 0.2s",
           }}
         />
@@ -446,19 +476,10 @@ export function ProfilePage() {
 
   return (
     <div className="page">
+      {/* «Выйти» переехал в конец списка внизу: деструктивное действие не
+          должно быть самым заметным элементом шапки. */}
       <div className="row" style={{ marginBottom: 16 }}>
         <h1 className="h1" style={{ margin: 0 }}>Профиль</h1>
-        <span className="spacer" />
-        <button
-          className="tab"
-          style={{ flex: "none", width: "auto", color: "var(--muted)" }}
-          onClick={() => {
-            logout();
-            nav("/onboarding", { replace: true });
-          }}
-        >
-          Выйти
-        </button>
       </div>
 
       <div className="card row" style={{ gap: 14, marginBottom: 16 }}>
@@ -474,20 +495,33 @@ export function ProfilePage() {
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
           </div>
           <div className="muted">
-            {me ? `★ ${me.rating.toFixed(1)}` : "—"}
+            {me ? (me.rating > 0 ? `★ ${me.rating.toFixed(1)}` : "Новичок") : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
             {me?.shiftsDone ? ` · ${me.shiftsDone} смен` : ""}
           </div>
         </span>
       </div>
 
-      {me && <EarningsCard me={me} />}
+      {role === "seeker" && me && !PILOT_MODE && <EarningsCard me={me} />}
+
+      {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="row">
+            <b>Смен проведено</b>
+            <span className="spacer" />
+            <b style={{ color: "var(--gold)", fontSize: 20 }}>{me.shiftsDone}</b>
+          </div>
+          <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+            Закрытые смены формируют рейтинг и знак «Платит вовремя».
+          </div>
+        </div>
+      )}
 
       {role === "seeker" && me && (
         <ProfileMeter pct={me.profileCompletion ?? 100} />
       )}
 
-      {role === "seeker" && me && <GoalCard earned={me.earnedRub ?? 0} />}
+      {role === "seeker" && me && !PILOT_MODE && <GoalCard earned={me.earnedRub ?? 0} />}
 
       {role === "seeker" && (
         <AvailabilityCard initial={me?.availableToday ?? false} />
@@ -519,30 +553,43 @@ export function ProfilePage() {
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
-          <b>Тариф: {PLAN_LABEL[ent?.plan ?? "free"]}</b>
-          <span className="spacer" />
-          <button className="btn ghost" style={{ width: "auto", padding: "8px 14px" }} onClick={() => nav("/pricing")}>
-            Улучшить
-          </button>
+      {role === "employer" && !PILOT_MODE && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="row">
+            <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <IconFire size={18} /> Поднятий в топ: {ent?.boostBalance ?? 0}
+            </b>
+            <span className="spacer" />
+            <button className="btn ghost" style={{ width: "auto", padding: "8px 14px" }} onClick={() => nav("/pricing")}>
+              Поднять в топ
+            </button>
+          </div>
+          <div className="muted" style={{ marginTop: 8, fontSize: 14 }}>
+            Поднимает вакансию в топ ленты, когда человек нужен срочно.
+          </div>
         </div>
-        <div className="muted" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <IconBolt size={14} /> Супер-лайки: {ent?.superlikeBalance ?? 0}
-          <span style={{ opacity: 0.5 }}>·</span>
-          <IconFire size={14} /> Boost: {ent?.boostBalance ?? 0}
+      )}
+
+      {role === "seeker" && !!ent?.superlikeBalance && ent.superlikeBalance > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <IconBolt size={18} /> Супер-лайки «Срочно»: {ent.superlikeBalance}
+          </b>
+          <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
+            Покажут тебя заведению первым. Дарим за приглашённых друзей.
+          </div>
         </div>
-      </div>
+      )}
 
       {role === "employer" && <CommissionCard />}
 
-      {role === "employer" && <EmployerVerify />}
+      {role === "employer" && !PILOT_MODE && <EmployerVerify />}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <b>{role === "employer" ? "Пригласить коллег-рестораторов" : "Пригласить друзей"}</b>
         <div className="muted" style={{ margin: "6px 0 12px" }}>
           {role === "employer"
-            ? "За каждого пришедшего по вашей ссылке — Boost вакансии в подарок."
+            ? "За каждого пришедшего по вашей ссылке — поднятие вакансии в топ в подарок."
             : `За каждого по вашей ссылке — ${ref?.bonusSuperlikes ?? 3} супер-лайка «Срочно».`}
           {" "}Уже пришло: {ref?.invited ?? 0}.
         </div>
@@ -553,47 +600,96 @@ export function ProfilePage() {
         </Button>
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <Button variant="secondary" onClick={() => nav("/settings")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconEdit size={18} /> Настройки — тема, крупный режим, звук
-          </span>
-        </Button>
+      {/* Раньше здесь стоял столбик из 4-5 одинаковых полноширинных кнопок —
+          читалось как отладочное меню. Теперь это один список со строками. */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <MenuRow
+          icon={<IconEdit size={18} />}
+          label="Редактировать профиль"
+          onClick={() => nav("/profile/edit")}
+        />
+        {role === "seeker" && (
+          <MenuRow
+            icon={<IconBookmark size={18} />}
+            label="Избранные смены"
+            onClick={() => nav("/favorites")}
+          />
+        )}
+        <MenuRow
+          icon={<IconShield size={18} />}
+          label="Настройки"
+          onClick={() => nav("/settings")}
+        />
+        <MenuRow
+          icon={<IconHelp size={18} />}
+          label="Помощь и поддержка"
+          onClick={() => nav("/support")}
+        />
+        {isAdmin && (
+          <MenuRow
+            icon={<IconShield size={18} />}
+            label="Админ-панель"
+            onClick={() => nav("/admin")}
+          />
+        )}
+        <MenuRow
+          label="Выйти из аккаунта"
+          danger
+          last
+          onClick={async () => {
+            // Подтверждение: случайно вылететь из аккаунта неприятно.
+            if (!(await confirmAction("Выйти из аккаунта?", "Выйти"))) return;
+            logout();
+            nav("/onboarding", { replace: true });
+          }}
+        />
       </div>
-
-      {role === "seeker" && (
-        <div style={{ marginBottom: 10 }}>
-          <Button variant="secondary" onClick={() => nav("/favorites")}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconBookmark size={18} /> Избранные смены
-            </span>
-          </Button>
-        </div>
-      )}
-
-      <Button variant="secondary" onClick={() => nav("/profile/edit")}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <IconEdit size={18} /> Редактировать профиль
-        </span>
-      </Button>
-
-      <div style={{ marginTop: 10 }}>
-        <Button variant="ghost" onClick={() => nav("/support")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconHelp size={18} /> Помощь и поддержка
-          </span>
-        </Button>
-      </div>
-
-      {isAdmin && (
-        <div style={{ marginTop: 10 }}>
-          <Button variant="ghost" onClick={() => nav("/admin")}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconShield size={18} /> Админ-панель
-            </span>
-          </Button>
-        </div>
-      )}
     </div>
+  );
+}
+
+/** Строка списка в профиле: иконка — подпись — шеврон. Высота ≥52px. */
+function MenuRow({
+  icon,
+  label,
+  onClick,
+  danger = false,
+  last = false,
+}: {
+  icon?: ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        width: "100%",
+        minHeight: 54,
+        padding: "0 18px",
+        background: "none",
+        border: "none",
+        borderBottom: last ? "none" : "1px solid var(--border)",
+        color: danger ? "var(--danger)" : "var(--text)",
+        fontSize: 16,
+        fontWeight: 600,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      {/* Плейсхолдер держит колонку иконок: без него строка без иконки
+          съезжала влево относительно остальных. */}
+      <span style={{ display: "inline-flex", width: 18, color: "var(--gold)" }}>
+        {icon}
+      </span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {/* Шеврон = «откроется экран». У «Выйти» экрана нет — там подтверждение. */}
+      {!danger && <IconChevronRight size={18} />}
+    </button>
   );
 }

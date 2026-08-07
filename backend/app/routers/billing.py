@@ -1,7 +1,9 @@
-"""Монетизация: тарифы (ЮKassa, рубли) + Boost/супер-лайки (Telegram Stars).
+"""Деньги: ОДИН рельс — ЮKassa, единственное назначение — пополнение баланса.
 
-Цифровые товары внутри Telegram — через Stars (требование Telegram).
-Подписки/верификация юрлиц — через ЮKassa.
+С баланса автоматически списывается комиссия за закрытую смену (10%).
+Ни подписок, ни Telegram Stars: подписки нигде не продавались, но их можно
+было оплатить прямым запросом; Stars дублировали рельс ради фич, которые
+в пилоте выдаёт оператор (буст) и реферальная программа (супер-лайки).
 """
 import base64
 import hmac
@@ -10,7 +12,7 @@ import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -18,47 +20,10 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..entitlements import get_or_create
-from ..models import Commission, Purchase, Subscription, WalletTxn
+from ..models import Commission, Entitlement, Purchase, Subscription, WalletTxn
 from ..security import current_principal
 
 router = APIRouter(prefix="/billing", tags=["billing"])
-
-# Каталог товаров. provider: stars|yookassa. effect применяется после оплаты.
-# Подписки работодателей — ЮKassa (рубли); микро-фичи — Telegram Stars (XTR).
-CATALOG: dict[str, dict] = {
-    "sub_pro_week": {
-        "provider": "yookassa", "rub": 690, "title": "Pro · неделя",
-        "effect": {"plan": "pro", "days": 7, "boost": 3},
-    },
-    "sub_pro_month": {
-        "provider": "yookassa", "rub": 1990, "title": "Pro · месяц",
-        "effect": {"plan": "pro", "days": 30, "boost": 10},
-    },
-    "sub_business": {
-        "provider": "yookassa", "rub": 4990, "title": "Business · месяц",
-        "effect": {"plan": "business", "days": 30, "boost": 30},
-    },
-    "verify_year": {
-        "provider": "yookassa", "rub": 2900, "title": "Верификация заведения",
-        "effect": {"verified": True, "days": 365},
-    },
-    "boost_24h": {
-        "provider": "stars", "stars": 150, "title": "Boost 24 часа",
-        "effect": {"boost": 1},
-    },
-    "super_5": {
-        "provider": "stars", "stars": 100, "title": "5 супер-лайков",
-        "effect": {"superlike": 5},
-    },
-    "super_20": {
-        "provider": "stars", "stars": 300, "title": "20 супер-лайков",
-        "effect": {"superlike": 20},
-    },
-    # NB: «Premium соискателя» («кто меня лайкнул») пока не реализован как фича —
-    # не продаём его, чтобы не брать деньги за то, что не работает. Поле
-    # seeker_premium и эффект {"premium": True} оставлены для будущей реализации.
-}
-
 
 class EntitlementsOut(BaseModel):
     plan: str
@@ -67,40 +32,6 @@ class EntitlementsOut(BaseModel):
     boostBalance: int
     seekerPremium: bool
     employerVerified: bool
-
-
-class SkuIn(BaseModel):
-    sku: str
-    email: str | None = None  # для фискального чека ЮKassa (54-ФЗ)
-
-
-def _apply_effect(db: Session, owner_id: str, sku: str) -> None:
-    """Применяет эффект SKU к правам пользователя."""
-    effect = CATALOG[sku]["effect"]
-    ent = get_or_create(db, owner_id)
-    if "superlike" in effect:
-        ent.superlike_balance += int(effect["superlike"])
-    if "boost" in effect:
-        ent.boost_balance += int(effect["boost"])
-    if effect.get("premium"):
-        ent.seeker_premium = True
-    if effect.get("verified"):
-        ent.employer_verified = True
-    if "plan" in effect:
-        days = int(effect.get("days", 30))
-        renews = (datetime.now(UTC) + timedelta(days=days)).isoformat()
-        sub = (
-            db.query(Subscription)
-            .filter(Subscription.owner_id == owner_id)
-            .first()
-        )
-        if sub is None:
-            sub = Subscription(owner_id=owner_id)
-            db.add(sub)
-        sub.plan = effect["plan"]
-        sub.active = True
-        sub.renews_at = renews
-    db.commit()
 
 
 @router.get("/entitlements", response_model=EntitlementsOut)
@@ -182,105 +113,16 @@ def commission_info(
     )
 
 
-class InvoiceOut(BaseModel):
-    link: str
-
-
-@router.post("/stars/invoice", response_model=InvoiceOut)
-def stars_invoice(
-    body: SkuIn, principal: dict = Depends(current_principal)
-):
-    item = CATALOG.get(body.sku)
-    if item is None or item["provider"] != "stars":
-        raise HTTPException(status_code=400, detail="Неизвестный SKU")
-
-    # Boт API createInvoiceLink для currency XTR (Stars). payload = owner:sku
-    payload = f"{principal['id']}:{body.sku}"
-    if not settings.telegram_bot_token:
-        return InvoiceOut(link=f"mock-stars-invoice://{body.sku}")
-
-    req_body = {
-        "title": item["title"],
-        "description": item["title"],
-        "payload": payload,
-        "currency": "XTR",
-        "prices": [{"label": item["title"], "amount": int(item["stars"])}],
-    }
-    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/createInvoiceLink"
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(req_body).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
-            data = json.loads(resp.read())
-        if not data.get("ok"):
-            raise HTTPException(status_code=502, detail="Telegram API error")
-        return InvoiceOut(link=data["result"])
-    except HTTPException:
-        raise
-    except Exception:  # noqa: BLE001
-        return InvoiceOut(link=f"mock-stars-invoice://{body.sku}")
-
-
-class FulfillIn(BaseModel):
-    owner_id: str
-    sku: str
-    provider: str
-    charge_id: str | None = None
-
-
-def _require_internal(token: str) -> None:
-    """Доступ только внутренним вызовам (бот / вебхук) по общему секрету."""
-    secret = settings.internal_api_secret
-    if not secret or not hmac.compare_digest(token or "", secret):
-        raise HTTPException(status_code=401, detail="Требуется внутренний токен")
-
-
-@router.post("/fulfill")
-def fulfill(
-    body: FulfillIn,
-    db: Session = Depends(get_db),
-    x_internal_token: str = Header(default=""),
-):
-    """Начисление прав после оплаты. Вызывается ботом (Stars) или вебхуком
-    ЮKassa с заголовком X-Internal-Token. Идемпотентно по charge_id."""
-    _require_internal(x_internal_token)
-    if body.sku not in CATALOG:
-        raise HTTPException(status_code=400, detail="Неизвестный SKU")
-    if body.charge_id:
-        dup = (
-            db.query(Purchase)
-            .filter(Purchase.provider_charge_id == body.charge_id)
-            .first()
-        )
-        if dup:
-            return {"ok": True, "duplicate": True}
-    item = CATALOG[body.sku]
-    db.add(Purchase(
-        owner_id=body.owner_id,
-        sku=body.sku,
-        provider=body.provider,
-        amount=int(item.get("stars") or item.get("rub") or 0),
-        currency="XTR" if body.provider == "stars" else "RUB",
-        status="paid",
-        provider_charge_id=body.charge_id,
-    ))
-    _apply_effect(db, body.owner_id, body.sku)
-    return {"ok": True}
-
-
 class PaymentOut(BaseModel):
     url: str
 
 
 def _yk_payload(
     owner_id: str, sku: str, rub: int, email: str | None,
-    title: str | None = None, extra_meta: dict | None = None,
+    title: str, extra_meta: dict | None = None,
 ) -> dict:
     """Тело запроса платежа ЮKassa (+ фискальный чек по 54-ФЗ, если включено)."""
-    desc = title or CATALOG[sku]["title"]
+    desc = title
     payload = {
         "amount": {"value": f"{rub}.00", "currency": "RUB"},
         "capture": True,
@@ -308,8 +150,8 @@ def _yk_payload(
 
 
 def _create_yookassa_payment(
-    owner_id: str, sku: str, rub: int, email: str | None = None,
-    title: str | None = None, extra_meta: dict | None = None,
+    owner_id: str, sku: str, rub: int, title: str,
+    email: str | None = None, extra_meta: dict | None = None,
 ) -> str | None:
     """Создаёт платёж в ЮKassa и возвращает confirmation_url (или None)."""
     creds = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
@@ -330,27 +172,6 @@ def _create_yookassa_payment(
         return data.get("confirmation", {}).get("confirmation_url")
     except Exception:  # noqa: BLE001
         return None
-
-
-@router.post("/yookassa/payment", response_model=PaymentOut)
-def yookassa_payment(
-    body: SkuIn, principal: dict = Depends(current_principal)
-):
-    item = CATALOG.get(body.sku)
-    if item is None or item["provider"] != "yookassa":
-        raise HTTPException(status_code=400, detail="Неизвестный SKU")
-
-    # Боевой платёж ЮKassa с metadata={owner_id, sku} (вебхук начислит права).
-    if settings.yookassa_ready:
-        url = _create_yookassa_payment(
-            principal["id"], body.sku, int(item["rub"]), body.email
-        )
-        if url:
-            return PaymentOut(url=url)
-
-    # Без ключей / при ошибке — демо-ссылка (фронт откроет webview).
-    base = settings.payment_return_url or "https://example.com/pay"
-    return PaymentOut(url=f"{base}?sku={body.sku}&owner={principal['id']}")
 
 
 class TopupIn(BaseModel):
@@ -379,8 +200,9 @@ def wallet_topup(
         )
     if settings.yookassa_ready:
         url = _create_yookassa_payment(
-            principal["id"], "wallet_topup", body.amount_rub, body.email,
+            principal["id"], "wallet_topup", body.amount_rub,
             title=f"Пополнение баланса StaffSwipe на {body.amount_rub} ₽",
+            email=body.email,
             extra_meta={"amount_rub": str(body.amount_rub)},
         )
         if url:
@@ -390,11 +212,19 @@ def wallet_topup(
 
 
 def credit_wallet(db: Session, owner_id: str, amount: int, note: str) -> int:
-    """Зачислить деньги на баланс + записать движение. Возвращает новый баланс."""
-    ent = get_or_create(db, owner_id)
-    ent.balance_rub += amount
+    """Зачислить деньги на баланс + записать движение. Возвращает новый баланс.
+    Инкремент — атомарным UPDATE (balance = balance + amount), а НЕ
+    read-modify-write: иначе гонка с автосписанием комиссии затёрла бы списание
+    (заведение получило бы смену бесплатно). Правило проекта: деньги — только
+    атомарными UPDATE с условием."""
+    get_or_create(db, owner_id)  # гарантируем строку прав
+    db.query(Entitlement).filter(Entitlement.owner_id == owner_id).update(
+        {Entitlement.balance_rub: Entitlement.balance_rub + amount},
+        synchronize_session=False,
+    )
     db.add(WalletTxn(owner_id=owner_id, amount=amount, kind="topup", note=note))
     db.commit()
+    ent = get_or_create(db, owner_id)
     return ent.balance_rub
 
 
@@ -406,7 +236,7 @@ def yookassa_webhook(
 ):
     """Вебхук ЮKassa. ЮKassa не подписывает запросы (рекомендует IP-allowlist),
     поэтому защищаемся секретом в query `?secret=`. Если задан отдельный
-    yookassa_webhook_secret — используем его (утечка URL не открывает /fulfill)."""
+    yookassa_webhook_secret — используем его (отдельный секрет для вебхука)."""
     expected = settings.yookassa_webhook_secret or settings.internal_api_secret
     if not expected or not hmac.compare_digest(secret or "", expected):
         raise HTTPException(status_code=401, detail="Требуется внутренний токен")
@@ -422,6 +252,11 @@ def yookassa_webhook(
             rub = int(meta.get("amount_rub") or 0)
         except ValueError:
             rub = 0
+        # Потолок: сверка value↔metadata самореферентна (оба поля контролирует
+        # тот, кто знает секрет вебхука), поэтому единственная реальная защита от
+        # неограниченной эмиссии при утечке секрета — жёсткий лимит суммы.
+        if not 100 <= rub <= 100_000:
+            raise HTTPException(status_code=400, detail="Сумма вне лимита")
         amount = obj.get("amount", {})
         if (
             rub <= 0
@@ -442,23 +277,5 @@ def yookassa_webhook(
         credit_wallet(db, owner_id, rub, "Пополнение картой (ЮKassa)")
         return {"ok": True}
 
-    if not owner_id or sku not in CATALOG:
-        raise HTTPException(status_code=400, detail="Некорректные metadata")
-    # Сверяем фактически оплаченную сумму с ценой SKU (защита на случай утечки
-    # секрета вебхука: нельзя «оплатить» дешёвый платёж и получить дорогой тариф).
-    amount = obj.get("amount", {})
-    expected = f"{int(CATALOG[sku].get('rub') or 0)}.00"
-    if str(amount.get("value")) != expected or amount.get("currency") != "RUB":
-        raise HTTPException(status_code=400, detail="Сумма платежа не совпадает")
-    charge_id = obj.get("id")
-    if charge_id and db.query(Purchase).filter(
-        Purchase.provider_charge_id == charge_id
-    ).first():
-        return {"ok": True, "duplicate": True}
-    db.add(Purchase(
-        owner_id=owner_id, sku=sku, provider="yookassa",
-        amount=int(CATALOG[sku].get("rub") or 0), currency="RUB",
-        status="paid", provider_charge_id=charge_id,
-    ))
-    _apply_effect(db, owner_id, sku)
-    return {"ok": True}
+    # Других сценариев оплаты нет: пополнение баланса — единственный товар.
+    raise HTTPException(status_code=400, detail="Некорректные metadata")

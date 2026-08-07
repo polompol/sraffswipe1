@@ -8,6 +8,7 @@ import {
   createSavedSearch,
   fetchFeed,
   fetchMe,
+  fetchMyVacancies,
   listSavedSearches,
   sendSwipe,
   track,
@@ -28,6 +29,8 @@ import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
+import { Button } from "@/components/Button";
+import { PILOT_MODE } from "@/lib/flags";
 import {
   IconSkip,
   IconSuper,
@@ -38,7 +41,7 @@ import {
   IconCards,
   IconFire,
   IconBell,
-  IconCheck,
+  IconChevronRight,
 } from "@/components/Icons";
 
 export function FeedPage() {
@@ -153,7 +156,19 @@ export function FeedPage() {
     enabled: isSeeker,
   });
 
-  async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection) {
+  // Заведению без единой вакансии мэтч физически невозможен (мэтч ищется среди
+  // его смен). Лайкать кандидатов впустую — тупик, поэтому ведём разместить смену.
+  const { data: myVacs } = useQuery({
+    queryKey: ["my-vacancies"],
+    queryFn: fetchMyVacancies,
+    enabled: !isSeeker,
+  });
+  const employerNoVacancy = !isSeeker && myVacs != null && myVacs.length === 0;
+
+  // Возвращает true, если это был успешный отклик без мэтча — тогда список-вид
+  // покажет тост «Отклик отправлен». В колоде (свайп) результат игнорируется —
+  // там обратная связь — улетающая карточка.
+  async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection): Promise<boolean> {
     const targetType = isSeeker ? "vacancy" : "user";
     track("swipe", { dir });
     try {
@@ -174,17 +189,20 @@ export function FeedPage() {
           companyPhotoUrl: v.companyPhotoUrl,
           role: v.role,
         });
+        return false; // мэтч → оверлей, тост не нужен
       }
+      return dir === "like" || dir === "superlike";
     } catch (e) {
       // 402 — закончились супер-лайки (ведём в тарифы), 429 — слишком часто.
       const status = (e as { response?: { status?: number } })?.response?.status;
       if (status === 402) {
         toast("Срочные закончились — откликайтесь обычным лайком", "error");
       } else if (status === 429) {
-        toast("Слишком часто — притормозите", "error");
+        toast("Слишком много действий подряд — подождите пару секунд", "error");
       } else {
         toast("Не удалось отправить. Попробуйте ещё раз", "error");
       }
+      return false;
     }
   }
 
@@ -234,44 +252,42 @@ export function FeedPage() {
             <span className="icon-badge">{activeFilterCount}</span>
           )}
         </button>
-        <button className="icon-btn" aria-label="Тарифы и буст" onClick={() => nav("/pricing")}>
+        <button
+          className="icon-btn"
+          aria-label={isSeeker ? "Условия сервиса" : "Тарифы и комиссия"}
+          onClick={() => nav("/pricing")}
+        >
           <IconBolt size={22} />
         </button>
       </div>
 
-      <button
-        className="feed-loc"
-        onClick={() => setFilterOpen(true)}
-        aria-label={isSeeker ? "Сменить город и фильтры" : "Фильтры кандидатов"}
-      >
-        {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
-        {isSeeker && filters.city ? ` · ${filters.city}` : ""}
-        {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
-        {typeof data?.length === "number" ? ` · ${data.length}` : ""}
-        <span style={{ color: "var(--gold)", marginLeft: 4 }}>⌄</span>
-      </button>
-
-      {isSeeker && moneyNear > 0 && !empty && (
-        <div
-          className="money-near"
-          onClick={() => haptic("light")}
+      {/* Один ряд вместо трёх: город, «Сегодня» и сохранённые поиски раньше
+          шли отдельными строками и съедали ~54px над карточкой — а карточка
+          и есть продукт. */}
+      <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        <button
+          className="feed-loc"
+          onClick={() => setFilterOpen(true)}
+          aria-label={isSeeker ? "Сменить город и фильтры" : "Фильтры кандидатов"}
         >
-          <span className="money-near-cap">Рядом сейчас смен на</span>
-          <span className="money-near-sum">
-            <CountUp value={moneyNear} /> ₽
+          {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
+          {isSeeker && filters.city ? ` · ${filters.city}` : ""}
+          {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
+          {typeof data?.length === "number" ? ` · ${data.length}` : ""}
+          <span style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
+            <IconChevronRight size={16} />
           </span>
-          <span className="money-near-sub">забери свою — листай ленту</span>
-        </div>
-      )}
+        </button>
 
-      {isSeeker && (
-        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {isSeeker && <span className="spacer" />}
+
+        {isSeeker && (
           <button
             className="tag"
             aria-pressed={todayOnly}
             style={{
               cursor: "pointer",
-              borderColor: todayOnly ? "var(--gold)" : "var(--dislike)",
+              borderColor: todayOnly ? "var(--gold)" : "var(--border-strong)",
               background: todayOnly ? "var(--gold)" : "transparent",
               color: todayOnly ? "#fff" : "var(--text)",
             }}
@@ -279,22 +295,51 @@ export function FeedPage() {
           >
             <IconFire size={14} /> Сегодня
           </button>
+        )}
+
+        {isSeeker && searches?.map((s) => (
+          <button
+            key={s.id}
+            className="tag"
+            style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+            onClick={() => applyFilters(s.filters)}
+          >
+            <IconBell size={13} /> {s.title}
+          </button>
+        ))}
+      </div>
+
+      {employerNoVacancy && (
+        <div
+          className="card"
+          style={{ marginBottom: 12, borderColor: "var(--gold)" }}
+        >
+          <b>Сначала разместите смену</b>
+          <p className="muted" style={{ margin: "6px 0 10px" }}>
+            Пока у вас нет ни одной смены, кандидаты не смогут откликнуться —
+            даже если вы их лайкнете. Опубликуйте смену, и пойдут отклики.
+          </p>
+          <Button size="sm" block={false} onClick={() => nav("/vacancy/new")}>
+            + Разместить смену
+          </Button>
         </div>
       )}
 
-      {isSeeker && searches && searches.length > 0 && (
-        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-          {searches.map((s) => (
-            <button
-              key={s.id}
-              className="tag"
-              style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
-              onClick={() => applyFilters(s.filters)}
-            >
-              <IconBell size={13} /> {s.title}
-            </button>
-          ))}
-        </div>
+      {isSeeker && !PILOT_MODE && moneyNear > 0 && !empty && (
+        <button
+          className="money-near"
+          aria-label="Настроить фильтры ленты"
+          onClick={() => {
+            haptic("light");
+            setFilterOpen(true);
+          }}
+        >
+          <span className="money-near-cap">Рядом сейчас смен на</span>
+          <span className="money-near-sum">
+            <CountUp value={moneyNear} /> ₽
+          </span>
+          <span className="money-near-sub">настроить, что показывать</span>
+        </button>
       )}
 
       {isLoading && <SkeletonCard />}
@@ -307,7 +352,7 @@ export function FeedPage() {
             background: "var(--grad-brand)", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <IconCheck size={34} />
+            {isSeeker ? <IconFilter size={34} /> : <IconBell size={34} />}
           </div>
           <h2 className="h2" style={{ marginTop: 12 }}>
             {isSeeker
@@ -321,6 +366,9 @@ export function FeedPage() {
               ? "Оставь подписку — и мы напишем в бота, как только смена появится рядом"
               : "Загляните позже — появляются новые"}
           </p>
+          {/* Подписку прятать в пилоте было ошибкой: лента пуста именно на
+              старте, и это единственный способ не потерять человека, который
+              пришёл первым. Механика работает — незачем её скрывать. */}
           {isSeeker && (
             <button
               className="btn"
@@ -330,13 +378,13 @@ export function FeedPage() {
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <IconBell size={18} />
-                {subscribed ? "Подписка включена" : "Сообщить о новых сменах"}
+                {subscribed ? "Будем присылать новые смены" : "Присылать новые смены в бота"}
               </span>
             </button>
           )}
-          {isSeeker && filters.city && (
+          {isSeeker && (
             <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => setFilterOpen(true)}>
-              Сменить город
+              {filters.city ? "Сменить город" : "Настроить фильтры"}
             </button>
           )}
         </div>

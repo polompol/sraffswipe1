@@ -12,6 +12,7 @@ import {
 } from "@/types/domain";
 import {
   createVacancy,
+  updateVacancy,
   suggestAddress,
   track,
   type AddressSuggestion,
@@ -32,10 +33,16 @@ const fromMinutes = (m: number): string =>
 export function CreateVacancyPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  // «Повторить смену»: префилл всех полей из прошлой вакансии (кроме даты).
-  const pre = (useLocation().state as { prefill?: Vacancy } | null)?.prefill;
+  // Экран работает в двух режимах:
+  //   prefill — «повторить смену»: копируем поля, дату просим выбрать заново;
+  //   edit    — «исправить смену»: копируем всё вместе с датой и сохраняем поверх.
+  const navState = useLocation().state as
+    | { prefill?: Vacancy; edit?: Vacancy }
+    | null;
+  const editing = navState?.edit ?? null;
+  const pre = editing ?? navState?.prefill;
   const [role, setRole] = useState<StaffRole>(pre?.role ?? "waiter");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(editing?.date ?? "");
   const [start, setStart] = useState(pre ? fromMinutes(pre.startTime) : "10:00");
   const [end, setEnd] = useState(pre ? fromMinutes(pre.endTime) : "22:00");
   const [rate, setRate] = useState(pre ? String(pre.rate) : "350");
@@ -63,7 +70,7 @@ export function CreateVacancyPage() {
     }
     setBusy(true);
     try {
-      await createVacancy({
+      const payload = {
         role,
         date,
         start_time: toMinutes(start),
@@ -78,15 +85,33 @@ export function CreateVacancyPage() {
         city: city.trim(),
         lat: coords?.lat,
         lng: coords?.lng,
-      });
+      };
+      if (editing) {
+        await updateVacancy(editing.id, payload);
+        toast("Смена обновлена", "success");
+      } else {
+        await createVacancy(payload);
+        track("vacancy_publish", { role });
+        toast("Вакансия опубликована", "success");
+      }
       haptic("success");
-      track("vacancy_publish", { role });
-      toast("Вакансия опубликована", "success");
       qc.invalidateQueries({ queryKey: ["feed"] });
+      qc.invalidateQueries({ queryKey: ["my-vacancies"] });
       nav(-1);
-    } catch {
+    } catch (e) {
       haptic("error");
-      toast("Не удалось опубликовать. Проверьте поля.", "error");
+      // 409 — по смене уже откликнулись: сервер объясняет причину, покажем её.
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      const detail = (e as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      toast(
+        status === 409 && detail
+          ? detail
+          : editing
+            ? "Не удалось сохранить. Проверьте поля."
+            : "Не удалось опубликовать. Проверьте поля.",
+        "error",
+      );
     } finally {
       setBusy(false);
     }
@@ -108,15 +133,21 @@ export function CreateVacancyPage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>
-          {pre ? "Повторить смену" : "Новая вакансия"}
+          {editing ? "Исправить смену" : pre ? "Повторить смену" : "Новая вакансия"}
         </h1>
-        {pre && (
+        {editing && (
+          <p className="muted" style={{ marginBottom: 16 }}>
+            Правки видны в ленте сразу. Если по смене уже откликнулись,
+            менять условия нельзя — договоритесь в чате.
+          </p>
+        )}
+        {pre && !editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
             Поля заполнены по прошлой смене — укажите новую дату.
           </p>
         )}
 
-        <label className="muted">Должность</label>
+        <div className="form-label">Должность</div>
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
@@ -144,21 +175,21 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <label className="muted">Дата смены</label>
+        <div className="form-label">Дата смены</div>
         <input className="input" type="date" style={{ marginBottom: 12 }} value={date} onChange={(e) => setDate(e.target.value)} />
 
         <div className="row" style={{ marginBottom: 12 }}>
           <span style={{ flex: 1 }}>
-            <label className="muted">Начало</label>
+            <div className="form-label">Начало</div>
             <input className="input" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
           </span>
           <span style={{ flex: 1 }}>
-            <label className="muted">Конец</label>
+            <div className="form-label">Конец</div>
             <input className="input" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
           </span>
         </div>
 
-        <label className="muted">Ставка</label>
+        <div className="form-label">Ставка</div>
         <div className="row" style={{ marginBottom: 12 }}>
           <input className="input" type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
           <button
@@ -170,7 +201,7 @@ export function CreateVacancyPage() {
           </button>
         </div>
 
-        <label className="muted">Как и когда платите</label>
+        <div className="form-label">Как и когда платите</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((p) => (
             <button
@@ -189,7 +220,7 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <label className="muted">Чаевые (платят гости)</label>
+        <div className="form-label">Чаевые (платят гости)</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {(Object.keys(TIPS_LABELS) as TipsMode[]).map((t) => (
             <button
@@ -208,7 +239,7 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <label className="muted" htmlFor="city">Город</label>
+        <label className="form-label" htmlFor="city">Город</label>
         <input
           id="city"
           className="input"
@@ -218,7 +249,7 @@ export function CreateVacancyPage() {
           onChange={(e) => setCity(e.target.value)}
         />
 
-        <label className="muted" htmlFor="addr">Адрес (подсказки DaData)</label>
+        <label className="form-label" htmlFor="addr">Адрес</label>
         <input
           id="addr"
           className="input"
@@ -264,7 +295,7 @@ export function CreateVacancyPage() {
           </span>
         </div>
 
-        <label className="muted">Описание</label>
+        <div className="form-label">Описание</div>
         <textarea
           className="input"
           style={{ marginBottom: 16, minHeight: 90 }}
@@ -274,7 +305,7 @@ export function CreateVacancyPage() {
         />
 
         <Button loading={busy} onClick={publish}>
-          Опубликовать вакансию
+          {editing ? "Сохранить изменения" : "Опубликовать вакансию"}
         </Button>
       </div>
     </div>

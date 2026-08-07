@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     dadata_secret: str = ""
 
     # --- Telegram ---
-    # Токен бота (BotFather). Нужен для валидации initData и платежей Stars.
+    # Токен бота (BotFather). Нужен для валидации initData и уведомлений.
     telegram_bot_token: str = ""
     # Публичный URL Mini App (для кнопки запуска и реф-ссылок).
     mini_app_url: str = ""
@@ -64,9 +64,10 @@ class Settings(BaseSettings):
     yookassa_secret_key: str = ""
     # Базовый URL для возврата после оплаты ЮKassa.
     payment_return_url: str = ""
-    # 54-ФЗ: слать фискальный чек в платеже. Включать ТОЛЬКО если касса не
-    # фискализирует автоматически (уточнить у бухгалтера). vat_code: 1 — без НДС
-    # (самозанятый/УСН), 6 — НДС 20% и т.д.
+    # 54-ФЗ: слать фискальный чек в платеже. Для САМОЗАНЯТОГО оставить False —
+    # чек по НПД формируется в приложении «Мой налог», отдельная касса не нужна.
+    # Включать ТОЛЬКО ИП/ООО, если касса не фискализирует сама. vat_code: 1 —
+    # без НДС (самозанятый/УСН), 6 — НДС 20% и т.д.
     yookassa_send_receipt: bool = False
     yookassa_vat_code: int = 1
 
@@ -98,6 +99,8 @@ class Settings(BaseSettings):
         problems: list[str] = []
         if self.jwt_secret == "dev-secret-change-me":
             problems.append("JWT_SECRET не задан (используется dev-значение)")
+        elif len(self.jwt_secret) < 32:
+            problems.append("JWT_SECRET слишком короткий (нужно ≥32 символов)")
         if not self.internal_api_secret:
             problems.append("INTERNAL_API_SECRET не задан")
         if self.allow_insecure_telegram_auth:

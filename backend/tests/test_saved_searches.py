@@ -1,5 +1,19 @@
 """Тесты сохранённых поисков и срабатывания алертов."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 def _auth(client, role="seeker"):
     r = client.post("/auth/telegram", json={"init_data": "", "role": role})
@@ -38,7 +52,7 @@ def test_new_vacancy_matches_saved_search(client):
     # Работодатель публикует подходящую вакансию — функция алертов отрабатывает.
     e_token, _ = _auth(client, "employer")
     r = client.post("/vacancies", headers=_hdr(e_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "A",
     })

@@ -8,14 +8,15 @@ import {
   resolveMatch,
   adminCreditWallet,
   adminGrant,
+  fetchRepeatPairs,
+  sendShiftReminders,
+  autoCloseShifts,
   adminRelink,
   adminSearchUsers,
   blockUser,
   blockVacancy,
-  cancelSubscription,
   fetchAdminOverview,
   fetchAdminReports,
-  fetchAdminSubscriptions,
   fetchBlocked,
   fetchRevenue,
   resolveReport,
@@ -26,6 +27,8 @@ import {
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { Loading } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
+import { plural } from "@/lib/format";
 import { IconShield, IconMoney, IconCheck, IconWarning } from "@/components/Icons";
 
 const REASON_LABEL: Record<string, string> = {
@@ -83,19 +86,60 @@ export function AdminPage() {
       day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
     });
   };
-  const subs = useQuery({
-    queryKey: ["admin-subs"],
-    queryFn: fetchAdminSubscriptions,
-  });
   const blocked = useQuery({ queryKey: ["admin-blocked"], queryFn: fetchBlocked });
+  const pairs = useQuery({ queryKey: ["admin-pairs"], queryFn: fetchRepeatPairs });
+  const [remindBusy, setRemindBusy] = useState(false);
+  const [closeBusy, setCloseBusy] = useState(false);
+
+  async function closeHanging() {
+    setCloseBusy(true);
+    try {
+      const n = await autoCloseShifts();
+      haptic("success");
+      toast(
+        n > 0 ? `Закрыто смен: ${n}` : "Зависших смен нет",
+        "success",
+      );
+      qc.invalidateQueries({ queryKey: ["admin-overview"] });
+    } catch {
+      haptic("error");
+      toast("Не удалось закрыть", "error");
+    } finally {
+      setCloseBusy(false);
+    }
+  }
+
+  async function remind() {
+    setRemindBusy(true);
+    try {
+      const n = await sendShiftReminders();
+      haptic("success");
+      toast(
+        n > 0 ? `Напоминания отправлены: ${n}` : "Сегодня напоминать некому",
+        "success",
+      );
+    } catch {
+      haptic("error");
+      toast("Не удалось разослать", "error");
+    } finally {
+      setRemindBusy(false);
+    }
+  }
   const users = useQuery({
     queryKey: ["admin-users", userQ],
     queryFn: () => adminSearchUsers(userQ),
   });
 
-  async function grant(id: string, sku: string, label: string) {
+  // Компенсация оператора: выдаём буст и срочные явными числами —
+  // платного каталога больше нет, единственный платёж это пополнение баланса.
+  async function grant(
+    id: string,
+    label: string,
+    boost = 0,
+    superlikes = 0,
+  ) {
     haptic("success");
-    await adminGrant(id, sku);
+    await adminGrant(id, boost, superlikes);
     toast(`Выдано: ${label}`, "success");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
@@ -160,14 +204,6 @@ export function AdminPage() {
     else await unblockUser(id);
     toast("Разблокировано", "success");
     refresh();
-  }
-
-  async function cancelSub(ownerId: string) {
-    haptic("success");
-    await cancelSubscription(ownerId);
-    toast("Подписка отменена (доступ → Free)", "success");
-    qc.invalidateQueries({ queryKey: ["admin-subs"] });
-    qc.invalidateQueries({ queryKey: ["admin-overview"] });
   }
 
   async function resolve(id: string) {
@@ -245,21 +281,32 @@ export function AdminPage() {
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="row">
             <span style={{ flex: 1 }}>
-              <div className="muted" style={{ fontSize: 12 }}>Оценка дохода в месяц</div>
+              <div className="muted" style={{ fontSize: 12 }}>Комиссия начислена</div>
               <div style={{ fontSize: 24, fontWeight: 900, color: "var(--gold)" }}>
-                {rev.data.estMonthlyRub.toLocaleString("ru-RU")} ₽
+                {rev.data.commissionAccruedRub.toLocaleString("ru-RU")} ₽
               </div>
             </span>
             <span style={{ textAlign: "right" }}>
-              <div className="muted" style={{ fontSize: 12 }}>Всего получено</div>
+              <div className="muted" style={{ fontSize: 12 }}>Оплачено</div>
               <div style={{ fontWeight: 800 }}>
-                {rev.data.totalPaidRub.toLocaleString("ru-RU")} ₽ · {rev.data.totalStars} ★
+                {rev.data.commissionPaidRub.toLocaleString("ru-RU")} ₽
               </div>
             </span>
           </div>
           <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-            Активных подписок: <b style={{ color: "var(--text)" }}>Pro {rev.data.activePro}</b>
-            {" · "}<b style={{ color: "var(--text)" }}>Business {rev.data.activeBusiness}</b>
+            К оплате сейчас:{" "}
+            <b style={{ color: "var(--text)" }}>
+              {rev.data.commissionPendingRub.toLocaleString("ru-RU")} ₽
+            </b>
+            {" · "}смен с комиссией:{" "}
+            <b style={{ color: "var(--text)" }}>{rev.data.shiftsBilled}</b>
+          </div>
+          <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
+            Пополнено баланса:{" "}
+            <b style={{ color: "var(--text)" }}>
+              {rev.data.topupsRub.toLocaleString("ru-RU")} ₽
+            </b>{" "}
+            — это аванс заведений, а не заработок сервиса.
           </div>
         </div>
       )}
@@ -300,6 +347,8 @@ export function AdminPage() {
         </div>
       )}
 
+      <CampaignLinkMaker />
+
       <h2 className="h2" style={{ marginBottom: 8 }}>Источники регистраций</h2>
       {sources.data && sources.data.length === 0 && (
         <div className="card muted" style={{ textAlign: "center", marginBottom: 18 }}>
@@ -338,7 +387,7 @@ export function AdminPage() {
               <span style={{ flex: 1 }}>
                 <b>{u.name}</b>
                 {u.blocked && (
-                  <span className="tag" style={{ marginLeft: 8, color: "var(--crimson)", borderColor: "var(--crimson)" }}>бан</span>
+                  <span className="tag" style={{ marginLeft: 8, color: "var(--crimson-dark)", borderColor: "var(--crimson-dark)" }}>бан</span>
                 )}
                 <div className="muted" style={{ fontSize: 12 }}>
                   {u.role === "employer" ? "заведение" : "соискатель"}
@@ -355,19 +404,10 @@ export function AdminPage() {
               <button
                 className="tag"
                 style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                onClick={() => grant(u.id, "boost_24h", "Boost 24ч")}
+                onClick={() => grant(u.id, "буст на 1 вакансию", 1, 0)}
               >
                 + Boost
               </button>
-              {u.role === "employer" && (
-                <button
-                  className="tag"
-                  style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                  onClick={() => grant(u.id, "sub_pro_month", "Pro на месяц")}
-                >
-                  + Pro (месяц)
-                </button>
-              )}
               {u.role === "employer" &&
                 [1000, 5000].map((a) => (
                   <button
@@ -382,7 +422,7 @@ export function AdminPage() {
               <button
                 className="tag"
                 style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                onClick={() => grant(u.id, "super_5", "5 срочных")}
+                onClick={() => grant(u.id, "5 срочных", 0, 5)}
               >
                 + 5 срочных
               </button>
@@ -437,9 +477,9 @@ export function AdminPage() {
             className="tag"
             style={{
               cursor: "pointer",
-              background: period === p.id ? "var(--crimson)" : "transparent",
+              background: period === p.id ? "var(--crimson-dark)" : "transparent",
               color: period === p.id ? "#fff" : "var(--text)",
-              borderColor: period === p.id ? "var(--crimson)" : "var(--border)",
+              borderColor: period === p.id ? "var(--crimson-dark)" : "var(--border)",
             }}
             onClick={() => setPeriod(p.id)}
           >
@@ -543,35 +583,53 @@ export function AdminPage() {
         ))}
       </div>
 
-      <h2 className="h2" style={{ marginBottom: 8 }}>Активные подписки</h2>
-      {subs.isLoading && <Loading />}
-      {subs.data && subs.data.length === 0 && (
-        <div className="card muted" style={{ textAlign: "center" }}>Платящих заведений пока нет</div>
+      {/* Ежедневное действие оператора: напомнить о сменах на сегодня.
+          В сообщении — кнопка «Я на смене», отметка в один тап из бота. */}
+      <h2 className="h2" style={{ margin: "18px 0 8px" }}>Смены сегодня</h2>
+      <div className="card" style={{ marginBottom: 18 }}>
+        <p className="muted" style={{ margin: "0 0 12px" }}>
+          Разошлём напоминание всем, у кого сегодня подтверждённая смена и кто
+          ещё не отметился. В сообщении — кнопка «Я на смене».
+          Повторное нажатие дублей не создаёт.
+        </p>
+        <Button loading={remindBusy} onClick={remind}>
+          Напомнить о сменах на сегодня
+        </Button>
+        <p className="muted" style={{ margin: "16px 0 12px" }}>
+          Работник отметился кодом заведения, а подтверждения так и не было?
+          Такие смены закрываются сами — код знает только заведение, значит
+          человек был на месте. Спор для этого больше не нужен.
+        </p>
+        <Button variant="secondary" loading={closeBusy} onClick={closeHanging}>
+          Закрыть зависшие смены
+        </Button>
+      </div>
+
+      <h2 className="h2" style={{ margin: "18px 0 8px" }}>Вернулись за второй сменой</h2>
+      <p className="muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+        Главная цифра экономики: если пары закрывают одну смену и исчезают —
+        договариваются мимо сервиса.
+      </p>
+      {pairs.data && pairs.data.length === 0 && (
+        <div className="card muted" style={{ textAlign: "center", marginBottom: 18 }}>
+          Повторных пар пока нет
+        </div>
       )}
-      <div style={{ display: "grid", gap: 10 }}>
-        {subs.data?.map((s) => (
-          <div key={s.ownerId} className="card">
-            <div className="row">
-              <span style={{ flex: 1 }}>
-                <b>{s.company}</b>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {s.renewsAt ? `до ${s.renewsAt.slice(0, 10)}` : "—"}
-                </div>
+      {pairs.data && pairs.data.length > 0 && (
+        <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
+          {pairs.data.map((p) => (
+            <div key={`${p.employer}-${p.worker}`} className="card row">
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <b>{p.employer}</b>
+                <div className="muted" style={{ fontSize: 13 }}>{p.worker}</div>
               </span>
               <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
-                {s.plan.toUpperCase()}
+                {p.shifts} {plural(p.shifts, "смена", "смены", "смен")}
               </span>
             </div>
-            <button
-              className="tab"
-              style={{ width: "auto", marginTop: 6, color: "var(--muted)", fontSize: 12 }}
-              onClick={() => cancelSub(s.ownerId)}
-            >
-              Отменить подписку (после возврата денег)
-            </button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {blocked.data && blocked.data.length > 0 && (
         <>
@@ -598,5 +656,49 @@ export function AdminPage() {
         </>
       )}
     </div>
+  );
+}
+
+// Генератор рекламных ссылок: оператор вводит название канала/ролика → готовая
+// ссылка t.me/<bot>?startapp=src_XXX для вставки под видео. Клик открытия по
+// ней сразу трекается в «Источники регистраций» и ведёт на цепляющий экран.
+function CampaignLinkMaker() {
+  const bot = import.meta.env.VITE_BOT_USERNAME ?? "staffswipe_bot";
+  const [name, setName] = useState("");
+  const code = name.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 40);
+  const link = code ? `https://t.me/${bot}?startapp=src_${code}` : "";
+
+  return (
+    <>
+      <h2 className="h2" style={{ marginBottom: 8 }}>Ссылка для рекламы</h2>
+      <div className="card" style={{ marginBottom: 18 }}>
+        <div className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
+          Впиши канал или ролик (напр. <b>shorts_waiter</b>) — получишь ссылку.
+          Ставь её под видео: клики соберутся в «Источники» ниже.
+        </div>
+        <input
+          className="input"
+          placeholder="например: shorts_waiter"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        {link && (
+          <div className="row" style={{ gap: 8, marginTop: 10 }}>
+            <code style={{ flex: 1, fontSize: 12, wordBreak: "break-all" }}>{link}</code>
+            <button
+              className="btn"
+              style={{ width: "auto", padding: "0 14px", height: 44 }}
+              onClick={() => {
+                navigator.clipboard?.writeText(link);
+                haptic("success");
+                toast("Ссылка скопирована", "success");
+              }}
+            >
+              Копировать
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

@@ -7,7 +7,9 @@ from ..db import get_db
 from ..entitlements import get_or_create
 from ..models import Employer, Match, Swipe, User
 from ..notify import notify_owner
+from ..ratelimit import rate_limit
 from ..security import current_principal
+from .billing import commission_overdue
 from .dadata import lookup_party
 
 router = APIRouter(prefix="/employer", tags=["employer"])
@@ -57,7 +59,11 @@ def my_workers(
     ]
 
 
-@router.post("/invite/{user_id}")
+@router.post(
+    "/invite/{user_id}",
+    # Анти-спам: не заваливаем работника пингами «зовём снова».
+    dependencies=[Depends(rate_limit("invite", 20, 3600))],
+)
 def invite_again(
     user_id: str,
     db: Session = Depends(get_db),
@@ -66,6 +72,14 @@ def invite_again(
     """Позвать работника снова: фиксируем интерес заведения и шлём ему пинг."""
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
+    # Тот же барьер, что и на свайпах: должник не зовёт новых людей (иначе это
+    # обход блока приглашений через этот эндпоинт).
+    if commission_overdue(db, principal["id"]):
+        raise HTTPException(
+            status_code=402,
+            detail="Есть просроченная комиссия — оплатите счёт, "
+                   "чтобы звать людей.",
+        )
     emp = db.get(Employer, principal["id"])
     if emp is None or db.get(User, user_id) is None:
         raise HTTPException(status_code=404, detail="Не найдено")
@@ -84,7 +98,11 @@ def invite_again(
             target_type="user", direction="like",
         ))
         db.commit()
-    notify_owner(db, user_id, f"Вас снова зовут на смену в «{emp.company_name}»")
+    # Пинг шлём только при НОВОМ интересе — повторные вызовы не спамят человека.
+    if not exists:
+        notify_owner(
+            db, user_id, f"Вас снова зовут на смену в «{emp.company_name}»"
+        )
     return {"ok": True}
 
 

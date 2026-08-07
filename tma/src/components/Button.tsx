@@ -29,6 +29,7 @@ export function Button({
   children,
   disabled,
   onClick,
+  style,
   ...rest
 }: Props) {
   const s = SIZE[size];
@@ -54,13 +55,17 @@ export function Button({
       type="button"
       className={`ui-btn ui-btn--${variant}`}
       disabled={isDisabled}
-      aria-busy={loading}
+      aria-busy={busy}
       onClick={handle}
+      // Внешний style ДОПОЛНЯЕТ размеры, а не заменяет их: раньше он шёл через
+      // {...rest} после style и затирал minHeight — кнопка с внешним стилем
+      // схлопывалась по высоте иконки и теряла минимальную зону тапа.
       style={{
         width: block ? "100%" : "auto",
         minHeight: s.minHeight,
         padding: s.padding,
         fontSize: s.font,
+        ...style,
       }}
       {...rest}
     >

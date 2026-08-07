@@ -31,7 +31,7 @@ export function CandidateFilterSheet({
           cursor: "pointer",
           background: on ? "var(--gold)" : "transparent",
           color: on ? "#fff" : "var(--text)",
-          borderColor: on ? "var(--gold)" : "var(--dislike)",
+          borderColor: on ? "var(--gold)" : "var(--border-strong)",
         }}
         onClick={() => {
           haptic("select");
@@ -45,36 +45,18 @@ export function CandidateFilterSheet({
 
   return createPortal(
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(20,14,9,0.5)",
-        display: "flex",
-        alignItems: "flex-end",
-        zIndex: 100,
-      }}
+      className="sheet-backdrop"
       onClick={onClose}
     >
       <div
         className="fade-up sheet"
-        style={{
-          width: "100%",
-          maxWidth: 520,
-          margin: "0 auto",
-          maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column",
-          background: "var(--surface)",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grab" aria-hidden />
         <div className="sheet-body">
           <h2 className="h2" style={{ marginTop: 0 }}>Кто нужен</h2>
 
-          <label className="muted">Должность</label>
+          <div className="form-label">Должность</div>
           <div style={{ margin: "8px 0 16px" }}>
             {ROLE_FAMILY_ORDER.map((fam) => (
               <div key={fam} style={{ marginBottom: 10 }}>
@@ -95,7 +77,7 @@ export function CandidateFilterSheet({
             ))}
           </div>
 
-          <label className="muted" htmlFor="district">Район</label>
+          <label className="form-label" htmlFor="district">Район</label>
           <input
             id="district"
             className="input"
@@ -105,7 +87,7 @@ export function CandidateFilterSheet({
             onChange={(e) => set({ district: e.target.value || undefined })}
           />
 
-          <label className="muted">Показать</label>
+          <div className="form-label">Показать</div>
           <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 18px" }}>
             <Chip
               on={!!f.available_today}

@@ -38,15 +38,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger("staffswipe")
 
-# Наблюдаемость: Sentry подключается только если задан DSN и установлен SDK.
+# Наблюдаемость: Sentry подключается только если задан DSN (SDK в requirements).
+# Ошибки логируем РАЗДЕЛЬНО: «нет пакета» и «плохой DSN» — это разные проблемы,
+# и владельцу проекта важно видеть настоящую причину, а не общую заглушку.
 if settings.sentry_dsn:
     try:
         import sentry_sdk
-
-        sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1)
-        logger.info("Sentry инициализирован")
-    except Exception:  # noqa: BLE001
+    except ImportError:
         logger.warning("sentry_sdk не установлен — пропускаю Sentry")
+    else:
+        try:
+            sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1)
+            logger.info("Sentry инициализирован")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Sentry не запустился (проверьте SENTRY_DSN): %s", exc)
 
 
 @asynccontextmanager

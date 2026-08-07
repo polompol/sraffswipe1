@@ -7,9 +7,10 @@ import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { ReviewStars } from "@/components/ReviewStars";
-import { IconTabMatches, IconCheck, IconWarning, IconPin } from "@/components/Icons";
+import { IconTabMatches, IconCheck, IconWarning, IconPin, IconChevronRight } from "@/components/Icons";
 import { toast } from "@/components/Toast";
-import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
+import { haptic, confirmAction } from "@/telegram/sdk";
 
 export function MatchesPage() {
   const nav = useNavigate();
@@ -22,6 +23,15 @@ export function MatchesPage() {
   });
 
   async function mark(matchId: string, attended: boolean) {
+    // «Не вышел» бьёт по надёжности человека — подтверждаем, чтобы не отметить
+    // случайным тапом.
+    if (
+      !attended
+      && !(await confirmAction(
+        "Отметить, что человек не вышел на смену? Это повлияет на его надёжность.",
+        "Отметить",
+      ))
+    ) return;
     haptic(attended ? "success" : "warning");
     try {
       await markAttendance(matchId, attended);
@@ -48,6 +58,7 @@ export function MatchesPage() {
   }
 
   async function doDispute(matchId: string) {
+    if (!(await confirmAction("Открыть спор по смене? Его разберёт оператор.", "Открыть спор"))) return;
     haptic("warning");
     try {
       await disputeShift(matchId);
@@ -59,29 +70,54 @@ export function MatchesPage() {
   }
 
   // Отметиться геолокацией — работник физически на месте смены, код не нужен.
-  function checkinByGeo(matchId: string) {
+  // Возвращаем промис: определение координат занимает до 8 секунд, и без него
+  // кнопка не крутила спиннер — человек не понимал, идёт ли что-то, и жал ещё.
+  function checkinByGeo(matchId: string): Promise<void> {
     if (!("geolocation" in navigator)) {
       toast("Геолокация недоступна — введите код", "error");
-      return;
+      return Promise.resolve();
     }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await checkinShift(matchId, {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
-          haptic("success");
-          toast("Вы отметились на смене ✓", "success");
-          qc.invalidateQueries({ queryKey: ["matches"] });
-        } catch {
-          haptic("error");
-          toast("Вы не на месте смены — попробуйте код", "error");
-        }
-      },
-      () => toast("Нет доступа к геолокации — введите код", "error"),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
+    return new Promise<void>((resolve) => {
+      // Страховка: пока висит системный запрос разрешения, штатный timeout
+      // не тикает. Без своего таймера кнопка осталась бы со спиннером навсегда.
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const guard = setTimeout(() => {
+        toast("Не удалось определить геопозицию — введите код", "error");
+        done();
+      }, 12000);
+      const finish = () => {
+        clearTimeout(guard);
+        done();
+      };
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            await checkinShift(matchId, {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            });
+            haptic("success");
+            toast("Вы отметились на смене ✓", "success");
+            qc.invalidateQueries({ queryKey: ["matches"] });
+          } catch {
+            haptic("error");
+            toast("Вы не на месте смены — попробуйте код", "error");
+          } finally {
+            finish();
+          }
+        },
+        () => {
+          toast("Нет доступа к геолокации — введите код", "error");
+          finish();
+        },
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    });
   }
 
   return (
@@ -99,29 +135,51 @@ export function MatchesPage() {
       <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {data?.map((m) => (
           <div key={m.id} className="card">
-            <div
+            {/* Настоящая кнопка, а не div с onClick: переход в чат теперь
+                доступен с клавиатуры и озвучивается скринридером. Кнопки
+                действий лежат ниже, вложенности кнопок не возникает. */}
+            <button
               className="row"
-              style={{ gap: 12, cursor: "pointer" }}
+              aria-label={`Открыть чат: ${m.companyName ?? "Заведение"}`}
+              style={{
+                gap: 12,
+                cursor: "pointer",
+                width: "100%",
+                background: "none",
+                border: "none",
+                padding: 0,
+                textAlign: "left",
+                font: "inherit",
+                color: "inherit",
+              }}
               onClick={() => nav(`/chat/${m.id}`)}
             >
+              {/* Раньше сокращённое `background` шло ПОСЛЕ backgroundImage и
+                  затирало size/position, а без фото подставлялся url("").
+                  Теперь ветки не смешиваются. */}
               <span
                 style={{
                   width: 52,
                   height: 52,
                   borderRadius: 12,
                   flex: "none",
-                  backgroundImage: `url(${m.companyPhotoUrl ?? ""})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  background: m.companyPhotoUrl ? undefined : "var(--border)",
+                  ...(m.companyPhotoUrl
+                    ? {
+                        backgroundImage: `url(${m.companyPhotoUrl})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }
+                    : { background: "var(--border-strong)" }),
                 }}
               />
               <span style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700 }}>{m.companyName ?? "Заведение"}</div>
                 <div className="muted">{MATCH_STATUS_LABELS[m.status]}</div>
               </span>
-              <span style={{ color: "var(--muted)", fontSize: 22 }}>›</span>
-            </div>
+              <span style={{ color: "var(--muted)", display: "inline-flex" }}>
+                <IconChevronRight size={20} />
+              </span>
+            </button>
             {/* Спор — эскалация к оператору. */}
             {m.disputed && !m.checkedIn && (
               <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--crimson-dark)" }}>
@@ -146,23 +204,45 @@ export function MatchesPage() {
                 {/* Заведение */}
                 {role === "employer" && (
                   <>
+                    {/* Код заведение диктует работнику вслух — поэтому цифры
+                        крупные и читаемые, а не мелкой серой строкой. */}
                     {m.checkinCode && !m.employerCheckedIn && (
-                      <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
-                        Код-подсказка работнику (по желанию): <b style={{ color: "var(--gold)", letterSpacing: 3 }}>{m.checkinCode}</b>
+                      <div
+                        style={{
+                          marginBottom: 12,
+                          padding: "10px 14px",
+                          border: "1px solid var(--border-strong)",
+                          borderRadius: "var(--radius-sm)",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div className="muted" style={{ fontSize: 13 }}>
+                          Назовите этот код работнику
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "var(--text-2xl)",
+                            fontWeight: 800,
+                            letterSpacing: 6,
+                            color: "var(--gold)",
+                          }}
+                        >
+                          {m.checkinCode}
+                        </div>
                       </div>
                     )}
                     {m.employerCheckedIn ? (
                       <div className="muted">Вы подтвердили выход ✓ Ждём отметку работника.</div>
                     ) : (
                       <div className="row" style={{ gap: 8 }}>
-                        <button className="btn" style={{ width: "auto", flex: 1 }} onClick={() => mark(m.id, true)}>
+                        <Button block={false} style={{ flex: 1 }} onClick={() => mark(m.id, true)}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                             <IconCheck size={16} /> Человек пришёл
                           </span>
-                        </button>
-                        <button className="btn secondary" style={{ width: "auto" }} onClick={() => mark(m.id, false)}>
+                        </Button>
+                        <Button variant="danger" block={false} onClick={() => mark(m.id, false)}>
                           Не вышел
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </>
@@ -175,11 +255,11 @@ export function MatchesPage() {
                       <div className="muted">Вы отметились ✓ Ждём подтверждения заведения.</div>
                     ) : (
                       <>
-                        <button className="btn" onClick={() => checkinByGeo(m.id)}>
+                        <Button onClick={() => checkinByGeo(m.id)}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                             <IconPin size={18} /> Я на смене — отметиться
                           </span>
-                        </button>
+                        </Button>
                         <div className="muted" style={{ fontSize: 13, margin: "12px 0 6px" }}>
                           …или введите код, если заведение его назвало:
                         </div>
@@ -195,14 +275,15 @@ export function MatchesPage() {
                               setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
                             }
                           />
-                          <button
-                            className="btn secondary"
-                            style={{ width: "auto", flex: 1 }}
+                          <Button
+                            variant="secondary"
+                            block={false}
+                            style={{ flex: 1 }}
                             disabled={(codes[m.id] ?? "").length < 6}
                             onClick={() => doCheckin(m.id)}
                           >
                             Отметиться кодом
-                          </button>
+                          </Button>
                         </div>
                       </>
                     )}
@@ -210,9 +291,12 @@ export function MatchesPage() {
                 )}
 
                 {/* Путь спора — обеим сторонам. */}
+                {/* Раньше здесь стоял класс .tab — это класс нижней навигации
+                    (колонка, min-height 64). Защитная механика должна быть
+                    читаемой кнопкой, а не мелким серым текстом. */}
                 <button
-                  className="tab"
-                  style={{ width: "auto", marginTop: 10, color: "var(--muted)", fontSize: 13 }}
+                  className="btn ghost"
+                  style={{ marginTop: 10, minHeight: 44, fontSize: 14 }}
                   onClick={() => doDispute(m.id)}
                 >
                   Проблема — не получается подтвердить

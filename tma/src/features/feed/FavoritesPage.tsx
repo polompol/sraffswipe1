@@ -19,12 +19,14 @@ export function FavoritesPage() {
     queryFn: listFavorites,
   });
 
-  async function onAct(v: Vacancy, dir: SwipeDirection) {
-    if (dir === "dislike") return;
+  async function onAct(v: Vacancy, dir: SwipeDirection): Promise<boolean> {
+    if (dir === "dislike") return false;
     try {
       await sendSwipe(v.id, "vacancy", dir);
+      return true; // успех → VacancyList покажет тост «Отклик отправлен»
     } catch {
       toast("Не удалось отправить отклик", "error");
+      return false;
     }
   }
 
@@ -41,7 +43,9 @@ export function FavoritesPage() {
             text="Нажимайте на закладку у смены в списке — она сохранится здесь, чтобы откликнуться позже."
           />
         )}
-        {data && data.length > 0 && <VacancyList items={data} onAct={onAct} />}
+        {data && data.length > 0 && (
+          <VacancyList items={data} onAct={onAct} hideSkip />
+        )}
       </div>
     </div>
   );

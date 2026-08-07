@@ -1,4 +1,6 @@
 """Авторизация: телефон → SMS-код → JWT."""
+import hmac
+import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +14,7 @@ from ..security import create_token
 from ..sms import generate_code, send_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+_log = logging.getLogger("staffswipe")
 
 # Код живёт 10 минут — после этого считаем его недействительным.
 _CODE_TTL = timedelta(minutes=10)
@@ -33,7 +36,15 @@ def request_code(body: RequestCodeIn, db: Session = Depends(get_db)):
     else:
         db.add(PhoneCode(phone=body.phone, code=code))
     db.commit()
-    send_code(body.phone, code)
+    # Сбой SMS-шлюза не должен ронять запрос 500-й без объяснения. Код уже в
+    # БД; при ошибке отправки просим повторить.
+    try:
+        send_code(body.phone, code)
+    except Exception as e:  # noqa: BLE001 — любой сбой провайдера
+        _log.error("SMS send failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail="Не удалось отправить код. Попробуйте ещё раз."
+        ) from e
     from ..config import settings
 
     return RequestCodeOut(sent=True, dev_code=code if settings.dev_mode else None)
@@ -44,7 +55,8 @@ def verify(body: VerifyIn, db: Session = Depends(get_db)):
     # Анти-брутфорс: не больше 5 попыток ввода кода в минуту на номер.
     hit(f"verify:{body.phone}", limit=5, window=60)
     record = db.get(PhoneCode, body.phone)
-    if record is None or record.code != body.code:
+    # Тайминг-безопасное сравнение — не даём по времени ответа подбирать код.
+    if record is None or not hmac.compare_digest(record.code, body.code):
         raise HTTPException(status_code=400, detail="Неверный код")
     # Просроченный код недействителен — удаляем и просим запросить заново.
     if datetime.now(UTC) - _aware(record.created_at) > _CODE_TTL:

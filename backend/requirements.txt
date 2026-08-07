@@ -9,3 +9,4 @@ httpx==0.28.1
 psycopg[binary]==3.2.3
 boto3==1.35.99
 alembic==1.18.4
+sentry-sdk[fastapi]==2.66.1

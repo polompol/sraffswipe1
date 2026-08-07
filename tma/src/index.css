@@ -145,7 +145,7 @@
   border: 1.5px solid var(--gold);
 }
 .ui-btn--danger {
-  background: var(--crimson-dark);
+  background: var(--danger-bg);
   color: #fff;
   box-shadow: 0 6px 16px rgba(124, 21, 38, 0.28);
 }
@@ -255,7 +255,9 @@ input:focus-visible {
   font-size: 15px;
   font-weight: 600;
   padding: 8px 14px;
-  min-height: 38px;
+  /* 44px — минимальная комфортная зона нажатия пальцем (чипы фильтров,
+     быстрые ответы в чате). Раньше было 38px. */
+  min-height: 44px;
   border-radius: 999px;
   border: 1.5px solid;
   background: transparent;
@@ -274,6 +276,16 @@ button.tag:disabled {
 }
 [data-theme="dark"] button.tag:active {
   background: rgba(210, 75, 96, 0.14);
+}
+
+/* Подпись поля формы. Раньше подписи были просто .muted и липли к полю:
+   не было ни блочного поведения, ни отступа. */
+.form-label {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
 }
 
 .input {
@@ -377,7 +389,27 @@ button.tag:disabled {
   line-height: 16px;
   text-align: center;
 }
-/* Нижний лист (фильтры): grabber, прокручиваемое тело, липкий футер */
+/* Нижний лист (фильтры, детали смены): grabber, прокручиваемое тело, футер.
+   Подложка и сам лист раньше были скопированы инлайном в трёх файлах, причём
+   с z-index: 100 мимо токена --z-sheet и радиусом 20 мимо шкалы. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(20, 14, 9, 0.5);
+  z-index: var(--z-sheet);
+}
+.sheet {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
 .sheet-grab {
   width: 40px;
   height: 5px;
@@ -421,9 +453,14 @@ button.tag:disabled {
 /* Колода свайпа */
 .deck {
   position: relative;
-  /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде. */
-  height: 68vh;
-  min-height: 460px;
+  /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде.
+     Жёсткий min-height:460px на экранах ~640px уводил кнопки «Пропустить/
+     Отклик» под сгиб — теперь высота ужимается вместе с экраном. */
+  /* Высота считается от ОСТАТКА экрана: шапка+фильтры сверху (~120px),
+     кнопки действий (92px) и таббар (88px) снизу. Раньше при 68vh колода
+     занимала 560px и кнопки «Пропустить/Отклик» уезжали под таббар. */
+  height: clamp(300px, calc(100vh - 328px), 560px);
+  height: clamp(300px, calc(100dvh - 328px), 560px);
 }
 .swipe-card {
   position: absolute;
@@ -480,9 +517,16 @@ button.tag:disabled {
   overflow: hidden;
 }
 /* «Деньги рядом сейчас» — money-магнит наверху ленты */
+/* Это настоящая кнопка (ведёт в фильтры) — сбрасываем стили кнопки, чтобы
+   выглядела как блок, но оставалась доступной с клавиатуры. */
 .money-near {
   position: relative;
   overflow: hidden;
+  display: block;
+  width: 100%;
+  border: none;
+  font-family: inherit;
+  text-align: left;
   border-radius: var(--radius);
   padding: 16px 18px;
   margin-bottom: 12px;
@@ -716,6 +760,10 @@ body[data-large="1"] .tab {
   border-radius: 16px;
   margin: 4px 0;
   font-size: 16px;
+  /* Длинная ссылка/слово без пробелов иначе распирает пузырь и даёт
+     горизонтальный скролл всей страницы; переводы строк сохраняем. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .bubble.mine {
   margin-left: auto;
@@ -761,6 +809,36 @@ body[data-large="1"] .tab {
   to {
     transform: translateY(110vh) rotate(360deg);
     opacity: 0;
+  }
+}
+
+/* Денежный дождь при закрытии смены — фирменный момент радости */
+.money-rain {
+  overflow: hidden;
+}
+.money-rain .coin {
+  position: absolute;
+  top: -8%;
+  font-size: 26px;
+  font-weight: 900;
+  color: #f4cf6a;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  animation-name: coinFall;
+  animation-timing-function: cubic-bezier(0.3, 0.1, 0.5, 1);
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes coinFall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg) scale(0.9);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(115vh) rotate(220deg) scale(1.05);
+    opacity: 0.9;
   }
 }
 
@@ -912,6 +990,11 @@ body[data-large="1"] .tab {
 .act-skip {
   box-shadow: 0 6px 16px rgba(60, 40, 30, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+/* В тёмной теме белый блик превращался в светлую полоску по верху кнопки. */
+[data-theme="dark"] .act-skip {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .act:active {
   transform: scale(0.9);

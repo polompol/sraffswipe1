@@ -23,12 +23,24 @@ def _tg_id(db: Session, owner_id: str) -> int | None:
     return e.tg_id if e is not None else None
 
 
-def _send(token: str, tg: int, text: str) -> None:
+def _send(token: str, tg: int, text: str, open_app: str | None = None) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    body: dict = {"chat_id": tg, "text": text}
+    # Кнопка «открыть приложение» прямо в сообщении: человек отмечается на
+    # смене в один тап из бота, а не ищет приложение и нужный экран.
+    # web_app открывает Mini App внутри Telegram — вход по обычному initData,
+    # отдельного доверенного канала для бота не появляется.
+    if open_app and settings.mini_app_url:
+        body["reply_markup"] = {
+            "inline_keyboard": [[{
+                "text": open_app,
+                "web_app": {"url": settings.mini_app_url},
+            }]]
+        }
     try:
         req = urllib.request.Request(
             url,
-            data=json.dumps({"chat_id": tg, "text": text}).encode(),
+            data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"},
         )
         urllib.request.urlopen(req, timeout=5)  # noqa: S310
@@ -36,8 +48,11 @@ def _send(token: str, tg: int, text: str) -> None:
         pass
 
 
-def notify_owner(db: Session, owner_id: str, text: str) -> None:
-    """Отправить текст пользователю/работодателю по его tg_id (не блокируя)."""
+def notify_owner(
+    db: Session, owner_id: str, text: str, open_app: str | None = None
+) -> None:
+    """Отправить текст пользователю/работодателю по его tg_id (не блокируя).
+    `open_app` — подпись кнопки, открывающей Mini App прямо из сообщения."""
     token = settings.telegram_bot_token
     if not token:
         return
@@ -45,7 +60,7 @@ def notify_owner(db: Session, owner_id: str, text: str) -> None:
     if not tg:
         return
     threading.Thread(
-        target=_send, args=(token, tg, text), daemon=True
+        target=_send, args=(token, tg, text, open_app), daemon=True
     ).start()
 
 

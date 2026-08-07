@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  plural,
   fmtTime,
   rateLabel,
   estimatedPay,
@@ -43,5 +44,21 @@ describe("format", () => {
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     expect(isUrgentShift(todayISO())).toBe(true);
     expect(isUrgentShift(tomorrow)).toBe(false);
+  });
+});
+
+describe("склонение по числу", () => {
+  it("считает смены по-русски", () => {
+    const f = (n: number) => `${n} ${plural(n, "смена", "смены", "смен")}`;
+    expect(f(1)).toBe("1 смена");
+    expect(f(2)).toBe("2 смены");
+    expect(f(4)).toBe("4 смены");
+    expect(f(5)).toBe("5 смен");
+    expect(f(11)).toBe("11 смен");   // 11-14 — исключение
+    expect(f(14)).toBe("14 смен");
+    expect(f(21)).toBe("21 смена");
+    expect(f(22)).toBe("22 смены");
+    expect(f(25)).toBe("25 смен");
+    expect(f(0)).toBe("0 смен");
   });
 });

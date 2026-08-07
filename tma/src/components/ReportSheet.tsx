@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   reportTarget,
   type ReportReason,
@@ -6,6 +7,7 @@ import {
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 
 const REASONS: { id: ReportReason; label: string }[] = [
   { id: "fake", label: "Фейковая вакансия" },
@@ -45,45 +47,38 @@ export function ReportSheet({
     }
   }
 
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(20,14,9,0.5)",
-        display: "flex",
-        alignItems: "flex-end",
-        zIndex: 50,
-      }}
-      onClick={onClose}
-    >
+  // Портал в body: иначе панель наследует анимацию и задержку
+  // родительского списка (.stagger) и всплывает с запозданием.
+  return createPortal(
+    <div className="sheet-backdrop" onClick={onClose}>
+      {/* Структура как у остальных панелей: прокручиваемое тело + закреплённый
+          низ. Без этого на невысоком экране кнопка «Отправить» уезжала за
+          нижнюю кромку листа, и жалобу нельзя было отправить вообще. */}
       <div
-        className="fade-up"
-        style={{
-          width: "100%",
-          maxWidth: 520,
-          margin: "0 auto",
-          background: "var(--surface)",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          padding: 20,
-          paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
-        }}
+        className="fade-up sheet"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="sheet-body">
         <h2 className="h2">Пожаловаться</h2>
         <p className="muted" style={{ marginTop: 4 }}>
           Что не так? Мы проверим и примем меры.
         </p>
-        <div style={{ display: "grid", gap: 8, margin: "12px 0 14px" }}>
+        <div
+          role="radiogroup"
+          aria-label="Причина жалобы"
+          style={{ display: "grid", gap: 8, margin: "12px 0 14px" }}
+        >
           {REASONS.map((r) => (
             <button
               key={r.id}
               className="card"
+              role="radio"
+              aria-checked={reason === r.id}
               style={{
                 textAlign: "left",
                 cursor: "pointer",
-                borderColor: reason === r.id ? "var(--gold)" : "var(--border)",
+                minHeight: 48,
+                borderColor: reason === r.id ? "var(--gold)" : "var(--border-strong)",
                 color: reason === r.id ? "var(--gold)" : "var(--text)",
               }}
               onClick={() => {
@@ -104,15 +99,17 @@ export function ReportSheet({
           maxLength={1000}
           onChange={(e) => setText(e.target.value)}
         />
-        <div className="row" style={{ gap: 10 }}>
-          <button className="btn secondary" onClick={onClose}>
+        </div>
+        <div className="sheet-foot">
+          <Button variant="secondary" onClick={onClose}>
             Отмена
-          </button>
-          <button className="btn" disabled={!reason || busy} onClick={submit}>
-            {busy ? "Отправляем…" : "Отправить"}
-          </button>
+          </Button>
+          <Button loading={busy} disabled={!reason} onClick={submit}>
+            Отправить
+          </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -30,7 +30,7 @@ export function EmptyState({
           height: 72,
           margin: "0 auto 14px",
           borderRadius: "50%",
-          background: "rgba(199,162,75,.14)",
+          background: "var(--gold-tint)",
           color: "var(--gold)",
           display: "flex",
           alignItems: "center",

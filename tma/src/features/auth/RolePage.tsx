@@ -46,8 +46,8 @@ export function RolePage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginTop: 24 }}>Кто вы?</h1>
-        <p className="muted">Это можно будет поменять позже</p>
+        <h1 className="h1" style={{ marginTop: 24 }}>С чего начнём?</h1>
+        <p className="muted">Это можно поменять позже</p>
 
         <label
           className="card row"
@@ -67,10 +67,18 @@ export function RolePage() {
           </span>
         </label>
 
-        <div style={{ marginTop: 16, display: "grid", gap: 16, opacity: consent ? 1 : 0.5, pointerEvents: consent ? "auto" : "none" }}>
+        {/* До согласия карточки выключены — раньше без единого слова, почему
+            тап не срабатывает. Теперь причина написана явно. */}
+        {!consent && (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Отметьте согласие выше, чтобы выбрать роль
+          </p>
+        )}
+
+        <div style={{ marginTop: 16, display: "grid", gap: 16, opacity: consent ? 1 : 0.55, pointerEvents: consent ? "auto" : "none" }}>
           <RoleCard
             Icon={IconBriefcase}
-            grad="linear-gradient(135deg,#c0334a,#a51c30)"
+            grad="var(--grad-brand)"
             title="Я ищу подработку"
             sub="Официант, бариста, кальянщик, флорист, курьер"
             loading={busy === "seeker"}
@@ -78,7 +86,7 @@ export function RolePage() {
           />
           <RoleCard
             Icon={IconStore}
-            grad="linear-gradient(135deg,#a51c30,#7e1322)"
+            grad="linear-gradient(135deg, var(--gold), var(--crimson-dark))"
             title="Я ищу сотрудников"
             sub="Кафе, ресторан, бар, кофейня, кальянная"
             loading={busy === "employer"}

@@ -164,12 +164,6 @@ export interface InvoiceLink {
   link: string;
 }
 
-/** Запрос ссылки на оплату Stars (XTR) с backend. */
-export async function createStarsInvoice(sku: string): Promise<InvoiceLink> {
-  if (!USE_BACKEND) return { link: `mock-invoice:${sku}` };
-  const { data } = await api.post<InvoiceLink>("/billing/stars/invoice", { sku });
-  return data;
-}
 
 export interface Me {
   id: string;
@@ -179,11 +173,19 @@ export interface Me {
   tgUsername?: string | null;
   streak?: number;
   city?: string;
+  district?: string;
   incomingLikes?: number;
   earnedRub?: number;
   shiftsDone?: number;
   availableToday?: boolean;
   profileCompletion?: number;
+  birthDate?: string;
+  roles?: string[];
+  selfEmployed?: boolean;
+  inn?: string | null;
+  about?: string;
+  experienceTags?: string[];
+  photoUrl?: string;
 }
 
 export async function fetchMe(): Promise<Me> {
@@ -211,6 +213,7 @@ export interface MeUpdate {
   self_employed?: boolean;
   inn?: string;
   about?: string;
+  experience_tags?: string[];
   photo_url?: string;
   company_name?: string;
 }
@@ -306,6 +309,22 @@ export async function createVacancy(input: VacancyInput): Promise<Vacancy> {
   return data;
 }
 
+/** Исправить свою смену. 409 — по ней уже есть отклик, условия менять нельзя. */
+export async function updateVacancy(
+  id: string,
+  input: VacancyInput,
+): Promise<Vacancy> {
+  if (!USE_BACKEND) return mock.updateVacancy(id, input);
+  const { data } = await api.put<Vacancy>(`/vacancies/${id}`, input);
+  return data;
+}
+
+/** Снять свою смену с публикации. 409 — по ней уже есть отклик. */
+export async function deleteVacancy(id: string): Promise<void> {
+  if (!USE_BACKEND) return mock.deleteVacancy(id);
+  await api.delete(`/vacancies/${id}`);
+}
+
 /** Собственные вакансии работодателя (любой статус). */
 export async function fetchMyVacancies(): Promise<Vacancy[]> {
   if (!USE_BACKEND) return mock.fetchMyVacancies();
@@ -381,11 +400,11 @@ export interface AdminBlocked {
 }
 
 export interface AdminRevenue {
-  activePro: number;
-  activeBusiness: number;
-  estMonthlyRub: number;
-  totalPaidRub: number;
-  totalStars: number;
+  commissionAccruedRub: number;
+  commissionPaidRub: number;
+  commissionPendingRub: number;
+  shiftsBilled: number;
+  topupsRub: number;
 }
 
 export interface AdminSubscription {
@@ -451,9 +470,44 @@ export async function adminSearchUsers(q: string): Promise<AdminUser[]> {
 }
 
 /** Бесплатно выдать буст/подписку/супер-лайки (комп, поддержка). */
-export async function adminGrant(ownerId: string, sku: string): Promise<void> {
-  if (!USE_BACKEND) return mock.adminGrant(ownerId, sku);
-  await api.post("/admin/grant", { owner_id: ownerId, sku });
+export interface RepeatPair {
+  employer: string;
+  worker: string;
+  shifts: number;
+}
+
+/** Пары, закрывшие больше одной смены: возвращаются ли люди к нам. */
+export async function fetchRepeatPairs(): Promise<RepeatPair[]> {
+  if (!USE_BACKEND) return mock.fetchRepeatPairs();
+  const { data } = await api.get<RepeatPair[]>("/admin/repeat-pairs");
+  return data;
+}
+
+/** Закрыть смены, где работник отметился кодом, а заведение промолчало. */
+export async function autoCloseShifts(): Promise<number> {
+  if (!USE_BACKEND) return mock.autoCloseShifts();
+  const { data } = await api.post<{ closed: number }>("/admin/shifts/auto-close", {});
+  return data.closed;
+}
+
+/** Разослать напоминания о сегодняшних сменах (с кнопкой «Я на смене»). */
+export async function sendShiftReminders(): Promise<number> {
+  if (!USE_BACKEND) return mock.sendShiftReminders();
+  const { data } = await api.post<{ sent: number }>("/admin/reminders/send", {});
+  return data.sent;
+}
+
+export async function adminGrant(
+  ownerId: string,
+  boost: number,
+  superlikes: number,
+): Promise<void> {
+  if (!USE_BACKEND) return mock.adminGrant(ownerId, boost, superlikes);
+  await api.post("/admin/grant", {
+    owner_id: ownerId,
+    boost,
+    superlikes,
+  });
 }
 
 export interface CommissionRow {
@@ -570,11 +624,6 @@ export async function fetchBlocked(): Promise<AdminBlocked[]> {
   return data;
 }
 
-/** Отозвать подписку (после возврата денег) — доступ падает на Free. */
-export async function cancelSubscription(ownerId: string): Promise<void> {
-  if (!USE_BACKEND) return mock.cancelSubscription(ownerId);
-  await api.post(`/admin/subscriptions/${ownerId}/cancel`, {});
-}
 
 export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {
   if (!USE_BACKEND) return mock.fetchAdminSubscriptions();

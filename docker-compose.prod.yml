@@ -78,14 +78,13 @@ services:
     build: ./backend/bot
     restart: unless-stopped
     environment:
+      # Боту нужен только токен и адрес Mini App: платежей он больше не
+      # обрабатывает (единственный рельс — ЮKassa на стороне API), а
+      # уведомления шлёт сам API.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
       MINI_APP_URL: https://${DOMAIN}
-      API_BASE_URL: http://api:8000
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET in .env}
       # Эффект «печатает…» + плавное раскрытие текста бота (0 — выключить).
       BOT_TYPEWRITER: ${BOT_TYPEWRITER:-1}
-    depends_on:
-      - api
 
   # Собранная статика Mini App. VITE_*-переменные «запекаются» в бандл на этапе
   # сборки образа (build args), поэтому важен пересбор при смене домена.

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..config import settings
+from ..ratelimit import rate_limit
 from ..security import current_principal
 
 router = APIRouter(prefix="/dadata", tags=["dadata"])
@@ -37,7 +38,12 @@ class AddressItem(BaseModel):
     lng: float | None = None
 
 
-@router.get("/address", response_model=list[AddressItem])
+@router.get(
+    "/address",
+    response_model=list[AddressItem],
+    # Анти-drain платной квоты DaData.
+    dependencies=[Depends(rate_limit("dadata", 30, 60))],
+)
 def suggest_address(q: str, _p: dict = Depends(current_principal)):
     if not settings.dadata_token or len(q) < 3:
         return []
@@ -83,6 +89,10 @@ def lookup_party(inn: str) -> PartyOut:
     )
 
 
-@router.get("/party", response_model=PartyOut)
+@router.get(
+    "/party",
+    response_model=PartyOut,
+    dependencies=[Depends(rate_limit("dadata", 30, 60))],
+)
 def check_party(inn: str, _p: dict = Depends(current_principal)):
     return lookup_party(inn)

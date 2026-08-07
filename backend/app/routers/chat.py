@@ -7,7 +7,7 @@ from ..models import Match, Message
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import MessageIn, MessageOut
-from ..security import current_principal, decode_token
+from ..security import _is_blocked, current_principal, decode_token
 
 router = APIRouter(tags=["chat"])
 
@@ -123,9 +123,10 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
     db = SessionLocal()
     try:
         match = db.get(Match, match_id)
-        if match is None or principal["id"] not in (
-            match.user_id,
-            match.employer_id,
+        if (
+            match is None
+            or principal["id"] not in (match.user_id, match.employer_id)
+            or _is_blocked(db, principal)  # забаненный не висит в чужом чате
         ):
             await websocket.close(code=4403)
             return
@@ -137,16 +138,27 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
     try:
         while True:
             data = await websocket.receive_json()
-            text = data.get("text", "")
+            # Тот же контроль, что и на REST-пути: обрезаем длину (анти-раздувание
+            # БД) и молча пропускаем пустое. Без этого WS был обходом лимита 2000.
+            raw = data.get("text", "")
+            text = raw.strip()[:2000] if isinstance(raw, str) else ""
             if not text:
                 continue
             db = SessionLocal()
             try:
+                # Бан проверяем на каждое сообщение: за долгий коннект человека
+                # могли заблокировать.
+                if _is_blocked(db, principal):
+                    await websocket.close(code=4403)
+                    return
                 msg = Message(match_id=match_id, sender_id=sender, text=text)
                 db.add(msg)
                 db.commit()
                 db.refresh(msg)
                 payload = _to_out(msg).model_dump()
+                # Авто-модерация подозрительных фраз (как на REST-пути).
+                from ..moderation import auto_flag
+                auto_flag(db, "message", msg.id, text)
             finally:
                 db.close()
             await manager.broadcast(match_id, payload)

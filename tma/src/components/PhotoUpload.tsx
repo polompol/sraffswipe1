@@ -34,7 +34,7 @@ export function PhotoUpload({
 
   return (
     <div style={{ marginBottom: 12 }}>
-      <label className="muted">{label}</label>
+      <div className="form-label">{label}</div>
       <div className="row" style={{ gap: 12, marginTop: 8 }}>
         <div
           style={{

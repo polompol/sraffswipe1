@@ -6,6 +6,12 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	# Анти-DoS: тело запроса до 2 МБ (фото грузятся напрямую в S3, не через API,
+	# поэтому большие тела на API не нужны). Отсекается ДО чтения в память.
+	request_body {
+		max_size 2MB
+	}
+
 	# Бэкенд. handle_path снимает префикс /api, дальше FastAPI видит свои пути
 	# (/me, /vacancies, /auth/..., /ws/chat/...).
 	handle_path /api/* {
@@ -14,6 +20,15 @@
 
 	# Всё остальное — собранный Mini App.
 	handle {
+		# Защитные заголовки для статики Mini App. CSP разрешает inline-стили
+		# (нужны Vite/приложению), картинки по https (фото заведений с S3/CDN),
+		# соединения к своему API и Telegram. Внешние скрипты запрещены.
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://{$DOMAIN} wss://{$DOMAIN} https://telegram.org; frame-ancestors https://web.telegram.org https://telegram.org"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			-Server
+		}
 		reverse_proxy tma:80
 	}
 }

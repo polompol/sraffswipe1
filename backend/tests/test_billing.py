@@ -2,11 +2,23 @@
 import hashlib
 import hmac
 import time
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from app.telegram import validate_init_data
 
-INTERNAL = {"X-Internal-Token": "test-internal-secret"}
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 
 def _signed_init_data(bot_token: str, user_json: str) -> str:
@@ -51,69 +63,15 @@ def test_telegram_login_creates_user_and_entitlements(client):
     assert body["superlikeBalance"] >= 1
 
 
-def test_stars_invoice_and_fulfill(client):
-    r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
-    token = r.json()["access_token"]
-    owner = r.json()["user_id"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    inv = client.post(
-        "/billing/stars/invoice", json={"sku": "super_5"}, headers=headers
-    )
-    assert inv.status_code == 200
-    assert "link" in inv.json()
-
-    before = client.get("/billing/entitlements", headers=headers).json()[
-        "superlikeBalance"
-    ]
-    # Имитация колбэка бота об успешной оплате Stars (с внутренним секретом).
-    f = client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "super_5", "provider": "stars", "charge_id": "ch_1",
-    })
-    assert f.status_code == 200
-    after = client.get("/billing/entitlements", headers=headers).json()[
-        "superlikeBalance"
-    ]
-    assert after == before + 5
-
-    # Идемпотентность: повторный колбэк с тем же charge_id не начисляет снова.
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "super_5", "provider": "stars", "charge_id": "ch_1",
-    })
-    again = client.get("/billing/entitlements", headers=headers).json()[
-        "superlikeBalance"
-    ]
-    assert again == after
-
-
-def test_yookassa_subscription_activates_plan(client):
-    r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
-    token = r.json()["access_token"]
-    owner = r.json()["user_id"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    pay = client.post(
-        "/billing/yookassa/payment", json={"sku": "sub_pro_month"}, headers=headers
-    )
-    assert pay.status_code == 200
-    assert "url" in pay.json()
-
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "sub_pro_month", "provider": "yookassa",
-        "charge_id": "yk_1",
-    })
-    ent = client.get("/billing/entitlements", headers=headers).json()
-    assert ent["plan"] == "pro"
-    assert ent["boostBalance"] >= 10
-
-
 def test_yookassa_webhook_verifies_amount(client):
+    """Единственный платёж — пополнение баланса. Сумма сверяется с metadata,
+    иначе утечка секрета вебхука позволяла бы рисовать баланс из воздуха."""
     r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     owner = r.json()["user_id"]
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
     secret = "test-internal-secret"  # = internal_api_secret в conftest
 
-    def hook(charge_id, value):
+    def hook(charge_id, value, declared=1000):
         return client.post(
             f"/billing/yookassa/webhook?secret={secret}",
             json={
@@ -121,20 +79,31 @@ def test_yookassa_webhook_verifies_amount(client):
                 "object": {
                     "id": charge_id,
                     "amount": {"value": value, "currency": "RUB"},
-                    "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+                    "metadata": {
+                        "owner_id": owner, "sku": "wallet_topup",
+                        "amount_rub": str(declared),
+                    },
                 },
             },
         )
 
-    # Неверная сумма (дешевле тарифа) — отклоняется, права не выдаются.
-    bad = hook("yk_bad", "1.00")
-    assert bad.status_code == 400
-    assert client.get("/billing/entitlements", headers=headers).json()["plan"] == "free"
+    def balance():
+        return client.get("/billing/commission", headers=headers).json()["balanceRub"]
 
-    # Верная сумма — начисляет тариф.
-    ok = hook("yk_ok", "1990.00")
-    assert ok.status_code == 200
-    assert client.get("/billing/entitlements", headers=headers).json()["plan"] == "pro"
+    # Заплатили 1 ₽, а в metadata просят зачислить 1000 — отклоняем.
+    assert hook("yk_bad", "1.00").status_code == 400
+    assert balance() == 0
+
+    # Совпало — зачисляем.
+    assert hook("yk_ok", "1000.00").status_code == 200
+    assert balance() == 1000
+
+    # Повтор того же платежа не удваивает баланс.
+    assert hook("yk_ok", "1000.00").json().get("duplicate") is True
+    assert balance() == 1000
+
+    # Сумма вне лимита — отклоняем (защита от неограниченной эмиссии).
+    assert hook("yk_huge", "999999.00", declared=999999).status_code == 400
 
     # Неверный секрет — 401.
     no = client.post(
@@ -144,37 +113,22 @@ def test_yookassa_webhook_verifies_amount(client):
     assert no.status_code == 401
 
 
-def test_fulfill_requires_internal_secret(client):
-    r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
-    owner = r.json()["user_id"]
-    # Без секрета — 401 (нельзя начислить себе права).
-    bad = client.post("/billing/fulfill", json={
-        "owner_id": owner, "sku": "super_5", "provider": "stars", "charge_id": "x",
-    })
-    assert bad.status_code == 401
-    wrong = client.post("/billing/fulfill", headers={"X-Internal-Token": "nope"},
-                        json={"owner_id": owner, "sku": "super_5",
-                              "provider": "stars", "charge_id": "x"})
-    assert wrong.status_code == 401
-
-
 def _new_vacancy(client, headers, role="barista"):
     payload = {
-        "role": role, "date": "2026-06-20", "start_time": 600, "end_time": 1080,
+        "role": role, "date": SOON, "start_time": 600, "end_time": 1080,
         "rate": 350, "rate_type": "perHour", "lat": 55.75, "lng": 37.61,
         "address": "Тест",
     }
     return client.post("/vacancies", json=payload, headers=headers)
 
 
-def test_free_plan_vacancy_limit(client):
+def test_vacancy_publishing_is_unlimited(client):
     r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    # Free-план на пилоте: до 5 активных вакансий (наполняем ленту сменами).
-    for _ in range(5):
+    # Модель — комиссия, а не подписка: публиковать смены можно без лимита
+    # (чем больше смен, тем больше потенциальной комиссии). 6+ вакансий проходят.
+    for _ in range(6):
         assert _new_vacancy(client, headers).status_code == 201
-    # Шестая вакансия на Free — запрещена (402).
-    assert _new_vacancy(client, headers).status_code == 402
 
 
 def test_boost_moves_vacancy_to_top(client):
@@ -182,11 +136,10 @@ def test_boost_moves_vacancy_to_top(client):
     token = r.json()["access_token"]
     owner = r.json()["user_id"]
     headers = {"Authorization": f"Bearer {token}"}
-    # Pro-подписка снимает лимит и даёт boost-баланс.
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "sub_pro_month", "provider": "yookassa",
-        "charge_id": "yk_b",
-    })
+    # Буст в пилоте выдаёт оператор (платного каталога больше нет).
+    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    client.post("/admin/grant", headers=ah, json={"owner_id": owner, "boost": 1})
     _new_vacancy(client, headers, role="waiter")
     second = _new_vacancy(client, headers, role="bartender").json()
 
@@ -202,10 +155,6 @@ def test_superlike_consumes_balance(client):
     # Pro-работодатель публикует две вакансии — две разные цели супер-лайка.
     e = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     eh = {"Authorization": f"Bearer {e.json()['access_token']}"}
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": e.json()["user_id"], "sku": "sub_pro_month",
-        "provider": "yookassa", "charge_id": "yk_sl",
-    })
     vac1 = _new_vacancy(client, eh, role="waiter").json()
     vac2 = _new_vacancy(client, eh, role="bartender").json()
 
@@ -238,18 +187,19 @@ def test_yookassa_receipt_payload_gated_by_config():
     from app.routers.billing import _yk_payload
 
     # По умолчанию (флаг выключен) — чека нет.
-    base = _yk_payload("owner1", "sub_pro_month", 1990, "a@b.ru")
+    base = _yk_payload("owner1", "wallet_topup", 1990, "a@b.ru", "Пополнение")
     assert "receipt" not in base
     assert base["amount"] == {"value": "1990.00", "currency": "RUB"}
-    assert base["metadata"] == {"owner_id": "owner1", "sku": "sub_pro_month"}
+    assert base["metadata"] == {"owner_id": "owner1", "sku": "wallet_topup"}
 
     # Включаем фискализацию.
     settings.yookassa_send_receipt = True
     try:
-        with_email = _yk_payload("owner1", "sub_pro_month", 1990, "a@b.ru")
+        with_email = _yk_payload("owner1", "wallet_topup", 1990, "a@b.ru", "Пополнение")
         assert with_email["receipt"]["customer"]["email"] == "a@b.ru"
         assert with_email["receipt"]["items"][0]["amount"]["value"] == "1990.00"
         # Без email чек не формируем (нет контакта для чека).
-        assert "receipt" not in _yk_payload("owner1", "sub_pro_month", 1990, None)
+        no_email = _yk_payload("owner1", "wallet_topup", 1990, None, "Пополнение")
+        assert "receipt" not in no_email
     finally:
         settings.yookassa_send_receipt = False

@@ -85,7 +85,7 @@ export function FilterSheet({
           cursor: "pointer",
           background: on ? "var(--gold)" : "transparent",
           color: on ? "#fff" : "var(--text)",
-          borderColor: on ? "var(--gold)" : "var(--dislike)",
+          borderColor: on ? "var(--gold)" : "var(--border-strong)",
         }}
         onClick={() => {
           haptic("select");
@@ -99,36 +99,18 @@ export function FilterSheet({
 
   return createPortal(
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(20,14,9,0.5)",
-        display: "flex",
-        alignItems: "flex-end",
-        zIndex: 100,
-      }}
+      className="sheet-backdrop"
       onClick={onClose}
     >
       <div
         className="fade-up sheet"
-        style={{
-          width: "100%",
-          maxWidth: 520,
-          margin: "0 auto",
-          maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column",
-          background: "var(--surface)",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-grab" aria-hidden />
         <div className="sheet-body">
         <h2 className="h2" style={{ marginTop: 0 }}>Фильтры</h2>
 
-        <label className="muted" htmlFor="city">Город</label>
+        <label className="form-label" htmlFor="city">Город</label>
         <input
           id="city"
           className="input"
@@ -138,7 +120,7 @@ export function FilterSheet({
           onChange={(e) => set({ city: e.target.value || undefined })}
         />
 
-        <label className="muted">Когда</label>
+        <div className="form-label">Когда</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           <Chip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
           <Chip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
@@ -146,7 +128,7 @@ export function FilterSheet({
           <Chip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
         </div>
 
-        <label className="muted">Должность</label>
+        <div className="form-label">Должность</div>
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
@@ -167,14 +149,14 @@ export function FilterSheet({
           ))}
         </div>
 
-        <label className="muted">Тип ставки</label>
+        <div className="form-label">Тип ставки</div>
         <div className="row" style={{ margin: "8px 0 16px" }}>
           <Chip on={!f.rate_type} label="Любая" onClick={() => set({ rate_type: undefined })} />
           <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
           <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
         </div>
 
-        <label className="muted">Подойдёт мне</label>
+        <div className="form-label">Подойдёт мне</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           <Chip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
           <Chip on={!!f.no_experience} label="Без опыта" onClick={() => set({ no_experience: !f.no_experience })} />
@@ -182,7 +164,7 @@ export function FilterSheet({
           <Chip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
         </div>
 
-        <label className="muted" htmlFor="minrate">Ставка от, ₽</label>
+        <label className="form-label" htmlFor="minrate">Ставка от, ₽</label>
         <input
           id="minrate"
           className="input"
@@ -193,14 +175,14 @@ export function FilterSheet({
           onChange={(e) => set({ min_rate: e.target.value ? Number(e.target.value) : undefined })}
         />
 
-        <label className="muted">Сортировка</label>
+        <div className="form-label">Сортировка</div>
         <div className="row" style={{ margin: "8px 0 18px" }}>
           {SORTS.map((s) => (
             <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
           ))}
         </div>
 
-        <label className="muted" htmlFor="radius">
+        <label className="form-label" htmlFor="radius">
           Радиус{hasLocation ? `: ${f.radius_km ?? 25} км` : ""}
         </label>
         {hasLocation ? (

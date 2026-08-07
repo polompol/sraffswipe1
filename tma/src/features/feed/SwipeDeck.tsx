@@ -163,7 +163,7 @@ function Tint({ x }: { x: SpringValue<number> }) {
       <animated.div
         className="swipe-tint"
         style={{
-          background: "#3a342f",
+          background: "var(--dislike)",
           opacity: to(x, (v) => Math.max(0, Math.min(0.4, -v / 260))),
         }}
       />

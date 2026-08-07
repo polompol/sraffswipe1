@@ -1,4 +1,5 @@
 """Мэтчи и подтверждение смены."""
+import hmac
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -127,8 +128,10 @@ def mark_attendance(
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["role"] != "employer" or principal["id"] != m.employer_id:
         raise HTTPException(status_code=403, detail="Только работодатель смены")
-    if m.status not in ("confirmed", "completed"):
-        raise HTTPException(status_code=400, detail="Смена ещё не подтверждена")
+    # Уже закрытую смену не трогаем: иначе attended=false переоткрывал бы спор
+    # по completed-смене и спамил оператора ложными уведомлениями.
+    if m.status != "confirmed":
+        raise HTTPException(status_code=400, detail="Смена не в статусе подтверждённой")
 
     if body.attended:
         m.employer_checked_in = True
@@ -146,9 +149,11 @@ def mark_attendance(
     return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
 
 
-def _to_out(m: Match, role: str = "") -> MatchOut:
+def _to_out(db: Session, m: Match, role: str = "") -> MatchOut:
     # Код прихода показываем ТОЛЬКО заведению как помощник, пока смена не закрыта.
     show_code = role == "employer" and m.status == "confirmed" and bool(m.checkin_code)
+    v = db.get(Vacancy, m.vacancy_id)
+    pay = _shift_pay(v) if v is not None else 0
     return MatchOut(
         id=m.id,
         user_id=m.user_id,
@@ -161,6 +166,7 @@ def _to_out(m: Match, role: str = "") -> MatchOut:
         checked_in=m.status == "completed",
         seeker_checked_in=m.seeker_checked_in,
         employer_checked_in=m.employer_checked_in,
+        shift_pay=pay,
         disputed=m.disputed,
     )
 
@@ -172,13 +178,13 @@ def list_matches(
 ):
     col = Match.user_id if principal["role"] == "seeker" else Match.employer_id
     rows = db.query(Match).filter(col == principal["id"]).all()
-    return [_to_out(m, principal["role"]) for m in rows]
+    return [_to_out(db, m, principal["role"]) for m in rows]
 
 
 @router.post(
     "/{match_id}/checkin",
     response_model=MatchOut,
-    # Анти-перебор: 4-значный код нельзя подобрать скриптом —
+    # Анти-перебор: 6-значный код нельзя подобрать скриптом —
     # максимум 5 попыток в минуту на пользователя.
     dependencies=[Depends(rate_limit("checkin", 5, 60))],
 )
@@ -200,7 +206,9 @@ def checkin(
         raise HTTPException(status_code=400, detail="Смена не подтверждена")
 
     by_code = bool(
-        body.code and m.checkin_code and body.code.strip() == m.checkin_code
+        body.code
+        and m.checkin_code
+        and hmac.compare_digest(body.code.strip(), m.checkin_code)
     )
     by_geo = False
     if body.lat is not None and body.lng is not None:
@@ -213,11 +221,15 @@ def checkin(
             detail="Не удалось отметиться: неверный код или вы не на месте смены",
         )
     m.seeker_checked_in = True
+    # Способ важен: код знает только заведение, поэтому по нему смену можно
+    # закрыть автоматически, если заведение молчит. По гео — нельзя.
+    if by_code:
+        m.checkin_by_code = True
     _sys(db, m.id, "Работник отметился: на месте. Ждём подтверждения заведения.")
     _maybe_complete(db, m)
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])
 
 
 @router.post(
@@ -240,7 +252,7 @@ def dispute(
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
     # Повторный спор по той же смене не плодит жалобы/уведомления.
     if m.disputed:
-        return _to_out(m, principal["role"])
+        return _to_out(db, m, principal["role"])
     m.disputed = True
     who = "работник" if principal["id"] == m.user_id else "заведение"
     note = (body.note or "").strip()[:300]
@@ -254,7 +266,7 @@ def dispute(
     notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])
 
 
 class ResolveMatchIn(BaseModel):
@@ -291,7 +303,7 @@ def resolve_match(
         raise HTTPException(status_code=400, detail="outcome: completed|no_show")
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])
 
 
 @router.post("/{match_id}/confirm", response_model=MatchOut)
@@ -321,4 +333,4 @@ def confirm(
              "«я на смене», заведение — «человек пришёл».")
     db.commit()
     db.refresh(m)
-    return _to_out(m, principal["role"])
+    return _to_out(db, m, principal["role"])

@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="page" style={{ textAlign: "center", paddingTop: 80 }}>
           <div style={{
             width: 72, height: 72, borderRadius: "50%", margin: "0 auto",
-            background: "rgba(199,162,75,.14)", color: "var(--gold)",
+            background: "var(--gold-tint)", color: "var(--gold)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             <IconWarning size={36} />
