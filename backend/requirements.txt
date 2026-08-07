@@ -9,4 +9,7 @@ httpx==0.28.1
 psycopg[binary]==3.2.3
 boto3==1.35.99
 alembic==1.18.4
+# База часовых поясов: время смены — московское, а сервер в UTC.
+# В slim-образе zoneinfo без неё может не найти Europe/Moscow.
+tzdata==2026.3
 sentry-sdk[fastapi]==2.66.1

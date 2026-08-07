@@ -10,10 +10,13 @@ from sqlalchemy.orm import Session
 
 from .models import Match, Swipe, User, Vacancy
 from .notify import notify_owner
+from .timeutil import local_today, shift_end_utc
 
 
 def _today() -> str:
-    return datetime.now(UTC).date().isoformat()
+    # Дата смены — местная. Считать её по часам сервера значит с 21:00 UTC
+    # (полночь в Москве) напоминать людям про вчерашний день.
+    return local_today()
 
 
 def _fmt_time(minutes: int) -> str:
@@ -113,11 +116,8 @@ def send_reminders(db: Session) -> int:
 
 
 def _shift_end(v: Vacancy) -> datetime:
-    """Момент окончания смены в UTC. Ночная смена (20:00→04:00) заканчивается
-    на следующий день — иначе закрывали бы её на сутки раньше срока."""
-    day = datetime.strptime(v.date, "%Y-%m-%d").replace(tzinfo=UTC)
-    end = v.end_time if v.end_time > v.start_time else v.end_time + 1440
-    return day + timedelta(minutes=end)
+    """Момент окончания смены в UTC (время смены — местное, см. timeutil)."""
+    return shift_end_utc(v.date, v.start_time, v.end_time)
 
 
 # Сколько ждём подтверждения заведения, прежде чем закрыть смену самим.

@@ -6,17 +6,20 @@
 """
 import subprocess
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
 from app.routers.acts import act_number
 from app.rubles import plural, rubles_in_words
+from app.timeutil import local_today
 
 
 def _d(days: int) -> str:
-    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+    """Дата смены относительно «сегодня» — по местному времени, как её
+    видит человек: у сервера в UTC с 21:00 уже другая дата."""
+    return (date.fromisoformat(local_today()) + timedelta(days=days)).isoformat()
 
 
 def test_act_number_is_the_same_forever():
@@ -119,4 +122,4 @@ def test_act_contains_calculation_and_signatures(client):
     assert "Заказчик:" in text and "Исполнитель:" in text
     assert "подпись" in text
     # Дата по-русски, а не в ISO.
-    assert datetime.now(UTC).strftime("%d.%m.%Y") in text
+    assert date.fromisoformat(local_today()).strftime("%d.%m.%Y") in text

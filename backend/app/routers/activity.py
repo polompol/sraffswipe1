@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Employer, Match, Swipe, User, Vacancy
 from ..security import current_principal
+from ..timeutil import local_today
 
 router = APIRouter(prefix="/activity", tags=["activity"])
 
@@ -77,7 +78,7 @@ def recent(
         ))
 
     # Срочные смены на сегодня — «горят прямо сейчас».
-    today = datetime.now(UTC).date().isoformat()
+    today = local_today()
     urgent_rows = (
         db.query(Vacancy, Employer)
         .join(Employer, Vacancy.employer_id == Employer.id)
