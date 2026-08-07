@@ -7,7 +7,11 @@ from ..models import Match, Message
 from ..notify import notify_owner
 from ..ratelimit import hit, rate_limit
 from ..schemas import MessageIn, MessageOut
-from ..security import _is_blocked, current_principal, decode_token
+from ..security import (
+    current_principal,
+    decode_token,
+    ensure_token_usable,
+)
 
 router = APIRouter(tags=["chat"])
 
@@ -123,11 +127,15 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
     db = SessionLocal()
     try:
         match = db.get(Match, match_id)
-        if (
-            match is None
-            or principal["id"] not in (match.user_id, match.employer_id)
-            or _is_blocked(db, principal)  # забаненный не висит в чужом чате
+        if match is None or principal["id"] not in (
+            match.user_id, match.employer_id
         ):
+            await websocket.close(code=4403)
+            return
+        try:
+            # Забаненный или разлогиненный не висит в чужом чате.
+            ensure_token_usable(db, principal)
+        except HTTPException:
             await websocket.close(code=4403)
             return
     finally:
@@ -157,9 +165,11 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
                 continue
             db = SessionLocal()
             try:
-                # Бан проверяем на каждое сообщение: за долгий коннект человека
-                # могли заблокировать.
-                if _is_blocked(db, principal):
+                # Проверяем на каждое сообщение: за долгий коннект человека
+                # могли заблокировать или разлогинить.
+                try:
+                    ensure_token_usable(db, principal)
+                except HTTPException:
                     await websocket.close(code=4403)
                     return
                 msg = Message(match_id=match_id, sender_id=sender, text=text)

@@ -76,7 +76,7 @@ def verify(body: VerifyIn, db: Session = Depends(get_db)):
             db.add(employer)
             db.commit()
             db.refresh(employer)
-        token = create_token(employer.id, "employer")
+        token = create_token(employer.id, "employer", employer.token_version)
         db.commit()
         return TokenOut(access_token=token, role="employer", user_id=employer.id)
 
@@ -88,6 +88,6 @@ def verify(body: VerifyIn, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
-    token = create_token(user.id, "seeker")
+    token = create_token(user.id, "seeker", user.token_version)
     db.commit()
     return TokenOut(access_token=token, role="seeker", user_id=user.id)

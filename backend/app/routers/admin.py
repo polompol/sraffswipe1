@@ -595,6 +595,10 @@ def relink_account(
     target.tg_id = body.new_tg_id
     if target.phone == f"tg:{old_tg}":
         target.phone = f"tg:{body.new_tg_id}"
+    # Перенос делают, когда доступ к прежнему Telegram потерян — в том числе
+    # когда телефон украли. Ранее выданные токены продолжали работать до конца
+    # срока, то есть у прежнего владельца оставался вход. Обрываем все сессии.
+    target.token_version = (target.token_version or 0) + 1
     db.commit()
     notify_owner(db, target.id,
                  "Аккаунт перенесён на этот Telegram ✓ Рейтинг, история смен "
@@ -699,6 +703,29 @@ def commissions(
     return out
 
 
+@router.post("/users/{owner_id}/logout-all")
+def logout_all(
+    owner_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Завершить все сессии аккаунта («потерял телефон»).
+
+    До этого отозвать токен было нечем: срок жизни — дни, и всё это время
+    нашедший телефон работал бы от лица человека. Блокировка аккаунта тоже
+    обрывает доступ, но она наказание, а тут человек ни в чём не виноват.
+    """
+    target = db.get(User, owner_id) or db.get(Employer, owner_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Аккаунт не найден")
+    target.token_version = (target.token_version or 0) + 1
+    db.commit()
+    notify_owner(db, owner_id,
+                 "Все сессии завершены. Откройте приложение заново — "
+                 "вход произойдёт сам.")
+    return {"ok": True}
+
+
 class EraseOut(BaseModel):
     ok: bool
     kind: str          # user|employer
@@ -793,6 +820,7 @@ def erase_account(
     target.tg_username = None
     target.phone = f"erased:{owner_id[:12]}"
     target.blocked = True
+    target.token_version = (target.token_version or 0) + 1  # токены не работают
     if kind == "user":
         target.name = "Профиль удалён"
         target.birth_date = ""

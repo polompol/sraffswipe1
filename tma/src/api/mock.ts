@@ -601,6 +601,10 @@ export function adminRelink(
   void _newTgId;
   return Promise.resolve();
 }
+export function adminLogoutAll(_ownerId: string): Promise<void> {
+  void _ownerId;
+  return Promise.resolve();
+}
 export function adminEraseAccount(
   _ownerId: string,
 ): Promise<Record<string, number>> {

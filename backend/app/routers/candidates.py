@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Match, Swipe, User
+from ..ratelimit import rate_limit
 from ..security import current_principal
 
 router = APIRouter(tags=["candidates"])
@@ -66,7 +67,15 @@ def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]
     return out
 
 
-@router.get("/candidates", response_model=list[CandidateOut])
+@router.get(
+    "/candidates",
+    response_model=list[CandidateOut],
+    # Лента отдаёт персональные данные людей. Зарегистрироваться «заведением»
+    # может кто угодно, а один запрос возвращает до 200 анкет — без ограничения
+    # базу соискателей можно было выкачать скриптом. Живому заведению 30
+    # обновлений ленты в минуту хватает с запасом.
+    dependencies=[Depends(rate_limit("candidates", 30, 60))],
+)
 def list_candidates(
     role: str | None = None,
     district: str | None = None,

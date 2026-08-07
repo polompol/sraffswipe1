@@ -579,6 +579,15 @@ export async function adminRelink(
 }
 
 /**
+ * Завершить все сессии аккаунта («потерял телефон»). Человек просто откроет
+ * приложение заново — вход в Telegram произойдёт сам. Это не блокировка.
+ */
+export async function adminLogoutAll(ownerId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.adminLogoutAll(ownerId);
+  await api.post(`/admin/users/${ownerId}/logout-all`, {});
+}
+
+/**
  * Удаление персональных данных по заявлению (152-ФЗ). Необратимо: профиль
  * обезличивается, привязка к Telegram снимается. Смены и начисленная
  * комиссия остаются — это бухгалтерия.

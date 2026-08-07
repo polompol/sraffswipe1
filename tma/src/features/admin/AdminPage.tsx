@@ -9,6 +9,7 @@ import {
   adminCreditWallet,
   adminEraseAccount,
   adminGrant,
+  adminLogoutAll,
   fetchRepeatPairs,
   sendShiftReminders,
   autoCloseShifts,
@@ -150,6 +151,19 @@ export function AdminPage() {
     await adminCreditWallet(id, amountRub);
     toast(`Баланс пополнен на ${amountRub.toLocaleString("ru-RU")} ₽`, "success");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
+  }
+
+  // Завершить все сессии: человек потерял телефон. Не блокировка — он просто
+  // откроет приложение заново и войдёт сам.
+  async function logoutAll(id: string) {
+    try {
+      await adminLogoutAll(id);
+      haptic("success");
+      toast("Все сессии завершены", "success");
+    } catch {
+      haptic("error");
+      toast("Не удалось завершить сессии", "error");
+    }
   }
 
   // Удаление данных по заявлению (152-ФЗ). Необратимо, поэтому в два тапа:
@@ -457,6 +471,13 @@ export function AdminPage() {
                 }}
               >
                 ↔ Новый Telegram
+              </button>
+              <button
+                className="tag"
+                style={{ cursor: "pointer" }}
+                onClick={() => logoutAll(u.id)}
+              >
+                Завершить сессии
               </button>
               <button
                 className="tag"

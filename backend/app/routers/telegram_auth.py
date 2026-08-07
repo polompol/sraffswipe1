@@ -133,7 +133,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
             _track_source(db, emp.id, ref_code, "employer")
         touch_streak(db, emp.id)
         return TokenOut(
-            access_token=create_token(emp.id, "employer"),
+            access_token=create_token(emp.id, "employer", emp.token_version),
             role="employer",
             user_id=emp.id,
         )
@@ -158,7 +158,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         _track_source(db, user.id, ref_code, "seeker")
     touch_streak(db, user.id)
     return TokenOut(
-        access_token=create_token(user.id, "seeker"),
+        access_token=create_token(user.id, "seeker", user.token_version),
         role="seeker",
         user_id=user.id,
     )

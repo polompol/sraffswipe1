@@ -56,6 +56,13 @@ class User(Base):
     available_today: Mapped[bool] = mapped_column(Boolean, default=False)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     warnings: Mapped[int] = mapped_column(Integer, default=0)  # предупреждения
+    # Поколение токенов. Номер зашит в токен; «разлогинить везде» = увеличить
+    # его, и все ранее выданные токены разом перестают подходить. Нужно при
+    # потере телефона и при переносе аккаунта на новый Telegram — иначе у
+    # прежнего владельца доступ жил бы до конца срока.
+    # Счётчик, а не отметка времени: время в токене хранится с точностью до
+    # секунды, и вход в ту же секунду, что и отзыв, различить невозможно.
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -82,6 +89,13 @@ class Employer(Base):
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     warnings: Mapped[int] = mapped_column(Integer, default=0)  # предупреждения
+    # Поколение токенов. Номер зашит в токен; «разлогинить везде» = увеличить
+    # его, и все ранее выданные токены разом перестают подходить. Нужно при
+    # потере телефона и при переносе аккаунта на новый Telegram — иначе у
+    # прежнего владельца доступ жил бы до конца срока.
+    # Счётчик, а не отметка времени: время в токене хранится с точностью до
+    # секунды, и вход в ту же секунду, что и отзыв, различить невозможно.
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     vacancies: Mapped[list["Vacancy"]] = relationship(back_populates="employer")
