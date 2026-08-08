@@ -406,5 +406,10 @@ class Commission(Base):
     match_id: Mapped[str] = mapped_column(String, unique=True)  # 1 на смену
     shift_pay: Mapped[int] = mapped_column(Integer, default=0)  # оплата смены, ₽
     amount: Mapped[int] = mapped_column(Integer, default=0)     # комиссия, ₽
-    status: Mapped[str] = mapped_column(String, default="pending")  # pending|paid
+    # pending — к оплате, paid — деньги получены, written_off — списано
+    # оператором (прощено по спору или признано безнадёжным долгом).
+    status: Mapped[str] = mapped_column(String, default="pending")
+    # Причина списания — обязательна при write-off: через полгода никто не
+    # вспомнит, почему конкретное начисление обнулили.
+    note: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

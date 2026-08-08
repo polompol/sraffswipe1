@@ -84,6 +84,7 @@ class RevenueOut(BaseModel):
     commissionAccruedRub: int   # начислено за всё время
     commissionPaidRub: int      # из них оплачено
     commissionPendingRub: int   # к оплате сейчас
+    commissionWrittenOffRub: int  # списано: прощено по спорам и безнадёжный долг
     shiftsBilled: int           # смен, за которые начислена комиссия
     topupsRub: int              # пополнений баланса (аванс, НЕ выручка)
 
@@ -100,6 +101,7 @@ def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
         commissionAccruedRub=_commission(),
         commissionPaidRub=_commission("paid"),
         commissionPendingRub=_commission("pending"),
+        commissionWrittenOffRub=_commission("written_off"),
         shiftsBilled=int(db.query(func.count(Commission.id)).scalar() or 0),
         # Аванс — это обязательство перед заведением, а не заработок сервиса.
         topupsRub=int(
@@ -947,3 +949,45 @@ def settle_commission(
         notify_owner(db, employer_id,
                      "Оплата комиссии получена, спасибо! Счёт закрыт ✓")
     return {"ok": True, "settled": n}
+
+
+class WriteOffIn(BaseModel):
+    reason: Annotated[str, Field(min_length=3, max_length=200)]
+    match_id: str = ""   # пусто — списать весь долг заведения
+
+
+@router.post("/commissions/{employer_id}/write-off")
+def write_off_commission(
+    employer_id: str,
+    body: WriteOffIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Списать комиссию: простить спорную или признать долг безнадёжным.
+
+    Раньше у оператора была одна кнопка — «Оплачено». И ею закрывали всё
+    подряд: и реальную оплату, и прощённую после спора комиссию, и долг, за
+    которым никто не пойдёт в суд из-за трёх тысяч. В отчёте всё это
+    выглядело выручкой, которой не было.
+
+    Списание — отдельный статус с обязательной причиной. В деньги сервиса
+    оно не попадает, но остаётся в истории: видно, сколько и почему потеряли.
+    """
+    q = db.query(Commission).filter(
+        Commission.employer_id == employer_id,
+        Commission.status == "pending",
+    )
+    if body.match_id:
+        q = q.filter(Commission.match_id == body.match_id)
+    rows = q.all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Нет неоплаченных начислений")
+    total = sum(c.amount for c in rows)
+    for c in rows:
+        c.status = "written_off"
+        c.note = body.reason[:200]
+    db.commit()
+    notify_owner(db, employer_id,
+                 f"Комиссия {total} ₽ списана оператором. Причина: "
+                 f"{body.reason[:120]}")
+    return {"ok": True, "written_off": len(rows), "amount_rub": total}
