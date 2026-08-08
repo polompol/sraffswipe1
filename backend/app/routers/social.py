@@ -196,6 +196,10 @@ def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
 def _profile_completion(u) -> int:
     """% заполненности анкеты — ключевые поля, что влияют на мэтчи."""
     fields = [
+        # Имя не считалось вовсе, хотя безымянная карточка — худшее, что
+        # видит заведение: заполнив имя, человек не двигал шкалу и не
+        # понимал, чего от него хотят.
+        bool((u.name or "").strip()),
         bool(u.birth_date),
         bool(u.city),
         bool(u.roles),

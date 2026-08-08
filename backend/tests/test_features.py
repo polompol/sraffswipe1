@@ -162,7 +162,7 @@ def test_profile_completion_grows_as_fields_fill(client):
     assert 0 <= start < 100
     # Дозаполняем ключевые поля — процент растёт до 100.
     client.put("/me", headers=_hdr(seeker_token), json={
-        "birth_date": "2000-01-01", "city": "Москва",
+        "name": "Анна", "birth_date": "2000-01-01", "city": "Москва",
         "roles": ["barista"], "photo_url": "https://x/p.jpg",
         "about": "Опыт 2 года",
     })
@@ -170,6 +170,16 @@ def test_profile_completion_grows_as_fields_fill(client):
         "profileCompletion"]
     assert full == 100
     assert full > start
+
+
+def test_name_counts_towards_completion(client):
+    """Имя обязано двигать шкалу: безымянная карточка — худшее, что видит
+    заведение, а раньше заполнение имени не меняло процент вообще."""
+    token, _ = _auth(client, "seeker")
+    before = client.get("/me", headers=_hdr(token)).json()["profileCompletion"]
+    client.put("/me", headers=_hdr(token), json={"name": "Анна Петрова"})
+    after = client.get("/me", headers=_hdr(token)).json()["profileCompletion"]
+    assert after > before
 
 
 def test_feed_excludes_already_swiped_vacancy(client):

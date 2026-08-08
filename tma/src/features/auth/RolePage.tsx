@@ -24,7 +24,10 @@ export function RolePage() {
     try {
       const res = await authTelegram(rawInitData(), role);
       setAuth(res.accessToken, res.role, res.userId);
-      nav("/feed", { replace: true });
+      // Сразу в ленту не отправляем: анкета была бы пустой, и заведение
+      // пролистало бы карточку без имени и профессии. Знакомство короткое
+      // и его можно пропустить.
+      nav("/welcome", { replace: true });
     } catch {
       setBusy(null);
     }

@@ -13,6 +13,7 @@ import {
 // Стартовый путь грузим сразу, остальное — по требованию (code-splitting).
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { RolePage } from "@/features/auth/RolePage";
+import { WelcomePage } from "@/features/auth/WelcomePage";
 import { FeedPage } from "@/features/feed/FeedPage";
 
 const MatchesPage = lazy(() =>
@@ -124,6 +125,10 @@ export function App() {
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/role" element={<RolePage />} />
+      <Route
+        path="/welcome"
+        element={ready ? <WelcomePage /> : <Navigate to="/onboarding" />}
+      />
 
       <Route
         path="/feed"
