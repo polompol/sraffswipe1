@@ -1,5 +1,5 @@
 import axios from "axios";
-import { api } from "./client";
+import { api, baseURL, getToken } from "./client";
 import * as mock from "./mock";
 import type {
   AppRole,
@@ -113,10 +113,37 @@ export async function sendMessage(
   return data;
 }
 
-export async function confirmShift(matchId: string): Promise<MatchModel> {
+/** Смена, которая пересекается по времени с подтверждаемой. */
+export class ShiftConflict extends Error {
+  constructor(public readonly detail: string) {
+    super(detail);
+    this.name = "ShiftConflict";
+  }
+}
+
+/**
+ * Подтвердить смену. `force` — согласие взять её, несмотря на пересечение с
+ * другой сменой этого же человека: сервер предупреждает, но не запрещает.
+ */
+export async function confirmShift(
+  matchId: string,
+  force = false,
+): Promise<MatchModel> {
   if (!USE_BACKEND) return mock.confirmShift(matchId);
-  const { data } = await api.post<MatchModel>(`/matches/${matchId}/confirm`, {});
-  return data;
+  try {
+    const { data } = await api.post<MatchModel>(
+      `/matches/${matchId}/confirm`,
+      {},
+      { params: force ? { force: true } : undefined },
+    );
+    return data;
+  } catch (e: any) {
+    const d = e?.response?.data?.detail;
+    if (e?.response?.status === 409 && d?.code === "shift_conflict") {
+      throw new ShiftConflict(d.message);
+    }
+    throw e;
+  }
 }
 
 /** Работодатель отмечает после смены: работник вышел или нет (надёжность). */
@@ -602,6 +629,18 @@ export async function adminEraseAccount(
     {},
   );
   return data.removed;
+}
+
+/**
+ * Ссылка на счёт или акт от сервиса заведению (PDF).
+ *
+ * Ресторану-юрлицу без этих двух документов не оплатить по безналу и не
+ * поставить расход. Токен идёт в адресе: PDF открывает браузер по прямой
+ * ссылке, заголовки он не передаёт.
+ */
+export function billingDocUrl(kind: "invoice" | "act"): string {
+  const token = getToken() ?? "";
+  return `${baseURL}/billing/${kind}.pdf?token=${encodeURIComponent(token)}`;
 }
 
 /** Оператор зачисляет аванс на баланс заведения (принял СБП/счёт). */

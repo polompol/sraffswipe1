@@ -45,6 +45,12 @@ def local_today() -> str:
     return local_now().date().isoformat()
 
 
+def shift_start_utc(date: str, start_time: int) -> datetime:
+    """Момент начала смены в UTC (`date` и минуты — местное время)."""
+    day = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=business_tz())
+    return (day + timedelta(minutes=start_time)).astimezone(UTC)
+
+
 def shift_end_utc(date: str, start_time: int, end_time: int) -> datetime:
     """Момент окончания смены в UTC.
 

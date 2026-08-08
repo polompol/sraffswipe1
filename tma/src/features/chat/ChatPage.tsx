@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { confirmShift, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
+import { ShiftConflict, confirmShift, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
@@ -34,6 +34,9 @@ export function ChatPage() {
   // Подтверждение смены берём из данных сервера, а не из локального стейта —
   // иначе при переоткрытии чата кнопка снова «Подтвердить», хотя ты уже нажал.
   const [match, setMatchState] = useState<MatchModel | null>(null);
+  // Текст предупреждения о пересечении смен. Не запрет: человек может знать
+  // то, чего не знаем мы (первую смену отменили, договорился о подмене).
+  const [conflict, setConflict] = useState<string | null>(null);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
@@ -108,9 +111,9 @@ export function ChatPage() {
     void deliver(t);
   }
 
-  async function doConfirm() {
+  async function doConfirm(force = false) {
     try {
-      const m = await confirmShift(matchId);
+      const m = await confirmShift(matchId, force);
       track("confirm");
       haptic("success");
       coin();
@@ -123,7 +126,14 @@ export function ChatPage() {
       );
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
       qc.invalidateQueries({ queryKey: ["matches"] });
-    } catch {
+    } catch (e) {
+      // Пересечение с другой сменой — не ошибка, а вопрос. Решает человек:
+      // бывает, что первую смену отменили, а статус ещё не обновился.
+      if (e instanceof ShiftConflict) {
+        haptic("warning");
+        setConflict(e.detail);
+        return;
+      }
       haptic("error");
       toast("Не удалось подтвердить смену. Попробуйте ещё раз", "error");
     }
@@ -201,7 +211,7 @@ export function ChatPage() {
           <Button
             variant={iConfirmed ? "secondary" : "primary"}
             disabled={iConfirmed}
-            onClick={doConfirm}
+            onClick={() => doConfirm()}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <IconCheck size={17} />
@@ -231,6 +241,29 @@ export function ChatPage() {
           </Button>
         </div>
       </div>
+
+      {conflict && (
+        <div className="sheet-backdrop" onClick={() => setConflict(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="h2" style={{ marginTop: 0 }}>Смены пересекаются</h2>
+            <p className="muted" style={{ marginBottom: 16 }}>{conflict}</p>
+            <div style={{ display: "grid", gap: 10 }}>
+              <Button
+                block
+                onClick={() => {
+                  setConflict(null);
+                  void doConfirm(true);
+                }}
+              >
+                Всё равно беру
+              </Button>
+              <Button variant="ghost" block onClick={() => setConflict(null)}>
+                Отменить
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {reportOpen && (
         <ReportSheet

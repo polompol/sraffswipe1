@@ -69,6 +69,32 @@ class Settings(BaseSettings):
     # WEB_CONCURRENCY обязан быть 1. Пример: redis://redis:6379/0
     redis_url: str = ""
 
+    # --- Реквизиты получателя платежа (для счёта и акта юрлицу) ---
+    # Ресторан-юрлицо не может оплатить по безналу без счёта с реквизитами, а
+    # в расходы не поставит без акта. Пока поля пустые, документы не
+    # выдаются: лучше честный отказ, чем бумага с прочерками, которую
+    # бухгалтерия всё равно вернёт.
+    org_name: str = ""            # ИП Иванов Иван Иванович / ООО «Ромашка»
+    org_inn: str = ""
+    org_kpp: str = ""             # у ИП и самозанятого КПП нет — оставить пустым
+    org_ogrn: str = ""
+    org_address: str = ""
+    org_bank_name: str = ""
+    org_bank_bic: str = ""
+    org_bank_account: str = ""    # расчётный счёт
+    org_corr_account: str = ""    # корреспондентский счёт банка
+    org_signer: str = ""          # кто подписывает документы
+    # Плательщик НДС? Самозанятый и УСН — нет.
+    org_vat: bool = False
+
+    @property
+    def org_ready(self) -> bool:
+        """Хватает ли реквизитов, чтобы выставить счёт."""
+        return bool(
+            self.org_name and self.org_inn and self.org_bank_account
+            and self.org_bank_bic
+        )
+
     # Разрешённые источники CORS (csv). Пусто + dev_mode → "*"; иначе — mini_app_url.
     allowed_origins: str = ""
 

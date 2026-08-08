@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..conflicts import overlapping_shifts
 from ..db import get_db
 from ..geo import distance_km
 from ..models import (
@@ -47,6 +48,21 @@ class DisputeIn(BaseModel):
 
 def _sys(db: Session, match_id: str, text: str) -> None:
     db.add(Message(match_id=match_id, sender_id="system", text=text, is_system=True))
+
+
+def _fmt_time(minutes: int) -> str:
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _fmt_date(iso: str) -> str:
+    """2026-08-09 → 9 августа: в предупреждении человек должен узнать смену."""
+    months = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+              "августа", "сентября", "октября", "ноября", "декабря")
+    try:
+        y, mth, d = (int(x) for x in iso.split("-"))
+        return f"{d} {months[mth - 1]}"
+    except (ValueError, IndexError):
+        return iso
 
 
 def _shift_pay(v: Vacancy) -> int:
@@ -337,6 +353,7 @@ def resolve_match(
 )
 def confirm(
     match_id: str,
+    force: bool = False,
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
@@ -347,6 +364,30 @@ def confirm(
     if principal["id"] not in (m.user_id, m.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
     if principal["role"] == "seeker":
+        # Пересечение по времени: предупреждаем, но не запрещаем. Человек в
+        # двух местах не будет, и одно заведение останется без работника —
+        # но бывает и так, что первую смену отменили, а статус ещё не
+        # обновился. Решает человек; наше дело — показать, что он делает.
+        if not force:
+            vac = db.get(Vacancy, m.vacancy_id)
+            clash = (
+                overlapping_shifts(db, m.user_id, vac, exclude_match_id=m.id)
+                if vac is not None else []
+            )
+            if clash:
+                other = clash[0]
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "shift_conflict",
+                        "message": (
+                            f"У вас уже есть смена {_fmt_date(other.date)} "
+                            f"{_fmt_time(other.start_time)}–"
+                            f"{_fmt_time(other.end_time)}. Она пересекается "
+                            f"с этой. Всё равно берёте?"
+                        ),
+                    },
+                )
         m.confirmed_by_seeker = True
     else:
         m.confirmed_by_employer = True

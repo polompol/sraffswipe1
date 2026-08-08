@@ -11,7 +11,7 @@ import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -20,7 +20,12 @@ from ..config import settings
 from ..db import get_db
 from ..entitlements import ensure, get_or_create
 from ..models import Commission, Entitlement, Purchase, Subscription, WalletTxn
-from ..security import current_principal, secure_equals
+from ..security import (
+    current_principal,
+    decode_token,
+    ensure_token_usable,
+    secure_equals,
+)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -51,6 +56,64 @@ def get_entitlements(
         seekerPremium=ent.seeker_premium,
         employerVerified=ent.employer_verified,
     )
+
+
+def _document_response(kind: str, db: Session, employer_id: str) -> Response:
+    """Счёт или акт в PDF. Общая обработка отказов для обеих ручек."""
+    from ..documents import RequisitesMissing, act_pdf, invoice_pdf
+
+    try:
+        data, filename = (
+            invoice_pdf(db, employer_id) if kind == "invoice"
+            else act_pdf(db, employer_id)
+        )
+    except RequisitesMissing:
+        raise HTTPException(
+            status_code=503,
+            detail="Реквизиты получателя платежа не заполнены — "
+                   "документы для юрлица пока не выставляются.",
+        ) from None
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/invoice.pdf")
+def commission_invoice(
+    token: str = "",
+    db: Session = Depends(get_db),
+):
+    """Счёт на оплату комиссии — для бухгалтерии заведения.
+
+    Токен в адресе: PDF открывает браузер по прямой ссылке, заголовки он не
+    шлёт. Проверяем теми же правилами, что и обычные ручки.
+    """
+    principal = decode_token(token)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Нужен токен")
+    ensure_token_usable(db, principal)
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    return _document_response("invoice", db, principal["id"])
+
+
+@router.get("/act.pdf")
+def commission_act(
+    token: str = "",
+    db: Session = Depends(get_db),
+):
+    """Акт оказанных услуг — чтобы заведение поставило расход."""
+    principal = decode_token(token)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Нужен токен")
+    ensure_token_usable(db, principal)
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    return _document_response("act", db, principal["id"])
 
 
 def commission_overdue(db: Session, employer_id: str) -> bool:

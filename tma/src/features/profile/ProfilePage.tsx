@@ -3,16 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
 import {
+  billingDocUrl,
   fetchAdminOverview,
   fetchEntitlements,
   fetchMe,
   fetchMyCommission,
   fetchReferral,
-  walletTopup,
   setAvailability,
-  verifyEmployer,
   type Me,
   type VerifyResult,
+  verifyEmployer,
+  walletTopup,
 } from "@/api/endpoints";
 import { share, haptic, confirmAction } from "@/telegram/sdk";
 import {
@@ -93,6 +94,35 @@ function CommissionCard() {
         Комиссия списывается с баланса сама — без счетов, реквизитов
         и переписки. Всё внутри приложения.
       </div>
+      {/* Документы для бухгалтерии. Ресторан-юрлицо не проведёт оплату по
+          безналу без счёта с реквизитами и не поставит расход без акта —
+          «оплатите картой» для него не ответ. Кнопки показываем только когда
+          есть за что платить. */}
+      {due && (
+        <>
+          <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+            Документы для бухгалтерии
+          </div>
+          <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+            {([["invoice", "Счёт на оплату"], ["act", "Акт услуг"]] as const).map(
+              ([kind, label]) => (
+                <button
+                  key={kind}
+                  className="tag"
+                  style={{ flex: 1, minWidth: 120, cursor: "pointer" }}
+                  onClick={() => {
+                    haptic("light");
+                    window.open(billingDocUrl(kind), "_blank");
+                  }}
+                >
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
+        </>
+      )}
+
       {bill.topupAvailable ? (
         <>
           <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
