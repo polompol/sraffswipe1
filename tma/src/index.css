@@ -524,6 +524,36 @@ button.tag:disabled {
   justify-content: center;
   overflow: hidden;
 }
+/* Карточка без фото: вместо пустоты — главное крупно (сколько платят / кто). */
+.swipe-hero {
+  /* Крепим блок к верху — сразу под рядом бейджей. Доля от высоты (30%,
+     половина) не годится: тело карточки растёт от длины описания и наезжало
+     бы на сумму у одних смен и оставляло дыру у других. */
+  position: absolute;
+  top: 84px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  color: #fff;
+  pointer-events: none;
+}
+.swipe-hero-sum {
+  font-size: 46px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -1px;
+  text-shadow: 0 2px 12px rgba(40, 12, 18, 0.35);
+}
+.swipe-hero-cap {
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0.92;
+}
+
 /* Демо-карточка свайпа на онбординге — мягко качается, подсказывая жест */
 @keyframes swipeDemo {
   0%, 100% { transform: translateX(0) rotate(0deg); }

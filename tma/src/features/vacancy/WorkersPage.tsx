@@ -21,11 +21,20 @@ export function WorkersPage() {
   async function invite(id: string) {
     haptic("success");
     try {
-      await inviteWorker(id);
+      const notified = await inviteWorker(id);
       setInvited((s) => new Set(s).add(id));
-      toast("Приглашение отправлено", "success");
-    } catch {
-      toast("Не удалось пригласить", "error");
+      toast(
+        notified
+          ? "Приглашение отправлено"
+          : "Этого человека вы уже звали — он видит вашу смену",
+        "success",
+      );
+    } catch (e) {
+      haptic("error");
+      // 409 — нет опубликованной смены: звать некуда, и сервер это объясняет.
+      const detail = (e as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      toast(detail ?? "Не удалось пригласить", "error");
     }
   }
 

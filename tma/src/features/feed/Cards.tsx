@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
@@ -39,14 +39,30 @@ const PAY_ICON: Record<PayMethod, typeof IconCash> = {
   transfer: IconBank,
 };
 
-/** Фото карточки: всегда есть бренд-градиент + инициал как фолбэк; поверх —
- *  картинка, которая плавно проявляется при загрузке и НЕ ломает вид, если
- *  ссылка битая (onError) или фото нет. */
-function SwipePhoto({ src, initial }: { src?: string; initial: string }) {
+/** Фото карточки: всегда есть бренд-градиент как фолбэк; поверх — картинка,
+ *  которая плавно проявляется при загрузке и НЕ ломает вид, если ссылка битая
+ *  (onError) или фото нет.
+ *
+ *  Когда фото нет — а на старте его не будет почти ни у кого — вместо
+ *  огромной пустой буквы показываем главное: сколько платят и за что. Раньше
+ *  верхняя половина карточки была пустым полем с инициалом, и лента без фото
+ *  выглядела так, будто в сервисе ничего нет. */
+function SwipePhoto({ src, initial, hero }: {
+  src?: string;
+  initial: string;
+  hero?: ReactNode;
+}) {
   const [state, setState] = useState<"load" | "ok" | "err">(src ? "load" : "err");
+  // Битая ссылка на фото — тот же случай, что и «фото нет»: показываем
+  // главное, а не пустую букву.
+  const showHero = !!hero && (!src || state === "err");
   return (
     <div className="swipe-photo swipe-photo-fallback">
-      <span className="swipe-initial">{initial}</span>
+      {showHero ? (
+        <div className="swipe-hero">{hero}</div>
+      ) : (
+        <span className="swipe-initial">{initial}</span>
+      )}
       {src && state === "load" && <div className="photo-shimmer" />}
       {src && state !== "err" && (
         <img
@@ -133,7 +149,20 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
   return (
     <>
-      <SwipePhoto src={hasPhoto ? v.interiorPhotoUrl : undefined} initial={(v.companyName || "С").charAt(0)} />
+      <SwipePhoto
+        src={hasPhoto ? v.interiorPhotoUrl : undefined}
+        initial={(v.companyName || "С").charAt(0)}
+        hero={
+          <>
+            <div className="swipe-hero-sum">
+              {estimatedPay(v).toLocaleString("ru-RU")} ₽
+            </div>
+            <div className="swipe-hero-cap">
+              за смену · {shiftDayLabel(v.date)}
+            </div>
+          </>
+        }
+      />
       <div className="swipe-shade" />
 
       {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
@@ -267,7 +296,21 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
   const experienced = tags.includes("experienced");
   return (
     <>
-      <SwipePhoto src={hasPhoto ? photos[0] : undefined} initial={(s.name || "?").charAt(0)} />
+      <SwipePhoto
+        src={hasPhoto ? photos[0] : undefined}
+        initial={(s.name || "?").charAt(0)}
+        hero={
+          <>
+            <div className="swipe-hero-sum" style={{ fontSize: 34 }}>
+              {roles.length > 0 ? STAFF_ROLE_LABELS[roles[0]] : "Готов выйти"}
+            </div>
+            {/* Надёжность не дублируем: она есть ниже, в теле карточки. */}
+            {!s.shiftsTotal && (
+              <div className="swipe-hero-cap">новичок в сервисе</div>
+            )}
+          </>
+        }
+      />
       <div className="swipe-shade" />
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <span className="glass">{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>

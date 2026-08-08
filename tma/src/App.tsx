@@ -52,6 +52,9 @@ const FavoritesPage = lazy(() =>
 const WorkersPage = lazy(() =>
   import("@/features/vacancy/WorkersPage").then((m) => ({ default: m.WorkersPage })),
 );
+const ApplicantsPage = lazy(() =>
+  import("@/features/vacancy/ApplicantsPage").then((m) => ({ default: m.ApplicantsPage })),
+);
 const InvitesPage = lazy(() =>
   import("@/features/invites/InvitesPage").then((m) => ({ default: m.InvitesPage })),
 );
@@ -153,6 +156,7 @@ export function App() {
       <Route path="/support" element={ready ? <SupportPage /> : <Navigate to="/onboarding" />} />
       <Route path="/favorites" element={ready ? <FavoritesPage /> : <Navigate to="/onboarding" />} />
       <Route path="/workers" element={ready ? <WorkersPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/applicants" element={ready ? <ApplicantsPage /> : <Navigate to="/onboarding" />} />
       <Route path="/invites" element={ready ? <InvitesPage /> : <Navigate to="/onboarding" />} />
       <Route path="/settings" element={ready ? <SettingsPage /> : <Navigate to="/onboarding" />} />
 

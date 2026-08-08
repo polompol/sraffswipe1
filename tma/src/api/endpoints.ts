@@ -357,9 +357,43 @@ export async function fetchMyWorkers(): Promise<Worker[]> {
   }));
 }
 
-export async function inviteWorker(userId: string): Promise<void> {
+/**
+ * Позвать работника снова. Возвращает, ушло ли ему сообщение: второй раз
+ * подряд мы намеренно молчим, чтобы не спамить, и кнопка должна честно
+ * сказать «уже звали», а не показывать успех повторно.
+ */
+export async function inviteWorker(userId: string): Promise<boolean> {
   if (!USE_BACKEND) return mock.inviteWorker(userId);
-  await api.post(`/employer/invite/${userId}`, {});
+  const { data } = await api.post<{ notified: boolean }>(
+    `/employer/invite/${userId}`, {});
+  return data.notified !== false;
+}
+
+export interface Applicant {
+  id: string;
+  name: string;
+  age?: number | null;
+  district: string;
+  roles: string[];
+  medBook: string;
+  rating: number;
+  photoUrls: string[];
+  about: string;
+  availableToday: boolean;
+  shiftsTotal: number;
+  shiftsAttended: number;
+  vacancyId: string;
+  vacancyRole: string;
+  vacancyDate: string;
+  vacancyStart: number;
+  vacancyEnd: number;
+}
+
+/** Кто откликнулся на мои смены и ждёт ответа. */
+export async function fetchApplicants(): Promise<Applicant[]> {
+  if (!USE_BACKEND) return mock.fetchApplicants();
+  const { data } = await api.get<Applicant[]>("/employer/applicants");
+  return data;
 }
 
 export interface VacancyInput {

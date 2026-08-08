@@ -670,8 +670,33 @@ export function fetchMyWorkers() {
   ]);
 }
 
-export function inviteWorker(_userId: string): Promise<void> {
-  return Promise.resolve();
+export function inviteWorker(_userId: string): Promise<boolean> {
+  return Promise.resolve(true);
+}
+
+export function fetchApplicants() {
+  const v = VACANCIES[0];
+  return Promise.resolve(
+    SEEKERS.map((s) => ({
+      id: s.id,
+      name: s.name,
+      age: s.age ?? null,
+      district: s.district,
+      roles: s.roles as string[],
+      medBook: s.medBook as string,
+      rating: s.rating,
+      photoUrls: s.photoUrls ?? [],
+      about: s.about ?? "",
+      availableToday: !!s.availableToday,
+      shiftsTotal: s.shiftsTotal ?? 0,
+      shiftsAttended: s.shiftsAttended ?? 0,
+      vacancyId: v.id,
+      vacancyRole: v.role as string,
+      vacancyDate: v.date,
+      vacancyStart: v.startTime,
+      vacancyEnd: v.endTime,
+    })),
+  );
 }
 
 export function verifyEmployer(inn: string): Promise<VerifyResult> {

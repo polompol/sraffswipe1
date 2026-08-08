@@ -56,13 +56,29 @@ export function MyVacanciesPage() {
           + Вакансия
         </Button>
       </div>
-      <button
-        className="tag"
-        style={{ cursor: "pointer", marginBottom: 14, borderColor: "var(--gold)", color: "var(--gold)" }}
-        onClick={() => nav("/workers")}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 8,
+          marginBottom: 14,
+        }}
       >
-        Мои работники — позвать снова
-      </button>
+        <button
+          className="tag"
+          style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+          onClick={() => nav("/applicants")}
+        >
+          Кто откликнулся
+        </button>
+        <button
+          className="tag"
+          style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+          onClick={() => nav("/workers")}
+        >
+          Мои работники
+        </button>
+      </div>
 
       {/* Раньше новое заведение видело заголовок и пустоту — непонятно,
           что делать дальше. Теперь экран сам ведёт к размещению смены. */}
