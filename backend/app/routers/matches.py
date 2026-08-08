@@ -478,7 +478,7 @@ def propose_reschedule(
         f"Заведение предлагает перенести смену на {_fmt_date(body.date)} "
         f"({_fmt_time(body.start_time)}–{_fmt_time(body.end_time)}). "
         "Откройте чат смены, чтобы согласиться или отказаться.",
-        open_app="Открыть смену",
+        open_app="Открыть смену", screen="matches",
     )
     db.commit()
     db.refresh(m)

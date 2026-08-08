@@ -23,7 +23,31 @@ def _tg_id(db: Session, owner_id: str) -> int | None:
     return e.tg_id if e is not None else None
 
 
-def _send(token: str, tg: int, text: str, open_app: str | None = None) -> None:
+def webapp_url(screen: str = "") -> str:
+    """Ссылка на Mini App с указанием экрана, который надо открыть.
+
+    Экран передаём query-параметром, а НЕ через #/путь: Telegram кладёт
+    initData в фрагмент URL (#tgWebAppData=...), и наш собственный хэш там
+    просто затрётся. Приложение читает ?go= при старте и переходит куда надо.
+
+    Без этого кнопка в уведомлении открывала корень: человеку приходило
+    «отметьтесь на смене», он жал кнопку и попадал в ленту вакансий — искать
+    нужный экран самому.
+    """
+    base = settings.mini_app_url
+    if not base or not screen:
+        return base
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}go={screen}"
+
+
+def _send(
+    token: str,
+    tg: int,
+    text: str,
+    open_app: str | None = None,
+    screen: str = "",
+) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     body: dict = {"chat_id": tg, "text": text}
     # Кнопка «открыть приложение» прямо в сообщении: человек отмечается на
@@ -34,7 +58,7 @@ def _send(token: str, tg: int, text: str, open_app: str | None = None) -> None:
         body["reply_markup"] = {
             "inline_keyboard": [[{
                 "text": open_app,
-                "web_app": {"url": settings.mini_app_url},
+                "web_app": {"url": webapp_url(screen)},
             }]]
         }
     try:
@@ -49,10 +73,17 @@ def _send(token: str, tg: int, text: str, open_app: str | None = None) -> None:
 
 
 def notify_owner(
-    db: Session, owner_id: str, text: str, open_app: str | None = None
+    db: Session,
+    owner_id: str,
+    text: str,
+    open_app: str | None = None,
+    screen: str = "",
 ) -> None:
     """Отправить текст пользователю/работодателю по его tg_id (не блокируя).
-    `open_app` — подпись кнопки, открывающей Mini App прямо из сообщения."""
+
+    `open_app` — подпись кнопки, открывающей Mini App прямо из сообщения;
+    `screen` — какой экран открыть (`shifts`, `matches`, `applicants`…).
+    """
     token = settings.telegram_bot_token
     if not token:
         return
@@ -60,7 +91,7 @@ def notify_owner(
     if not tg:
         return
     threading.Thread(
-        target=_send, args=(token, tg, text, open_app), daemon=True
+        target=_send, args=(token, tg, text, open_app, screen), daemon=True
     ).start()
 
 

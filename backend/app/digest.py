@@ -108,7 +108,8 @@ def send_reminders(db: Session) -> int:
     today = _today()
     reminders = build_reminders(db)
     for match_id, user_id, text in reminders:
-        notify_owner(db, user_id, text, open_app="Я на смене — отметиться")
+        notify_owner(db, user_id, text,
+                     open_app="Я на смене — отметиться", screen="shifts")
         m = db.get(Match, match_id)
         if m is not None:
             m.reminded_on = today
@@ -176,7 +177,8 @@ def send_unfilled_alerts(db: Session) -> int:
     """Разослать предупреждения о незакрытых сменах на завтра."""
     alerts = build_unfilled_alerts(db)
     for _vid, employer_id, text in alerts:
-        notify_owner(db, employer_id, text, open_app="Открыть смену")
+        notify_owner(db, employer_id, text,
+                     open_app="Открыть смену", screen="vacancies")
     return len(alerts)
 
 

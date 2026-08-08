@@ -9,11 +9,13 @@
 import asyncio
 import os
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
+    BotCommand,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    MenuButtonWebApp,
     Message,
     WebAppInfo,
 )
@@ -65,9 +67,8 @@ async def send_typed(message, text, reply_markup=None, steps=10, delay=0.4):
     return sent
 
 
-@dp.message(CommandStart())
-async def start(message: Message) -> None:
-    kb = InlineKeyboardMarkup(
+def _open_app_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
@@ -77,11 +78,15 @@ async def start(message: Message) -> None:
             ]
         ]
     )
+
+
+@dp.message(CommandStart())
+async def start(message: Message) -> None:
     await send_typed(
         message,
         "StaffSwipe — смены в общепите за один свайп.\n"
         "Нажмите кнопку ниже, чтобы начать.",
-        reply_markup=kb,
+        reply_markup=_open_app_kb(),
     )
 
 
@@ -112,10 +117,48 @@ async def support_cmd(message: Message) -> None:
     )
 
 
+# Любое другое сообщение. Люди пишут боту — «здравствуйте», «есть работа?»,
+# «когда смена» — и до сих пор получали тишину: обработчиков не было вовсе.
+# Молчащий бот читается как «сервис не работает».
+@dp.message(F.text)
+async def anything_else(message: Message) -> None:
+    await message.answer(
+        "Я бот-уведомлялка: сюда приходят мэтчи, подтверждения смен и "
+        "напоминания. Смены живут в приложении — откройте его кнопкой ниже.\n"
+        "Как всё устроено — /help, проблема — /support.",
+        reply_markup=_open_app_kb(),
+    )
+
+
+async def setup(bot: Bot) -> None:
+    """Разовая настройка бота при запуске.
+
+    Обе вещи раньше приходилось делать руками в BotFather (и легко забыть):
+    список команд в меню и постоянная кнопка «Открыть» слева от поля ввода.
+    Кнопка важнее команд: это единственный способ вернуться в приложение,
+    если человек закрыл его и пролистал переписку.
+    """
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Открыть приложение"),
+            BotCommand(command="help", description="Как это работает"),
+            BotCommand(command="support", description="Поддержка и споры"),
+        ])
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="Смены",
+                web_app=WebAppInfo(url=MINI_APP_URL),
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — настройка не должна ронять бота
+        print(f"Не удалось настроить меню бота: {exc}")
+
+
 async def main() -> None:
     if not BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN не задан")
     bot = Bot(BOT_TOKEN)
+    await setup(bot)
     await dp.start_polling(bot)
 
 

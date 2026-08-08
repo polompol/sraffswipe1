@@ -111,7 +111,11 @@ def _on_match(db: Session, match: Match, created: bool) -> None:
     if not created:
         return
     notify_owner(db, match.user_id, "🔥 У вас новый мэтч в StaffSwipe!")
-    notify_owner(db, match.employer_id, "🔥 Новый отклик-мэтч в StaffSwipe!")
+    notify_owner(
+        db, match.employer_id,
+        "Новый мэтч в StaffSwipe — договоритесь о деталях смены.",
+        open_app="Открыть чат", screen="matches",
+    )
 
 
 @router.post(

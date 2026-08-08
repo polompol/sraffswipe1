@@ -31,6 +31,27 @@ initTheme();
 if (localStorage.getItem("ss_large") === "1") {
   document.body.dataset.large = "1";
 }
+// Кнопка из уведомления бота открывает приложение с ?go=<экран>. Без этого
+// человек получал «отметьтесь на смене», жал кнопку и попадал в ленту
+// вакансий — искать нужный экран самому. Хэш для этого не годится: Telegram
+// кладёт туда initData и наш собственный #/путь затирается.
+const GO_SCREENS: Record<string, string> = {
+  shifts: "/shifts",
+  matches: "/matches",
+  vacancies: "/vacancy/my",
+  applicants: "/applicants",
+  profile: "/profile",
+};
+try {
+  const go = new URLSearchParams(window.location.search).get("go") ?? "";
+  const path = GO_SCREENS[go];
+  if (path && localStorage.getItem("ss_jwt")) {
+    window.location.hash = `#${path}`;
+  }
+} catch {
+  /* нет query — обычный запуск */
+}
+
 // «open» — один раз за сессию, чтобы не раздувать вершину воронки на перезапусках.
 if (!sessionStorage.getItem("ss_open")) {
   sessionStorage.setItem("ss_open", "1");
