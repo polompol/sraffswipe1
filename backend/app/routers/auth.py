@@ -1,5 +1,4 @@
 """Авторизация: телефон → SMS-код → JWT."""
-import hmac
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -10,7 +9,7 @@ from ..db import get_db
 from ..models import Employer, PhoneCode, User
 from ..ratelimit import hit
 from ..schemas import RequestCodeIn, RequestCodeOut, TokenOut, VerifyIn
-from ..security import create_token
+from ..security import create_token, secure_equals
 from ..sms import generate_code, send_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -56,7 +55,7 @@ def verify(body: VerifyIn, db: Session = Depends(get_db)):
     hit(f"verify:{body.phone}", limit=5, window=60)
     record = db.get(PhoneCode, body.phone)
     # Тайминг-безопасное сравнение — не даём по времени ответа подбирать код.
-    if record is None or not hmac.compare_digest(record.code, body.code):
+    if record is None or not secure_equals(record.code, body.code):
         raise HTTPException(status_code=400, detail="Неверный код")
     # Просроченный код недействителен — удаляем и просим запросить заново.
     if datetime.now(UTC) - _aware(record.created_at) > _CODE_TTL:

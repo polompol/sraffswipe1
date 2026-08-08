@@ -6,7 +6,25 @@ from sqlalchemy.orm import Session
 from .models import Boost, Entitlement, Subscription, Vacancy
 
 
+def ensure(db: Session, owner_id: str) -> Entitlement:
+    """Гарантировать строку прав БЕЗ коммита.
+
+    Отдельно от get_or_create, потому что коммит в середине денежной операции
+    фиксирует всё, что висит в сессии, — и разрывает её на две части. Именно
+    так терялись пополнения: запись «оплачено» успевала зафиксироваться, а
+    зачисление на баланс — нет. Здесь только flush: строка появляется в
+    транзакции, но фиксируется вместе со всем остальным.
+    """
+    ent = db.get(Entitlement, owner_id)
+    if ent is None:
+        ent = Entitlement(owner_id=owner_id)
+        db.add(ent)
+        db.flush()
+    return ent
+
+
 def get_or_create(db: Session, owner_id: str) -> Entitlement:
+    """То же, но с коммитом. Для обычных чтений, вне денежных транзакций."""
     ent = db.get(Entitlement, owner_id)
     if ent is None:
         ent = Entitlement(owner_id=owner_id)

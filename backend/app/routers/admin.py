@@ -16,6 +16,7 @@ from ..entitlements import get_or_create, plan_of
 from ..models import (
     Commission,
     Employer,
+    Entitlement,
     Event,
     Match,
     Purchase,
@@ -24,6 +25,7 @@ from ..models import (
     Swipe,
     User,
     Vacancy,
+    WalletTxn,
 )
 from ..notify import notify_owner
 from ..security import current_principal
@@ -636,6 +638,62 @@ def wallet_credit(
     return {"ok": True, "balanceRub": balance}
 
 
+class WalletRefundIn(BaseModel):
+    amount_rub: Annotated[int, Field(ge=1, le=500_000)]
+    note: str = ""
+
+
+@router.post("/wallet/{owner_id}/refund")
+def wallet_refund(
+    owner_id: str,
+    body: WalletRefundIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Вернуть деньги с баланса (возврат заведению или исправление ошибки).
+
+    До этого механизма возврата не было НИКАКОГО: ошиблись при зачислении —
+    единственный путь правки лежал через прямой доступ к базе, где движение
+    денег не оставляет следа в журнале. Теперь и списание тоже строка в
+    wallet_txns: журнал остаётся полным.
+
+    В минус не уходим: нельзя вернуть больше, чем на балансе. Списание —
+    атомарным UPDATE с условием, как и все деньги в проекте.
+    """
+    from ..entitlements import ensure
+
+    if db.get(Employer, owner_id) is None and db.get(User, owner_id) is None:
+        raise HTTPException(status_code=404, detail="Аккаунт не найден")
+    ensure(db, owner_id)
+    taken = (
+        db.query(Entitlement)
+        .filter(
+            Entitlement.owner_id == owner_id,
+            Entitlement.balance_rub >= body.amount_rub,
+        )
+        .update(
+            {Entitlement.balance_rub: Entitlement.balance_rub - body.amount_rub},
+            synchronize_session=False,
+        )
+    )
+    if not taken:
+        current = int(db.get(Entitlement, owner_id).balance_rub)
+        raise HTTPException(
+            status_code=409,
+            detail=f"На балансе только {current} ₽ — вернуть больше нельзя.",
+        )
+    db.add(WalletTxn(
+        owner_id=owner_id, amount=-body.amount_rub, kind="refund",
+        note=(body.note or "Возврат оператором")[:200],
+    ))
+    db.commit()
+    balance = int(db.get(Entitlement, owner_id).balance_rub)
+    notify_owner(db, owner_id,
+                 f"С баланса возвращено {body.amount_rub} ₽. "
+                 f"Остаток — {balance} ₽.")
+    return {"ok": True, "balanceRub": balance}
+
+
 class SourceRow(BaseModel):
     source: str      # канал из ссылки t.me/<bot>?startapp=src_<канал>
     seekers: int     # регистраций работников
@@ -701,6 +759,22 @@ def commissions(
         ))
     out.sort(key=lambda r: -r.amountRub)
     return out
+
+
+@router.post("/payments/reconcile")
+def reconcile_payments(
+    hours: int = 48,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Сверить платежи с ЮKassa и дозачислить те, по которым не дошёл вебхук.
+
+    Запускать раз в сутки кроном. Без сверки непришедший вебхук означает:
+    у ЮKassa деньги есть, у нас их нет, и никто об этом не узнает.
+    """
+    from ..reconcile import reconcile
+
+    return reconcile(db, hours=max(1, min(hours, 24 * 30)))
 
 
 @router.post("/users/{owner_id}/logout-all")

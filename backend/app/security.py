@@ -1,4 +1,5 @@
 """JWT-аутентификация (свои токены, как в варианте 2 спецификации)."""
+import hmac
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -10,6 +11,17 @@ from .config import settings
 from .db import get_db
 
 bearer = HTTPBearer(auto_error=False)
+
+
+def secure_equals(a: str, b: str) -> bool:
+    """Сравнение строк, устойчивое и к таймингу, и к нелатинским символам.
+
+    hmac.compare_digest на строках требует только ASCII и БРОСАЕТ TypeError на
+    кириллице или эмодзи. То есть достаточно было прислать секрет с русской
+    буквой, чтобы вместо честного «неверный токен» получить необработанную
+    ошибку 500. Сравниваем байты — тогда на вход годится что угодно.
+    """
+    return hmac.compare_digest((a or "").encode("utf-8"), (b or "").encode("utf-8"))
 
 
 def _owner(db: Session, principal: dict):

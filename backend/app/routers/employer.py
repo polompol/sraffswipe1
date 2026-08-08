@@ -119,7 +119,14 @@ class VerifyOut(BaseModel):
     hint: str = ""
 
 
-@router.post("/verify", response_model=VerifyOut)
+@router.post(
+    "/verify",
+    response_model=VerifyOut,
+    # Ходит в ПЛАТНУЮ DaData. Соседние ручки /dadata/* лимит имеют, а здесь
+    # его забыли — скрипт в цикле опустошал бы баланс DaData за счёт владельца.
+    # Проверка ИНН делается один раз при регистрации, 10 в час хватает с лихвой.
+    dependencies=[Depends(rate_limit("verify", 10, 3600))],
+)
 def verify_employer(
     body: VerifyIn,
     db: Session = Depends(get_db),

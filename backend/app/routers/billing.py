@@ -6,7 +6,6 @@
 в пилоте выдаёт оператор (буст) и реферальная программа (супер-лайки).
 """
 import base64
-import hmac
 import json
 import urllib.request
 import uuid
@@ -19,9 +18,9 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..entitlements import get_or_create
+from ..entitlements import ensure, get_or_create
 from ..models import Commission, Entitlement, Purchase, Subscription, WalletTxn
-from ..security import current_principal
+from ..security import current_principal, secure_equals
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -211,21 +210,31 @@ def wallet_topup(
     return PaymentOut(url=f"{base}?sku=wallet_topup&owner={principal['id']}")
 
 
-def credit_wallet(db: Session, owner_id: str, amount: int, note: str) -> int:
+def credit_wallet(
+    db: Session, owner_id: str, amount: int, note: str,
+    kind: str = "topup", commit: bool = True,
+) -> int:
     """Зачислить деньги на баланс + записать движение. Возвращает новый баланс.
+
     Инкремент — атомарным UPDATE (balance = balance + amount), а НЕ
     read-modify-write: иначе гонка с автосписанием комиссии затёрла бы списание
     (заведение получило бы смену бесплатно). Правило проекта: деньги — только
-    атомарными UPDATE с условием."""
-    get_or_create(db, owner_id)  # гарантируем строку прав
+    атомарными UPDATE с условием.
+
+    commit=False — когда зачисление часть большей транзакции (вебхук оплаты):
+    фиксировать её должен вызывающий, одним коммитом на всё.
+    """
+    ensure(db, owner_id)  # строка прав без коммита
     db.query(Entitlement).filter(Entitlement.owner_id == owner_id).update(
         {Entitlement.balance_rub: Entitlement.balance_rub + amount},
         synchronize_session=False,
     )
-    db.add(WalletTxn(owner_id=owner_id, amount=amount, kind="topup", note=note))
-    db.commit()
-    ent = get_or_create(db, owner_id)
-    return ent.balance_rub
+    db.add(WalletTxn(owner_id=owner_id, amount=amount, kind=kind, note=note))
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return int(db.get(Entitlement, owner_id).balance_rub)
 
 
 @router.post("/yookassa/webhook")
@@ -238,7 +247,7 @@ def yookassa_webhook(
     поэтому защищаемся секретом в query `?secret=`. Если задан отдельный
     yookassa_webhook_secret — используем его (отдельный секрет для вебхука)."""
     expected = settings.yookassa_webhook_secret or settings.internal_api_secret
-    if not expected or not hmac.compare_digest(secret or "", expected):
+    if not expected or not secure_equals(secret, expected):
         raise HTTPException(status_code=401, detail="Требуется внутренний токен")
     if payload.get("event") != "payment.succeeded":
         return {"ok": True, "ignored": True}
@@ -274,12 +283,20 @@ def yookassa_webhook(
             Purchase.provider_charge_id == charge_id
         ).first():
             return {"ok": True, "duplicate": True}
+        # ОДНА транзакция на запись платежа и зачисление денег. Раньше между
+        # ними случался коммит (строка прав создавалась отдельно), и при сбое
+        # в этом окне платёж оставался помеченным «оплачено», а деньги на
+        # баланс не попадали. Повтор вебхука видел дубль по charge_id и молча
+        # уходил — деньги терялись навсегда. Теперь при сбое откатывается всё,
+        # и повторный вебхук проводит платёж заново.
         db.add(Purchase(
             owner_id=owner_id, sku="wallet_topup", provider="yookassa",
             amount=rub, currency="RUB", status="paid",
             provider_charge_id=charge_id,
         ))
-        credit_wallet(db, owner_id, rub, "Пополнение картой (ЮKassa)")
+        credit_wallet(db, owner_id, rub, "Пополнение картой (ЮKassa)",
+                      commit=False)
+        db.commit()
         return {"ok": True}
 
     # Других сценариев оплаты нет: пополнение баланса — единственный товар.

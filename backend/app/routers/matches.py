@@ -1,5 +1,4 @@
 """Мэтчи и подтверждение смены."""
-import hmac
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,7 +20,7 @@ from ..models import (
 from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import MatchOut
-from ..security import current_principal
+from ..security import current_principal, secure_equals
 from .analytics import _is_admin
 
 router = APIRouter(prefix="/matches", tags=["matches"])
@@ -208,7 +207,7 @@ def checkin(
     by_code = bool(
         body.code
         and m.checkin_code
-        and hmac.compare_digest(body.code.strip(), m.checkin_code)
+        and secure_equals(body.code.strip(), m.checkin_code)
     )
     by_geo = False
     if body.lat is not None and body.lng is not None:
