@@ -1,11 +1,11 @@
 """Лента кандидатов для работодателя."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Integer, func, or_
+from sqlalchemy import Integer, case, func, or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Match, Swipe, User
+from ..models import Match, Swipe, User, Vacancy
 from ..ratelimit import rate_limit
 from ..security import current_principal
 
@@ -98,17 +98,36 @@ def list_candidates(
             Swipe.target_type == "user",
         ).all()
     ]
-    # «Готов выйти сегодня» — наверх ленты: их зовут на срочные смены первыми.
+    # Кто отправил «Срочно» именно этому заведению. Супер-лайк обещает
+    # соискателю «покажут тебя заведению первым» — и до сих пор НЕ делал
+    # ничего: списывал баланс и попадал в ленту наравне со всеми. Теперь
+    # обещание выполняется: такие анкеты идут выше остальных.
+    my_vacancies = [
+        v[0] for v in db.query(Vacancy.id).filter(
+            Vacancy.employer_id == principal["id"]
+        ).all()
+    ]
+    urgent_ids: set[str] = set()
+    if my_vacancies:
+        urgent_ids = {
+            s[0] for s in db.query(Swipe.swiper_id).filter(
+                Swipe.target_type == "vacancy",
+                Swipe.target_id.in_(my_vacancies),
+                Swipe.direction == "superlike",
+            ).all()
+        }
+
+    # «Готов выйти сегодня» — тоже наверх: их зовут на срочные смены первыми.
     q = db.query(User).filter(User.blocked.is_(False))
     if swiped:
         q = q.filter(User.id.notin_(swiped))
     if available_today:
         q = q.filter(User.available_today.is_(True))
-    rows = (
-        q.order_by(User.available_today.desc(), User.rating.desc())
-        .limit(200)
-        .all()
-    )
+    order = [User.available_today.desc(), User.rating.desc()]
+    if urgent_ids:
+        # Сначала «Срочно» — до сортировки по доступности и рейтингу.
+        order.insert(0, case((User.id.in_(urgent_ids), 0), else_=1))
+    rows = q.order_by(*order).limit(200).all()
     role_f = role.strip() if role else None
     dist_f = district.strip().lower() if district else None
 
