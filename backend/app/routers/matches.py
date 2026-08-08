@@ -159,10 +159,14 @@ def mark_attendance(
     return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
 
 
-def _to_out(db: Session, m: Match, role: str = "") -> MatchOut:
+def _to_out(
+    db: Session, m: Match, role: str = "", vac: Vacancy | None = None
+) -> MatchOut:
     # Код прихода показываем ТОЛЬКО заведению как помощник, пока смена не закрыта.
     show_code = role == "employer" and m.status == "confirmed" and bool(m.checkin_code)
-    v = db.get(Vacancy, m.vacancy_id)
+    # vac передают заранее, когда мэтчей много: иначе на каждую строку списка
+    # уходил отдельный запрос за сменой (25 мэтчей = 27 запросов).
+    v = vac if vac is not None else db.get(Vacancy, m.vacancy_id)
     pay = _shift_pay(v) if v is not None else 0
     return MatchOut(
         id=m.id,
@@ -188,7 +192,17 @@ def list_matches(
 ):
     col = Match.user_id if principal["role"] == "seeker" else Match.employer_id
     rows = db.query(Match).filter(col == principal["id"]).all()
-    return [_to_out(db, m, principal["role"]) for m in rows]
+    # Смены подгружаем ОДНИМ запросом на весь список, а не по одному на строку.
+    vacs = {
+        v.id: v
+        for v in db.query(Vacancy).filter(
+            Vacancy.id.in_([m.vacancy_id for m in rows] or ["__none__"])
+        )
+    }
+    return [
+        _to_out(db, m, principal["role"], vac=vacs.get(m.vacancy_id))
+        for m in rows
+    ]
 
 
 @router.post(

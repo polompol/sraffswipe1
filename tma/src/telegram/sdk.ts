@@ -10,6 +10,8 @@ import {
   bindThemeParamsCssVars,
   mountViewport,
   expandViewport,
+  mountSwipeBehavior,
+  disableVerticalSwipes,
   bindViewportCssVars,
   backButton,
   hapticFeedback,
@@ -52,6 +54,17 @@ export async function initTelegram(): Promise<void> {
     await mountViewport();
     bindViewportCssVars();
     expandViewport();
+  } catch {
+    /* noop */
+  }
+
+  try {
+    // Приложение свайповое, и вертикальный свайп в Telegram закрывает
+    // мини-апп. Потянул карточку чуть вниз при свайпе — и вместо отклика
+    // приложение схлопнулось, а человек не понял, что произошло.
+    // Отключаем закрытие свайпом: выйти по-прежнему можно крестиком.
+    mountSwipeBehavior();
+    disableVerticalSwipes();
   } catch {
     /* noop */
   }
