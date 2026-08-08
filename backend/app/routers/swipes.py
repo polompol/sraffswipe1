@@ -1,5 +1,6 @@
 """Свайпы и детект мэтча."""
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,43 @@ def _same_person(db: Session, user_id: str, employer_id: str) -> bool:
     return bool(u.tg_id and e.tg_id and u.tg_id == e.tg_id)
 
 
+class SlotsFull(Exception):
+    """Мест на смене больше нет."""
+
+
+def _claim_slot(db: Session, vacancy_id: str) -> None:
+    """Занять место на смене или отказать, если все разобрали.
+
+    Свободные места при создании мэтча не проверялись ВООБЩЕ. Смена на одного
+    уходила из ленты, когда место занимали, — но два человека могли успеть
+    откликнуться до этого, и заведение, лайкнув обоих, получало два мэтча на
+    одно место. Оба уверены, что смена их; один приезжает зря, а комиссия
+    начисляется за каждого закрытого.
+
+    Строку смены берём под блокировку (FOR UPDATE), потом считаем занятые
+    места. Без блокировки два параллельных запроса оба увидели бы «место
+    свободно» и оба создали бы мэтч. На SQLite блокировка строки не
+    поддерживается, но там запись и так идёт по одному writer'у.
+    """
+    q = db.query(Vacancy).filter(Vacancy.id == vacancy_id)
+    if db.bind is not None and db.bind.dialect.name != "sqlite":
+        q = q.with_for_update()
+    vac = q.first()
+    if vac is None:
+        raise SlotsFull
+    taken = (
+        db.query(func.count(Match.id))
+        .filter(
+            Match.vacancy_id == vacancy_id,
+            Match.status.in_(("matched", "confirmed", "completed")),
+            Match.no_show.is_(False),
+        )
+        .scalar()
+    ) or 0
+    if taken >= (vac.headcount or 1):
+        raise SlotsFull
+
+
 def _ensure_match(
     db: Session, user_id: str, employer_id: str, vacancy_id: str
 ) -> tuple[Match, bool]:
@@ -39,6 +77,7 @@ def _ensure_match(
     )
     if existing:
         return existing, False
+    _claim_slot(db, vacancy_id)
     match = Match(
         user_id=user_id, employer_id=employer_id, vacancy_id=vacancy_id
     )
@@ -186,7 +225,12 @@ def swipe(
             .first()
         )
         if reciprocal and not _same_person(db, me, vac.employer_id):
-            match, created = _ensure_match(db, me, vac.employer_id, vac.id)
+            try:
+                match, created = _ensure_match(db, me, vac.employer_id, vac.id)
+            except SlotsFull:
+                # Отклик записан — человек не виноват, что опоздал на секунды.
+                # Но мэтча нет: мест не осталось.
+                return SwipeOut(recorded=True, matched=False)
             _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
 
@@ -209,9 +253,18 @@ def swipe(
             .first()
         )
         if seeker_like and not _same_person(db, body.target_id, me):
-            match, created = _ensure_match(
-                db, body.target_id, me, seeker_like.target_id
-            )
+            try:
+                match, created = _ensure_match(
+                    db, body.target_id, me, seeker_like.target_id
+                )
+            except SlotsFull:
+                # Заведение уже набрало всех на эту смену. Отказ понятный:
+                # иначе оно бы думало, что позвало человека, а мэтча нет.
+                raise HTTPException(
+                    status_code=409,
+                    detail="На эту смену уже набраны все люди. "
+                           "Увеличьте число мест или опубликуйте новую смену.",
+                ) from None
             _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
 
