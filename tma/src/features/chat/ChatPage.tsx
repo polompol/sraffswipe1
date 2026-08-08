@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { ShiftConflict, confirmShift, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
+import { ShiftConflict, cancelShift, confirmShift, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
@@ -37,6 +37,10 @@ export function ChatPage() {
   // Текст предупреждения о пересечении смен. Не запрет: человек может знать
   // то, чего не знаем мы (первую смену отменили, договорился о подмене).
   const [conflict, setConflict] = useState<string | null>(null);
+  // Отмена смены — в два шага и с причиной: вторая сторона должна понимать,
+  // что произошло, а не гадать. Заранее отменённая смена не бьёт по надёжности.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
@@ -109,6 +113,25 @@ export function ChatPage() {
   function quickReply(t: string) {
     haptic("light");
     void deliver(t);
+  }
+
+  async function doCancel() {
+    try {
+      const m = await cancelShift(matchId, cancelReason.trim());
+      haptic("warning");
+      setMatchState(m);
+      setCancelOpen(false);
+      setCancelReason("");
+      toast("Смена отменена. Вторая сторона уведомлена", "success");
+      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    } catch (e: any) {
+      haptic("error");
+      toast(
+        e?.response?.data?.detail ?? "Не удалось отменить смену",
+        "error",
+      );
+    }
   }
 
   async function doConfirm(force = false) {
@@ -222,6 +245,23 @@ export function ChatPage() {
                   : "Подтвердить смену"}
             </span>
           </Button>
+          {/* Отменить можно, пока смена не началась. Без этой кнопки у
+              человека оставался один выход — просто не прийти. */}
+          {match && !["completed", "cancelled"].includes(match.status) &&
+            !match.seekerCheckedIn && !match.employerCheckedIn && (
+            <button
+              className="tag"
+              style={{
+                marginTop: 8,
+                cursor: "pointer",
+                color: "var(--danger)",
+                borderColor: "var(--danger)",
+              }}
+              onClick={() => setCancelOpen(true)}
+            >
+              Не смогу выйти
+            </button>
+          )}
         </div>
         <div className="row">
           <input
@@ -241,6 +281,34 @@ export function ChatPage() {
           </Button>
         </div>
       </div>
+
+      {cancelOpen && (
+        <div className="sheet-backdrop" onClick={() => setCancelOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="h2" style={{ marginTop: 0 }}>Отменить смену?</h2>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              Вторая сторона получит уведомление сразу. Чем раньше
+              предупредите, тем лучше: заранее отменённая смена не влияет на
+              надёжность профиля, за несколько часов до начала — влияет.
+            </p>
+            <input
+              className="input"
+              placeholder="Причина (по желанию)"
+              maxLength={200}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+            />
+            <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+              <Button variant="danger" block onClick={doCancel}>
+                Отменить смену
+              </Button>
+              <Button variant="ghost" block onClick={() => setCancelOpen(false)}>
+                Назад
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {conflict && (
         <div className="sheet-backdrop" onClick={() => setConflict(null)}>

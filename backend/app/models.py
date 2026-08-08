@@ -197,6 +197,14 @@ class Match(Base):
     employer_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
     # Спор (стороны не сошлись / работник не может отметиться) → к оператору.
     disputed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Кто отменил смену: seeker|employer. Пусто — не отменяли.
+    # Отмена — не то же самое, что неявка: человек, предупредивший заранее,
+    # не должен получать ту же отметку, что и пропавший без предупреждения.
+    cancelled_by: Mapped[str] = mapped_column(String, default="")
+    cancel_reason: Mapped[str] = mapped_column(String, default="")
+    # Отменил ли слишком поздно (за считаные часы). Поздняя отмена по вреду
+    # почти равна неявке: заменить человека заведение уже не успеет.
+    cancelled_late: Mapped[bool] = mapped_column(Boolean, default=False)
     # Дата последнего напоминания о смене (YYYY-MM-DD). Нужна, чтобы повторный
     # запуск рассылки (оператор нажал дважды / крон) не слал людям дубли.
     reminded_on: Mapped[str] = mapped_column(String, default="")

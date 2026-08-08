@@ -98,12 +98,13 @@ export const TIPS_BADGE: Record<TipsMode, string> = {
   shared: "Чаевые — поровну",
 };
 
-export type MatchStatus = "matched" | "confirmed" | "completed";
+export type MatchStatus = "matched" | "confirmed" | "completed" | "cancelled";
 
 export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
   matched: "Мэтч",
   confirmed: "Смена подтверждена",
   completed: "Завершено",
+  cancelled: "Отменена",
 };
 
 export type ExperienceTag =

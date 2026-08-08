@@ -1,9 +1,11 @@
 """Мэтчи и подтверждение смены."""
 import secrets
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -23,6 +25,7 @@ from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import MatchOut
 from ..security import current_principal, secure_equals
+from ..timeutil import shift_start_utc
 from .analytics import _is_admin
 
 router = APIRouter(prefix="/matches", tags=["matches"])
@@ -311,6 +314,87 @@ def dispute(
 
 class ResolveMatchIn(BaseModel):
     outcome: str  # "completed" | "no_show"
+
+
+class CancelIn(BaseModel):
+    reason: Annotated[str, StringConstraints(max_length=200)] = ""
+
+
+@router.post(
+    "/{match_id}/cancel",
+    response_model=MatchOut,
+    dependencies=[Depends(rate_limit("cancel", 10, 3600))],
+)
+def cancel_shift(
+    match_id: str,
+    body: CancelIn | None = None,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Отменить смену, о которой уже договорились.
+
+    Самое частое событие в подработке: человек заболел, заведение передумало,
+    планы поменялись. До этого отмены не было ВООБЩЕ — и оставался ровно один
+    способ: не прийти. То есть честный человек, предупредивший за два дня,
+    получал ту же отметку «неявка», что и пропавший молча, а заведение
+    узнавало обо всём в день смены. Место при этом оставалось занятым, и
+    заменить человека было нельзя.
+
+    Теперь отмена освобождает место (смена возвращается в ленту), вторая
+    сторона получает уведомление сразу, а надёжность профиля страдает только
+    при ПОЗДНЕЙ отмене — когда заменить человека заведение уже не успевает.
+    """
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["id"] not in (m.user_id, m.employer_id):
+        raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
+    if m.status in ("completed", "cancelled"):
+        raise HTTPException(
+            status_code=409,
+            detail="Смену уже нельзя отменить: она закрыта или отменена.",
+        )
+    if m.seeker_checked_in or m.employer_checked_in:
+        raise HTTPException(
+            status_code=409,
+            detail="Смена уже началась — отмена не поможет. "
+                   "Напишите в чат или откройте спор.",
+        )
+
+    who = "seeker" if principal["id"] == m.user_id else "employer"
+    reason = (body.reason.strip() if body else "")[:200]
+
+    # Поздняя отмена — та, после которой заведение уже не успеет найти замену.
+    late = False
+    v = db.get(Vacancy, m.vacancy_id)
+    if v is not None:
+        try:
+            start = shift_start_utc(v.date, v.start_time)
+            hours_left = (start - datetime.now(UTC)).total_seconds() / 3600
+            late = hours_left < settings.late_cancel_hours
+        except (ValueError, TypeError):
+            late = False
+
+    m.status = "cancelled"
+    m.cancelled_by = who
+    m.cancel_reason = reason
+    m.cancelled_late = late
+
+    label = "работник" if who == "seeker" else "заведение"
+    tail = f" Причина: {reason}" if reason else ""
+    _sys(db, m.id, f"Смена отменена ({label}).{tail}")
+    other = m.employer_id if who == "seeker" else m.user_id
+    notify_owner(
+        db, other,
+        ("Работник отказался от смены." if who == "seeker"
+         else "Заведение отменило смену.")
+        + (f" Причина: {reason}" if reason else "")
+        + (" Место снова свободно — смена вернулась в ленту."
+           if who == "seeker" else ""),
+    )
+    db.commit()
+    db.refresh(m)
+    return _to_out(db, m, principal["role"])
 
 
 @router.post("/{match_id}/resolve", response_model=MatchOut)

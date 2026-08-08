@@ -1,7 +1,7 @@
 """Лента кандидатов для работодателя."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Integer, case, func, or_
+from sqlalchemy import Integer, and_, case, func, or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -46,15 +46,31 @@ def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]
         db.query(
             Match.user_id,
             func.count(Match.id),
-            func.sum(func.cast(Match.no_show, Integer)),
+            # «Подвёл» = неявка или поздняя отмена: для заведения разницы нет.
+            func.sum(func.cast(
+                or_(Match.no_show.is_(True), Match.cancelled_late.is_(True)),
+                Integer,
+            )),
         )
         .filter(
             Match.user_id.in_(user_ids),
-            # Надёжность считаем по РЕАЛЬНЫМ сменам: закрытая (completed = вышел)
-            # ИЛИ зафиксированная неявка (no_show). Голый confirmed без отметки
-            # не в счёт — иначе «вышел на N смен» накручивается фиктивными мэтчами.
-            # Накрутить хорошую статистику через no_show нельзя: он её ухудшает.
-            or_(Match.status == "completed", Match.no_show.is_(True)),
+            # Надёжность считаем по РЕАЛЬНЫМ сменам: закрытая (completed = вышел),
+            # зафиксированная неявка (no_show) ИЛИ поздняя отмена работником.
+            # Голый confirmed без отметки не в счёт — иначе «вышел на N смен»
+            # накручивается фиктивными мэтчами. Накрутить хорошую статистику
+            # через неявку нельзя: она её ухудшает.
+            #
+            # Ранняя отмена в статистику НЕ попадает вообще, и это принципиально:
+            # человек, предупредивший за два дня, дал заведению время найти
+            # замену — наказывать его не за что. Наказывается только поздняя
+            # отмена, после которой замену уже не найти.
+            or_(
+                Match.status == "completed",
+                Match.no_show.is_(True),
+                and_(Match.status == "cancelled",
+                     Match.cancelled_by == "seeker",
+                     Match.cancelled_late.is_(True)),
+            ),
         )
         .group_by(Match.user_id)
         .all()

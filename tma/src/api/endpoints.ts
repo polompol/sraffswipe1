@@ -168,6 +168,24 @@ export async function checkinShift(
   return data;
 }
 
+/**
+ * Отменить смену, о которой договорились.
+ *
+ * Заболел, передумал, планы поменялись — самое частое событие в подработке.
+ * Раньше выхода не было: оставалось просто не прийти, и человек получал
+ * отметку «неявка» наравне с теми, кто пропал молча.
+ */
+export async function cancelShift(
+  matchId: string,
+  reason = "",
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  const { data } = await api.post<MatchModel>(`/matches/${matchId}/cancel`, {
+    reason,
+  });
+  return data;
+}
+
 /** Спор по смене («был/пришёл, но не могу подтвердить») → к оператору. */
 export async function disputeShift(
   matchId: string,
