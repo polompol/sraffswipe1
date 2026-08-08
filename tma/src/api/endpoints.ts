@@ -186,6 +186,52 @@ export async function cancelShift(
   return data;
 }
 
+/**
+ * Заведение указывает фактическую длительность смены.
+ *
+ * Опоздал, ушёл раньше, задержался — оплата и комиссия считаются по факту.
+ * Работник видит изменение в чате и может открыть спор.
+ */
+export async function setActualHours(
+  matchId: string,
+  minutes: number,
+  note = "",
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  const { data } = await api.post<MatchModel>(`/matches/${matchId}/hours`, {
+    minutes,
+    note,
+  });
+  return data;
+}
+
+/** Заведение предлагает перенести смену. Работник соглашается или нет. */
+export async function proposeReschedule(
+  matchId: string,
+  date: string,
+  startTime: number,
+  endTime: number,
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/reschedule`,
+    { date, start_time: startTime, end_time: endTime },
+  );
+  return data;
+}
+
+export async function answerReschedule(
+  matchId: string,
+  accept: boolean,
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/reschedule/${accept ? "accept" : "decline"}`,
+    {},
+  );
+  return data;
+}
+
 /** Спор по смене («был/пришёл, но не могу подтвердить») → к оператору. */
 export async function disputeShift(
   matchId: string,

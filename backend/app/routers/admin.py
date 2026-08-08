@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -542,6 +542,73 @@ class RepeatPairOut(BaseModel):
     employer: str
     worker: str
     shifts: int
+
+
+class CancelStatRow(BaseModel):
+    ownerId: str
+    name: str
+    role: str            # employer|seeker
+    cancels: int         # всего отмен
+    lateCancels: int     # из них поздних
+    noShows: int         # неявок (для работника)
+
+
+@router.get("/cancel-stats", response_model=list[CancelStatRow])
+def cancel_stats(
+    days: int = 60,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Кто систематически отменяет смены.
+
+    Одна отмена — жизнь. Пять поздних отмен за месяц — это уже поведение,
+    из-за которого страдает вторая сторона: заведение остаётся без людей, а
+    люди приезжают зря. Раньше такой паттерн можно было заметить только
+    случайно, разбирая жалобы поштучно.
+
+    Отдельно считаем поздние отмены: ранние — нормальная часть работы и сами
+    по себе ни о чём не говорят.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    since = datetime.now(UTC) - timedelta(days=max(1, min(days, 365)))
+    rows = (
+        db.query(Match)
+        .filter(
+            Match.created_at >= since,
+            or_(Match.status == "cancelled", Match.no_show.is_(True)),
+        )
+        .all()
+    )
+    agg: dict[tuple[str, str], dict] = {}
+    for m in rows:
+        if m.status == "cancelled" and m.cancelled_by:
+            key = (
+                m.user_id if m.cancelled_by == "seeker" else m.employer_id,
+                m.cancelled_by,
+            )
+            st = agg.setdefault(key, {"cancels": 0, "late": 0, "no_shows": 0})
+            st["cancels"] += 1
+            st["late"] += 1 if m.cancelled_late else 0
+        if m.no_show:
+            key = (m.user_id, "seeker")
+            st = agg.setdefault(key, {"cancels": 0, "late": 0, "no_shows": 0})
+            st["no_shows"] += 1
+
+    out: list[CancelStatRow] = []
+    for (owner_id, role), st in agg.items():
+        obj = (db.get(User, owner_id) if role == "seeker"
+               else db.get(Employer, owner_id))
+        name = (getattr(obj, "name", None)
+                or getattr(obj, "company_name", None) or "—")
+        out.append(CancelStatRow(
+            ownerId=owner_id, name=name, role=role,
+            cancels=st["cancels"], lateCancels=st["late"],
+            noShows=st["no_shows"],
+        ))
+    # Сначала те, кто подводит чаще: поздние отмены и неявки весомее ранних.
+    out.sort(key=lambda r: -(r.lateCancels * 2 + r.noShows * 2 + r.cancels))
+    return out[:50]
 
 
 @router.get("/repeat-pairs", response_model=list[RepeatPairOut])

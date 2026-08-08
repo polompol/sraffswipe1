@@ -199,6 +199,12 @@ export interface MatchModel {
   role?: StaffRole;
   checkinCode?: string | null; // виден только заведению (помощник)
   checkedIn?: boolean; // смена закрыта (обе стороны подтвердили)
+  /** Предложенный перенос: дата и время, если заведение его предложило. */
+  rescheduleDate?: string;
+  rescheduleStart?: number | null;
+  rescheduleEnd?: number | null;
+  /** Фактическая длительность смены в минутах, если она отличалась. */
+  actualMinutes?: number | null;
   seekerCheckedIn?: boolean;
   employerCheckedIn?: boolean;
   disputed?: boolean;

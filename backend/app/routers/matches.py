@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -68,13 +68,24 @@ def _fmt_date(iso: str) -> str:
         return iso
 
 
-def _shift_pay(v: Vacancy) -> int:
-    """Оплата смены, ₽ (зеркало estimatedPay в TMA)."""
-    if v.rate_type == "perShift":
-        return v.rate
+def _planned_minutes(v: Vacancy) -> int:
     mins = v.end_time - v.start_time
     if mins <= 0:
         mins += 1440  # ночная смена через полночь
+    return mins
+
+
+def _shift_pay(v: Vacancy, actual_minutes: int | None = None) -> int:
+    """Оплата смены, ₽ (зеркало estimatedPay в TMA).
+
+    actual_minutes — фактическая длительность, если смена разошлась с
+    объявленной: человек опоздал, ушёл раньше или задержался. Почасовая
+    оплата считается по факту, посменная — нет: там договорились на смену
+    целиком, и часы значения не имеют.
+    """
+    if v.rate_type == "perShift":
+        return v.rate
+    mins = actual_minutes if actual_minutes is not None else _planned_minutes(v)
     return round(v.rate * mins / 60)
 
 
@@ -89,7 +100,7 @@ def _accrue_commission(db: Session, m: Match) -> None:
     v = db.get(Vacancy, m.vacancy_id)
     if v is None:
         return
-    pay = _shift_pay(v)
+    pay = _shift_pay(v, m.actual_minutes)
     # Округляем половину ВВЕРХ, а не «к чётному», как делает round(): при
     # комиссии 282.5 ₽ он давал 282, а при 283.5 — 284. Объяснить заведению
     # такую логику невозможно, а копейки в бухгалтерии всплывают.
@@ -186,7 +197,7 @@ def _to_out(
     # vac передают заранее, когда мэтчей много: иначе на каждую строку списка
     # уходил отдельный запрос за сменой (25 мэтчей = 27 запросов).
     v = vac if vac is not None else db.get(Vacancy, m.vacancy_id)
-    pay = _shift_pay(v) if v is not None else 0
+    pay = _shift_pay(v, m.actual_minutes) if v is not None else 0
     return MatchOut(
         id=m.id,
         user_id=m.user_id,
@@ -314,6 +325,234 @@ def dispute(
 
 class ResolveMatchIn(BaseModel):
     outcome: str  # "completed" | "no_show"
+
+
+class HoursIn(BaseModel):
+    # Фактическая длительность в минутах: 30 минут — минимум осмысленной
+    # смены, 16 часов — потолок, дальше это уже не подработка.
+    minutes: Annotated[int, Field(ge=30, le=960)]
+    note: Annotated[str, StringConstraints(max_length=200)] = ""
+
+
+@router.post(
+    "/{match_id}/hours",
+    response_model=MatchOut,
+    dependencies=[Depends(rate_limit("hours", 20, 3600))],
+)
+def set_actual_hours(
+    match_id: str,
+    body: HoursIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Заведение указывает фактическую длительность смены.
+
+    Человек опоздал на час, ушёл раньше или, наоборот, задержался — оплата и
+    комиссия должны считаться по факту, а не по объявлению. Раньше это
+    решалось только перепиской и ручной правкой оператора.
+
+    Работник ВИДИТ изменение: оно попадает в чат смены и приходит
+    уведомлением. Молча уменьшать оплату нельзя — это прямой путь к
+    «сервис на стороне заведений». Не согласен — кнопка «Проблема» рядом.
+
+    Почасовая оплата пересчитывается, посменная — нет: там договорились на
+    смену целиком. Комиссию пересчитываем, только пока она не оплачена.
+    """
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["role"] != "employer" or principal["id"] != m.employer_id:
+        raise HTTPException(status_code=403, detail="Только работодатель смены")
+    if m.status not in ("confirmed", "completed"):
+        raise HTTPException(
+            status_code=400,
+            detail="Часы указываются по подтверждённой или закрытой смене",
+        )
+    v = db.get(Vacancy, m.vacancy_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="Смена не найдена")
+
+    planned = _planned_minutes(v)
+    m.actual_minutes = body.minutes
+    new_pay = _shift_pay(v, body.minutes)
+
+    # Пересчитываем комиссию, если она ещё не оплачена: с оплаченной так
+    # делать нельзя — деньги уже прошли, это работа оператора.
+    c = db.query(Commission).filter(Commission.match_id == m.id).first()
+    if c is not None and c.status == "pending":
+        fee = int(
+            (Decimal(new_pay) * settings.commission_pct / 100).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
+        c.shift_pay = new_pay
+        c.amount = max(settings.commission_min_rub, fee)
+
+    hours = body.minutes / 60
+    word = "меньше" if body.minutes < planned else "больше"
+    tail = f" Комментарий: {body.note}" if body.note else ""
+    _sys(
+        db, m.id,
+        f"Заведение указало фактическую длительность: {hours:.1f} ч "
+        f"({word} объявленных {planned / 60:.1f} ч). "
+        f"Оплата по ставке — {new_pay} ₽.{tail} "
+        "Не согласны — нажмите «Проблема», разберёт оператор.",
+    )
+    notify_owner(
+        db, m.user_id,
+        f"По смене указана фактическая длительность {hours:.1f} ч, "
+        f"оплата {new_pay} ₽. Если это не так — откройте спор в чате смены.",
+    )
+    db.commit()
+    db.refresh(m)
+    return _to_out(db, m, principal["role"], vac=v)
+
+
+class RescheduleIn(BaseModel):
+    date: Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    start_time: Annotated[int, Field(ge=0, le=1440)]
+    end_time: Annotated[int, Field(ge=0, le=1440)]
+
+
+@router.post(
+    "/{match_id}/reschedule",
+    response_model=MatchOut,
+    dependencies=[Depends(rate_limit("reschedule", 10, 3600))],
+)
+def propose_reschedule(
+    match_id: str,
+    body: RescheduleIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Заведение предлагает перенести смену на другой день или время.
+
+    «Выйди не в пятницу, а в субботу» — обычная просьба. Раньше её решали
+    перепиской: заведение снимало смену и публиковало новую, человек искал её
+    заново и мог не найти. Половина договорённостей разваливалась на этом шаге.
+
+    Перенос — именно ПРЕДЛОЖЕНИЕ: условия смены человек уже принял, и менять
+    их односторонне нельзя. Работник соглашается или отказывается.
+    """
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["role"] != "employer" or principal["id"] != m.employer_id:
+        raise HTTPException(status_code=403, detail="Только работодатель смены")
+    if m.status not in ("matched", "confirmed"):
+        raise HTTPException(
+            status_code=409, detail="Переносить можно только предстоящую смену"
+        )
+    if m.seeker_checked_in or m.employer_checked_in:
+        raise HTTPException(status_code=409, detail="Смена уже началась")
+
+    # Переносим саму смену, поэтому на ней не должно быть других людей:
+    # иначе перенос ударил бы по тем, кто ни о чём не договаривался.
+    others = (
+        db.query(Match)
+        .filter(
+            Match.vacancy_id == m.vacancy_id,
+            Match.id != m.id,
+            Match.status.in_(("matched", "confirmed", "completed")),
+        )
+        .count()
+    )
+    if others:
+        raise HTTPException(
+            status_code=409,
+            detail="На эту смену набраны и другие люди — перенести её нельзя. "
+                   "Опубликуйте новую смену на нужную дату.",
+        )
+
+    m.reschedule_date = body.date
+    m.reschedule_start = body.start_time
+    m.reschedule_end = body.end_time
+    _sys(
+        db, m.id,
+        f"Заведение предлагает перенести смену на {_fmt_date(body.date)}, "
+        f"{_fmt_time(body.start_time)}–{_fmt_time(body.end_time)}. "
+        "Работник может согласиться или отказаться.",
+    )
+    notify_owner(
+        db, m.user_id,
+        f"Заведение предлагает перенести смену на {_fmt_date(body.date)} "
+        f"({_fmt_time(body.start_time)}–{_fmt_time(body.end_time)}). "
+        "Откройте чат смены, чтобы согласиться или отказаться.",
+        open_app="Открыть смену",
+    )
+    db.commit()
+    db.refresh(m)
+    return _to_out(db, m, principal["role"])
+
+
+@router.post("/{match_id}/reschedule/accept", response_model=MatchOut)
+def accept_reschedule(
+    match_id: str,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Работник соглашается на перенос — смена меняет дату и время."""
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["role"] != "seeker" or principal["id"] != m.user_id:
+        raise HTTPException(status_code=403, detail="Только работник смены")
+    if not m.reschedule_date:
+        raise HTTPException(status_code=404, detail="Переноса не предлагали")
+
+    v = db.get(Vacancy, m.vacancy_id)
+    if v is None:
+        raise HTTPException(status_code=404, detail="Смена не найдена")
+
+    # Новое время может пересечься с другой сменой человека — предупреждать
+    # поздно, он уже согласился, поэтому просто фиксируем это в чате.
+    v.date = m.reschedule_date
+    v.start_time = m.reschedule_start
+    v.end_time = m.reschedule_end
+    _sys(
+        db, m.id,
+        f"Работник согласился на перенос. Новое время смены: "
+        f"{_fmt_date(v.date)}, {_fmt_time(v.start_time)}–{_fmt_time(v.end_time)}.",
+    )
+    notify_owner(db, m.employer_id,
+                 f"Работник согласился на перенос смены на {_fmt_date(v.date)}.")
+    m.reschedule_date = ""
+    m.reschedule_start = None
+    m.reschedule_end = None
+    db.commit()
+    db.refresh(m)
+    return _to_out(db, m, principal["role"], vac=v)
+
+
+@router.post("/{match_id}/reschedule/decline", response_model=MatchOut)
+def decline_reschedule(
+    match_id: str,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Работник отказывается от переноса — смена остаётся как была.
+
+    Это не отмена: изначальная договорённость в силе. Если заведение
+    настаивает, оно отменяет смену обычной кнопкой и несёт за это те же
+    последствия, что и всегда.
+    """
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if principal["role"] != "seeker" or principal["id"] != m.user_id:
+        raise HTTPException(status_code=403, detail="Только работник смены")
+    if not m.reschedule_date:
+        raise HTTPException(status_code=404, detail="Переноса не предлагали")
+    m.reschedule_date = ""
+    m.reschedule_start = None
+    m.reschedule_end = None
+    _sys(db, m.id, "Работник отказался от переноса — смена остаётся в прежнее время.")
+    notify_owner(db, m.employer_id,
+                 "Работник не может выйти в новое время. Смена остаётся "
+                 "в прежнее; если она вам больше не нужна — отмените её.")
+    db.commit()
+    db.refresh(m)
+    return _to_out(db, m, principal["role"])
 
 
 class CancelIn(BaseModel):

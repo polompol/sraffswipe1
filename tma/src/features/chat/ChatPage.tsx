@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { ShiftConflict, cancelShift, confirmShift, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
+import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
+import { fmtTime } from "@/lib/format";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Button } from "@/components/Button";
@@ -41,6 +42,16 @@ export function ChatPage() {
   // что произошло, а не гадать. Заранее отменённая смена не бьёт по надёжности.
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  // Фактические часы: заведение уточняет длительность, если смена прошла
+  // не как объявляли. Работник это видит и может открыть спор.
+  const [hoursOpen, setHoursOpen] = useState(false);
+  const [hoursValue, setHoursValue] = useState("8");
+  const [hoursNote, setHoursNote] = useState("");
+  // Перенос смены: заведение предлагает, работник отвечает.
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveDate, setMoveDate] = useState("");
+  const [moveStart, setMoveStart] = useState("10:00");
+  const [moveEnd, setMoveEnd] = useState("18:00");
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
@@ -113,6 +124,55 @@ export function ChatPage() {
   function quickReply(t: string) {
     haptic("light");
     void deliver(t);
+  }
+
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  async function saveHours() {
+    const minutes = Math.round(parseFloat(hoursValue.replace(",", ".")) * 60);
+    try {
+      const m = await setActualHours(matchId, minutes, hoursNote.trim());
+      haptic("success");
+      setMatchState(m);
+      setHoursOpen(false);
+      toast("Часы уточнены, работник уведомлён", "success");
+      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+    } catch (e: any) {
+      haptic("error");
+      toast(e?.response?.data?.detail ?? "Не удалось сохранить часы", "error");
+    }
+  }
+
+  async function proposeMove() {
+    try {
+      const m = await proposeReschedule(
+        matchId, moveDate, toMinutes(moveStart), toMinutes(moveEnd));
+      haptic("success");
+      setMatchState(m);
+      setMoveOpen(false);
+      toast("Предложение отправлено работнику", "success");
+      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+    } catch (e: any) {
+      haptic("error");
+      toast(e?.response?.data?.detail ?? "Не удалось предложить перенос", "error");
+    }
+  }
+
+  async function answerMove(accept: boolean) {
+    try {
+      const m = await answerReschedule(matchId, accept);
+      haptic(accept ? "success" : "warning");
+      setMatchState(m);
+      toast(accept ? "Перенос принят" : "Отказ отправлен", "success");
+      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    } catch {
+      haptic("error");
+      toast("Не удалось ответить", "error");
+    }
   }
 
   async function doCancel() {
@@ -245,6 +305,53 @@ export function ChatPage() {
                   : "Подтвердить смену"}
             </span>
           </Button>
+          {/* Заведению: уточнить часы и предложить перенос. Раньше и то и
+              другое решалось перепиской и ручными правками оператора. */}
+          {role === "employer" && match &&
+            !["cancelled", "expired"].includes(match.status) && (
+            <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <button
+                className="tag"
+                style={{ flex: 1, minWidth: 130, cursor: "pointer" }}
+                onClick={() => setHoursOpen(true)}
+              >
+                Уточнить часы
+              </button>
+              {!match.seekerCheckedIn && !match.employerCheckedIn && (
+                <button
+                  className="tag"
+                  style={{ flex: 1, minWidth: 130, cursor: "pointer" }}
+                  onClick={() => setMoveOpen(true)}
+                >
+                  Перенести смену
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Работнику: заведение предложило другой день — надо ответить. */}
+          {role === "seeker" && match?.rescheduleDate && (
+            <div
+              className="card"
+              style={{ marginTop: 8, borderColor: "var(--gold)" }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                Заведение предлагает перенос
+              </div>
+              <p className="muted" style={{ margin: "0 0 10px", fontSize: 14 }}>
+                {match.rescheduleDate}
+                {match.rescheduleStart != null &&
+                  ` · ${fmtTime(match.rescheduleStart)}–${fmtTime(match.rescheduleEnd ?? 0)}`}
+              </p>
+              <div className="row" style={{ gap: 8 }}>
+                <Button onClick={() => answerMove(true)}>Согласен</Button>
+                <Button variant="ghost" onClick={() => answerMove(false)}>
+                  Не смогу
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Отменить можно, пока смена не началась. Без этой кнопки у
               человека оставался один выход — просто не прийти. */}
           {match && !["completed", "cancelled"].includes(match.status) &&
@@ -281,6 +388,88 @@ export function ChatPage() {
           </Button>
         </div>
       </div>
+
+      {hoursOpen && (
+        <div className="sheet-backdrop" onClick={() => setHoursOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="h2" style={{ marginTop: 0 }}>Сколько часов вышло</h2>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              Опоздал, ушёл раньше или задержался — оплата и комиссия
+              пересчитаются по факту. Работник увидит это в чате.
+            </p>
+            <div className="form-label">Часов</div>
+            <input
+              className="input"
+              inputMode="decimal"
+              value={hoursValue}
+              onChange={(e) => setHoursValue(e.target.value)}
+            />
+            <div className="form-label" style={{ marginTop: 12 }}>
+              Комментарий — по желанию
+            </div>
+            <input
+              className="input"
+              maxLength={200}
+              placeholder="Отпустили раньше"
+              value={hoursNote}
+              onChange={(e) => setHoursNote(e.target.value)}
+            />
+            <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+              <Button block onClick={saveHours}>Сохранить</Button>
+              <Button variant="ghost" block onClick={() => setHoursOpen(false)}>
+                Отмена
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moveOpen && (
+        <div className="sheet-backdrop" onClick={() => setMoveOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="h2" style={{ marginTop: 0 }}>Перенести смену</h2>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              Человек уже согласился на прежние условия, поэтому перенос — это
+              предложение: он может не смочь в новое время.
+            </p>
+            <div className="form-label">Новая дата</div>
+            <input
+              className="input"
+              type="date"
+              value={moveDate}
+              onChange={(e) => setMoveDate(e.target.value)}
+            />
+            <div className="row" style={{ gap: 10, marginTop: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div className="form-label">Начало</div>
+                <input
+                  className="input"
+                  type="time"
+                  value={moveStart}
+                  onChange={(e) => setMoveStart(e.target.value)}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="form-label">Конец</div>
+                <input
+                  className="input"
+                  type="time"
+                  value={moveEnd}
+                  onChange={(e) => setMoveEnd(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+              <Button block disabled={!moveDate} onClick={proposeMove}>
+                Предложить перенос
+              </Button>
+              <Button variant="ghost" block onClick={() => setMoveOpen(false)}>
+                Отмена
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cancelOpen && (
         <div className="sheet-backdrop" onClick={() => setCancelOpen(false)}>

@@ -197,6 +197,14 @@ class Match(Base):
     employer_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
     # Спор (стороны не сошлись / работник не может отметиться) → к оператору.
     disputed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Фактическая длительность смены в минутах, если она разошлась с
+    # объявленной: человек опоздал, ушёл раньше или задержался. Пусто —
+    # смена прошла как договаривались, платим по объявлению.
+    actual_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Предложение перенести смену: заведение предлагает, работник соглашается.
+    reschedule_date: Mapped[str] = mapped_column(String, default="")
+    reschedule_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reschedule_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Кто отменил смену: seeker|employer. Пусто — не отменяли.
     # Отмена — не то же самое, что неявка: человек, предупредивший заранее,
     # не должен получать ту же отметку, что и пропавший без предупреждения.
