@@ -1,5 +1,6 @@
 """Мэтчи и подтверждение смены."""
 import secrets
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -70,7 +71,14 @@ def _accrue_commission(db: Session, m: Match) -> None:
     if v is None:
         return
     pay = _shift_pay(v)
-    fee = round(pay * settings.commission_pct / 100)
+    # Округляем половину ВВЕРХ, а не «к чётному», как делает round(): при
+    # комиссии 282.5 ₽ он давал 282, а при 283.5 — 284. Объяснить заведению
+    # такую логику невозможно, а копейки в бухгалтерии всплывают.
+    fee = int(
+        (Decimal(pay) * settings.commission_pct / 100).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+    )
     amount = max(settings.commission_min_rub, fee)
     c = Commission(
         employer_id=m.employer_id, match_id=m.id, shift_pay=pay, amount=amount,
@@ -112,7 +120,10 @@ def _maybe_complete(db: Session, m: Match) -> None:
         _sys(db, m.id, "Обе стороны подтвердили выход ✓ Смена закрыта.")
 
 
-@router.post("/{match_id}/attendance")
+@router.post(
+    "/{match_id}/attendance",
+    dependencies=[Depends(rate_limit("attendance", 30, 60))],
+)
 def mark_attendance(
     match_id: str,
     body: AttendanceIn,
@@ -305,7 +316,11 @@ def resolve_match(
     return _to_out(db, m, principal["role"])
 
 
-@router.post("/{match_id}/confirm", response_model=MatchOut)
+@router.post(
+    "/{match_id}/confirm",
+    response_model=MatchOut,
+    dependencies=[Depends(rate_limit("confirm", 30, 60))],
+)
 def confirm(
     match_id: str,
     db: Session = Depends(get_db),

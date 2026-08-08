@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Match, Referral, Review, User, Vacancy
+from ..ratelimit import rate_limit
 from ..security import current_principal
 
 router = APIRouter(tags=["social"])
@@ -61,7 +62,10 @@ def _recompute_rating(db: Session, ratee_id: str) -> float:
     return rating
 
 
-@router.post("/matches/{match_id}/review")
+@router.post(
+    "/matches/{match_id}/review",
+    dependencies=[Depends(rate_limit("review", 20, 60))],
+)
 def leave_review(
     match_id: str,
     body: ReviewIn,
@@ -251,7 +255,10 @@ class AvailableIn(BaseModel):
     available: bool
 
 
-@router.post("/me/available")
+@router.post(
+    "/me/available",
+    dependencies=[Depends(rate_limit("available", 30, 60))],
+)
 def set_available(
     body: AvailableIn,
     db: Session = Depends(get_db),
@@ -311,7 +318,13 @@ class MeUpdateIn(BaseModel):
     company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
 
-@router.put("/me", response_model=MeOut)
+@router.put(
+    "/me",
+    response_model=MeOut,
+    # Профиль правят редко; без лимита это была ручка для раздувания базы
+    # длинными текстами «о себе».
+    dependencies=[Depends(rate_limit("profile", 20, 60))],
+)
 def update_me(
     body: MeUpdateIn,
     db: Session = Depends(get_db),

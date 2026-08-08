@@ -12,6 +12,19 @@ from ..timeutil import local_today
 
 router = APIRouter(prefix="/activity", tags=["activity"])
 
+# Русские названия должностей для витрины.
+_ROLE_RU = {
+    "waiter": "Официант", "waiter_assistant": "Помощник официанта",
+    "barista": "Бариста", "cook": "Повар", "dishwasher": "Посудомойщик",
+    "hostess": "Хостес", "bartender": "Бармен", "hookah": "Кальянщик",
+    "florist": "Флорист", "administrator": "Администратор",
+    "courier": "Курьер", "cleaner": "Уборщик",
+}
+
+
+def _role_ru(role: str) -> str:
+    return _ROLE_RU.get(role, "Сотрудник")
+
 
 class ActivityItem(BaseModel):
     kind: str  # closed|urgent
@@ -25,13 +38,6 @@ class ActivityOut(BaseModel):
     urgent_today: int  # сколько срочных смен на сегодня
 
 
-def _shift_pay(rate: int, rate_type: str, start: int, end: int) -> int:
-    if rate_type == "perShift":
-        return rate
-    mins = end - start
-    if mins <= 0:
-        mins += 1440
-    return round(rate * mins / 60)
 
 
 def _ago_min(then: datetime) -> int:
@@ -41,9 +47,6 @@ def _ago_min(then: datetime) -> int:
     return max(0, int(delta.total_seconds() // 60))
 
 
-def _first_name(name: str) -> str:
-    """Только имя (без фамилии) — для социального доказательства без лишних ПДн."""
-    return (name or "Кто-то").strip().split(" ")[0] or "Кто-то"
 
 
 @router.get("/recent", response_model=ActivityOut)
@@ -58,22 +61,27 @@ def recent(
     items: list[ActivityItem] = []
 
     # Недавно закрытые смены (подтверждённые/завершённые) — «X получил Y ₽».
+    # Имя работника и название заведения в витрине больше не участвуют,
+    # поэтому и не выбираем их: лишние персональные данные не должны даже
+    # покидать базу.
     closed = (
-        db.query(Match, Vacancy, Employer, User)
+        db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
-        .join(Employer, Match.employer_id == Employer.id)
-        .join(User, Match.user_id == User.id)
         .filter(Match.status.in_(("confirmed", "completed")))
         .order_by(Match.created_at.desc())
         .limit(8)
         .all()
     )
-    for m, v, emp, u in closed:
-        pay = _shift_pay(v.rate, v.rate_type, v.start_time, v.end_time)
+    for m, v in closed:
         items.append(ActivityItem(
             kind="closed",
-            text=f"{_first_name(u.name)} вышел(ла) в «{emp.company_name}» — "
-                 f"{pay:,} ₽".replace(",", " "),
+            # Раньше здесь была связка «имя + заведение + сумма», видная
+            # ЛЮБОМУ вошедшему. На пилоте, где все друг друга знают, это
+            # выдавало занятость конкретного человека и ставки конкретного
+            # заведения. Смысл витрины — показать, что сервис живой; для
+            # этого хватает роли и района.
+            text=f"{_role_ru(v.role)} вышел(ла) на смену"
+                 + (f" · {v.city}" if v.city else ""),
             ago_min=_ago_min(m.created_at),
         ))
 

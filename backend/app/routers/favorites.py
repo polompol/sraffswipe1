@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, Favorite, Vacancy
+from ..ratelimit import rate_limit
 from ..schemas import VacancyOut
 from ..security import current_principal
 
@@ -55,7 +56,9 @@ def list_favorite_ids(
     ]
 
 
-@router.post("/{vacancy_id}")
+@router.post("/{vacancy_id}",
+    dependencies=[Depends(rate_limit("fav", 60, 60))],
+)
 def add_favorite(
     vacancy_id: str,
     db: Session = Depends(get_db),

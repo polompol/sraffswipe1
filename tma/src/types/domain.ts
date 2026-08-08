@@ -229,7 +229,6 @@ export interface PriceItem {
   id: string;
   title: string;
   subtitle: string;
-  priceStars?: number; // XTR
   priceRub?: number; // ₽ (ЮKassa)
   badge?: string;
 }

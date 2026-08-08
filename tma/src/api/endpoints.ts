@@ -753,12 +753,20 @@ export async function uploadPhoto(file: File): Promise<string> {
   if (!USE_BACKEND) {
     throw new Error("Загрузка фото доступна только с backend");
   }
+  // Первые 16 байт файла — проба, по которой сервер проверяет НАСТОЯЩИЙ тип.
+  // Заявленному типу верить нельзя: назвать что угодно «image/jpeg» может кто
+  // угодно, а хранилище содержимое не проверяет.
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const headHex = Array.from(head)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
   const { data } = await api.post<{
     upload_url: string;
     fields: Record<string, string>;
     public_url: string;
     max_bytes: number;
-  }>("/uploads/photo-url", { content_type: file.type });
+  }>("/uploads/photo-url", { content_type: file.type, head_hex: headHex });
 
   if (file.size > data.max_bytes) {
     throw new Error(

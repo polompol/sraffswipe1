@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import SavedSearch, Vacancy
 from ..notify import notify_owner
+from ..ratelimit import rate_limit
 from ..security import current_principal
 
 router = APIRouter(prefix="/saved-searches", tags=["saved-searches"])
@@ -53,7 +54,12 @@ def list_searches(
     return [_to_out(s) for s in rows]
 
 
-@router.post("", response_model=SavedSearchOut, status_code=201)
+@router.post(
+    "",
+    response_model=SavedSearchOut,
+    status_code=201,
+    dependencies=[Depends(rate_limit("saved-search", 20, 60))],
+)
 def create_search(
     body: SavedSearchIn,
     db: Session = Depends(get_db),

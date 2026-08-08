@@ -900,8 +900,6 @@ def erase_account(
         target.birth_date = ""
         target.city = ""
         target.district = ""
-        target.lat = 0.0
-        target.lng = 0.0
         target.roles = ""
         target.med_book = "no"
         target.self_employed = False

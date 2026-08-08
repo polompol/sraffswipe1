@@ -100,7 +100,6 @@ def test_erase_wipes_profile_but_keeps_shift_history(client):
         assert u.tg_id is None                    # войти в аккаунт больше нельзя
         assert not u.phone.startswith("tg:")
         assert u.blocked is True
-        assert u.lat == 0.0 and u.lng == 0.0
 
         assert db.get(Match, mid) is not None     # смена сохранилась
         texts = [m.text for m in db.query(Message).filter(

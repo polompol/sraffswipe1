@@ -41,8 +41,12 @@ class User(Base):
     birth_date: Mapped[str] = mapped_column(String, default="")  # ISO yyyy-mm-dd
     city: Mapped[str] = mapped_column(String, default="")
     district: Mapped[str] = mapped_column(String, default="")
-    lat: Mapped[float] = mapped_column(Float, default=0.0)
-    lng: Mapped[float] = mapped_column(Float, default=0.0)
+    # Координат жилья здесь НЕТ и быть не должно. Поля lat/lng существовали,
+    # но их никто не заполнял и не читал: расстояние до смены считается от
+    # координат телефона, которые приходят в запросе и нигде не сохраняются.
+    # Мёртвое поле с таким смыслом — ловушка: рано или поздно в него начали бы
+    # писать настоящий адрес человека. Принцип минимизации 152-ФЗ: не хранить
+    # то, что не нужно.
     roles: Mapped[str] = mapped_column(String, default="")  # csv: waiter,barista
     med_book: Mapped[str] = mapped_column(String, default="no")  # yes|no|expired
     self_employed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -278,7 +282,10 @@ class Purchase(Base):
     sku: Mapped[str] = mapped_column(String)
     provider: Mapped[str] = mapped_column(String)  # yookassa
     amount: Mapped[int] = mapped_column(Integer, default=0)
-    currency: Mapped[str] = mapped_column(String, default="XTR")
+    # Рубли: единственный рельс — ЮKassa. Раньше по умолчанию стояло "XTR"
+    # (Telegram Stars) — остаток от удалённой механики, который вводил в
+    # заблуждение любого, кто откроет таблицу платежей.
+    currency: Mapped[str] = mapped_column(String, default="RUB")
     # pending|paid|failed
     status: Mapped[str] = mapped_column(String, default="pending")
     provider_charge_id: Mapped[str | None] = mapped_column(
