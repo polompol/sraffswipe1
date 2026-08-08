@@ -45,6 +45,20 @@ services:
       timeout: 5s
       retries: 10
 
+  # Общее состояние процессов приложения: счётчики частоты и раздача чата.
+  # Наружу не выставлен — только внутренняя сеть compose.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Данные не переживают перезапуск намеренно: там только счётчики частоты
+    # и транзитные сообщения чата. Переписка хранится в PostgreSQL.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   # FastAPI. При старте прогоняет миграции и проверяет безопасность конфига
   # (DEV_MODE=false → требует заданные секреты, иначе не поднимется).
   api:
@@ -71,10 +85,16 @@ services:
       S3_SECRET: ${S3_SECRET:-}
       S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # Общее состояние процессов. Без него WEB_CONCURRENCY обязан быть 1.
+      REDIS_URL: redis://redis:6379/0
+      # Число рабочих процессов. Больше 1 безопасно только с Redis выше.
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
       # Часовой пояс смен: сервер в UTC, а «10:00–18:00» — местное время.
       BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   # Telegram-бот: кнопка запуска Mini App и уведомления.

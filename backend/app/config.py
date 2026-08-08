@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # URL из логов ограничен вебхуком и не открывает /fulfill. Пусто → fallback.
     yookassa_webhook_secret: str = ""
 
+    # Общая память для нескольких процессов: счётчики частоты и раздача
+    # сообщений чата. Пусто — всё живёт в памяти процесса, и тогда
+    # WEB_CONCURRENCY обязан быть 1. Пример: redis://redis:6379/0
+    redis_url: str = ""
+
     # Разрешённые источники CORS (csv). Пусто + dev_mode → "*"; иначе — mini_app_url.
     allowed_origins: str = ""
 

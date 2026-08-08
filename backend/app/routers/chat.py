@@ -1,7 +1,16 @@
-"""Чат: REST для истории + WebSocket для real-time (в проде — Redis pub/sub)."""
+"""Чат: REST для истории + WebSocket для real-time.
+
+Между процессами сообщения расходятся через Redis (см. ConnectionManager);
+без Redis — раздача внутри процесса, как раньше.
+"""
+import asyncio
+import json
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
+from .. import redisclient
 from ..db import SessionLocal, get_db
 from ..models import Match, Message
 from ..notify import notify_owner
@@ -12,6 +21,8 @@ from ..security import (
     decode_token,
     ensure_token_usable,
 )
+
+_log = logging.getLogger("staffswipe")
 
 router = APIRouter(tags=["chat"])
 
@@ -85,13 +96,51 @@ async def send(
 
 
 class ConnectionManager:
-    """Простой in-memory брокер WebSocket-комнат по match_id."""
+    """Комнаты чата по match_id.
+
+    Сокеты живут в памяти того процесса, который их держит, — иначе никак.
+    А вот РАЗДАЧА сообщения идёт через Redis: процесс публикует сообщение в
+    общий канал, и каждый процесс отдаёт его своим сокетам. Без этого два
+    человека в одном чате, попавшие на разные процессы, не видели бы друг
+    друга — поэтому до сих пор и стояло ограничение «один воркер».
+
+    Без Redis всё работает как раньше: раздача внутри процесса.
+    """
+
+    CHANNEL = "chat:broadcast"
 
     def __init__(self) -> None:
         self._rooms: dict[str, list[WebSocket]] = {}
+        self._listener = None       # задача-подписчик, одна на процесс
+
+    async def _ensure_listener(self) -> None:
+        """Подписчик на общий канал. Поднимается лениво — при первом чате."""
+        if self._listener is not None:
+            return
+        client = await redisclient.async_client()
+        if client is None:
+            return
+        self._listener = asyncio.create_task(self._listen(client))
+
+    async def _listen(self, client) -> None:
+        try:
+            pubsub = client.pubsub(ignore_subscribe_messages=True)
+            await pubsub.subscribe(self.CHANNEL)
+            async for msg in pubsub.listen():
+                try:
+                    payload = json.loads(msg["data"])
+                    await self._deliver_local(payload["match_id"], payload["data"])
+                except Exception:  # noqa: BLE001 — битое сообщение не рвёт подписку
+                    continue
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("Подписка чата на Redis прервалась: %s", exc)
+            self._listener = None   # следующий чат попробует подписаться заново
 
     async def connect(self, match_id: str, ws: WebSocket) -> None:
         await ws.accept()
+        await self._ensure_listener()
         self._rooms.setdefault(match_id, []).append(ws)
 
     def disconnect(self, match_id: str, ws: WebSocket) -> None:
@@ -103,7 +152,8 @@ class ConnectionManager:
         if not room:
             self._rooms.pop(match_id, None)
 
-    async def broadcast(self, match_id: str, data: dict) -> None:
+    async def _deliver_local(self, match_id: str, data: dict) -> None:
+        """Отдать сообщение сокетам ЭТОГО процесса."""
         dead: list[WebSocket] = []
         for ws in list(self._rooms.get(match_id, [])):
             try:
@@ -112,6 +162,23 @@ class ConnectionManager:
                 dead.append(ws)
         for ws in dead:
             self.disconnect(match_id, ws)
+
+    async def broadcast(self, match_id: str, data: dict) -> None:
+        client = await redisclient.async_client()
+        if client is None:
+            await self._deliver_local(match_id, data)
+            return
+        try:
+            # Публикуем всем процессам, включая себя: свои сокеты получат
+            # сообщение через подписку, дубля не будет.
+            await client.publish(
+                self.CHANNEL,
+                json.dumps({"match_id": match_id, "data": data},
+                           ensure_ascii=False),
+            )
+        except Exception as exc:  # noqa: BLE001 — Redis упал: отдаём хотя бы своим
+            _log.warning("Не удалось разослать сообщение через Redis: %s", exc)
+            await self._deliver_local(match_id, data)
 
 
 manager = ConnectionManager()

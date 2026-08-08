@@ -25,6 +25,9 @@ services:
     environment:
       # Значения берутся из backend/.env (скопируйте из .env.example).
       DATABASE_URL: postgresql+psycopg://staffswipe:staffswipe@db:5432/staffswipe
+      # Контейнер Redis тут стоял и раньше, но приложение к нему не
+      # подключалось — крутился впустую. Теперь используется.
+      REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       # Для прода DEV_MODE=false (тогда нужны валидные секреты — защита от
       # небезопасного запуска). Для локальной отладки поставьте true.
