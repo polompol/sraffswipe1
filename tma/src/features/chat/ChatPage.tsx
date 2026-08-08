@@ -386,7 +386,7 @@ export function ChatPage() {
 
       {troubleOpen && (
         <div className="sheet-backdrop" onClick={() => setTroubleOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
             <h2 className="h2" style={{ marginTop: 0 }}>Что-то пошло не так</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
               Планы меняются — это нормально. Главное, чтобы вторая сторона
@@ -439,7 +439,7 @@ export function ChatPage() {
 
       {hoursOpen && (
         <div className="sheet-backdrop" onClick={() => setHoursOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
             <h2 className="h2" style={{ marginTop: 0 }}>Сколько часов вышло</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
               Опоздал, ушёл раньше или задержался — оплата и комиссия
@@ -474,7 +474,7 @@ export function ChatPage() {
 
       {moveOpen && (
         <div className="sheet-backdrop" onClick={() => setMoveOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
             <h2 className="h2" style={{ marginTop: 0 }}>Перенести смену</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
               Человек уже согласился на прежние условия, поэтому перенос — это
@@ -521,7 +521,7 @@ export function ChatPage() {
 
       {cancelOpen && (
         <div className="sheet-backdrop" onClick={() => setCancelOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
             <h2 className="h2" style={{ marginTop: 0 }}>Отменить смену?</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
               Вторая сторона получит уведомление сразу. Чем раньше
@@ -549,7 +549,7 @@ export function ChatPage() {
 
       {conflict && (
         <div className="sheet-backdrop" onClick={() => setConflict(null)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
             <h2 className="h2" style={{ marginTop: 0 }}>Смены пересекаются</h2>
             <p className="muted" style={{ marginBottom: 16 }}>{conflict}</p>
             <div style={{ display: "grid", gap: 10 }}>

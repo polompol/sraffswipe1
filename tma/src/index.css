@@ -410,6 +410,11 @@ button.tag:disabled {
   background: var(--surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
+.sheet-pad {
+  /* Простая шторка без прокручиваемого тела: отступы задаём ей самой,
+     иначе текст упирается в края экрана. */
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+}
 .sheet-grab {
   width: 40px;
   height: 5px;

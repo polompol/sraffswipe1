@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
@@ -216,6 +216,11 @@ function EmployerVerify() {
 function AvailabilityCard({ initial }: { initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
+
+  // Профиль приходит с сервера уже после первой отрисовки, и без этой
+  // синхронизации тумблер навсегда оставался выключенным: человек включал
+  // доступность, возвращался в профиль — и видел «выключено».
+  useEffect(() => setOn(initial), [initial]);
 
   async function toggle() {
     const next = !on;
