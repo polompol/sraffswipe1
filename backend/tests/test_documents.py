@@ -156,3 +156,45 @@ def test_invoice_requires_a_token(client, requisites):
     assert client.get("/billing/invoice.pdf").status_code == 401
     assert client.get("/billing/invoice.pdf",
                       params={"token": "мусор"}).status_code == 401
+
+
+def test_act_is_issued_for_paid_commission_too(client, requisites):
+    """Заведение с балансом получает акт.
+
+    Комиссия у такого заведения списывается сразу и помечается оплаченной.
+    Сначала акт собирался из тех же НЕоплаченных начислений, что и счёт, —
+    и получалось наоборот: тот, кто заплатил, акт получить не мог, хотя
+    именно ему он и нужен для расходов.
+    """
+    from app.db import SessionLocal
+    from app.models import Commission
+
+    token, eid = _employer_with_debt(client)
+    db = SessionLocal()
+    try:
+        for c in db.query(Commission).filter(Commission.employer_id == eid):
+            c.status = "paid"
+        db.commit()
+    finally:
+        db.close()
+
+    # Счёт выставлять не за что — всё оплачено.
+    assert client.get("/billing/invoice.pdf",
+                      params={"token": token}).status_code == 404
+    # А акт обязан быть.
+    r = client.get("/billing/act.pdf", params={"token": token})
+    assert r.status_code == 200, "акт не выдан заведению, которое заплатило"
+
+
+def test_act_period_must_be_valid(client, requisites):
+    token, _ = _employer_with_debt(client)
+    r = client.get("/billing/act.pdf",
+                   params={"token": token, "period": "август"})
+    assert r.status_code == 400
+
+
+def test_act_for_a_month_without_shifts_is_404(client, requisites):
+    token, _ = _employer_with_debt(client)
+    r = client.get("/billing/act.pdf",
+                   params={"token": token, "period": "2020-01"})
+    assert r.status_code == 404

@@ -7,6 +7,7 @@
 """
 import base64
 import json
+import re
 import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -58,14 +59,16 @@ def get_entitlements(
     )
 
 
-def _document_response(kind: str, db: Session, employer_id: str) -> Response:
+def _document_response(
+    kind: str, db: Session, employer_id: str, period: str = ""
+) -> Response:
     """Счёт или акт в PDF. Общая обработка отказов для обеих ручек."""
     from ..documents import RequisitesMissing, act_pdf, invoice_pdf
 
     try:
         data, filename = (
             invoice_pdf(db, employer_id) if kind == "invoice"
-            else act_pdf(db, employer_id)
+            else act_pdf(db, employer_id, period)
         )
     except RequisitesMissing:
         raise HTTPException(
@@ -104,16 +107,22 @@ def commission_invoice(
 @router.get("/act.pdf")
 def commission_act(
     token: str = "",
+    period: str = "",
     db: Session = Depends(get_db),
 ):
-    """Акт оказанных услуг — чтобы заведение поставило расход."""
+    """Акт оказанных услуг за месяц — чтобы заведение поставило расход.
+
+    period — «ГГГГ-ММ»; по умолчанию текущий месяц.
+    """
     principal = decode_token(token)
     if principal is None:
         raise HTTPException(status_code=401, detail="Нужен токен")
     ensure_token_usable(db, principal)
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
-    return _document_response("act", db, principal["id"])
+    if period and not re.fullmatch(r"\d{4}-\d{2}", period):
+        raise HTTPException(status_code=400, detail="Период в формате ГГГГ-ММ")
+    return _document_response("act", db, principal["id"], period)
 
 
 def commission_overdue(db: Session, employer_id: str) -> bool:

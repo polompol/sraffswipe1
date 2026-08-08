@@ -65,11 +65,38 @@ def doc_number(prefix: str, employer_id: str, period: str) -> str:
 
 
 def _pending(db: Session, employer_id: str) -> list[Commission]:
+    """Начисления к оплате — из них складывается СЧЁТ."""
     return (
         db.query(Commission)
         .filter(
             Commission.employer_id == employer_id,
             Commission.status == "pending",
+        )
+        .order_by(Commission.created_at)
+        .all()
+    )
+
+
+def _for_period(
+    db: Session, employer_id: str, period: str
+) -> list[Commission]:
+    """Все начисления за месяц — из них складывается АКТ.
+
+    Именно все, а не только неоплаченные. Акт подтверждает, что услуга
+    оказана, и нужен заведению для расходов — то есть в первую очередь по
+    ОПЛАЧЕННЫМ смемам. Сначала акт собирался из тех же неоплаченных, что и
+    счёт, и получалось наоборот: заведение с балансом (комиссия списывается
+    сразу и помечается оплаченной) не могло получить акт вообще.
+    """
+    start = f"{period}-01"
+    year, month = (int(x) for x in period.split("-"))
+    end = f"{year + (month // 12)}-{(month % 12) + 1:02d}-01"
+    return (
+        db.query(Commission)
+        .filter(
+            Commission.employer_id == employer_id,
+            Commission.created_at >= datetime.fromisoformat(start),
+            Commission.created_at < datetime.fromisoformat(end),
         )
         .order_by(Commission.created_at)
         .all()
@@ -210,18 +237,23 @@ def invoice_pdf(db: Session, employer_id: str) -> tuple[bytes, str]:
     return bytes(pdf.output()), f"schet_{number}.pdf"
 
 
-def act_pdf(db: Session, employer_id: str) -> tuple[bytes, str]:
-    """Акт оказанных услуг за закрытые смены (для расходов заведения)."""
+def act_pdf(
+    db: Session, employer_id: str, period: str = ""
+) -> tuple[bytes, str]:
+    """Акт оказанных услуг за месяц (для расходов заведения).
+
+    period — «ГГГГ-ММ»; по умолчанию текущий месяц. Акты закрывают период,
+    поэтому чаще всего нужен именно прошлый месяц.
+    """
     if not settings.org_ready:
         raise RequisitesMissing
     emp = db.get(Employer, employer_id)
     if emp is None:
         raise LookupError("Заведение не найдено")
-    items = _pending(db, employer_id)
+    period = period or _period_label()
+    items = _for_period(db, employer_id, period)
     if not items:
-        raise LookupError("Нет закрытых смен для акта")
-
-    period = _period_label()
+        raise LookupError("За этот месяц закрытых смен нет — акт пустой")
     number = doc_number("act", employer_id, period)
     total = sum(c.amount for c in items)
 
