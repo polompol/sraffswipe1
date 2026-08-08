@@ -291,6 +291,9 @@ button.tag:disabled {
 .input {
   width: 100%;
   min-height: 50px;
+  /* Браузер по умолчанию рисует textarea моноширинным шрифтом: «о себе» и
+     описание смены выглядели как кусок кода. Наследуем шрифт приложения. */
+  font-family: inherit;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius-sm);

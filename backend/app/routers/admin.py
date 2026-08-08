@@ -51,7 +51,10 @@ class Overview(BaseModel):
     likes: int
     matches: int
     openReports: int
-    activeSubscriptions: int
+    # Закрытые смены — главная цифра сервиса: только с них берётся комиссия.
+    # Раньше на её месте было число активных подписок, которое всегда равно
+    # нулю: подписок в продукте нет.
+    completedShifts: int
 
 
 @router.get("/overview", response_model=Overview)
@@ -71,8 +74,8 @@ def overview(db: Session = Depends(get_db), _admin: dict = Depends(require_admin
         .filter(Report.status == "open")
         .scalar()
         or 0,
-        activeSubscriptions=db.query(func.count(Subscription.id))
-        .filter(Subscription.active.is_(True))
+        completedShifts=db.query(func.count(Match.id))
+        .filter(Match.status == "completed")
         .scalar()
         or 0,
     )
@@ -124,6 +127,29 @@ class ReportOut(BaseModel):
     createdAt: str
 
 
+# Должности в админке — по-русски. В базе они лежат латиницей (waiter,
+# barista…), и оператор видел в жалобах «waiter · 300₽»: читать это в спешке
+# неудобно, а панель — русскоязычная, как и всё остальное в проекте.
+ROLE_RU = {
+    "waiter": "Официант",
+    "runner": "Помощник официанта",
+    "hostess": "Хостес",
+    "manager": "Администратор",
+    "barista": "Бариста",
+    "bartender": "Бармен",
+    "hookah": "Кальянщик",
+    "cook": "Повар",
+    "dishwasher": "Посудомой",
+    "cleaner": "Уборщик",
+    "courier": "Курьер",
+    "florist": "Флорист",
+}
+
+
+def role_ru(role: str) -> str:
+    return ROLE_RU.get(role, role)
+
+
 def _describe_target(db: Session, target_type: str, target_id: str) -> str:
     """Человекочитаемое описание цели жалобы — чтобы админ видел контент."""
     if target_type == "vacancy":
@@ -131,7 +157,7 @@ def _describe_target(db: Session, target_type: str, target_id: str) -> str:
         if v is None:
             return "вакансия удалена"
         emp = db.get(Employer, v.employer_id)
-        return f"{v.role} · {emp.company_name if emp else '—'} · {v.rate}₽"
+        return f"{role_ru(v.role)} · {emp.company_name if emp else '—'} · {v.rate}₽"
     if target_type == "user":
         u = db.get(User, target_id) or db.get(Employer, target_id)
         return getattr(u, "name", None) or getattr(u, "company_name", None) or "—"
@@ -324,7 +350,8 @@ def list_blocked(
             BlockedOut(type="user", id=e.id, info=e.company_name or "Заведение")
         )
     for v in db.query(Vacancy).filter(Vacancy.status == "blocked").limit(100).all():
-        out.append(BlockedOut(type="vacancy", id=v.id, info=f"{v.role} · {v.rate}₽"))
+        out.append(BlockedOut(
+            type="vacancy", id=v.id, info=f"{role_ru(v.role)} · {v.rate}₽"))
     return out
 
 

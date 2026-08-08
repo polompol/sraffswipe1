@@ -1,4 +1,6 @@
 """Лента кандидатов для работодателя."""
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Integer, and_, func, or_
@@ -12,10 +14,26 @@ from ..security import current_principal
 router = APIRouter(tags=["candidates"])
 
 
+def _age(iso: str) -> int | None:
+    """Полных лет по дате рождения. None — если дата не заполнена/битая."""
+    try:
+        born = date.fromisoformat(iso)
+    except (ValueError, TypeError):
+        return None
+    today = date.today()
+    return today.year - born.year - (
+        (today.month, today.day) < (born.month, born.day)
+    )
+
+
 class CandidateOut(BaseModel):
     id: str
     name: str
-    birth_date: str
+    # Возраст числом, а не дата рождения. Раньше отдавали «год-01-01», чтобы
+    # не раскрывать точную дату, — и клиент считал по ней возраст, завышая
+    # его почти у всех, у кого день рождения ещё не прошёл. Готовое число
+    # и точнее, и раскрывает о человеке меньше, чем любая дата.
+    age: int | None = None
     city: str
     district: str
     lat: float
@@ -147,9 +165,7 @@ def list_candidates(
         CandidateOut(
             id=u.id,
             name=u.name,
-            # Только год рождения (возраст считается на клиенте) — точную дату
-            # не раскрываем в общей ленте.
-            birth_date=(u.birth_date[:4] + "-01-01") if u.birth_date else "",
+            age=_age(u.birth_date),
             city=u.city,
             district=u.district,
             # Точные координаты дома соискателя не раскрываем до мэтча —

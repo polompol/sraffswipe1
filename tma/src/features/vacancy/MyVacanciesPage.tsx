@@ -87,20 +87,30 @@ export function MyVacanciesPage() {
               {fmtDate(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)} · {rateLabel(v.rate, v.rateType)}
             </div>
             <div className="muted">{v.address}</div>
-            <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            {/* Сетка, а не ряд с переносом: кнопки разной ширины переносились
+                по-своему в каждой карточке, и одинаковые смены выглядели
+                по-разному. Две ровные колонки читаются как таблица. */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 8,
+                marginTop: 10,
+              }}
+            >
               <button
                 className="tag"
                 style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
                 onClick={() => nav("/vacancy/new", { state: { prefill: v } })}
               >
-                <IconCalendar size={13} /> Повторить смену
+                <IconCalendar size={13} /> Повторить
               </button>
               <button
                 className="tag"
                 style={{ cursor: "pointer", borderColor: "var(--like)", color: "var(--like)" }}
                 onClick={() => doUrgent(v.id)}
               >
-                <IconFire size={13} /> Срочно: позвать рядом
+                <IconFire size={13} /> Позвать людей
               </button>
               {/* Исправить и снять — пока по смене нет отклика. После отклика
                   сервер ответит 409 и объяснит: условия уже согласованы. */}

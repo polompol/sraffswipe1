@@ -119,7 +119,7 @@ const SEEKERS: Seeker[] = [
   {
     id: "s2",
     name: "Мария",
-    birthDate: "1998-09-03",
+    age: 27,
     city: "Москва",
     district: "Басманный",
     lat: 55.765,
@@ -140,7 +140,7 @@ const SEEKERS: Seeker[] = [
   {
     id: "s3",
     name: "Иван",
-    birthDate: "2002-01-20",
+    age: 24,
     city: "Москва",
     district: "Тверской",
     lat: 55.768,
@@ -235,7 +235,7 @@ export function sendSwipe(
       id: uid(),
       chatId: match.id,
       senderId: "system",
-      text: `Это мэтч! Смена «${vac.companyName}». Договоритесь о деталях.`,
+      text: `Это мэтч! Смена: ${vac.companyName}. Договоритесь о деталях.`,
       isSystem: true,
       timestamp: new Date().toISOString(),
     },
@@ -489,7 +489,7 @@ export function fetchAdminOverview() {
     likes: 940,
     matches: 410,
     openReports: adminReports.filter((r) => r.status === "open").length,
-    activeSubscriptions: 12,
+    completedShifts: 121,
   });
 }
 export function fetchAdminReports(status = "open") {
@@ -502,6 +502,7 @@ export function fetchRevenue() {
     commissionAccruedRub: 12400,
     commissionPaidRub: 9100,
     commissionPendingRub: 3300,
+    commissionWrittenOffRub: 0,
     shiftsBilled: 31,
     topupsRub: 18000,
   });
@@ -550,6 +551,49 @@ export function autoCloseShifts(): Promise<number> {
 
 export function sendShiftReminders(): Promise<number> {
   return Promise.resolve(3);
+}
+
+export function closeAbandonedShifts(): Promise<number> {
+  return Promise.resolve(2);
+}
+
+export function sendUnfilledAlerts(): Promise<number> {
+  return Promise.resolve(1);
+}
+
+export function reconcilePayments(): Promise<number> {
+  return Promise.resolve(0);
+}
+
+export function fetchCancelStats() {
+  return Promise.resolve([
+    {
+      ownerId: "seek1", name: "Мария", role: "seeker" as const,
+      cancels: 4, lateCancels: 3, noShows: 1,
+    },
+    {
+      ownerId: "emp1", name: "Кофейня «Дрова»", role: "employer" as const,
+      cancels: 2, lateCancels: 0, noShows: 0,
+    },
+  ]);
+}
+
+export function writeOffCommission(): Promise<number> {
+  return Promise.resolve(1960);
+}
+
+export function adminRefundWallet(): Promise<number> {
+  return Promise.resolve(500);
+}
+
+export function fetchPayments() {
+  return Promise.resolve([
+    {
+      id: "p1", ownerId: "emp1", sku: "wallet_topup", provider: "yookassa",
+      amount: 5000, currency: "RUB", status: "paid",
+      createdAt: "2026-08-06T10:15:00Z",
+    },
+  ]);
 }
 
 export function fetchCommissions() {

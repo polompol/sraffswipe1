@@ -132,7 +132,9 @@ export interface AvailabilitySlot {
 export interface Seeker {
   id: string;
   name: string;
-  birthDate: string; // ISO yyyy-mm-dd
+  // Возраст числом приходит с сервера. Дату рождения в публичную ленту не
+  // отдаём вовсе: она о человеке говорит больше, чем нужно заведению.
+  age?: number | null;
   city: string;
   district: string;
   lat: number;

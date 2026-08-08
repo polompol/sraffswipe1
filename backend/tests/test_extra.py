@@ -38,7 +38,10 @@ def test_events_and_funnel(client):
     f = client.get("/analytics/funnel", headers=_hdr(token)).json()["counts"]
     assert f["open"] == 1
     assert f["swipe"] == 1
-    assert f["purchase"] == 0
+    # Последний шаг воронки — закрытая смена, а не «покупка»: покупать в
+    # сервисе нечего, и этот шаг всегда показывал ноль.
+    assert f["done"] == 0
+    assert "purchase" not in f
 
 
 def test_funnel_forbidden_for_non_admin(client):

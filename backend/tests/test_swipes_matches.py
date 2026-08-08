@@ -247,7 +247,9 @@ def test_candidates_pii_minimized(client):
     cands = client.get("/candidates", headers=_hdr(e_token)).json()
     assert cands, "ожидаем хотя бы одного кандидата"
     for c in cands:
-        # Точные координаты дома и точная дата рождения не раскрываются.
+        # Точные координаты дома и дата рождения не раскрываются: в ленту
+        # уходит только возраст числом.
         assert c["lat"] == 0 and c["lng"] == 0
         assert c["inn"] is None
-        assert c["birth_date"] in ("", None) or c["birth_date"].endswith("-01-01")
+        assert "birth_date" not in c
+        assert c["age"] is None or 18 <= c["age"] <= 100

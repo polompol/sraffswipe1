@@ -205,7 +205,14 @@ export function CreateVacancyPage() {
         </div>
 
         <div className="form-label">Сколько человек нужно</div>
-        <div className="row" style={{ gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(5, 1fr)",
+            gap: 8,
+            marginBottom: 8,
+          }}
+        >
           {[1, 2, 3, 5, 10].map((n) => (
             <button
               key={n}
@@ -223,26 +230,29 @@ export function CreateVacancyPage() {
               {n}
             </button>
           ))}
-          <input
-            className="input"
-            type="number"
-            min={1}
-            max={20}
-            aria-label="Сколько человек нужно"
-            style={{ width: 90 }}
-            value={headcount}
-            onChange={(e) =>
-              setHeadcount(Math.min(20, Math.max(1, Number(e.target.value) || 1)))
-            }
-          />
         </div>
+        {/* Своё число — отдельной строкой. В одном ряду с чипами поле
+            выглядело как шестой вариант выбора и рвало ряд пополам. */}
+        <input
+          className="input"
+          type="number"
+          min={1}
+          max={20}
+          aria-label="Другое количество человек"
+          placeholder="другое число"
+          style={{ marginBottom: 16 }}
+          value={headcount}
+          onChange={(e) =>
+            setHeadcount(Math.min(20, Math.max(1, Number(e.target.value) || 1)))
+          }
+        />
         <p className="muted" style={{ margin: "-8px 0 16px", fontSize: 13 }}>
           Одна смена на всех — не нужно публиковать несколько одинаковых.
           Когда наберётся столько людей, смена уйдёт из ленты сама.
         </p>
 
         <div className="form-label">Как и когда платите</div>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+        <div style={{ display: "grid", gap: 8, margin: "8px 0 16px" }}>
           {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((p) => (
             <button
               key={p}
@@ -261,7 +271,14 @@ export function CreateVacancyPage() {
         </div>
 
         <div className="form-label">Чаевые (платят гости)</div>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            margin: "8px 0 16px",
+          }}
+        >
           {(Object.keys(TIPS_LABELS) as TipsMode[]).map((t) => (
             <button
               key={t}

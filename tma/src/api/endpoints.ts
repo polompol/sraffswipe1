@@ -443,7 +443,7 @@ export type Funnel = Record<string, number>;
 
 export async function fetchFunnel(): Promise<Funnel> {
   if (!USE_BACKEND) {
-    return { open: 1200, swipe: 940, match: 410, confirm: 180, purchase: 64 };
+    return { open: 1200, swipe: 940, match: 410, confirm: 180, done: 121 };
   }
   const { data } = await api.get<{ counts: Funnel }>("/analytics/funnel");
   return data.counts;
@@ -457,7 +457,7 @@ export interface AdminOverview {
   likes: number;
   matches: number;
   openReports: number;
-  activeSubscriptions: number;
+  completedShifts: number;
 }
 
 export interface AdminReport {
@@ -481,6 +481,8 @@ export interface AdminRevenue {
   commissionAccruedRub: number;
   commissionPaidRub: number;
   commissionPendingRub: number;
+  /** Прощено по спорам и признано безнадёжным — в выручку не входит. */
+  commissionWrittenOffRub: number;
   shiftsBilled: number;
   topupsRub: number;
 }
@@ -570,6 +572,89 @@ export async function sendShiftReminders(): Promise<number> {
   if (!USE_BACKEND) return mock.sendShiftReminders();
   const { data } = await api.post<{ sent: number }>("/admin/reminders/send", {});
   return data.sent;
+}
+
+/** Закрыть смены, которые не отметила ни одна сторона (спустя двое суток). */
+export async function closeAbandonedShifts(): Promise<number> {
+  if (!USE_BACKEND) return mock.closeAbandonedShifts();
+  const { data } = await api.post<{ closed: number }>(
+    "/admin/shifts/close-abandoned", {});
+  return data.closed;
+}
+
+/** Предупредить заведения о завтрашних сменах, на которые никто не откликнулся. */
+export async function sendUnfilledAlerts(): Promise<number> {
+  if (!USE_BACKEND) return mock.sendUnfilledAlerts();
+  const { data } = await api.post<{ sent: number }>(
+    "/admin/shifts/unfilled-alerts", {});
+  return data.sent;
+}
+
+/** Сверить платежи с ЮKassa и дозачислить те, по которым не дошёл вебхук. */
+export async function reconcilePayments(): Promise<number> {
+  if (!USE_BACKEND) return mock.reconcilePayments();
+  const { data } = await api.post<{ credited: number }>(
+    "/admin/payments/reconcile", {});
+  return data.credited ?? 0;
+}
+
+export interface CancelStatRow {
+  ownerId: string;
+  name: string;
+  role: "employer" | "seeker";
+  cancels: number;
+  lateCancels: number;
+  noShows: number;
+}
+
+/** Кто систематически отменяет смены и не выходит. */
+export async function fetchCancelStats(days = 60): Promise<CancelStatRow[]> {
+  if (!USE_BACKEND) return mock.fetchCancelStats();
+  const { data } = await api.get<CancelStatRow[]>("/admin/cancel-stats", {
+    params: { days },
+  });
+  return data;
+}
+
+/** Списать неоплаченную комиссию: прощена по спору или долг безнадёжен. */
+export async function writeOffCommission(
+  employerId: string,
+  reason: string,
+): Promise<number> {
+  if (!USE_BACKEND) return mock.writeOffCommission();
+  const { data } = await api.post<{ amount_rub: number }>(
+    `/admin/commissions/${employerId}/write-off`, { reason });
+  return data.amount_rub;
+}
+
+/** Вернуть деньги с баланса заведения (возврат или исправление ошибки). */
+export async function adminRefundWallet(
+  ownerId: string,
+  amountRub: number,
+  note = "",
+): Promise<number> {
+  if (!USE_BACKEND) return mock.adminRefundWallet();
+  const { data } = await api.post<{ balanceRub: number }>(
+    `/admin/wallet/${ownerId}/refund`, { amount_rub: amountRub, note });
+  return data.balanceRub;
+}
+
+export interface PaymentRow {
+  id: string;
+  ownerId: string;
+  sku: string;
+  provider: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+}
+
+/** Журнал платежей: что и кому приходило. */
+export async function fetchPayments(): Promise<PaymentRow[]> {
+  if (!USE_BACKEND) return mock.fetchPayments();
+  const { data } = await api.get<PaymentRow[]>("/admin/purchases");
+  return data;
 }
 
 export interface CommissionRow {

@@ -10,7 +10,7 @@ const STEPS: { key: string; label: string }[] = [
   { key: "swipe", label: "Свайпнули" },
   { key: "match", label: "Мэтч" },
   { key: "confirm", label: "Подтвердили смену" },
-  { key: "purchase", label: "Покупка" },
+  { key: "done", label: "Смена закрыта" },
 ];
 
 export function FunnelPage() {
@@ -29,7 +29,8 @@ export function FunnelPage() {
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>Воронка</h1>
         <p className="muted" style={{ marginBottom: 16 }}>
-          Путь пользователя: открытие → свайп → мэтч → смена → покупка.
+          Путь человека: открыл → свайпнул → мэтч → договорились о смене →
+          смена состоялась. Последний шаг и есть заработок сервиса.
         </p>
 
         {isLoading && <Loading />}
@@ -41,7 +42,8 @@ export function FunnelPage() {
               const value = data[s.key] ?? 0;
               const width = `${Math.round((value / top) * 100)}%`;
               const prev = i > 0 ? data[STEPS[i - 1].key] ?? 0 : value;
-              const conv = prev > 0 ? Math.round((value / prev) * 100) : 100;
+              // Ноль из нуля — это не «100%», а «считать пока не из чего».
+              const conv = prev > 0 ? `${Math.round((value / prev) * 100)}%` : "—";
               return (
                 <div key={s.key} className="card">
                   <div className="row">
@@ -62,7 +64,7 @@ export function FunnelPage() {
                   </div>
                   {i > 0 && (
                     <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                      конверсия из «{STEPS[i - 1].label}»: {conv}%
+                      конверсия из «{STEPS[i - 1].label}»: {conv}
                     </div>
                   )}
                 </div>

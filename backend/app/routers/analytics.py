@@ -8,14 +8,16 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Employer, Event, User
+from ..models import Employer, Event, Match, User
 from ..ratelimit import client_ip, hit
 from ..security import current_principal, optional_principal
 
 router = APIRouter(tags=["analytics"])
 
-# Ключевые шаги воронки.
-FUNNEL = ["open", "swipe", "match", "confirm", "purchase"]
+# Ключевые шаги воронки. Первые два знают только события с клиента
+# («открыл приложение», «свайпнул»), остальные считаются по фактам в базе —
+# так цифра не зависит от того, дошло ли событие с телефона.
+FUNNEL = ["open", "swipe", "match", "confirm", "done"]
 
 # Максимальный размер сериализованных props события (анти-раздувание БД).
 _MAX_PROPS_CHARS = 2000
@@ -81,4 +83,26 @@ def funnel(
         .all()
     )
     by_name = {name: count for name, count in rows}
-    return FunnelOut(counts={step: by_name.get(step, 0) for step in FUNNEL})
+    # Мэтчи, подтверждения и закрытые смены берём из таблицы смен: это
+    # состоявшиеся факты. Шага «покупка» здесь больше нет — покупать в
+    # сервисе нечего, и он всегда показывал ноль.
+    matches = db.query(func.count(Match.id)).scalar() or 0
+    confirmed = (
+        db.query(func.count(Match.id))
+        .filter(Match.status.in_(("confirmed", "completed")))
+        .scalar()
+        or 0
+    )
+    done = (
+        db.query(func.count(Match.id))
+        .filter(Match.status == "completed")
+        .scalar()
+        or 0
+    )
+    return FunnelOut(counts={
+        "open": by_name.get("open", 0),
+        "swipe": by_name.get("swipe", 0),
+        "match": matches,
+        "confirm": confirmed,
+        "done": done,
+    })

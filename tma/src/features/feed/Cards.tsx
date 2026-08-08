@@ -208,7 +208,20 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           </div>
         )}
 
-        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        {/* Две ровные колонки вместо ряда с переносом. Раньше плашки были
+            разной ширины и вставали по-разному на каждой карточке: у одной
+            смены «медкнижка» уезжала на вторую строку, у соседней — нет,
+            и лента выглядела дёрганой при листании. */}
+        <div
+          style={{
+            marginTop: 10,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            columnGap: 10,
+            rowGap: 6,
+            alignItems: "center",
+          }}
+        >
           {PayGlyph && v.payMethod && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
               <PayGlyph size={16} /> {PAY_METHOD_LABELS[v.payMethod]}
@@ -245,8 +258,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
 }
 
 export function SeekerCardContent({ s }: { s: Seeker }) {
-  const year = s.birthDate ? new Date(s.birthDate).getFullYear() : NaN;
-  const age = Number.isFinite(year) ? new Date().getFullYear() - year : null;
+  const age = s.age ?? null;
   const roles = s.roles ?? [];
   const tags = s.experienceTags ?? [];
   const photos = s.photoUrls ?? [];
