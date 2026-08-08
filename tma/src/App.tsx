@@ -37,9 +37,6 @@ const MyVacanciesPage = lazy(() =>
 const ShiftsPage = lazy(() =>
   import("@/features/shifts/ShiftsPage").then((m) => ({ default: m.ShiftsPage })),
 );
-const PricingPage = lazy(() =>
-  import("@/features/billing/PricingPage").then((m) => ({ default: m.PricingPage })),
-);
 const FunnelPage = lazy(() =>
   import("@/features/analytics/FunnelPage").then((m) => ({ default: m.FunnelPage })),
 );
@@ -54,9 +51,6 @@ const FavoritesPage = lazy(() =>
 );
 const WorkersPage = lazy(() =>
   import("@/features/vacancy/WorkersPage").then((m) => ({ default: m.WorkersPage })),
-);
-const ShareEarningsPage = lazy(() =>
-  import("@/features/share/ShareEarningsPage").then((m) => ({ default: m.ShareEarningsPage })),
 );
 const InvitesPage = lazy(() =>
   import("@/features/invites/InvitesPage").then((m) => ({ default: m.InvitesPage })),
@@ -154,13 +148,11 @@ export function App() {
       <Route path="/profile/edit" element={ready ? <EditProfilePage /> : <Navigate to="/onboarding" />} />
       <Route path="/vacancy/new" element={ready ? <CreateVacancyPage /> : <Navigate to="/onboarding" />} />
       <Route path="/chat/:matchId" element={ready ? <ChatPage /> : <Navigate to="/onboarding" />} />
-      <Route path="/pricing" element={ready ? <PricingPage /> : <Navigate to="/onboarding" />} />
       <Route path="/funnel" element={ready ? <FunnelPage /> : <Navigate to="/onboarding" />} />
       <Route path="/admin" element={ready ? <AdminPage /> : <Navigate to="/onboarding" />} />
       <Route path="/support" element={ready ? <SupportPage /> : <Navigate to="/onboarding" />} />
       <Route path="/favorites" element={ready ? <FavoritesPage /> : <Navigate to="/onboarding" />} />
       <Route path="/workers" element={ready ? <WorkersPage /> : <Navigate to="/onboarding" />} />
-      <Route path="/share" element={ready ? <ShareEarningsPage /> : <Navigate to="/onboarding" />} />
       <Route path="/invites" element={ready ? <InvitesPage /> : <Navigate to="/onboarding" />} />
       <Route path="/settings" element={ready ? <SettingsPage /> : <Navigate to="/onboarding" />} />
 

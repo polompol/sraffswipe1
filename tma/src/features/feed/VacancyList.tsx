@@ -114,9 +114,6 @@ export function VacancyList({
                 {isUrgentShift(v.date) && (
                   <span className="tag pulse" style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}><IconFire size={12} /> Сегодня</span>
                 )}
-                {v.boosted && (
-                  <span className="tag pulse" style={{ flex: "none", color: "var(--super-text)", borderColor: "var(--super)" }}><IconFire size={12} /> ТОП</span>
-                )}
               </div>
               <div className="muted" style={{ marginTop: 2 }}>
                 {STAFF_ROLE_LABELS[v.role]} · {rateLabel(v.rate, v.rateType)}

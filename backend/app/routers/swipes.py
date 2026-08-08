@@ -5,8 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..entitlements import get_or_create
-from ..models import Employer, Entitlement, Match, Message, Swipe, User, Vacancy
+from ..models import Employer, Match, Message, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
@@ -15,7 +14,7 @@ from .billing import commission_overdue
 
 router = APIRouter(prefix="/swipes", tags=["swipes"])
 
-_POSITIVE = {"like", "superlike"}
+_POSITIVE = {"like"}
 
 
 def _same_person(db: Session, user_id: str, employer_id: str) -> bool:
@@ -147,7 +146,7 @@ def swipe(
                    "чтобы приглашать новых людей.",
         )
 
-    # Сначала валидируем цель — чтобы при 404 не «сжечь» супер-лайк/не писать свайп.
+    # Сначала валидируем цель — чтобы при 404 не писать свайп в никуда.
     if body.target_type == "vacancy":
         if db.get(Vacancy, body.target_id) is None:
             raise HTTPException(status_code=404, detail="Вакансия не найдена")
@@ -168,29 +167,6 @@ def swipe(
     )
 
     if existing is None:
-        # Супер-лайк «Срочно» — платная фича: списываем с баланса атомарно
-        # (UPDATE ... WHERE balance >= 1), иначе параллельные запросы на разные
-        # цели уводят баланс в минус (double-spend).
-        if body.direction == "superlike":
-            get_or_create(db, me)  # гарантируем строку прав
-            spent = (
-                db.query(Entitlement)
-                .filter(
-                    Entitlement.owner_id == me,
-                    Entitlement.superlike_balance >= 1,
-                )
-                .update(
-                    {Entitlement.superlike_balance: Entitlement.superlike_balance - 1},
-                    synchronize_session=False,
-                )
-            )
-            if not spent:
-                raise HTTPException(
-                    status_code=402,
-                    detail="Супер-лайки «Срочно» закончились. Их дарят за "
-                           "приглашённых друзей.",
-                )
-
         db.add(
             Swipe(
                 swiper_id=me,

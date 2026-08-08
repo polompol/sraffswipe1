@@ -1,6 +1,4 @@
 """Лента вакансий и их создание."""
-from datetime import UTC, datetime, timedelta
-
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -9,13 +7,11 @@ from ..config import settings
 from ..db import get_db
 from ..entitlements import (
     PLAN_VACANCY_LIMIT,
-    active_boost_vacancy_ids,
     active_vacancy_count,
-    get_or_create,
     plan_of,
 )
 from ..geo import distance_km
-from ..models import Boost, Employer, Entitlement, Match, Swipe, User, Vacancy
+from ..models import Employer, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import VacancyIn, VacancyOut
@@ -71,7 +67,6 @@ def _to_out(
     v: Vacancy,
     emp: Employer | None,
     dist: float | None,
-    boosted: bool = False,
     shifts_done: int = 0,
     taken: int = 0,
 ) -> VacancyOut:
@@ -105,7 +100,6 @@ def _to_out(
         interior_photo_url=v.interior_photo_url,
         status=v.status,
         distance_km=round(dist, 1) if dist is not None else None,
-        boosted=boosted,
         employer_rating=round(rating, 1),
         employer_shifts_done=shifts_done,
         employer_pays_on_time=pays_on_time,
@@ -132,11 +126,9 @@ def list_vacancies(
     db: Session = Depends(get_db),
     principal: dict | None = Depends(optional_principal),
 ):
-    """Активные вакансии с фильтрами. Boost-вакансии всегда наверху.
+    """Активные вакансии с фильтрами.
 
     `mine=1` — вернуть собственные вакансии работодателя (любой статус)."""
-    boosted_ids = active_boost_vacancy_ids(db)
-
     # Раздел «Мои вакансии» — только свои, для текущего работодателя.
     if mine:
         if not principal or principal["role"] != "employer":
@@ -153,7 +145,6 @@ def list_vacancies(
         return [
             _to_out(
                 v, emp, None,
-                boosted=v.id in boosted_ids,
                 shifts_done=done.get(v.employer_id, 0),
                 taken=taken.get(v.id, 0),
             )
@@ -236,18 +227,18 @@ def list_vacancies(
             continue
         result.append(_to_out(
             v, emp, dist,
-            boosted=v.id in boosted_ids,
             shifts_done=done.get(v.employer_id, 0),
             taken=taken.get(v.id, 0),
         ))
 
-    # Boost всегда наверху; внутри группы — по выбранной сортировке.
+    # Порядок ленты определяет только выбранная сортировка. Платного
+    # поднятия в топ нет: место в ленте не продаётся.
     def _key(x: VacancyOut):
         if sort == "rate":
-            return (not x.boosted, -x.rate)
+            return -x.rate
         if sort == "date":
-            return (not x.boosted, x.date)
-        return (not x.boosted, x.distance_km if x.distance_km is not None else 1e9)
+            return x.date
+        return x.distance_km if x.distance_km is not None else 1e9
 
     result.sort(key=_key)
     return result
@@ -267,7 +258,7 @@ def invites(
         s[0] for s in db.query(Swipe.swiper_id).filter(
             Swipe.target_id == me,
             Swipe.target_type == "user",
-            Swipe.direction.in_(("like", "superlike")),
+            Swipe.direction == "like",
         ).distinct().all()
     ]
     if not emp_ids:
@@ -288,12 +279,10 @@ def invites(
         return []
     ids = {v.employer_id for v in rows}
     emps = {e.id: e for e in db.query(Employer).filter(Employer.id.in_(ids)).all()}
-    boosted = active_boost_vacancy_ids(db)
     done = _shifts_done_by_employer(db, ids)
     return [
         _to_out(
             v, emps.get(v.employer_id), None,
-            boosted=v.id in boosted,
             shifts_done=done.get(v.employer_id, 0),
         )
         for v in rows
@@ -439,46 +428,6 @@ def delete_vacancy(
     db.delete(v)
     db.commit()
     return None
-
-
-@router.post("/{vacancy_id}/boost")
-def boost_vacancy(
-    vacancy_id: str,
-    db: Session = Depends(get_db),
-    principal: dict = Depends(current_principal),
-):
-    """Поднять вакансию в топ ленты на 24 часа, списав 1 boost с баланса."""
-    if principal["role"] != "employer":
-        raise HTTPException(status_code=403, detail="Только для работодателя")
-    if commission_overdue(db, principal["id"]):
-        raise HTTPException(
-            status_code=402,
-            detail="Есть просроченная комиссия — оплатите счёт, "
-                   "чтобы продвигать вакансии.",
-        )
-    v = db.get(Vacancy, vacancy_id)
-    if v is None or v.employer_id != principal["id"]:
-        raise HTTPException(status_code=404, detail="Вакансия не найдена")
-    # Атомарное списание буста (защита от double-spend при параллельных запросах).
-    get_or_create(db, principal["id"])
-    spent = (
-        db.query(Entitlement)
-        .filter(
-            Entitlement.owner_id == principal["id"],
-            Entitlement.boost_balance >= 1,
-        )
-        .update(
-            {Entitlement.boost_balance: Entitlement.boost_balance - 1},
-            synchronize_session=False,
-        )
-    )
-    if not spent:
-        raise HTTPException(status_code=402, detail="Нет boost на балансе")
-    expires = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
-    db.add(Boost(vacancy_id=vacancy_id, expires_at=expires))
-    db.commit()
-    ent = get_or_create(db, principal["id"])
-    return {"ok": True, "boostBalance": ent.boost_balance, "expiresAt": expires}
 
 
 @router.post(

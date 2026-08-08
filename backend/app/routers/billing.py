@@ -33,8 +33,6 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 class EntitlementsOut(BaseModel):
     plan: str
     planRenewsAt: str | None = None
-    superlikeBalance: int
-    boostBalance: int
     seekerPremium: bool
     employerVerified: bool
 
@@ -52,8 +50,6 @@ def get_entitlements(
     return EntitlementsOut(
         plan=sub.plan if sub and sub.active else "free",
         planRenewsAt=sub.renews_at if sub else None,
-        superlikeBalance=ent.superlike_balance,
-        boostBalance=ent.boost_balance,
         seekerPremium=ent.seeker_premium,
         employerVerified=ent.employer_verified,
     )

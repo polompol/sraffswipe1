@@ -161,10 +161,6 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           <span className="glass pulse" style={{ background: "var(--gold)" }}>
             <IconFire size={13} /> Сегодня
           </span>
-        ) : v.boosted ? (
-          <span className="glass pulse" style={{ background: "var(--super)" }}>
-            <IconFire size={13} /> ТОП
-          </span>
         ) : null}
         {typeof v.distanceKm === "number" && (
           <span className="glass">

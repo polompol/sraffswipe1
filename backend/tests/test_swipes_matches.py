@@ -30,10 +30,15 @@ def _hdr(t):
     return {"Authorization": f"Bearer {t}"}
 
 
-def _superlike_balance(client, token):
-    return client.get("/billing/entitlements", headers=_hdr(token)).json()[
-        "superlikeBalance"
-    ]
+def _swipe_count(swiper_id):
+    from app.db import SessionLocal
+    from app.models import Swipe
+
+    db = SessionLocal()
+    try:
+        return db.query(Swipe).filter(Swipe.swiper_id == swiper_id).count()
+    finally:
+        db.close()
 
 
 def _vacancy(client, headers):
@@ -87,15 +92,14 @@ def test_candidates_lists_users(client):
     assert s_id in [c["id"] for c in r.json()]
 
 
-def test_superlike_not_consumed_on_missing_target(client):
-    token, _ = _auth(client, "seeker")
-    before = _superlike_balance(client, token)
-    # Несуществующая вакансия → 404, баланс НЕ списан.
+def test_swipe_to_missing_target_is_404(client):
+    """Свайп по несуществующей смене не записывается: 404 и пустая история."""
+    token, sid = _auth(client, "seeker")
     r = client.post("/swipes", headers=_hdr(token), json={
-        "target_id": "no-such", "target_type": "vacancy", "direction": "superlike",
+        "target_id": "no-such", "target_type": "vacancy", "direction": "like",
     })
     assert r.status_code == 404
-    assert _superlike_balance(client, token) == before
+    assert _swipe_count(sid) == 0
 
 
 def test_confirm_requires_participant(client):
@@ -166,18 +170,16 @@ def test_act_blocked_until_confirmed(client):
     ).status_code == 200
 
 
-def test_superlike_not_double_charged_on_repeat(client):
+def test_repeat_swipe_is_idempotent(client):
+    """Двойной клик по той же смене не плодит вторую запись."""
     e_token, _ = _auth(client, "employer")
     vac = _vacancy(client, _hdr(e_token))
-    token, _ = _auth(client, "seeker")
-    before = _superlike_balance(client, token)
-    body = {"target_id": vac["id"], "target_type": "vacancy", "direction": "superlike"}
+    token, sid = _auth(client, "seeker")
+    body = {"target_id": vac["id"], "target_type": "vacancy", "direction": "like"}
     client.post("/swipes", headers=_hdr(token), json=body)
-    after_first = _superlike_balance(client, token)
-    assert after_first == before - 1
-    # Повторный свайп по той же цели не списывает баланс ещё раз.
+    assert _swipe_count(sid) == 1
     client.post("/swipes", headers=_hdr(token), json=body)
-    assert _superlike_balance(client, token) == after_first
+    assert _swipe_count(sid) == 1
 
 
 def test_candidates_forbidden_for_seeker(client):

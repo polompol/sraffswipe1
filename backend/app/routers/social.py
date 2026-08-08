@@ -22,7 +22,6 @@ class ReferralOut(BaseModel):
     code: str
     link: str
     invited: int
-    bonusSuperlikes: int
 
 
 @router.get("/referral/me", response_model=ReferralOut)
@@ -36,7 +35,6 @@ def referral_me(
         code=code,
         link=f"https://t.me/{settings.bot_username}?startapp={code}",
         invited=invited,
-        bonusSuperlikes=settings.referral_bonus_superlikes,
     )
 
 
@@ -109,7 +107,6 @@ class MeOut(BaseModel):
     name: str
     rating: float
     tgUsername: str | None = None
-    streak: int = 0
     city: str = ""
     district: str = ""
     incomingLikes: int = 0  # «тебя хотят»: входящие лайки/отклики
@@ -127,19 +124,11 @@ class MeOut(BaseModel):
     photoUrl: str = ""
 
 
-def _streak(db: Session, owner_id: str) -> int:
-    from ..models import Streak
-
-    s = db.get(Streak, owner_id)
-    return s.count if s else 0
-
-
 def _incoming_likes(db: Session, principal: dict) -> int:
     """Сколько входящих лайков: соискателю — от заведений на него; заведению —
     отклики соискателей на его вакансии. Крючок «тебя хотят»."""
     from ..models import Swipe, Vacancy
 
-    positive = ("like", "superlike")
     if principal["role"] == "employer":
         vac_ids = [
             v.id for v in db.query(Vacancy.id)
@@ -152,7 +141,7 @@ def _incoming_likes(db: Session, principal: dict) -> int:
             .filter(
                 Swipe.target_type == "vacancy",
                 Swipe.target_id.in_(vac_ids),
-                Swipe.direction.in_(positive),
+                Swipe.direction == "like",
             )
             .count()
         )
@@ -161,7 +150,7 @@ def _incoming_likes(db: Session, principal: dict) -> int:
         .filter(
             Swipe.target_type == "user",
             Swipe.target_id == principal["id"],
-            Swipe.direction.in_(positive),
+            Swipe.direction == "like",
         )
         .count()
     )
@@ -225,7 +214,6 @@ def me(
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
-            streak=_streak(db, e.id),
             incomingLikes=_incoming_likes(db, principal),
             shiftsDone=shifts,
         )
@@ -239,7 +227,7 @@ def me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city, district=u.district,
+        city=u.city, district=u.district,
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
         availableToday=u.available_today,
@@ -361,7 +349,6 @@ def update_me(
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
-            streak=_streak(db, e.id),
         )
 
     u = db.get(User, principal["id"])
@@ -393,5 +380,5 @@ def update_me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city,
+        city=u.city,
     )

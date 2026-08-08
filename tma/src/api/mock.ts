@@ -3,7 +3,6 @@
 
 import type {
   AppRole,
-  Entitlements,
   MatchModel,
   Message,
   Seeker,
@@ -50,7 +49,6 @@ const VACANCIES: Vacancy[] = [
     interiorPhotoUrl: photo("photo-1559925393-8be0ec4767c8"),
     employerVerified: true,
     status: "active",
-    boosted: true,
     distanceKm: 1.6,
     employerRating: 4.7,
     employerShiftsDone: 24,
@@ -162,13 +160,9 @@ const SEEKERS: Seeker[] = [
 
 const matches: MatchModel[] = [];
 const messagesByMatch: Record<string, Message[]> = {};
-const entitlements: Entitlements = {
-  plan: "free",
-  superlikeBalance: 1,
-  boostBalance: 0,
-  seekerPremium: false,
-  employerVerified: false,
-};
+// Верификация компании по ИНН в моке всегда «не подтверждено»: бейдж
+// «Проверен» ставит DaData на живом сервере.
+const employerVerified = false;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -338,10 +332,6 @@ export function disputeShift(matchId: string, _note: string): Promise<MatchModel
   return Promise.resolve(m);
 }
 
-export function fetchEntitlements(): Promise<Entitlements> {
-  return Promise.resolve({ ...entitlements });
-}
-
 const invited = 2;
 
 const meProfile: Me = {
@@ -350,7 +340,6 @@ const meProfile: Me = {
   name: "Алексей",
   rating: 4.8,
   tgUsername: "alexey",
-  streak: 3,
   city: "Москва",
   incomingLikes: 4,
   earnedRub: 18400,
@@ -455,7 +444,6 @@ export function fetchReferral(): Promise<ReferralInfo> {
     code: "ref_me",
     link: "https://t.me/staffswipe_bot?startapp=ref_me",
     invited,
-    bonusSuperlikes: 3,
   });
 }
 
@@ -537,12 +525,11 @@ export function adminSearchUsers(q: string) {
     {
       id: "emp1", role: "employer" as const, name: "Кофейня «Дрова»",
       username: "drova", blocked: false, warnings: 0, plan: "pro",
-      boostBalance: 4, superlikeBalance: 0, balanceRub: 1500,
+      balanceRub: 1500,
     },
     {
       id: "seek1", role: "seeker" as const, name: "Мария", username: null,
-      blocked: false, warnings: 1, plan: "free", boostBalance: 0,
-      superlikeBalance: 2, balanceRub: 0,
+      blocked: false, warnings: 1, plan: "free", balanceRub: 0,
     },
   ];
   const ql = q.trim().toLowerCase();
@@ -565,13 +552,6 @@ export function sendShiftReminders(): Promise<number> {
   return Promise.resolve(3);
 }
 
-export function adminGrant(
-  _ownerId: string,
-  _boost: number,
-  _superlikes: number,
-): Promise<void> {
-  return Promise.resolve();
-}
 export function fetchCommissions() {
   return Promise.resolve([
     { employerId: "emp1", company: "Кофейня «Дрова»", shifts: 7, amountRub: 1960 },
@@ -635,12 +615,6 @@ export function fetchAdminSubscriptions() {
 export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);
 }
-export function boostVacancy(vacancyId: string): Promise<void> {
-  const vac = VACANCIES.find((v) => v.id === vacancyId);
-  if (vac) vac.boosted = true;
-  return Promise.resolve();
-}
-
 export function urgentPing(_vacancyId: string): Promise<number> {
   return Promise.resolve(7); // демо: «пингнули 7 доступных рядом»
 }
@@ -660,14 +634,14 @@ export function verifyEmployer(inn: string): Promise<VerifyResult> {
   const ok = /^\d{10,12}$/.test(inn);
   return Promise.resolve({
     found: ok,
-    verified: ok && entitlements.employerVerified,
+    verified: ok && employerVerified,
     name: ok ? "ООО «Кофейня Дрова»" : "",
     ogrn: ok ? "1167746000000" : "",
     address: ok ? "Москва, ул. Льва Толстого, 16" : "",
     hint: ok
-      ? entitlements.employerVerified
+      ? employerVerified
         ? ""
-        : "Данные подтянуты. Бейдж «Проверен» — после оплаты верификации."
+        : "Данные подтянуты. Бейдж «Проверен» появится после сверки."
       : "Введите корректный ИНН (10–12 цифр).",
   });
 }

@@ -33,7 +33,7 @@ from .analytics import _is_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_POSITIVE = ("like", "superlike")
+_POSITIVE = ("like",)
 
 
 def require_admin(
@@ -401,8 +401,6 @@ class AdminUserOut(BaseModel):
     blocked: bool
     warnings: int
     plan: str
-    boostBalance: int
-    superlikeBalance: int
     balanceRub: int = 0  # денежный баланс (аванс) заведения
 
 
@@ -413,8 +411,6 @@ def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
         id=obj.id, role=role, name=name, username=obj.tg_username,
         blocked=obj.blocked, warnings=obj.warnings,
         plan=plan_of(db, obj.id),
-        boostBalance=ent.boost_balance,
-        superlikeBalance=ent.superlike_balance,
         balanceRub=ent.balance_rub,
     )
 
@@ -440,35 +436,6 @@ def search_users(
         if _match(e.company_name, e.tg_username, e.phone):
             res.append(_admin_user_out(db, e, "employer"))
     return res[:30]
-
-
-class GrantIn(BaseModel):
-    owner_id: str
-    # Сколько выдать. Раньше выдавали «пакетами» из каталога товаров, но
-    # каталога больше нет: платный рельс один — пополнение баланса. Оператор
-    # компенсирует напрямую, без выдуманных SKU.
-    boost: Annotated[int, Field(ge=0, le=100)] = 0
-    superlikes: Annotated[int, Field(ge=0, le=100)] = 0
-
-
-@router.post("/grant")
-def grant_entitlement(
-    body: GrantIn,
-    db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
-):
-    """Компенсация от оператора: выдать буст и/или супер-лайки бесплатно."""
-    if body.boost == 0 and body.superlikes == 0:
-        raise HTTPException(status_code=400, detail="Нечего выдавать")
-    ent = get_or_create(db, body.owner_id)
-    ent.boost_balance += body.boost
-    ent.superlike_balance += body.superlikes
-    db.commit()
-    return {
-        "ok": True,
-        "boostBalance": ent.boost_balance,
-        "superlikeBalance": ent.superlike_balance,
-    }
 
 
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----
@@ -934,7 +901,6 @@ def erase_account(
         Referral,
         Review,
         SavedSearch,
-        Streak,
     )
 
     target = db.get(User, owner_id)
@@ -967,7 +933,6 @@ def erase_account(
                                           SavedSearch.owner_id == owner_id)
     removed["события аналитики"] = _drop(Event, Event.owner_id == owner_id)
     removed["жалобы"] = _drop(Report, Report.reporter_id == owner_id)
-    removed["серии заходов"] = _drop(Streak, Streak.owner_id == owner_id)
     removed["рефералы"] = _drop(Referral, Referral.referrer_id == owner_id,
                                 Referral.referred_id == owner_id)
     removed["права/баланс"] = _drop(Entitlement, Entitlement.owner_id == owner_id)

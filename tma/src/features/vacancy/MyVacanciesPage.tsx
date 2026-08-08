@@ -1,9 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
-  boostVacancy,
   deleteVacancy,
-  fetchEntitlements,
   fetchMyVacancies,
   urgentPing,
 } from "@/api/endpoints";
@@ -14,7 +12,6 @@ import { Button } from "@/components/Button";
 import { IconFire, IconCalendar, IconEdit, IconWarning } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { EmptyState } from "@/components/EmptyState";
-import { PILOT_MODE } from "@/lib/flags";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
@@ -23,22 +20,6 @@ export function MyVacanciesPage() {
     queryKey: ["my-vacancies"],
     queryFn: fetchMyVacancies,
   });
-  const { data: ent } = useQuery({
-    queryKey: ["entitlements"],
-    queryFn: fetchEntitlements,
-  });
-
-  async function doBoost(id: string) {
-    if ((ent?.boostBalance ?? 0) < 1) {
-      nav("/pricing");
-      return;
-    }
-    haptic("success");
-    await boostVacancy(id);
-    qc.invalidateQueries({ queryKey: ["my-vacancies"] });
-    qc.invalidateQueries({ queryKey: ["entitlements"] });
-  }
-
   async function doRemove(id: string, title: string) {
     if (!(await confirmAction(`Снять смену «${title}» с публикации?`, "Снять"))) return;
     haptic("warning");
@@ -101,21 +82,7 @@ export function MyVacanciesPage() {
       <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {data?.map((v) => (
           <div key={v.id} className="card">
-            <div className="row">
-              <b>{STAFF_ROLE_LABELS[v.role]}</b>
-              <span className="spacer" />
-              {v.boosted ? (
-                <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}><IconFire size={12} /> в топе</span>
-              ) : !PILOT_MODE ? (
-                <button
-                  className="tag"
-                  style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
-                  onClick={() => doBoost(v.id)}
-                >
-                  <IconFire size={12} /> Поднять в топ
-                </button>
-              ) : null}
-            </div>
+            <b>{STAFF_ROLE_LABELS[v.role]}</b>
             <div className="muted" style={{ marginTop: 6 }}>
               {fmtDate(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)} · {rateLabel(v.rate, v.rateType)}
             </div>

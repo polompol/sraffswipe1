@@ -287,7 +287,7 @@ def test_admin_warn_on_match_rejected(client):
     assert client.post(f"/admin/reports/{rid}/warn", headers=ah).status_code == 400
 
 
-def test_admin_search_and_grant(client):
+def test_admin_search_finds_venue(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
     emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
@@ -295,21 +295,6 @@ def test_admin_search_and_grant(client):
     # Поиск находит заведение среди пользователей.
     users = client.get("/admin/users", headers=ah).json()
     assert any(u["id"] == eid and u["role"] == "employer" for u in users)
-    # Компенсация от оператора: выдаём буст и супер-лайки явными числами.
-    g = client.post("/admin/grant", headers=ah,
-                    json={"owner_id": eid, "boost": 2, "superlikes": 3})
-    assert g.status_code == 200
-    assert g.json()["boostBalance"] == 2
-    by_id = {u["id"]: u for u in client.get("/admin/users", headers=ah).json()}
-    assert by_id[eid]["boostBalance"] == 2
-    # Пустая выдача бессмысленна → 400.
-    assert client.post(
-        "/admin/grant", headers=ah, json={"owner_id": eid}
-    ).status_code == 400
-    # Отрицательные значения не принимаем.
-    assert client.post(
-        "/admin/grant", headers=ah, json={"owner_id": eid, "boost": -5}
-    ).status_code == 422
 
 
 def test_admin_users_forbidden_for_non_admin(client):
@@ -321,9 +306,6 @@ def test_admin_users_forbidden_for_non_admin(client):
     ).json()["access_token"]
     h = {"Authorization": f"Bearer {token}"}
     assert client.get("/admin/users", headers=h).status_code == 403
-    assert client.post(
-        "/admin/grant", headers=h, json={"owner_id": "x", "sku": "boost_24h"}
-    ).status_code == 403
 
 
 def test_autoflag_scam_vacancy(client):

@@ -49,6 +49,8 @@ export function ChatPage() {
   const [hoursNote, setHoursNote] = useState("");
   // Перенос смены: заведение предлагает, работник отвечает.
   const [moveOpen, setMoveOpen] = useState(false);
+  // Одно меню на все редкие действия: «что-то пошло не так».
+  const [troubleOpen, setTroubleOpen] = useState(false);
   const [moveDate, setMoveDate] = useState("");
   const [moveStart, setMoveStart] = useState("10:00");
   const [moveEnd, setMoveEnd] = useState("18:00");
@@ -67,6 +69,17 @@ export function ChatPage() {
     : !!srvMatch?.confirmedBySeeker;
   const bothConfirmed =
     !!srvMatch && srvMatch.confirmedBySeeker && srvMatch.confirmedByEmployer;
+  // Смена ещё «живая»: не отменена и не закрыта сама собой.
+  const alive =
+    !!srvMatch && !["cancelled", "expired", "completed"].includes(srvMatch.status);
+  // Никто ещё не отметился — значит смена не началась: можно переносить и
+  // отменять. После отметки остаётся только уточнение часов и спор.
+  const notStarted =
+    !!srvMatch && !srvMatch.seekerCheckedIn && !srvMatch.employerCheckedIn;
+  const canCancel = alive && notStarted;
+  const canMove = role === "employer" && alive && notStarted;
+  const canSetHours = role === "employer" && alive;
+  const canAct = canCancel || canMove || canSetHours;
 
   // Добавить сообщение в кэш с дедупликацией по id (echo от WS не задвоит).
   function appendMessage(msg: Message) {
@@ -305,32 +318,31 @@ export function ChatPage() {
                   : "Подтвердить смену"}
             </span>
           </Button>
-          {/* Заведению: уточнить часы и предложить перенос. Раньше и то и
-              другое решалось перепиской и ручными правками оператора. */}
-          {role === "employer" && match &&
-            !["cancelled", "expired"].includes(match.status) && (
-            <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              <button
-                className="tag"
-                style={{ flex: 1, minWidth: 130, cursor: "pointer" }}
-                onClick={() => setHoursOpen(true)}
-              >
-                Уточнить часы
-              </button>
-              {!match.seekerCheckedIn && !match.employerCheckedIn && (
-                <button
-                  className="tag"
-                  style={{ flex: 1, minWidth: 130, cursor: "pointer" }}
-                  onClick={() => setMoveOpen(true)}
-                >
-                  Перенести смену
-                </button>
-              )}
-            </div>
+          {/* Одна дверь вместо ряда кнопок. Уточнить часы, перенести и
+              отменить нужны редко — но когда нужны, их ищут именно тут.
+              Пять кнопок в ряд превращали чат в панель управления. */}
+          {canAct && (
+            <button
+              onClick={() => setTroubleOpen(true)}
+              style={{
+                marginTop: 8,
+                width: "100%",
+                minHeight: 40,
+                background: "none",
+                border: "none",
+                color: "var(--muted)",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Что-то пошло не так
+            </button>
           )}
 
-          {/* Работнику: заведение предложило другой день — надо ответить. */}
-          {role === "seeker" && match?.rescheduleDate && (
+          {/* Работнику: заведение предложило другой день — надо ответить.
+              Это не пряталось бы в меню: тут ждут ответа именно от него. */}
+          {role === "seeker" && srvMatch?.rescheduleDate && (
             <div
               className="card"
               style={{ marginTop: 8, borderColor: "var(--gold)" }}
@@ -339,9 +351,9 @@ export function ChatPage() {
                 Заведение предлагает перенос
               </div>
               <p className="muted" style={{ margin: "0 0 10px", fontSize: 14 }}>
-                {match.rescheduleDate}
-                {match.rescheduleStart != null &&
-                  ` · ${fmtTime(match.rescheduleStart)}–${fmtTime(match.rescheduleEnd ?? 0)}`}
+                {srvMatch.rescheduleDate}
+                {srvMatch.rescheduleStart != null &&
+                  ` · ${fmtTime(srvMatch.rescheduleStart)}–${fmtTime(srvMatch.rescheduleEnd ?? 0)}`}
               </p>
               <div className="row" style={{ gap: 8 }}>
                 <Button onClick={() => answerMove(true)}>Согласен</Button>
@@ -352,23 +364,6 @@ export function ChatPage() {
             </div>
           )}
 
-          {/* Отменить можно, пока смена не началась. Без этой кнопки у
-              человека оставался один выход — просто не прийти. */}
-          {match && !["completed", "cancelled"].includes(match.status) &&
-            !match.seekerCheckedIn && !match.employerCheckedIn && (
-            <button
-              className="tag"
-              style={{
-                marginTop: 8,
-                cursor: "pointer",
-                color: "var(--danger)",
-                borderColor: "var(--danger)",
-              }}
-              onClick={() => setCancelOpen(true)}
-            >
-              Не смогу выйти
-            </button>
-          )}
         </div>
         <div className="row">
           <input
@@ -388,6 +383,59 @@ export function ChatPage() {
           </Button>
         </div>
       </div>
+
+      {troubleOpen && (
+        <div className="sheet-backdrop" onClick={() => setTroubleOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2 className="h2" style={{ marginTop: 0 }}>Что-то пошло не так</h2>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              Планы меняются — это нормально. Главное, чтобы вторая сторона
+              узнала об этом заранее, а не в последний момент.
+            </p>
+            <div style={{ display: "grid", gap: 10 }}>
+              {canSetHours && (
+                <Button
+                  variant="secondary"
+                  block
+                  onClick={() => {
+                    setTroubleOpen(false);
+                    setHoursOpen(true);
+                  }}
+                >
+                  Смена прошла не по времени
+                </Button>
+              )}
+              {canMove && (
+                <Button
+                  variant="secondary"
+                  block
+                  onClick={() => {
+                    setTroubleOpen(false);
+                    setMoveOpen(true);
+                  }}
+                >
+                  Перенести на другой день
+                </Button>
+              )}
+              {canCancel && (
+                <Button
+                  variant="danger"
+                  block
+                  onClick={() => {
+                    setTroubleOpen(false);
+                    setCancelOpen(true);
+                  }}
+                >
+                  {role === "employer" ? "Смена не состоится" : "Не смогу выйти"}
+                </Button>
+              )}
+              <Button variant="ghost" block onClick={() => setTroubleOpen(false)}>
+                Закрыть
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {hoursOpen && (
         <div className="sheet-backdrop" onClick={() => setHoursOpen(false)}>

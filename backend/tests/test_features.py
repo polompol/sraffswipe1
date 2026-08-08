@@ -418,7 +418,7 @@ def test_overdue_blocks_employer_positive_swipes(client):
     assert r2.status_code == 200
 
 
-def test_overdue_blocks_urgent_and_boost(client):
+def test_overdue_blocks_urgent(client):
     from datetime import UTC, datetime, timedelta
 
     from app.db import SessionLocal
@@ -433,10 +433,8 @@ def test_overdue_blocks_urgent_and_boost(client):
     )
     db.commit()
     db.close()
-    # Должник не может ни продвигать вакансию, ни рассылать «Срочно».
+    # Должник не может рассылать «Срочно» доступным рядом.
     assert client.post(f"/vacancies/{vac['id']}/urgent",
-                       headers=_hdr(emp_token)).status_code == 402
-    assert client.post(f"/vacancies/{vac['id']}/boost",
                        headers=_hdr(emp_token)).status_code == 402
 
 

@@ -96,7 +96,6 @@ class VacancyOut(BaseModel):
     interior_photo_url: str
     status: str
     distance_km: float | None = None
-    boosted: bool = False
     # Доверие к заведению (видно ДО отклика): рейтинг от соискателей,
     # сколько смен уже закрыто и признак «платит вовремя».
     employer_rating: float = 0.0
@@ -108,7 +107,7 @@ class VacancyOut(BaseModel):
 class SwipeIn(BaseModel):
     target_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     target_type: Literal["vacancy", "user"]
-    direction: Literal["like", "superlike", "dislike"]
+    direction: Literal["like", "dislike"]
 
 
 class SwipeOut(BaseModel):

@@ -58,7 +58,7 @@ export const MED_BOOK_LABELS: Record<MedBookStatus, string> = {
   expired: "Просрочена",
 };
 
-export type SwipeDirection = "like" | "superlike" | "dislike";
+export type SwipeDirection = "like" | "dislike";
 
 export type RateType = "perHour" | "perShift";
 
@@ -178,7 +178,6 @@ export interface Vacancy {
   interiorPhotoUrl: string;
   employerVerified: boolean;
   status: string;
-  boosted?: boolean;
   distanceKm?: number;
   // Доверие к заведению (видно ДО отклика).
   employerRating?: number;
@@ -222,16 +221,6 @@ export interface Message {
 
 // --- Монетизация / entitlements ---
 
-export type Plan = "free" | "pro" | "business";
-
-export interface Entitlements {
-  plan: Plan;
-  planRenewsAt?: string | null;
-  superlikeBalance: number;
-  boostBalance: number;
-  seekerPremium: boolean;
-  employerVerified: boolean;
-}
 
 export interface PriceItem {
   id: string;

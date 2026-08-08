@@ -1,9 +1,7 @@
-"""Общие помощники по правам/тарифам: план, boost-вакансии, баланс."""
-from datetime import UTC, datetime
-
+"""Общие помощники по правам/тарифам: план, баланс, лимиты."""
 from sqlalchemy.orm import Session
 
-from .models import Boost, Entitlement, Subscription, Vacancy
+from .models import Entitlement, Subscription, Vacancy
 
 
 def ensure(db: Session, owner_id: str) -> Entitlement:
@@ -41,13 +39,6 @@ def plan_of(db: Session, owner_id: str) -> str:
         .first()
     )
     return sub.plan if sub and sub.active else "free"
-
-
-def active_boost_vacancy_ids(db: Session) -> set[str]:
-    """ID вакансий с не истёкшим boost."""
-    now = datetime.now(UTC).isoformat()
-    rows = db.query(Boost).filter(Boost.expires_at > now).all()
-    return {b.vacancy_id for b in rows}
 
 
 def active_vacancy_count(db: Session, employer_id: str) -> int:

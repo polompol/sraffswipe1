@@ -3,7 +3,6 @@ import { api, baseURL, getToken } from "./client";
 import * as mock from "./mock";
 import type {
   AppRole,
-  Entitlements,
   MatchModel,
   Message,
   Seeker,
@@ -245,12 +244,6 @@ export async function disputeShift(
   return data;
 }
 
-export async function fetchEntitlements(): Promise<Entitlements> {
-  if (!USE_BACKEND) return mock.fetchEntitlements();
-  const { data } = await api.get<Entitlements>("/billing/entitlements");
-  return data;
-}
-
 export interface InvoiceLink {
   link: string;
 }
@@ -262,7 +255,6 @@ export interface Me {
   name: string;
   rating: number;
   tgUsername?: string | null;
-  streak?: number;
   city?: string;
   district?: string;
   incomingLikes?: number;
@@ -320,7 +312,6 @@ export interface ReferralInfo {
   code: string;
   link: string;
   invited: number;
-  bonusSuperlikes: number;
 }
 
 export async function fetchReferral(): Promise<ReferralInfo> {
@@ -336,11 +327,6 @@ export async function leaveReview(
 ): Promise<void> {
   if (!USE_BACKEND) return mock.leaveReview();
   await api.post(`/matches/${matchId}/review`, { stars, text });
-}
-
-export async function boostVacancy(vacancyId: string): Promise<void> {
-  if (!USE_BACKEND) return mock.boostVacancy(vacancyId);
-  await api.post(`/vacancies/${vacancyId}/boost`, {});
 }
 
 /** «Срочно»: пинг доступным соискателям в городе смены. Возвращает число. */
@@ -549,8 +535,6 @@ export interface AdminUser {
   blocked: boolean;
   warnings: number;
   plan: string;
-  boostBalance: number;
-  superlikeBalance: number;
   balanceRub: number;
 }
 
@@ -561,7 +545,6 @@ export async function adminSearchUsers(q: string): Promise<AdminUser[]> {
   return data;
 }
 
-/** Бесплатно выдать буст/подписку/супер-лайки (комп, поддержка). */
 export interface RepeatPair {
   employer: string;
   worker: string;
@@ -587,19 +570,6 @@ export async function sendShiftReminders(): Promise<number> {
   if (!USE_BACKEND) return mock.sendShiftReminders();
   const { data } = await api.post<{ sent: number }>("/admin/reminders/send", {});
   return data.sent;
-}
-
-export async function adminGrant(
-  ownerId: string,
-  boost: number,
-  superlikes: number,
-): Promise<void> {
-  if (!USE_BACKEND) return mock.adminGrant(ownerId, boost, superlikes);
-  await api.post("/admin/grant", {
-    owner_id: ownerId,
-    boost,
-    superlikes,
-  });
 }
 
 export interface CommissionRow {

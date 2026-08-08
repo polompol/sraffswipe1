@@ -163,7 +163,7 @@ class Swipe(Base):
     swiper_id: Mapped[str] = mapped_column(String, index=True)
     target_id: Mapped[str] = mapped_column(String, index=True)
     target_type: Mapped[str] = mapped_column(String)  # vacancy|user
-    direction: Mapped[str] = mapped_column(String)  # like|superlike|dislike
+    direction: Mapped[str] = mapped_column(String)  # like|dislike
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -259,13 +259,11 @@ class Subscription(Base):
 
 
 class Entitlement(Base):
-    """Баланс прав пользователя: супер-лайки, boost, premium, верификация."""
+    """Права пользователя: денежный баланс, premium, верификация."""
 
     __tablename__ = "entitlements"
 
     owner_id: Mapped[str] = mapped_column(String, primary_key=True)
-    superlike_balance: Mapped[int] = mapped_column(Integer, default=1)
-    boost_balance: Mapped[int] = mapped_column(Integer, default=0)
     seeker_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     employer_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     # Денежный баланс заведения, ₽ — аванс, с которого автоматически
@@ -310,17 +308,6 @@ class Purchase(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
-class Boost(Base):
-    """Активный boost вакансии: поднятие в ленте до момента expires_at."""
-
-    __tablename__ = "boosts"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    vacancy_id: Mapped[str] = mapped_column(String, index=True)
-    expires_at: Mapped[str] = mapped_column(String)  # ISO
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
-
-
 class Referral(Base):
     """Реферал: кто кого пригласил. Уникальность по приглашённому."""
 
@@ -343,16 +330,6 @@ class Event(Base):
     name: Mapped[str] = mapped_column(String, index=True)
     props: Mapped[str] = mapped_column(Text, default="")  # JSON-строка
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
-
-
-class Streak(Base):
-    """Серия ежедневных заходов (геймификация вовлечения)."""
-
-    __tablename__ = "streaks"
-
-    owner_id: Mapped[str] = mapped_column(String, primary_key=True)
-    count: Mapped[int] = mapped_column(Integer, default=1)
-    last_active: Mapped[str] = mapped_column(String, default="")  # ISO date
 
 
 class SavedSearch(Base):

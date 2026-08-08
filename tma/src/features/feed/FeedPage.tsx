@@ -14,9 +14,8 @@ import {
   track,
   type FeedFilters,
 } from "@/api/endpoints";
-import { todayISO, estimatedPay } from "@/lib/format";
+import { todayISO } from "@/lib/format";
 import { useGeo } from "@/lib/useGeo";
-import { CountUp } from "@/components/CountUp";
 import { pop } from "@/lib/sfx";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
@@ -30,13 +29,10 @@ import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/Button";
-import { PILOT_MODE } from "@/lib/flags";
 import {
   IconSkip,
-  IconSuper,
   IconLike,
   IconFilter,
-  IconBolt,
   IconList,
   IconCards,
   IconFire,
@@ -143,13 +139,6 @@ export function FeedPage() {
     queryFn: () => fetchFeed(role, feedFilters),
   });
 
-  // «Деньги рядом сейчас» — сумма оплат всех смен в ленте. Money-магнит:
-  // человек заходит посмотреть, сколько денег лежит рядом прямо сейчас.
-  const moneyNear =
-    isSeeker && data
-      ? (data as Vacancy[]).reduce((s, v) => s + estimatedPay(v), 0)
-      : 0;
-
   const { data: searches } = useQuery({
     queryKey: ["saved-searches"],
     queryFn: listSavedSearches,
@@ -191,12 +180,15 @@ export function FeedPage() {
         });
         return false; // мэтч → оверлей, тост не нужен
       }
-      return dir === "like" || dir === "superlike";
+      return dir === "like";
     } catch (e) {
-      // 402 — закончились супер-лайки (ведём в тарифы), 429 — слишком часто.
+      // 402 — просроченная комиссия, 429 — слишком часто.
       const status = (e as { response?: { status?: number } })?.response?.status;
       if (status === 402) {
-        toast("Срочные закончились — откликайтесь обычным лайком", "error");
+        toast(
+          "Есть неоплаченная комиссия — пополните баланс в профиле",
+          "error",
+        );
       } else if (status === 429) {
         toast("Слишком много действий подряд — подождите пару секунд", "error");
       } else {
@@ -251,13 +243,6 @@ export function FeedPage() {
           {activeFilterCount > 0 && (
             <span className="icon-badge">{activeFilterCount}</span>
           )}
-        </button>
-        <button
-          className="icon-btn"
-          aria-label={isSeeker ? "Условия сервиса" : "Тарифы и комиссия"}
-          onClick={() => nav("/pricing")}
-        >
-          <IconBolt size={22} />
         </button>
       </div>
 
@@ -323,23 +308,6 @@ export function FeedPage() {
             + Разместить смену
           </Button>
         </div>
-      )}
-
-      {isSeeker && !PILOT_MODE && moneyNear > 0 && !empty && (
-        <button
-          className="money-near"
-          aria-label="Настроить фильтры ленты"
-          onClick={() => {
-            haptic("light");
-            setFilterOpen(true);
-          }}
-        >
-          <span className="money-near-cap">Рядом сейчас смен на</span>
-          <span className="money-near-sum">
-            <CountUp value={moneyNear} /> ₽
-          </span>
-          <span className="money-near-sub">настроить, что показывать</span>
-        </button>
       )}
 
       {isLoading && <SkeletonCard />}
@@ -422,12 +390,6 @@ export function FeedPage() {
                 <IconSkip size={32} />
               </button>
               <span className="act-label act-label-skip">Пропустить</span>
-            </div>
-            <div className="act-col">
-              <button className="act sm act-super" aria-label="Срочно — показать заведению первым" onClick={() => controller.current?.("superlike")}>
-                <IconSuper size={28} />
-              </button>
-              <span className="act-label act-label-super">Срочно</span>
             </div>
             <div className="act-col">
               <button className="act act-like" aria-label="Откликнуться — хочу здесь работать" onClick={() => controller.current?.("like")}>

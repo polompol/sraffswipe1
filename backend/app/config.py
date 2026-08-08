@@ -41,8 +41,6 @@ class Settings(BaseSettings):
     mini_app_url: str = ""
     # Username бота (без @) — для реферальных ссылок t.me/<bot>?startapp=...
     bot_username: str = "staffswipe_bot"
-    # Бонус рефереру за приглашённого (супер-лайки).
-    referral_bonus_superlikes: int = 3
     # Комиссия сервиса с закрытой смены (% от оплаты). Только УЧЁТ для счёта —
     # деньги не списываются автоматически до подключения ЮKassa. 0 = выключено.
     commission_pct: int = 10

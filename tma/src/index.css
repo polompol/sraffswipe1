@@ -516,44 +516,6 @@ button.tag:disabled {
   justify-content: center;
   overflow: hidden;
 }
-/* «Деньги рядом сейчас» — money-магнит наверху ленты */
-/* Это настоящая кнопка (ведёт в фильтры) — сбрасываем стили кнопки, чтобы
-   выглядела как блок, но оставалась доступной с клавиатуры. */
-.money-near {
-  position: relative;
-  overflow: hidden;
-  display: block;
-  width: 100%;
-  border: none;
-  font-family: inherit;
-  text-align: left;
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  margin-bottom: 12px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--crimson-dark), var(--gold));
-  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.22);
-  cursor: pointer;
-}
-.money-near-cap {
-  display: block;
-  font-size: 14px;
-  opacity: 0.92;
-}
-.money-near-sum {
-  display: block;
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  line-height: 1.1;
-  margin: 2px 0;
-}
-.money-near-sub {
-  display: block;
-  font-size: 13px;
-  opacity: 0.9;
-}
-
 /* Демо-карточка свайпа на онбординге — мягко качается, подсказывая жест */
 @keyframes swipeDemo {
   0%, 100% { transform: translateX(0) rotate(0deg); }
@@ -667,20 +629,11 @@ button.tag:disabled {
   justify-content: center;
   cursor: pointer;
 }
-.act.sm {
-  width: 60px;
-  height: 60px;
-}
 /* Высокий контраст: заливка + белая иконка — хорошо видно при слабом зрении */
 .act-like {
   background: var(--like);
   color: #fff;
   border-color: var(--like);
-}
-.act-super {
-  background: var(--super);
-  color: #fff;
-  border-color: var(--super);
 }
 .act-skip {
   background: var(--surface);
@@ -695,9 +648,6 @@ button.tag:disabled {
 .act-label-like {
   color: var(--like);
 }
-.act-label-super {
-  color: var(--super);
-}
 .act-label-skip {
   color: var(--dislike);
 }
@@ -705,10 +655,6 @@ button.tag:disabled {
 body[data-large="1"] .act {
   width: 88px;
   height: 88px;
-}
-body[data-large="1"] .act.sm {
-  width: 74px;
-  height: 74px;
 }
 body[data-large="1"] .act-label {
   font-size: 15px;
@@ -982,11 +928,6 @@ body[data-large="1"] .tab {
   box-shadow: 0 10px 24px rgba(165, 28, 48, 0.42),
     inset 0 2px 4px rgba(255, 255, 255, 0.30);
 }
-.act-super {
-  background-image: linear-gradient(160deg, #d8b85a, #c39a3a);
-  box-shadow: 0 10px 24px rgba(195, 154, 58, 0.44),
-    inset 0 2px 4px rgba(255, 255, 255, 0.36);
-}
 .act-skip {
   box-shadow: 0 6px 16px rgba(60, 40, 30, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -1006,10 +947,6 @@ body[data-large="1"] .tab {
   .act-like:hover {
     box-shadow: 0 16px 32px rgba(165, 28, 48, 0.5),
       inset 0 2px 4px rgba(255, 255, 255, 0.3);
-  }
-  .act-super:hover {
-    box-shadow: 0 16px 32px rgba(195, 154, 58, 0.52),
-      inset 0 2px 4px rgba(255, 255, 255, 0.36);
   }
 }
 

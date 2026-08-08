@@ -15,8 +15,9 @@ interface Props<T> {
 
 const VISIBLE = 3;
 
-function dirFrom(mx: number, my: number, sx: number, sy: number): SwipeDirection {
-  if (sy < 0 || (my < -80 && Math.abs(my) > Math.abs(mx))) return "superlike";
+// Свайп вбок: вправо — отклик, влево — пропустить. Свайпа вверх больше нет
+// (им отправляли супер-лайк «Срочно»), поэтому вертикаль карточку не двигает.
+function dirFrom(mx: number, sx: number): SwipeDirection {
   if (sx !== 0) return sx > 0 ? "like" : "dislike";
   return mx > 0 ? "like" : "dislike";
 }
@@ -37,13 +38,12 @@ export function SwipeDeck<T>(props: Props<T>) {
     if (gone.has(index)) return;
     gone.add(index);
     haptic(dir === "dislike" ? "light" : "medium");
-    const dx = dir === "dislike" ? -1 : dir === "like" ? 1 : 0;
-    const dy = dir === "superlike" ? -1 : 0;
+    const dx = dir === "dislike" ? -1 : 1;
     apiRef.start((i) => {
       if (i !== index) return {};
       return {
         x: (200 + window.innerWidth) * dx,
-        y: dy ? -(200 + window.innerHeight) : 0,
+        y: 0,
         rot: dx * 18,
         config: { tension: 200, friction: 28 },
       };
@@ -100,11 +100,11 @@ export function SwipeDeck<T>(props: Props<T>) {
   }, [apiRef, gone]);
 
   const bind = useDrag(
-    ({ args: [index], active, movement: [mx, my], swipe: [sx, sy], last }) => {
-      // Триггер: длинный свайп ИЛИ быстрый флик (swipe от use-gesture).
-      const trigger = sx !== 0 || sy !== 0 || Math.abs(mx) > 110 || my < -110;
+    ({ args: [index], active, movement: [mx, my], swipe: [sx], last }) => {
+      // Триггер: длинный свайп вбок ИЛИ быстрый флик (swipe от use-gesture).
+      const trigger = sx !== 0 || Math.abs(mx) > 110;
       if (last && trigger) {
-        fling(index as number, dirFrom(mx, my, sx, sy));
+        fling(index as number, dirFrom(mx, sx));
         return;
       }
       apiRef.start((i) => {
@@ -141,7 +141,7 @@ export function SwipeDeck<T>(props: Props<T>) {
           >
             {renderCard(item)}
             <Tint x={style.x} />
-            <Stamps x={style.x} y={style.y} />
+            <Stamps x={style.x} />
           </animated.div>
         );
       })}
@@ -171,7 +171,7 @@ function Tint({ x }: { x: SpringValue<number> }) {
   );
 }
 
-function Stamps({ x, y }: { x: SpringValue<number>; y: SpringValue<number> }) {
+function Stamps({ x }: { x: SpringValue<number> }) {
   return (
     <>
       <animated.div
@@ -195,19 +195,6 @@ function Stamps({ x, y }: { x: SpringValue<number>; y: SpringValue<number> }) {
         }}
       >
         НЕТ
-      </animated.div>
-      <animated.div
-        className="stamp"
-        style={{
-          left: "50%",
-          marginLeft: -70,
-          top: "auto",
-          bottom: 90,
-          color: "var(--super)",
-          opacity: to(y, (v) => Math.max(0, Math.min(1, -v / 80))),
-        }}
-      >
-        СРОЧНО
       </animated.div>
     </>
   );

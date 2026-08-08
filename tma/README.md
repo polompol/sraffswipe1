@@ -33,15 +33,15 @@ src/
 ├── types/domain.ts        # доменные типы (зеркало backend)
 ├── lib/format.ts          # форматирование дат/ставок
 └── features/              # onboarding, auth(role), feed(свайп), matches, chat,
-                           # profile, vacancy, shifts, billing(тарифы/Stars/ЮKassa)
+                           # profile, vacancy, shifts, admin, support
 ```
 
 ## Монетизация
 
-- **Подписки работодателей** (Free / Pro / Business) — ЮKassa, рубли.
-- **Boost вакансии** и **супер-лайки «Срочно»** — Telegram Stars (XTR).
-- **Верификация заведения** (DaData) — ЮKassa.
-- **Premium соискателя** — Telegram Stars.
+Одна цифра и один платёж:
 
-Экран — `src/features/billing/PricingPage.tsx`. Ссылки на оплату приходят с
-backend (`/billing/stars/invoice`, `/billing/yookassa/payment`).
+- **Комиссия 10%** с закрытой смены — списывается с баланса заведения;
+- **пополнение баланса** картой через ЮKassa (`/billing/wallet/topup`).
+
+Отдельного экрана с тарифами нет намеренно: платит только заведение и только
+за состоявшуюся смену, поэтому всё живёт в карточке комиссии в профиле.

@@ -8,7 +8,6 @@ import {
   resolveMatch,
   adminCreditWallet,
   adminEraseAccount,
-  adminGrant,
   adminLogoutAll,
   fetchRepeatPairs,
   sendShiftReminders,
@@ -131,20 +130,6 @@ export function AdminPage() {
     queryKey: ["admin-users", userQ],
     queryFn: () => adminSearchUsers(userQ),
   });
-
-  // Компенсация оператора: выдаём буст и срочные явными числами —
-  // платного каталога больше нет, единственный платёж это пополнение баланса.
-  async function grant(
-    id: string,
-    label: string,
-    boost = 0,
-    superlikes = 0,
-  ) {
-    haptic("success");
-    await adminGrant(id, boost, superlikes);
-    toast(`Выдано: ${label}`, "success");
-    qc.invalidateQueries({ queryKey: ["admin-users"] });
-  }
 
   async function credit(id: string, amountRub: number) {
     haptic("success");
@@ -428,7 +413,6 @@ export function AdminPage() {
                 <div className="muted" style={{ fontSize: 12 }}>
                   {u.role === "employer" ? "заведение" : "соискатель"}
                   {u.username ? ` · @${u.username}` : ""} · {u.plan.toUpperCase()}
-                  {" · "}Boost {u.boostBalance}
                   {u.role === "employer"
                     ? ` · Баланс ${u.balanceRub.toLocaleString("ru-RU")} ₽`
                     : ""}
@@ -437,13 +421,6 @@ export function AdminPage() {
               </span>
             </div>
             <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              <button
-                className="tag"
-                style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                onClick={() => grant(u.id, "буст на 1 вакансию", 1, 0)}
-              >
-                + Boost
-              </button>
               {u.role === "employer" &&
                 [1000, 5000].map((a) => (
                   <button
@@ -455,13 +432,6 @@ export function AdminPage() {
                     Баланс +{a.toLocaleString("ru-RU")} ₽
                   </button>
                 ))}
-              <button
-                className="tag"
-                style={{ cursor: "pointer", color: "var(--gold)", borderColor: "var(--gold)" }}
-                onClick={() => grant(u.id, "5 срочных", 0, 5)}
-              >
-                + 5 срочных
-              </button>
               <button
                 className="tag"
                 style={{ cursor: "pointer" }}
