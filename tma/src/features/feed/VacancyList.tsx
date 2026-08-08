@@ -120,6 +120,8 @@ export function VacancyList({
               </div>
               <div className="muted" style={{ marginTop: 2 }}>
                 {STAFF_ROLE_LABELS[v.role]} · {rateLabel(v.rate, v.rateType)}
+                {(v.headcount ?? 1) > 1 &&
+                  ` · набрано ${(v.headcount ?? 1) - (v.slotsLeft ?? 0)} из ${v.headcount}`}
               </div>
               <div className="muted">
                 {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}

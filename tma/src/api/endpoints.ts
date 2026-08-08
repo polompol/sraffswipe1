@@ -296,6 +296,7 @@ export interface VacancyInput {
   tips?: string;
   description?: string;
   require_med_book?: boolean;
+  headcount?: number;
   address?: string;
   city?: string;
   lat?: number;

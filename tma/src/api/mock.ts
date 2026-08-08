@@ -91,6 +91,8 @@ const VACANCIES: Vacancy[] = [
     companyName: "Ресторан «Грядка»",
     companyPhotoUrl: photo("photo-1517248135467-4c7edcad34c4"),
     role: "waiter",
+    headcount: 4,
+    slotsLeft: 2,
     date: new Date().toISOString().slice(0, 10),
     startTime: 11 * 60,
     endTime: 23 * 60,

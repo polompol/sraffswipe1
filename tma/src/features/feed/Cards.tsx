@@ -228,6 +228,16 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
               <IconMedBook size={15} /> Медкнижка
             </span>
           )}
+          {/* Набор на несколько человек: без этой строки соискатель думает,
+              что место одно, и не откликается «наверняка уже заняли». */}
+          {(v.headcount ?? 1) > 1 && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700 }}>
+              Нужно {v.headcount} чел.
+              {v.slotsLeft != null && v.slotsLeft < (v.headcount ?? 1)
+                ? ` · свободно ${v.slotsLeft}`
+                : ""}
+            </span>
+          )}
         </div>
 
         <div style={{ marginTop: 8, fontWeight: 800, fontSize: 16 }}>

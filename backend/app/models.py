@@ -128,6 +128,10 @@ class Vacancy(Base):
     # none|individual|shared (нет / себе / поровну между сменой).
     tips: Mapped[str] = mapped_column(String, default="none")
     description: Mapped[str] = mapped_column(Text, default="")
+    # Сколько человек нужно на смену. Банкет, выходные, инвентаризация — там
+    # почти всегда нужен не один. Раньше поля не было: заведение публиковало
+    # пять одинаковых объявлений, а соискатель не понимал, сколько мест.
+    headcount: Mapped[int] = mapped_column(Integer, default=1)
     require_med_book: Mapped[bool] = mapped_column(Boolean, default=False)
     require_experience: Mapped[bool] = mapped_column(Boolean, default=False)
     lat: Mapped[float] = mapped_column(Float, default=0.0)

@@ -163,6 +163,10 @@ export interface Vacancy {
   payMethod?: PayMethod;
   tips?: TipsMode;
   description: string;
+  /** Сколько человек нужно на смену (по умолчанию 1). */
+  headcount?: number;
+  /** Сколько мест ещё свободно. */
+  slotsLeft?: number;
   requireMedBook: boolean;
   requireExperience: boolean;
   lat: number;

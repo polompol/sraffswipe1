@@ -46,12 +46,34 @@ def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
     return {emp_id: cnt for emp_id, cnt in rows}
 
 
+def taken_counts(db: Session, vacancy_ids: list[str]) -> dict[str, int]:
+    """Сколько мест уже занято по каждой смене.
+
+    Занятым считаем мэтч в любом «живом» состоянии: договорились, подтвердили,
+    отработали. Неявка место не занимает — заведению снова нужен человек.
+    """
+    if not vacancy_ids:
+        return {}
+    rows = (
+        db.query(Match.vacancy_id, func.count(Match.id))
+        .filter(
+            Match.vacancy_id.in_(vacancy_ids),
+            Match.status.in_(("matched", "confirmed", "completed")),
+            Match.no_show.is_(False),
+        )
+        .group_by(Match.vacancy_id)
+        .all()
+    )
+    return {vid: int(n) for vid, n in rows}
+
+
 def _to_out(
     v: Vacancy,
     emp: Employer | None,
     dist: float | None,
     boosted: bool = False,
     shifts_done: int = 0,
+    taken: int = 0,
 ) -> VacancyOut:
     rating = emp.rating if emp else 0.0
     # «Платит вовремя» — заслуженный знак доверия: высокий рейтинг от
@@ -74,6 +96,8 @@ def _to_out(
         description=v.description,
         require_med_book=v.require_med_book,
         require_experience=v.require_experience,
+        headcount=v.headcount or 1,
+        slots_left=max(0, (v.headcount or 1) - taken),
         lat=v.lat,
         lng=v.lng,
         address=v.address,
@@ -125,11 +149,13 @@ def list_vacancies(
             .all()
         )
         done = _shifts_done_by_employer(db, {principal["id"]})
+        taken = taken_counts(db, [v.id for v in rows])
         return [
             _to_out(
                 v, emp, None,
                 boosted=v.id in boosted_ids,
                 shifts_done=done.get(v.employer_id, 0),
+                taken=taken.get(v.id, 0),
             )
             for v in rows
         ]
@@ -187,6 +213,7 @@ def list_vacancies(
         else {}
     )
     done = _shifts_done_by_employer(db, emp_ids)
+    taken = taken_counts(db, [v.id for v in rows])
 
     result: list[VacancyOut] = []
     for v in rows:
@@ -202,10 +229,16 @@ def list_vacancies(
             dist = distance_km(lat, lng, v.lat, v.lng)
             if dist > radius_km:
                 continue
+        # Набранную смену в ленте не показываем: людей уже нашли, а отклик
+        # на неё — потерянное время обеих сторон. Раньше поля «сколько нужно»
+        # не было вовсе, и смена висела, пока заведение не снимет её руками.
+        if taken.get(v.id, 0) >= (v.headcount or 1):
+            continue
         result.append(_to_out(
             v, emp, dist,
             boosted=v.id in boosted_ids,
             shifts_done=done.get(v.employer_id, 0),
+            taken=taken.get(v.id, 0),
         ))
 
     # Boost всегда наверху; внутри группы — по выбранной сортировке.
@@ -344,13 +377,34 @@ def update_vacancy(
     """Исправить свою смену (опечатка в ставке, времени, адресе).
     Доступно, пока по ней нет откликов."""
     v = _own_vacancy_or_404(db, vacancy_id, principal)
-    if _blocked_by_matches(db, vacancy_id):
+    taken = taken_counts(db, [v.id]).get(v.id, 0)
+    fields = body.model_dump()
+
+    # Нельзя объявить, что нужно меньше людей, чем уже набрано, — иначе
+    # человек, с которым договорились, остаётся «лишним».
+    if fields["headcount"] < taken:
         raise HTTPException(
             status_code=409,
-            detail="По смене уже есть отклик — условия менять нельзя. "
-                   "Договоритесь в чате или снимите смену после её закрытия.",
+            detail=f"На смену уже взято {taken} чел. — меньше поставить нельзя.",
         )
-    for field, value in body.model_dump().items():
+
+    if _blocked_by_matches(db, vacancy_id):
+        # Исключение из заморозки условий: увеличить число людей можно всегда.
+        # «Нужен ещё один официант» никого не ущемляет — у тех, кто уже
+        # согласился, ставка, время и адрес остаются прежними. Всё остальное
+        # по-прежнему заморожено.
+        others_changed = any(
+            getattr(v, f) != val for f, val in fields.items() if f != "headcount"
+        )
+        if others_changed or fields["headcount"] <= (v.headcount or 1):
+            raise HTTPException(
+                status_code=409,
+                detail="По смене уже есть отклик — условия менять нельзя. "
+                       "Можно только увеличить число нужных людей. "
+                       "Остальное — договоритесь в чате.",
+            )
+
+    for field, value in fields.items():
         setattr(v, field, value)
     db.commit()
     db.refresh(v)
@@ -359,7 +413,7 @@ def update_vacancy(
 
     auto_flag(db, "vacancy", v.id, body.description, body.role)
     emp = db.get(Employer, v.employer_id)
-    return _to_out(v, emp, None)
+    return _to_out(v, emp, None, taken=taken)
 
 
 @router.delete("/{vacancy_id}", status_code=204)

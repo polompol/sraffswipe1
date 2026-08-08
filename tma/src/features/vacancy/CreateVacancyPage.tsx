@@ -55,6 +55,8 @@ export function CreateVacancyPage() {
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
   const [desc, setDesc] = useState(pre?.description ?? "");
   const [medBook, setMedBook] = useState(pre?.requireMedBook ?? true);
+  // Сколько человек нужно: на банкет и выходные почти никогда не один.
+  const [headcount, setHeadcount] = useState(pre?.headcount ?? 1);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
@@ -81,6 +83,7 @@ export function CreateVacancyPage() {
         tips,
         description: desc,
         require_med_book: medBook,
+        headcount,
         address,
         city: city.trim(),
         lat: coords?.lat,
@@ -200,6 +203,43 @@ export function CreateVacancyPage() {
             {rateType === "perHour" ? "₽/час" : "₽/смена"}
           </button>
         </div>
+
+        <div className="form-label">Сколько человек нужно</div>
+        <div className="row" style={{ gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          {[1, 2, 3, 5, 10].map((n) => (
+            <button
+              key={n}
+              className="tag"
+              style={{
+                cursor: "pointer",
+                minWidth: 52,
+                justifyContent: "center",
+                background: headcount === n ? "var(--gold)" : "transparent",
+                color: headcount === n ? "#fff" : "var(--text)",
+                borderColor: headcount === n ? "var(--gold)" : "var(--border)",
+              }}
+              onClick={() => setHeadcount(n)}
+            >
+              {n}
+            </button>
+          ))}
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={20}
+            aria-label="Сколько человек нужно"
+            style={{ width: 90 }}
+            value={headcount}
+            onChange={(e) =>
+              setHeadcount(Math.min(20, Math.max(1, Number(e.target.value) || 1)))
+            }
+          />
+        </div>
+        <p className="muted" style={{ margin: "-8px 0 16px", fontSize: 13 }}>
+          Одна смена на всех — не нужно публиковать несколько одинаковых.
+          Когда наберётся столько людей, смена уйдёт из ленты сама.
+        </p>
 
         <div className="form-label">Как и когда платите</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>

@@ -47,6 +47,9 @@ class VacancyIn(BaseModel):
     end_time: int = Field(ge=0, le=1440)
     rate: int = Field(ge=0, le=1_000_000)
     rate_type: Literal["perHour", "perShift"] = "perHour"
+    # Сколько человек нужно. Потолок 20 — дальше это уже не подработка
+    # через приложение, а отдельный разговор с заведением.
+    headcount: int = Field(default=1, ge=1, le=20)
     pay_method: Literal["cash", "card", "transfer"] = "cash"
     tips: Literal["none", "individual", "shared"] = "none"
     description: Longish = ""
@@ -84,6 +87,8 @@ class VacancyOut(BaseModel):
     description: str
     require_med_book: bool
     require_experience: bool
+    headcount: int = 1
+    slots_left: int = 1   # сколько мест ещё свободно
     lat: float
     lng: float
     address: str
