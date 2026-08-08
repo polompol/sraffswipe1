@@ -490,6 +490,36 @@ def send_shift_reminders(
     return {"sent": send_reminders(db)}
 
 
+@router.post("/shifts/close-abandoned")
+def close_abandoned(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Закрыть смены, которые не отметила ни одна сторона.
+
+    Такие смены висели «подтверждёнными» вечно и держали место занятым.
+    Запускать раз в сутки вместе с остальной уборкой.
+    """
+    from ..digest import close_abandoned_shifts
+
+    return {"closed": close_abandoned_shifts(db)}
+
+
+@router.post("/shifts/unfilled-alerts")
+def unfilled_alerts(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Предупредить заведения о завтрашних сменах без людей.
+
+    Раньше заведение узнавало об этом утром в день смены, когда искать уже
+    поздно. Запускать вечером, вместе с напоминаниями работникам.
+    """
+    from ..digest import send_unfilled_alerts
+
+    return {"sent": send_unfilled_alerts(db)}
+
+
 @router.post("/shifts/auto-close")
 def auto_close_hanging_shifts(
     db: Session = Depends(get_db),
