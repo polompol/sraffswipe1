@@ -245,7 +245,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           style={{
             marginTop: 10,
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
             columnGap: 10,
             rowGap: 6,
             alignItems: "center",

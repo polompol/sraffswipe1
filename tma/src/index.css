@@ -322,6 +322,9 @@ button.tag:disabled {
 }
 .tab {
   flex: 1;
+  /* Без этого длинная подпись («Вакансии») не даёт кнопке сжаться, и в
+     крупном режиме на узком экране панель вылезала за край экрана. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -744,6 +747,19 @@ body[data-large="1"] .card-meta {
 }
 body[data-large="1"] .tab {
   font-size: 16px;
+}
+/* Узкий экран + крупный режим: подписи вкладок вместе шире экрана. Уменьшаем
+   только подпись — зона нажатия и иконки остаются крупными, ради чего режим
+   и включают. */
+@media (max-width: 360px) {
+  body[data-large="1"] .tab {
+    font-size: 13px;
+  }
+  body[data-large="1"] .tab span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
 }
 
 /* Чат */

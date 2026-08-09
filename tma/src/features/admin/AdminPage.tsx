@@ -531,7 +531,7 @@ export function AdminPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `repeat(${PERIODS.length}, 1fr)`,
+              gridTemplateColumns: `repeat(${PERIODS.length}, minmax(0, 1fr))`,
               gap: 6,
               marginBottom: 10,
             }}
@@ -706,7 +706,7 @@ export function AdminPage() {
                       {c.amountRub.toLocaleString("ru-RU")} ₽
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8, marginTop: 10 }}>
                     <button
                       className="tag"
                       style={{ cursor: "pointer", color: "var(--like)", borderColor: "var(--like)" }}
@@ -821,7 +821,7 @@ export function AdminPage() {
                       </div>
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8, marginTop: 10 }}>
                     {u.role === "employer" && (
                       <>
                         {[1000, 5000].map((a) => (

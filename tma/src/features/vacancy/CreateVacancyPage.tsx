@@ -208,7 +208,7 @@ export function CreateVacancyPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5, 1fr)",
+            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
             gap: 8,
             marginBottom: 8,
           }}
@@ -274,7 +274,7 @@ export function CreateVacancyPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
             gap: 8,
             margin: "8px 0 16px",
           }}

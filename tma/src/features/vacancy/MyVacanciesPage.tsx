@@ -59,7 +59,7 @@ export function MyVacanciesPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
           gap: 8,
           marginBottom: 14,
         }}
@@ -109,7 +109,7 @@ export function MyVacanciesPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
                 gap: 8,
                 marginTop: 10,
               }}

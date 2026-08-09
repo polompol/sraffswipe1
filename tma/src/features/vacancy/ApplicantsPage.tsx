@@ -71,9 +71,11 @@ export function ApplicantsPage() {
         <div className="stagger" style={{ display: "grid", gap: 12 }}>
           {data?.map((a) => (
             <div key={a.id} className="card">
-              <div className="row" style={{ gap: 10 }}>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <b style={{ fontSize: 17 }}>
+              {/* Ряд переносится, а длинные слова рвутся: у людей бывают
+                  двойные фамилии, и на узком экране имя наезжало на бейдж. */}
+              <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                <span style={{ flex: "1 1 60%", minWidth: 0 }}>
+                  <b style={{ fontSize: 17, overflowWrap: "anywhere" }}>
                     {a.name}
                     {a.age ? `, ${a.age}` : ""}
                   </b>
@@ -97,14 +99,22 @@ export function ApplicantsPage() {
 
               {/* На какую смену откликнулись: у заведения их обычно несколько,
                   и без этой строки непонятно, кого и куда брать. */}
+              {/* Не .tag: чип рассчитан на короткую подпись в одну строку, а
+                  здесь роль, дата и время вместе не помещаются на узком
+                  экране и вылезали за карточку. */}
               <div
-                className="tag"
                 style={{
                   marginTop: 10,
-                  width: "100%",
-                  justifyContent: "flex-start",
-                  borderColor: "var(--gold)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  padding: "8px 14px",
+                  border: "1.5px solid var(--gold)",
+                  borderRadius: 999,
                   color: "var(--gold)",
+                  fontWeight: 600,
+                  fontSize: 15,
                 }}
               >
                 <IconCalendar size={13} />
@@ -129,7 +139,7 @@ export function ApplicantsPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
+                  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
                   gap: 8,
                   marginTop: 12,
                 }}
