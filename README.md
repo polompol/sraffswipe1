@@ -94,6 +94,7 @@ cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 рейт-лимит на запись и на SMS-коды (срок жизни кода 10 мин); строгая валидация
 входных данных; неблокирующие уведомления.
 
+🚀 С чего начать сегодня (20 минут, без сервера) — **[`docs/START-TODAY.md`](docs/START-TODAY.md)**.
 📦 Полная инструкция по запуску в прод — **[`docs/deploy.md`](docs/deploy.md)**.
 🗺️ План развития, чистка кода и безопасность — **[`docs/roadmap.html`](docs/roadmap.html)**.
 
