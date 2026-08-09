@@ -26,6 +26,17 @@ window.addEventListener("unhandledrejection", (e) =>
 
 void initSentry();
 void initTelegram();
+
+// Установка на домашний экран (вне Telegram). Внутри Mini App приложение уже
+// живёт в оболочке Telegram, и лишний слой там не нужен — поэтому регистрируем
+// service worker, только если запуск обычный, браузерный.
+if ("serviceWorker" in navigator && !window.location.hash.includes("tgWebApp")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* не поддержано или заблокировано — приложение работает как обычно */
+    });
+  });
+}
 initTheme();
 // Крупный режим (доступность) — применяем до первого рендера, если включён.
 if (localStorage.getItem("ss_large") === "1") {
