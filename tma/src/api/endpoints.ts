@@ -521,13 +521,6 @@ export interface AdminRevenue {
   topupsRub: number;
 }
 
-export interface AdminSubscription {
-  ownerId: string;
-  company: string;
-  plan: string;
-  renewsAt?: string | null;
-}
-
 export async function fetchAdminOverview(): Promise<AdminOverview> {
   if (!USE_BACKEND) return mock.fetchAdminOverview();
   const { data } = await api.get<AdminOverview>("/admin/overview");
@@ -570,7 +563,6 @@ export interface AdminUser {
   username?: string | null;
   blocked: boolean;
   warnings: number;
-  plan: string;
   balanceRub: number;
 }
 
@@ -842,12 +834,6 @@ export async function fetchBlocked(): Promise<AdminBlocked[]> {
   return data;
 }
 
-
-export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {
-  if (!USE_BACKEND) return mock.fetchAdminSubscriptions();
-  const { data } = await api.get<AdminSubscription[]>("/admin/subscriptions");
-  return data;
-}
 
 export interface AddressSuggestion {
   value: string;

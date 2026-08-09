@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..entitlements import ensure, get_or_create
-from ..models import Commission, Entitlement, Purchase, Subscription, WalletTxn
+from ..models import Commission, Entitlement, Purchase, WalletTxn
 from ..security import (
     current_principal,
     decode_token,
@@ -29,30 +29,6 @@ from ..security import (
 )
 
 router = APIRouter(prefix="/billing", tags=["billing"])
-
-class EntitlementsOut(BaseModel):
-    plan: str
-    planRenewsAt: str | None = None
-    seekerPremium: bool
-    employerVerified: bool
-
-
-@router.get("/entitlements", response_model=EntitlementsOut)
-def get_entitlements(
-    principal: dict = Depends(current_principal), db: Session = Depends(get_db)
-):
-    ent = get_or_create(db, principal["id"])
-    sub = (
-        db.query(Subscription)
-        .filter(Subscription.owner_id == principal["id"])
-        .first()
-    )
-    return EntitlementsOut(
-        plan=sub.plan if sub and sub.active else "free",
-        planRenewsAt=sub.renews_at if sub else None,
-        seekerPremium=ent.seeker_premium,
-        employerVerified=ent.employer_verified,
-    )
 
 
 def _document_response(

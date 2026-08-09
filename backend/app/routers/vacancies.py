@@ -7,11 +7,6 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..entitlements import (
-    PLAN_VACANCY_LIMIT,
-    active_vacancy_count,
-    plan_of,
-)
 from ..geo import distance_km
 from ..models import Employer, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
@@ -342,14 +337,6 @@ def create_vacancy(
             status_code=402,
             detail="Есть неоплаченная комиссия за прошлые смены — "
                    "оплатите счёт, чтобы публиковать новые вакансии.",
-        )
-
-    # Лимит тарифа Free на число активных вакансий.
-    limit = PLAN_VACANCY_LIMIT.get(plan_of(db, emp.id))
-    if limit is not None and active_vacancy_count(db, emp.id) >= limit:
-        raise HTTPException(
-            status_code=402,
-            detail="Лимит тарифа Free. Оформите Pro для большего числа вакансий.",
         )
 
     v = Vacancy(employer_id=emp.id, **body.model_dump())

@@ -168,7 +168,6 @@ def test_admin_panel_gating_and_reports(client):
     res = client.post(f"/admin/reports/{rid}/resolve", headers=admin_h)
     assert res.status_code == 200
     assert client.get("/admin/reports?status=open", headers=admin_h).json() == []
-    assert client.get("/admin/subscriptions", headers=admin_h).status_code == 200
 
 
 def test_admin_endpoints_forbidden_for_non_admin(client):
@@ -180,7 +179,7 @@ def test_admin_endpoints_forbidden_for_non_admin(client):
         "/auth/verify", json={"phone": "+79990007777", "code": code, "role": "seeker"}
     ).json()["access_token"]
     h = {"Authorization": f"Bearer {token}"}
-    for path in ("/admin/overview", "/admin/reports", "/admin/subscriptions"):
+    for path in ("/admin/overview", "/admin/reports", "/admin/purchases"):
         assert client.get(path, headers=h).status_code == 403, path
     assert client.post("/admin/reports/any/resolve", headers=h).status_code == 403
     # Совсем без токена — тоже закрыто.

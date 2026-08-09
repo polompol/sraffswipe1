@@ -97,6 +97,31 @@ services:
       redis:
         condition: service_healthy
 
+  # Ежедневные задачи: напоминания о сменах, предупреждения о завтрашних
+  # сменах без людей, закрытие зависших и брошенных, сверка платежей.
+  # Раньше всё это оператор нажимал руками в админке — уехал на выходные,
+  # и сервис на два дня замирал. Кнопки в админке остались: ими удобно
+  # догнать что-то сразу, не дожидаясь расписания.
+  scheduler:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://staffswipe:${POSTGRES_PASSWORD}@db:5432/staffswipe
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
+      BOT_USERNAME: ${BOT_USERNAME:?set BOT_USERNAME in .env}
+      DEV_MODE: "false"
+      ALLOW_INSECURE_TELEGRAM_AUTH: "false"
+      MINI_APP_URL: https://${DOMAIN}
+      BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
   # Telegram-бот: кнопка запуска Mini App и уведомления.
   bot:
     build: ./backend/bot
@@ -107,8 +132,8 @@ services:
       # уведомления шлёт сам API.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
       MINI_APP_URL: https://${DOMAIN}
-      # Эффект «печатает…» + плавное раскрытие текста бота (0 — выключить).
-      BOT_TYPEWRITER: ${BOT_TYPEWRITER:-1}
+      # Эффект «печатает…» + плавное раскрытие текста бота (1 — включить).
+      BOT_TYPEWRITER: ${BOT_TYPEWRITER:-0}
 
   # Собранная статика Mini App. VITE_*-переменные «запекаются» в бандл на этапе
   # сборки образа (build args), поэтому важен пересбор при смене домена.

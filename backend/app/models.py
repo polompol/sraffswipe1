@@ -245,26 +245,17 @@ class PhoneCode(Base):
 # ---- Монетизация / entitlements ----
 
 
-class Subscription(Base):
-    """Подписка работодателя (ЮKassa). Активный тариф и срок."""
-
-    __tablename__ = "subscriptions"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    owner_id: Mapped[str] = mapped_column(String, index=True)  # employer.id
-    plan: Mapped[str] = mapped_column(String, default="free")  # free|pro|business
-    active: Mapped[bool] = mapped_column(Boolean, default=False)
-    renews_at: Mapped[str | None] = mapped_column(String, nullable=True)  # ISO
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
-
-
 class Entitlement(Base):
-    """Права пользователя: денежный баланс, premium, верификация."""
+    """Права пользователя: денежный баланс и верификация компании.
+
+    Подписок и премиума тут нет: единственная модель заработка — комиссия с
+    закрытой смены. Поля от прежней схемы удалены, чтобы админка не показывала
+    людям тариф «FREE», которого не существует.
+    """
 
     __tablename__ = "entitlements"
 
     owner_id: Mapped[str] = mapped_column(String, primary_key=True)
-    seeker_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     employer_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     # Денежный баланс заведения, ₽ — аванс, с которого автоматически
     # списывается комиссия за закрытые смены. Пополнение: оператор (принял

@@ -12,7 +12,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..entitlements import get_or_create, plan_of
+from ..entitlements import get_or_create
 from ..models import (
     Commission,
     Employer,
@@ -21,7 +21,6 @@ from ..models import (
     Match,
     Purchase,
     Report,
-    Subscription,
     Swipe,
     User,
     Vacancy,
@@ -355,36 +354,6 @@ def list_blocked(
     return out
 
 
-class SubscriptionOut(BaseModel):
-    ownerId: str
-    company: str
-    plan: str
-    renewsAt: str | None = None
-
-
-@router.get("/subscriptions", response_model=list[SubscriptionOut])
-def list_subscriptions(
-    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
-):
-    rows = (
-        db.query(Subscription)
-        .filter(Subscription.active.is_(True))
-        .order_by(Subscription.created_at.desc())
-        .limit(200)
-        .all()
-    )
-    out: list[SubscriptionOut] = []
-    for s in rows:
-        emp = db.get(Employer, s.owner_id)
-        out.append(SubscriptionOut(
-            ownerId=s.owner_id,
-            company=emp.company_name if emp else "—",
-            plan=s.plan,
-            renewsAt=s.renews_at,
-        ))
-    return out
-
-
 class PurchaseOut(BaseModel):
     id: str
     ownerId: str
@@ -427,7 +396,6 @@ class AdminUserOut(BaseModel):
     username: str | None = None
     blocked: bool
     warnings: int
-    plan: str
     balanceRub: int = 0  # денежный баланс (аванс) заведения
 
 
@@ -437,7 +405,6 @@ def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
     return AdminUserOut(
         id=obj.id, role=role, name=name, username=obj.tg_username,
         blocked=obj.blocked, warnings=obj.warnings,
-        plan=plan_of(db, obj.id),
         balanceRub=ent.balance_rub,
     )
 

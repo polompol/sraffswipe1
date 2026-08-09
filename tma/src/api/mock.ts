@@ -525,12 +525,11 @@ export function adminSearchUsers(q: string) {
   const all = [
     {
       id: "emp1", role: "employer" as const, name: "Кофейня «Дрова»",
-      username: "drova", blocked: false, warnings: 0, plan: "pro",
-      balanceRub: 1500,
+      username: "drova", blocked: false, warnings: 0, balanceRub: 1500,
     },
     {
       id: "seek1", role: "seeker" as const, name: "Мария", username: null,
-      blocked: false, warnings: 1, plan: "free", balanceRub: 0,
+      blocked: false, warnings: 1, balanceRub: 0,
     },
   ];
   const ql = q.trim().toLowerCase();
@@ -649,12 +648,6 @@ export function resolveMatch(_matchId: string, _outcome: string): Promise<void> 
   void _matchId;
   void _outcome;
   return Promise.resolve();
-}
-export function fetchAdminSubscriptions() {
-  return Promise.resolve([
-    { ownerId: "emp1", company: "Кофейня «Дрова»", plan: "pro", renewsAt: "2026-07-20" },
-    { ownerId: "emp2", company: "Бар «Полночь»", plan: "business", renewsAt: "2026-07-12" },
-  ]);
 }
 export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);

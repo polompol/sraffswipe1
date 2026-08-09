@@ -48,20 +48,20 @@ def test_validate_init_data_signature():
     assert validate_init_data(stale, token) is False
 
 
-def test_telegram_login_creates_user_and_entitlements(client):
+def test_telegram_login_creates_working_account(client):
+    """Вход создаёт аккаунт, которым сразу можно пользоваться.
+
+    Тарифов у аккаунта нет: единственная модель заработка — комиссия с
+    закрытой смены, поэтому и ручки «мои права/тариф» больше не существует.
+    """
     # insecure-режим включён по умолчанию → пустой initData принимается в dev.
     r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     assert r.status_code == 200
     token = r.json()["access_token"]
+    h = {"Authorization": f"Bearer {token}"}
 
-    ent = client.get(
-        "/billing/entitlements", headers={"Authorization": f"Bearer {token}"}
-    )
-    assert ent.status_code == 200
-    body = ent.json()
-    assert body["plan"] == "free"
-    # Внутренних «валют» (супер-лайки, бусты) больше нет — только план и флаги.
-    assert "superlikeBalance" not in body and "boostBalance" not in body
+    assert client.get("/me", headers=h).status_code == 200
+    assert client.get("/billing/entitlements", headers=h).status_code == 404
 
 
 def test_yookassa_webhook_verifies_amount(client):

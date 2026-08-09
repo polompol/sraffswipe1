@@ -23,8 +23,11 @@ from aiogram.types import (
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://example.com")
 # «Печатающий» эффект: индикатор «печатает…» + плавное раскрытие текста.
-# Выключается BOT_TYPEWRITER=0 (тогда сообщения приходят сразу).
-TYPEWRITER = os.environ.get("BOT_TYPEWRITER", "1") != "0"
+# ВЫКЛЮЧЕН по умолчанию: ради анимации бот правит одно сообщение десять раз
+# подряд. Человек ждёт несколько секунд, чтобы прочитать /start, а при росте
+# числа пользователей это ещё и лишний риск упереться в ограничение частоты
+# запросов у Telegram. Включается BOT_TYPEWRITER=1.
+TYPEWRITER = os.environ.get("BOT_TYPEWRITER", "0") == "1"
 
 dp = Dispatcher()
 
