@@ -1,6 +1,8 @@
 """Лента вакансий и их создание."""
+import math
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -192,6 +194,33 @@ def list_vacancies(
     is_sqlite = settings.database_url.startswith("sqlite")
     if city_norm and not is_sqlite:
         query = query.filter(func.lower(Vacancy.city) == city_norm)
+
+    # Отсекаем далёкие смены ДО ограничения выборки.
+    #
+    # Раньше порядок был обратный: база отдавала 300 самых свежих смен, и уже
+    # среди них искались близкие. Пока смен десятки, разницы нет. Но стоит
+    # ленте вырасти до нескольких сотен, и человек с окраины видел бы только
+    # центр — просто потому, что там публикуют чаще. Лента переставала быть
+    # лентой «рядом», и заметить это по жалобам почти невозможно.
+    #
+    # Рамка грубая (прямоугольник вокруг точки), точное расстояние считается
+    # ниже: задача рамки — не пустить в выборку заведомо далёкое.
+    if lat is not None and lng is not None:
+        d_lat = radius_km / 111.0
+        # Меридианы сходятся к полюсам: на широте Москвы градус долготы вдвое
+        # короче градуса широты. cos у полюса → 0, поэтому нижняя граница.
+        d_lng = radius_km / max(1.0, 111.0 * math.cos(math.radians(lat)))
+        query = query.filter(
+            or_(
+                and_(
+                    Vacancy.lat.between(lat - d_lat, lat + d_lat),
+                    Vacancy.lng.between(lng - d_lng, lng + d_lng),
+                ),
+                # Смена заведена только по городу, без точки на карте, —
+                # её по расстоянию не судим и из ленты не выбрасываем.
+                and_(Vacancy.lat == 0, Vacancy.lng == 0),
+            )
+        )
 
     # Кап на размер выборки — защита от перегрузки на больших объёмах.
     rows = query.order_by(Vacancy.created_at.desc()).limit(300).all()
