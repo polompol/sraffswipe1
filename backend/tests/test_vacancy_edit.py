@@ -119,11 +119,24 @@ def test_cannot_remove_shift_with_response(client):
 
 
 def test_past_shift_disappears_from_feed(client):
-    """Вчерашняя смена не показывается: раньше отсечка работала только при
-    явном фильтре по датам, и прошедшие смены висели в ленте вечно."""
+    """Смена, дата которой прошла, уходит из ленты, но остаётся в истории.
+
+    Опубликовать смену задним числом теперь нельзя, поэтому «прошедшую»
+    делаем так, как она появляется в жизни: смену завели на будущее, а потом
+    этот день наступил и прошёл.
+    """
+    from app.db import SessionLocal
+    from app.models import Vacancy
+
     h = _hdr(_auth(client))
-    past = _make(client, h, date=_d(-1))
-    future = _make(client, h, date=_d(2))
+    past = _make(client, h, date=_d(2))
+    future = _make(client, h, date=_d(3))
+    db = SessionLocal()
+    try:
+        db.get(Vacancy, past["id"]).date = _d(-1)
+        db.commit()
+    finally:
+        db.close()
 
     ids = {x["id"] for x in client.get("/vacancies").json()}
     assert past["id"] not in ids
@@ -131,6 +144,23 @@ def test_past_shift_disappears_from_feed(client):
 
     # В своих вакансиях заведение прошедшую смену по-прежнему видит (история).
     assert past["id"] in {x["id"] for x in _mine(client, h)}
+
+
+def test_shift_in_the_past_is_rejected(client):
+    """Смену на вчера публиковать нельзя.
+
+    Раньше сервер принимал её молча, а лента прошедшие смены не показывает:
+    заведение видело смену у себя в списке и ждало откликов, которых не могло
+    быть. В календаре телефона соседние числа стоят вплотную — ошибиться легко.
+    """
+    h = _hdr(_auth(client))
+    r = client.post("/vacancies", headers=h, json={
+        "role": "waiter", "date": _d(-1), "start_time": 600, "end_time": 1080,
+        "rate": 400, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Никольская, 10",
+    })
+    assert r.status_code == 422
+    assert "прошлом" in r.text
 
 
 def test_admin_can_send_reminders_without_duplicates(client):
