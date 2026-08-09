@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import {
   ROLE_FAMILIES,
@@ -7,7 +8,12 @@ import {
   ROLE_FAMILY_ORDER,
   STAFF_ROLE_LABELS,
 } from "@/types/domain";
-import { createSavedSearch, type FeedFilters } from "@/api/endpoints";
+import {
+  createSavedSearch,
+  deleteSavedSearch,
+  listSavedSearches,
+  type FeedFilters,
+} from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { IconBell, IconCheck } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
@@ -52,6 +58,27 @@ export function FilterSheet({
 }) {
   const [f, setF] = useState<FeedFilters>({ sort: "distance", ...value });
   const [saved, setSaved] = useState(false);
+  const qc = useQueryClient();
+  // Сохранённый поиск — это подписка на уведомления о новых сменах. Создать
+  // её было можно, а отменить — нет: единственным способом остановить
+  // сообщения оставалось заблокировать бота вместе со всеми уведомлениями
+  // о своих же сменах. Поэтому список подписок живёт здесь же, где их заводят.
+  const { data: searches } = useQuery({
+    queryKey: ["saved-searches"],
+    queryFn: listSavedSearches,
+  });
+
+  async function removeSearch(id: string) {
+    haptic("warning");
+    try {
+      await deleteSavedSearch(id);
+      qc.invalidateQueries({ queryKey: ["saved-searches"] });
+      toast("Подписка отключена", "success");
+    } catch {
+      haptic("error");
+      toast("Не удалось отключить", "error");
+    }
+  }
   const set = (patch: Partial<FeedFilters>) => setF((cur) => ({ ...cur, ...patch }));
 
   // Какой пресет «Когда» сейчас выбран (для подсветки чипа).
@@ -70,6 +97,9 @@ export function FilterSheet({
     try {
       await createSavedSearch(title, f, true);
       setSaved(true);
+      // Без этого только что созданная подписка не появлялась в списке ниже,
+      // и человек не видел, чем именно управляет.
+      qc.invalidateQueries({ queryKey: ["saved-searches"] });
       toast("Поиск сохранён — пришлём новые смены", "success");
     } catch {
       haptic("error");
@@ -212,6 +242,38 @@ export function FilterSheet({
             {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
           </span>
         </button>
+
+        {!!searches?.length && (
+          <>
+            <div className="form-label" style={{ marginTop: 18 }}>
+              Мои подписки на новые смены
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {searches.map((s) => (
+                <div key={s.id} className="row" style={{ gap: 8 }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ fontSize: 15 }}>{s.title}</b>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                      {s.notify ? "уведомления включены" : "уведомления выключены"}
+                    </div>
+                  </span>
+                  <button
+                    className="tag"
+                    style={{
+                      flex: "none",
+                      cursor: "pointer",
+                      color: "var(--danger)",
+                      borderColor: "var(--danger)",
+                    }}
+                    onClick={() => removeSearch(s.id)}
+                  >
+                    Отключить
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         </div>
 
         <div className="sheet-foot">

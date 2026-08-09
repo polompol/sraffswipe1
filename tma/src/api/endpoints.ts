@@ -734,6 +734,10 @@ export async function fetchMyCommission(): Promise<CommissionInfo> {
 }
 
 /** Пополнение денежного баланса картой (ЮKassa) — вернёт ссылку на оплату. */
+export interface PaymentUrl {
+  url: string;
+}
+
 export async function walletTopup(amountRub: number): Promise<PaymentUrl> {
   if (!USE_BACKEND) return { url: "https://example.com/pay/wallet_topup" };
   const { data } = await api.post<PaymentUrl>("/billing/wallet/topup", {
@@ -961,19 +965,4 @@ export async function uploadPhoto(file: File): Promise<string> {
   return data.public_url;
 }
 
-export interface PaymentUrl {
-  url: string;
-}
 
-/** Запрос ссылки на оплату ЮKassa (рубли). email — для фискального чека (54-ФЗ). */
-export async function createYookassaPayment(
-  sku: string,
-  email?: string,
-): Promise<PaymentUrl> {
-  if (!USE_BACKEND) return { url: `https://example.com/pay/${sku}` };
-  const { data } = await api.post<PaymentUrl>("/billing/yookassa/payment", {
-    sku,
-    email: email || null,
-  });
-  return data;
-}

@@ -86,14 +86,17 @@ def test_photo_upload_without_s3(client):
 
 
 def test_dadata_without_token_is_empty(client):
+    """Без ключа DaData подсказки адреса просто пусты, а не падают.
+
+    Проверка компании по ИНН живёт в /employer/verify — отдельной публичной
+    ручки для неё нет: она делала то же самое и так же тратила платную квоту.
+    """
     token, _ = _auth(client)
-    # Без DADATA_TOKEN — graceful: пустой список / found=false.
     addr = client.get("/dadata/address?q=Москва", headers=_hdr(token))
     assert addr.status_code == 200
     assert addr.json() == []
-    party = client.get("/dadata/party?inn=7707083893", headers=_hdr(token))
-    assert party.status_code == 200
-    assert party.json()["found"] is False
+    assert client.get("/dadata/party?inn=7707083893",
+                      headers=_hdr(token)).status_code == 404
 
 
 def test_production_safe_guard_rejects_default_secrets():

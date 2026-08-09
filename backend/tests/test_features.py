@@ -749,20 +749,16 @@ def test_invites_forbidden_for_employer(client):
     ).status_code == 403
 
 
-def test_activity_feed_shape(client):
+def test_activity_feed_is_gone(client):
+    """«Живой ленты активности» больше нет.
+
+    Её никто не показывал: приложение этот адрес не запрашивало ни разу, а
+    сервер на каждый запрос выбирал чужие смены — лишняя работа и лишняя
+    поверхность вокруг данных других людей.
+    """
     seeker_token, _ = _auth(client, "seeker")
-    r = client.get("/activity/recent", headers=_hdr(seeker_token))
-    assert r.status_code == 200
-    body = r.json()
-    assert "items" in body and isinstance(body["items"], list)
-    # Соискатель существует → «ищут сейчас» не ноль (fallback на число юзеров).
-    assert body["searching_now"] >= 1
-
-
-def test_activity_shows_closed_shift(client):
-    _, _, seeker_token, _, _, _ = _full_shift_cycle(client)
-    body = client.get("/activity/recent", headers=_hdr(seeker_token)).json()
-    assert any(it["kind"] == "closed" for it in body["items"])
+    assert client.get("/activity/recent",
+                      headers=_hdr(seeker_token)).status_code == 404
 
 
 def test_favorites_add_list_remove(client):

@@ -87,12 +87,3 @@ def lookup_party(inn: str) -> PartyOut:
         ogrn=d.get("ogrn", ""),
         address=(d.get("address") or {}).get("value", ""),
     )
-
-
-@router.get(
-    "/party",
-    response_model=PartyOut,
-    dependencies=[Depends(rate_limit("dadata", 30, 60))],
-)
-def check_party(inn: str, _p: dict = Depends(current_principal)):
-    return lookup_party(inn)
