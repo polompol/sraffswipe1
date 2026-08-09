@@ -427,12 +427,16 @@ export function AdminPage() {
       <h1 className="h1" style={{ margin: "0 0 12px" }}>Админ-панель</h1>
 
       {/* Вкладки: одна строка, всегда видно, где ты и где горит. */}
+      {/* Ряд прокручиваемый, а не сетка в четыре равные доли: на узком
+          экране (320px, iPhone SE) четвёртая вкладка не помещалась и
+          обрезалась краем экрана — «Рост» был не виден и не нажимался. */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${TABS.length}, 1fr)`,
+          display: "flex",
           gap: 6,
           marginBottom: 16,
+          overflowX: "auto",
+          paddingBottom: 2,
         }}
       >
         {TABS.map((t) => (
@@ -440,6 +444,7 @@ export function AdminPage() {
             key={t.id}
             className="tag"
             style={{
+              flex: "1 0 auto",
               cursor: "pointer",
               background: tab === t.id ? "var(--crimson-dark)" : "transparent",
               color: tab === t.id ? "#fff" : "var(--text)",
