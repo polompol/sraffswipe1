@@ -7,6 +7,7 @@ import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
 import { fmtTime } from "@/lib/format";
+import { apiError } from "@/lib/errors";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Button } from "@/components/Button";
@@ -155,7 +156,7 @@ export function ChatPage() {
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
     } catch (e: any) {
       haptic("error");
-      toast(e?.response?.data?.detail ?? "Не удалось сохранить часы", "error");
+      toast(apiError(e, "Не удалось сохранить часы"), "error");
     }
   }
 
@@ -170,7 +171,7 @@ export function ChatPage() {
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
     } catch (e: any) {
       haptic("error");
-      toast(e?.response?.data?.detail ?? "Не удалось предложить перенос", "error");
+      toast(apiError(e, "Не удалось предложить перенос"), "error");
     }
   }
 
@@ -201,7 +202,7 @@ export function ChatPage() {
     } catch (e: any) {
       haptic("error");
       toast(
-        e?.response?.data?.detail ?? "Не удалось отменить смену",
+        apiError(e, "Не удалось отменить смену"),
         "error",
       );
     }

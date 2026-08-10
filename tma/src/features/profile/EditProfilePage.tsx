@@ -14,6 +14,7 @@ import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
+import { apiError } from "@/lib/errors";
 
 // Навыки для выбора (медкнижка/самозанятость задаются отдельными полями).
 const SKILLS: ExperienceTag[] = ["experienced", "english", "cashRegister"];
@@ -56,7 +57,14 @@ export function EditProfilePage() {
     setDistrict(me.district ?? "");
     setInn(me.inn ?? "");
     setSelfEmployed(me.selfEmployed ?? false);
-    setRoles((me.roles ?? []) as StaffRole[]);
+    // Только известные должности — как и у отметок об опыте ниже. В старых
+    // анкетах могло сохраниться что угодно: сервер теперь такое не принимает,
+    // и человек не смог бы сохранить профиль вообще, не понимая почему.
+    setRoles(
+      (me.roles ?? []).filter(
+        (r) => r in STAFF_ROLE_LABELS,
+      ) as StaffRole[],
+    );
     setAbout(me.about ?? "");
     setSkills((me.experienceTags ?? []).filter((t) =>
       SKILLS.includes(t as ExperienceTag)) as ExperienceTag[]);
@@ -98,10 +106,7 @@ export function EditProfilePage() {
       nav(-1);
     } catch (e) {
       haptic("error");
-      const msg =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? (e as Error)?.message ?? "Не удалось сохранить";
-      setError(msg);
+      setError(apiError(e, "Не удалось сохранить"));
     } finally {
       setSaving(false);
     }

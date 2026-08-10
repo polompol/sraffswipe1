@@ -7,6 +7,7 @@ import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { IconCheck, IconBolt } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 
 /** «Мои работники» — кто уже выходил, чтобы позвать снова (постоянство). */
 export function WorkersPage() {
@@ -32,9 +33,7 @@ export function WorkersPage() {
     } catch (e) {
       haptic("error");
       // 409 — нет опубликованной смены: звать некуда, и сервер это объясняет.
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      toast(detail ?? "Не удалось пригласить", "error");
+      toast(apiError(e, "Не удалось пригласить"), "error");
     }
   }
 

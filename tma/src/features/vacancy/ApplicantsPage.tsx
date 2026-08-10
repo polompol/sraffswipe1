@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { fmtDate, fmtTime } from "@/lib/format";
+import { apiError } from "@/lib/errors";
 import { MED_BOOK_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import type { MedBookStatus, StaffRole } from "@/types/domain";
 import { IconBolt, IconCheck, IconCalendar } from "@/components/Icons";
@@ -44,9 +45,7 @@ export function ApplicantsPage() {
       toast(take ? "Отклик принят" : "Отклик отклонён", "success");
     } catch (e) {
       haptic("error");
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      toast(detail ?? "Не получилось — попробуйте ещё раз", "error");
+      toast(apiError(e, "Не получилось — попробуйте ещё раз"), "error");
     }
   }
 

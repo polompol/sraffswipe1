@@ -6,6 +6,7 @@ import {
   urgentPing,
 } from "@/api/endpoints";
 import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
+import { apiError } from "@/lib/errors";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { haptic, confirmAction } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
@@ -31,9 +32,7 @@ export function MyVacanciesPage() {
     } catch (e) {
       haptic("error");
       // 409 — по смене уже откликнулись: сервер объясняет, почему нельзя.
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      toast(detail ?? "Не удалось снять смену", "error");
+      toast(apiError(e, "Не удалось снять смену"), "error");
     }
   }
 

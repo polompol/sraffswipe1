@@ -37,6 +37,7 @@ import { Loading } from "@/components/States";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
 import { plural } from "@/lib/format";
+import { apiError } from "@/lib/errors";
 import { IconShield, IconCheck, IconWarning } from "@/components/Icons";
 
 const PROVIDER_RU: Record<string, string> = { yookassa: "ЮKassa", manual: "оператор" };
@@ -260,9 +261,7 @@ export function AdminPage() {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     } catch (e) {
       haptic("error");
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      toast(detail ?? "Не удалось вернуть", "error");
+      toast(apiError(e, "Не удалось вернуть"), "error");
     }
   }
 
