@@ -4,6 +4,7 @@
 через notify_owner (тихий no-op без токена). В проде вызывается планировщиком
 (cron): `build_*` собирает, `send_*` рассылает.
 """
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func
@@ -13,6 +14,8 @@ from .models import Match, Swipe, User, Vacancy
 from .notify import notify_owner
 from .roles import date_ru, role_ru
 from .timeutil import local_today, shift_end_utc
+
+_log = logging.getLogger("staffswipe")
 
 
 def _today() -> str:
@@ -310,10 +313,20 @@ def settle_shifts(db: Session) -> int:
             continue
         m.status = "completed"
         m.no_show = False
-        m.seeker_checked_in = True
-        m.employer_checked_in = True
         _accrue_commission(db, m)
         _sys(db, m.id, "Смена закрыта ✓ Возражений не поступило.")
+        # Коммит на КАЖДУЮ смену, и только потом уведомления. Раньше был один
+        # коммит на весь прогон, а сообщения улетали сразу: любой конфликт при
+        # записи (например гонка с отметкой кодом, где на комиссию стоит
+        # уникальный индекс) откатывал всю пачку — люди уже получили «смена
+        # закрыта, комиссия начислена», а в базе не закрылось ничего, и назавтра
+        # приходило второе такое же сообщение.
+        try:
+            db.commit()
+        except Exception:  # noqa: BLE001 — одна смена не должна ронять прогон
+            db.rollback()
+            _log.exception("Не удалось закрыть смену %s", m.id)
+            continue
         notify_owner(
             db, m.employer_id,
             "Смена закрыта — возражений не было. Комиссия начислена.",

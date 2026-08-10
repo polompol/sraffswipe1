@@ -15,7 +15,7 @@ from ..roles import role_ru
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal, optional_principal
 from ..timeutil import local_today
-from .billing import commission_overdue
+from .billing import commission_overdue, overdue_employer_ids
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
@@ -149,6 +149,11 @@ def list_vacancies(
             for v in rows
         ]
     query = db.query(Vacancy).filter(Vacancy.status == "active")
+    # Смены должников в ленте не показываем: мэтч по ним всё равно не
+    # создастся (см. _ensure_match), и отклик уходил бы в никуда.
+    debtors = overdue_employer_ids(db)
+    if debtors:
+        query = query.filter(Vacancy.employer_id.notin_(debtors))
     # Не показываем смены, которые соискатель уже свайпнул, — иначе колода
     # зацикливается и после «просмотрел все» те же карточки лезут снова.
     if principal and principal["role"] == "seeker":

@@ -76,6 +76,12 @@ def _ensure_match(
     )
     if existing:
         return existing, False
+    # Должник не набирает новых людей — проверяем ЗДЕСЬ, на создании мэтча, а
+    # не только на позитивном свайпе заведения. Иначе блок обходился сам
+    # собой: соискатель лайкал смену должника (она оставалась в ленте), мэтч
+    # создавался, и заведение неделями продолжало набирать людей с долгом.
+    if commission_overdue(db, employer_id):
+        raise SlotsFull
     _claim_slot(db, vacancy_id)
     match = Match(
         user_id=user_id, employer_id=employer_id, vacancy_id=vacancy_id

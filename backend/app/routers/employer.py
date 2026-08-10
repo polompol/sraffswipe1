@@ -1,6 +1,7 @@
 """Верификация работодателя по ИНН (DaData) + «мои работники» / «позвать снова»."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -35,11 +36,18 @@ def my_workers(
         raise HTTPException(status_code=403, detail="Только для работодателя")
     from .candidates import _reliability
 
+    # Не только состоявшиеся смены: тот, кто не вышел, тоже должен быть виден
+    # с его надёжностью («вышел на 0 из 1»). Иначе заведение теряет из виду
+    # ровно тех, кого важнее всего помнить. Раньше неявка оставляла смену
+    # «подтверждённой» и попадала сюда сама; теперь у неё свой статус.
     user_ids = [
         uid for (uid,) in db.query(Match.user_id)
         .filter(
             Match.employer_id == principal["id"],
-            Match.status.in_(("confirmed", "completed")),
+            or_(
+                Match.status.in_(("confirmed", "completed")),
+                Match.no_show.is_(True),
+            ),
         )
         .distinct()
         .all()

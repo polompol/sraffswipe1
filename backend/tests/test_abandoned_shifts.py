@@ -103,11 +103,13 @@ def test_venue_can_say_the_shift_did_not_happen(client):
     from app.digest import settle_shifts
 
     emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870010, 870011)
+    # Сначала смена должна закончиться: заявить «не состоялась» заранее нельзя,
+    # иначе заведение отправляло бы человека работать по «отменённой» смене.
+    _age_the_shift(mid, days=5)
     r = client.post(f"/matches/{mid}/not-held", headers=emp_h,
                     json={"reason": "не вышел, не отвечает"})
     assert r.status_code == 200
 
-    _age_the_shift(mid, days=5)
     db = SessionLocal()
     try:
         assert settle_shifts(db) == 0, "заявленную смену расчёт не трогает"
@@ -124,9 +126,9 @@ def test_worker_can_say_the_shift_did_not_happen(client):
     from app.digest import settle_shifts
 
     emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870020, 870021)
+    _age_the_shift(mid, days=5)
     assert client.post(f"/matches/{mid}/not-held", headers=seeker_h,
                        json={"reason": "приехал, смену отменили"}).status_code == 200
-    _age_the_shift(mid, days=5)
     db = SessionLocal()
     try:
         settle_shifts(db)
@@ -152,6 +154,7 @@ def test_code_beats_a_quiet_no_show(client):
     assert client.post(f"/matches/{mid}/checkin", headers=seeker_h,
                        json={"code": code}).status_code == 200
 
+    _age_the_shift(mid, days=1)
     r = client.post(f"/matches/{mid}/not-held", headers=emp_h,
                     json={"reason": "не вышел"})
     assert r.status_code == 200

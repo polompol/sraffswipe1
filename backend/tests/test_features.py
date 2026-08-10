@@ -810,12 +810,20 @@ def test_attendance_and_reliability(client):
     assert me["shifts_total"] == 1
     assert me["shifts_attended"] == 0
 
-    # «Вышел» засчитывается только при ЗАКРЫТОЙ смене (взаимное подтверждение):
-    # работник отмечается кодом, заведение подтверждает «пришёл» → completed.
-    _close_shift(client, emp_token, seeker_token, match_id)
-    workers = client.get("/employer/workers", headers=_hdr(emp_token)).json()
-    me = next(c for c in workers if c["id"] == sid)
-    assert me["shifts_attended"] == 1 and me["shifts_total"] == 1
+    # Отмеченную неявку нельзя «переиграть» на той же смене: она закрыта.
+    # Раньше отметка «не вышел» оставляла смену подтверждённой, и её можно
+    # было закрыть заново — а ночной расчёт делал это сам, снимая неявку.
+    assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                       json={"attended": True}).status_code == 400
+
+    # «Вышел» засчитывается по ЗАКРЫТОЙ смене — проверяем на следующей.
+    # Аккаунт тот же (в тестах вход без подписи даёт один tg_id), поэтому в
+    # надёжности накапливаются обе смены: одна неявка и одна закрытая.
+    emp2, _, seeker2, sid2, _, match2 = _full_shift_cycle(client)
+    _close_shift(client, emp2, seeker2, match2)
+    workers = client.get("/employer/workers", headers=_hdr(emp2)).json()
+    other = next(c for c in workers if c["id"] == sid2)
+    assert other["shifts_total"] == 2 and other["shifts_attended"] == 1
 
 
 def test_my_workers_and_invite_again(client):

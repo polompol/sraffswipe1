@@ -114,6 +114,25 @@ def commission_overdue(db: Session, employer_id: str) -> bool:
     return row is not None
 
 
+def overdue_employer_ids(db: Session) -> set[str]:
+    """Заведения с просроченной комиссией — одним запросом.
+
+    Нужно ленте: смены должника из неё убираются. Иначе соискатель тратил
+    отклики на смены, по которым мэтч всё равно не создастся, и не понимал,
+    почему «отклик отправлен», а чата нет.
+    """
+    if settings.commission_due_days <= 0:
+        return set()
+    deadline = datetime.now(UTC) - timedelta(days=settings.commission_due_days)
+    rows = (
+        db.query(Commission.employer_id)
+        .filter(Commission.status == "pending", Commission.created_at < deadline)
+        .distinct()
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
 class CommissionInfoOut(BaseModel):
     pendingRub: int
     pendingShifts: int
