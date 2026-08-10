@@ -55,7 +55,7 @@
   min-height: 54px;
   border: none;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+  background: linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
   color: #fff;
   font-size: 16.5px;
   font-weight: 700;
@@ -395,7 +395,9 @@ button.tag:disabled {
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--gold);
+  /* Заливка, а не акцентный цвет: в тёмной теме --gold осветлён под текст,
+     и белые цифры на нём давали 4.3:1 при кегле 10px. */
+  background: var(--gold-fill);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -706,7 +708,10 @@ button.tag:disabled {
   color: var(--like);
 }
 .act-label-skip {
-  color: var(--dislike);
+  /* --dislike нейтрально-серый и на кремовом фоне даёт 3.15:1 при кегле 13.
+     Это одна из двух подписей на главном экране — их читает как раз тот, кто
+     ещё не знает жестов. */
+  color: var(--muted);
 }
 /* Крупный режим (самостоятельная регулировка в профиле) — для слабого зрения */
 body[data-large="1"] .act {
@@ -783,7 +788,7 @@ body[data-large="1"] .tab {
 }
 .bubble.mine {
   margin-left: auto;
-  background: var(--gold);
+  background: var(--gold-fill);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -974,9 +979,13 @@ body[data-large="1"] .tab {
 /* Главные CTA — лёгкий глянец сверху + фирменное свечение. «Дорого» на касание. */
 .btn,
 .ui-btn--primary {
+  /* Заливка через токены заливки, а не через акцентные. В тёмной теме
+     --gold/--gold-soft нарочно осветлены (они там работают ТЕКСТОМ на тёмном
+     фоне), и главная кнопка приложения становилась светло-розовой с белой
+     надписью — ночью её было почти не прочитать. */
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0) 44%),
-    linear-gradient(135deg, var(--gold-soft), var(--gold));
+    linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
   box-shadow: 0 8px 22px rgba(165, 28, 48, 0.30),
     inset 0 1px 0 rgba(255, 255, 255, 0.34);
   letter-spacing: 0.2px;
@@ -994,7 +1003,10 @@ body[data-large="1"] .tab {
 
 /* Круглые кнопки свайпа — объём: внутренняя подсветка + цветное свечение по смыслу. */
 .act-like {
-  background-image: linear-gradient(160deg, #c0334a, #a51c30);
+  /* Через токены: захардкоженный градиент оставался светло-багровым в тёмной
+     теме, а подпись под кнопкой уходила в розовый — кнопка и её подпись были
+     разного цвета. */
+  background-image: linear-gradient(160deg, var(--gold-fill-soft), var(--gold-fill));
   box-shadow: 0 10px 24px rgba(165, 28, 48, 0.42),
     inset 0 2px 4px rgba(255, 255, 255, 0.30);
 }

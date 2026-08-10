@@ -126,17 +126,23 @@ function CardFavButton({ id }: { id: string }) {
   );
 }
 
-/** Золотой бейдж-галочка «проверено» — единый знак доверия (бренд-цвет). */
+/** Золотой бейдж-галочка «проверено» — единый знак доверия (бренд-цвет).
+ *
+ *  Галочка ТЁМНАЯ: белая на золоте давала 2.6:1 в светлой теме и 1.9:1 в
+ *  тёмной — знак доверия превращался в жёлтый кружок без содержимого.
+ *  Название читается вслух: `title` на телефоне не показывается вовсе. */
 function VerifiedDot({ size = 20, title }: { size?: number; title: string }) {
   return (
     <span
+      role="img"
+      aria-label={title}
       title={title}
       style={{
         width: size,
         height: size,
         borderRadius: "50%",
         background: "var(--super)",
-        color: "#fff",
+        color: "#2a1f1a",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -197,7 +203,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         )}
         <span className="spacer" />
         {urgent ? (
-          <span className="glass pulse" style={{ background: "var(--gold)" }}>
+          <span className="glass pulse" style={{ background: "var(--gold-fill)" }}>
             <IconFire size={13} /> Сегодня
           </span>
         ) : null}
@@ -210,7 +216,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
 
       <div className="swipe-body">
         <div className="row" style={{ marginBottom: 8, gap: 6, flexWrap: "wrap" }}>
-          <span className="tag" style={{ background: "var(--gold)", color: "#fff", borderColor: "var(--gold)" }}>
+          <span className="tag" style={{ background: "var(--gold-fill)", color: "#fff", borderColor: "var(--gold-fill)" }}>
             {STAFF_ROLE_LABELS[v.role]}
           </span>
           {v.employerPaysOnTime && (
@@ -373,7 +379,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         {(heroShown ? roles.slice(1) : roles).length > 0 && (
           <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
             {(heroShown ? roles.slice(1) : roles).map((r) => (
-              <span key={r} className="tag" style={{ background: "var(--gold)", color: "#fff", borderColor: "var(--gold)" }}>
+              <span key={r} className="tag" style={{ background: "var(--gold-fill)", color: "#fff", borderColor: "var(--gold-fill)" }}>
                 {STAFF_ROLE_LABELS[r]}
               </span>
             ))}

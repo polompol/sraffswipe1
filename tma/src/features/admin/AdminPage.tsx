@@ -236,11 +236,32 @@ export function AdminPage() {
     },
   ];
 
+  /** Действие оператора: тост при отказе обязателен.
+   *
+   *  Восемь кнопок панели вызывали сервер без обработки ошибки. Отказ (403,
+   *  409, нет сети) не показывал ничего: оператор жал «Заблокировать» по
+   *  жалобе на мошенника, экран не менялся — и он считал, что нарушитель
+   *  забанен. Хуже неудобства: тихая ошибка выглядит как успех. */
+  async function act(fn: () => Promise<unknown>, ok: string, fail: string) {
+    try {
+      await fn();
+      haptic("success");
+      toast(ok, "success");
+      return true;
+    } catch (e) {
+      haptic("error");
+      toast(apiError(e, fail), "error");
+      return false;
+    }
+  }
+
   async function credit(id: string, amountRub: number) {
-    haptic("success");
-    await adminCreditWallet(id, amountRub);
-    toast(`Баланс пополнен на ${amountRub.toLocaleString("ru-RU")} ₽`, "success");
-    qc.invalidateQueries({ queryKey: ["admin-users"] });
+    const ok = await act(
+      () => adminCreditWallet(id, amountRub),
+      `Баланс пополнен на ${amountRub.toLocaleString("ru-RU")} ₽`,
+      "Не удалось пополнить баланс",
+    );
+    if (ok) qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
   // Возврат с баланса: ошиблись при зачислении или заведение уходит.
@@ -308,9 +329,12 @@ export function AdminPage() {
       toast("Введите числовой Telegram-id (из @userinfobot)", "error");
       return;
     }
-    haptic("success");
-    await adminRelink(id, tg);
-    toast("Аккаунт перенесён на новый Telegram", "success");
+    const ok = await act(
+      () => adminRelink(id, tg),
+      "Аккаунт перенесён на новый Telegram",
+      "Не удалось перенести аккаунт",
+    );
+    if (!ok) return;
     setRelinkFor(null);
     setRelinkTgId("");
     qc.invalidateQueries({ queryKey: ["admin-users"] });
@@ -318,9 +342,12 @@ export function AdminPage() {
 
   const commTotal = (comms.data ?? []).reduce((s, c) => s + c.amountRub, 0);
   async function settle(employerId: string) {
-    haptic("success");
-    await settleCommission(employerId);
-    toast("Отмечено оплаченным", "success");
+    const ok = await act(
+      () => settleCommission(employerId),
+      "Отмечено оплаченным",
+      "Не удалось отметить оплату",
+    );
+    if (!ok) return;
     qc.invalidateQueries({ queryKey: ["admin-commissions"] });
     qc.invalidateQueries({ queryKey: ["admin-revenue"] });
   }
@@ -355,10 +382,15 @@ export function AdminPage() {
     matchId: string,
     outcome: "completed" | "no_show",
   ) {
-    haptic("success");
-    await resolveMatch(matchId, outcome);
-    await resolveReport(reportId);
-    toast(outcome === "completed" ? "Смена засчитана" : "Зафиксирована неявка", "success");
+    const ok = await act(
+      async () => {
+        await resolveMatch(matchId, outcome);
+        await resolveReport(reportId);
+      },
+      outcome === "completed" ? "Смена засчитана" : "Зафиксирована неявка",
+      "Не удалось закрыть спор",
+    );
+    if (!ok) return;
     refresh();
     qc.invalidateQueries({ queryKey: ["admin-commissions"] });
   }
@@ -371,40 +403,48 @@ export function AdminPage() {
   }
 
   async function unblock(type: string, id: string) {
-    haptic("success");
-    if (type === "vacancy") await unblockVacancy(id);
-    else await unblockUser(id);
-    toast("Разблокировано", "success");
-    refresh();
+    const ok = await act(
+      () => (type === "vacancy" ? unblockVacancy(id) : unblockUser(id)),
+      "Разблокировано",
+      "Не удалось разблокировать",
+    );
+    if (ok) refresh();
   }
 
   async function resolve(id: string) {
-    haptic("success");
     const reply = (replies[id] ?? "").trim();
-    await resolveReport(id, reply);
+    const ok = await act(
+      () => resolveReport(id, reply),
+      reply ? "Ответ отправлен, жалоба закрыта" : "Жалоба закрыта",
+      "Не удалось закрыть жалобу",
+    );
+    if (!ok) return;
     setReplies((m) => ({ ...m, [id]: "" }));
-    toast(reply ? "Ответ отправлен, жалоба закрыта" : "Жалоба закрыта", "success");
     refresh();
   }
 
   async function warn(id: string) {
-    haptic("warning");
-    const n = await warnReport(id, (replies[id] ?? "").trim());
+    let total = 0;
+    const ok = await act(
+      async () => {
+        total = await warnReport(id, (replies[id] ?? "").trim());
+      },
+      "Предупреждение вынесено",
+      "Не удалось вынести предупреждение",
+    );
+    if (!ok) return;
+    toast(`Всего предупреждений у нарушителя: ${total}`, "success");
     setReplies((m) => ({ ...m, [id]: "" }));
-    toast(`Предупреждение вынесено (всего: ${n})`, "success");
     refresh();
   }
 
   async function blockTarget(type: string, targetId: string) {
-    haptic("success");
-    if (type === "vacancy") {
-      await blockVacancy(targetId);
-      toast("Вакансия снята с публикации", "success");
-    } else {
-      await blockUser(targetId);
-      toast("Пользователь заблокирован", "success");
-    }
-    refresh();
+    const ok = await act(
+      () => (type === "vacancy" ? blockVacancy(targetId) : blockUser(targetId)),
+      type === "vacancy" ? "Смена снята с публикации" : "Пользователь заблокирован",
+      "Не удалось заблокировать",
+    );
+    if (ok) refresh();
   }
 
   // 403 для не-админа → показываем заглушку.
@@ -445,9 +485,9 @@ export function AdminPage() {
             style={{
               flex: "1 0 auto",
               cursor: "pointer",
-              background: tab === t.id ? "var(--crimson-dark)" : "transparent",
+              background: tab === t.id ? "var(--gold-fill)" : "transparent",
               color: tab === t.id ? "#fff" : "var(--text)",
-              borderColor: tab === t.id ? "var(--crimson-dark)" : "var(--border)",
+              borderColor: tab === t.id ? "var(--gold-fill)" : "var(--border-strong)",
             }}
             aria-current={tab === t.id ? "page" : undefined}
             onClick={() => setTab(t.id)}
@@ -466,8 +506,8 @@ export function AdminPage() {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: tab === t.id ? "#fff" : "var(--crimson-dark)",
-                  color: tab === t.id ? "var(--crimson-dark)" : "#fff",
+                  background: tab === t.id ? "#fff" : "var(--gold-fill)",
+                  color: tab === t.id ? "var(--gold-fill)" : "#fff",
                 }}
               >
                 {openCount}
@@ -541,9 +581,9 @@ export function AdminPage() {
                 className="tag"
                 style={{
                   cursor: "pointer",
-                  background: period === p.id ? "var(--crimson-dark)" : "transparent",
+                  background: period === p.id ? "var(--gold-fill)" : "transparent",
                   color: period === p.id ? "#fff" : "var(--text)",
-                  borderColor: period === p.id ? "var(--crimson-dark)" : "var(--border)",
+                  borderColor: period === p.id ? "var(--gold-fill)" : "var(--border-strong)",
                 }}
                 onClick={() => setPeriod(p.id)}
               >
@@ -825,15 +865,20 @@ export function AdminPage() {
                   <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8, marginTop: 10 }}>
                     {u.role === "employer" && (
                       <>
+                        {/* Именно Button, а не .tag: зачисление денег не
+                            идемпотентно, и двойной тап по подтормаживающему
+                            экрану клал на баланс вдвое больше. У Button
+                            блокировка на время запроса встроена. */}
                         {[1000, 5000].map((a) => (
-                          <button
+                          <Button
                             key={a}
-                            className="tag"
-                            style={{ cursor: "pointer", color: "var(--like)", borderColor: "var(--like)" }}
+                            size="sm"
+                            block={false}
+                            variant="secondary"
                             onClick={() => credit(u.id, a)}
                           >
                             Баланс +{a.toLocaleString("ru-RU")} ₽
-                          </button>
+                          </Button>
                         ))}
                         <button
                           className="tag"

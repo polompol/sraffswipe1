@@ -78,7 +78,7 @@ export function ReportSheet({
                 textAlign: "left",
                 cursor: "pointer",
                 minHeight: 48,
-                borderColor: reason === r.id ? "var(--gold)" : "var(--border-strong)",
+                borderColor: reason === r.id ? "var(--gold-fill)" : "var(--border-strong)",
                 color: reason === r.id ? "var(--gold)" : "var(--text)",
               }}
               onClick={() => {

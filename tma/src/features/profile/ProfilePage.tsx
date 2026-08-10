@@ -290,7 +290,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
             height: 30,
             borderRadius: 999,
             transition: "background 0.2s",
-            background: on ? "var(--gold)" : "var(--border-strong)",
+            background: on ? "var(--gold-fill)" : "var(--border-strong)",
           }}
         />
         <span
@@ -448,12 +448,19 @@ export function ProfilePage() {
       )}
 
       {!!me?.incomingLikes && me.incomingLikes > 0 && (
-        <div
+        // Кнопка, а не div с onClick: это единственный вход на самый ценный
+        // экран, и клавиатурой в него было не попасть, а озвучка читала его
+        // как обычный текст. Заливка — из токенов заливки: в тёмной теме
+        // прежний градиент давал под белым текстом 3.2:1.
+        <button
           className="card"
           onClick={() => nav(role === "seeker" ? "/invites" : "/applicants")}
           style={{
+            width: "100%",
+            textAlign: "left",
             marginBottom: 16,
-            background: "linear-gradient(135deg, var(--gold-soft), var(--gold))",
+            background:
+              "linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill))",
             color: "#fff",
             border: "none",
             cursor: "pointer",
@@ -465,12 +472,12 @@ export function ProfilePage() {
               ? `Новых откликов: ${me.incomingLikes}`
               : `Вас зовут на смены: ${me.incomingLikes}`}
           </b>
-          <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2 }}>
+          <div style={{ fontSize: 14, marginTop: 2 }}>
             {role === "employer"
               ? "нажмите, чтобы увидеть, кто именно, и ответить"
               : "нажмите, чтобы увидеть, кто зовёт, и ответить в один тап"}
           </div>
-        </div>
+        </button>
       )}
 
       {role === "employer" && <CommissionCard />}

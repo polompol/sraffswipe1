@@ -90,12 +90,17 @@ export function EditProfilePage() {
           ? { company_name: name, inn: inn || undefined }
           : {
               name,
-              birth_date: birthDate,
+              // Пустые строки не шлём: сервер ждёт либо дату в формате
+              // ГГГГ-ММ-ДД, либо ничего. Пустая строка не проходила проверку,
+              // и человек, зарегистрировавшийся через экран знакомства (там
+              // даты рождения нет вовсе), не мог сохранить анкету вообще —
+              // ни район, ни «о себе», ничего. То же с ИНН.
+              birth_date: birthDate || undefined,
               city,
               district,
               roles,
               self_employed: selfEmployed,
-              inn: selfEmployed ? inn : undefined,
+              inn: selfEmployed && inn ? inn : undefined,
               about,
               experience_tags: skills,
               photo_url: photo || undefined,
@@ -180,9 +185,9 @@ export function EditProfilePage() {
                     className="tag"
                     style={{
                       cursor: "pointer",
-                      background: roles.includes(r) ? "var(--gold)" : "transparent",
+                      background: roles.includes(r) ? "var(--gold-fill)" : "transparent",
                       color: roles.includes(r) ? "#fff" : "var(--text)",
-                      borderColor: roles.includes(r) ? "var(--gold)" : "var(--border-strong)",
+                      borderColor: roles.includes(r) ? "var(--gold-fill)" : "var(--border-strong)",
                     }}
                     onClick={() => toggle(r)}
                   >
@@ -202,9 +207,9 @@ export function EditProfilePage() {
               className="tag"
               style={{
                 cursor: "pointer",
-                background: skills.includes(s) ? "var(--gold)" : "transparent",
+                background: skills.includes(s) ? "var(--gold-fill)" : "transparent",
                 color: skills.includes(s) ? "#fff" : "var(--text)",
-                borderColor: skills.includes(s) ? "var(--gold)" : "var(--border-strong)",
+                borderColor: skills.includes(s) ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => toggleSkill(s)}
             >

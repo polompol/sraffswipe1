@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/domain";
@@ -20,7 +20,7 @@ import {
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
-import { IconPin, IconCheck } from "@/components/Icons";
+import { IconPin } from "@/components/Icons";
 import { showBackButton, haptic } from "@/telegram/sdk";
 
 const toMinutes = (t: string): number => {
@@ -57,6 +57,9 @@ export function CreateVacancyPage() {
   const [address, setAddress] = useState(pre?.address || "Москва, ул. Льва Толстого, 16");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
+  // Последний адрес, выбранный из списка (или подставленный при входе): для
+  // него подсказки не запрашиваем.
+  const chosenAddress = useRef<string>(pre?.address || "Москва, ул. Льва Толстого, 16");
   const [desc, setDesc] = useState(pre?.description ?? "");
   const [medBook, setMedBook] = useState(pre?.requireMedBook ?? true);
   // Сколько человек нужно: на банкет и выходные почти никогда не один.
@@ -131,7 +134,18 @@ export function CreateVacancyPage() {
   }
 
   // Подсказки адреса DaData с дебаунсом.
+  //
+  // Не спрашиваем подсказки для адреса, который человек только что ВЫБРАЛ из
+  // списка. Иначе получалась петля: клик по подсказке менял адрес → эффект
+  // срабатывал заново → через 300 мс тот же список выпрыгивал обратно поверх
+  // формы и закрывал тумблер «Нужна медкнижка». А поскольку адрес
+  // предзаполнен, список открывался сам при входе на экран, без единого
+  // нажатия.
   useEffect(() => {
+    if (address === chosenAddress.current) {
+      setSuggests([]);
+      return;
+    }
     const t = setTimeout(async () => {
       try {
         setSuggests(await suggestAddress(address));
@@ -174,9 +188,9 @@ export function CreateVacancyPage() {
                     className="tag"
                     style={{
                       cursor: "pointer",
-                      background: role === r ? "var(--gold)" : "transparent",
+                      background: role === r ? "var(--gold-fill)" : "transparent",
                       color: role === r ? "#fff" : "var(--text)",
-                      borderColor: role === r ? "var(--gold)" : "var(--border)",
+                      borderColor: role === r ? "var(--gold-fill)" : "var(--border-strong)",
                     }}
                     onClick={() => setRole(r)}
                   >
@@ -231,9 +245,9 @@ export function CreateVacancyPage() {
                 cursor: "pointer",
                 minWidth: 52,
                 justifyContent: "center",
-                background: headcount === n ? "var(--gold)" : "transparent",
+                background: headcount === n ? "var(--gold-fill)" : "transparent",
                 color: headcount === n ? "#fff" : "var(--text)",
-                borderColor: headcount === n ? "var(--gold)" : "var(--border)",
+                borderColor: headcount === n ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => setHeadcount(n)}
             >
@@ -295,9 +309,9 @@ export function CreateVacancyPage() {
               className="tag"
               style={{
                 cursor: "pointer",
-                background: payMethod === p ? "var(--gold)" : "transparent",
+                background: payMethod === p ? "var(--gold-fill)" : "transparent",
                 color: payMethod === p ? "#fff" : "var(--text)",
-                borderColor: payMethod === p ? "var(--gold)" : "var(--border)",
+                borderColor: payMethod === p ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => setPayMethod(p)}
             >
@@ -321,9 +335,9 @@ export function CreateVacancyPage() {
               className="tag"
               style={{
                 cursor: "pointer",
-                background: tips === t ? "var(--gold)" : "transparent",
+                background: tips === t ? "var(--gold-fill)" : "transparent",
                 color: tips === t ? "#fff" : "var(--text)",
-                borderColor: tips === t ? "var(--gold)" : "var(--border)",
+                borderColor: tips === t ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => setTips(t)}
             >
@@ -356,6 +370,7 @@ export function CreateVacancyPage() {
                 key={s.value}
                 style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 10px", cursor: "pointer", color: "var(--text)" }}
                 onClick={() => {
+                  chosenAddress.current = s.value;
                   setAddress(s.value);
                   if (s.lat != null && s.lng != null) {
                     setCoords({ lat: s.lat, lng: s.lng });
@@ -372,21 +387,19 @@ export function CreateVacancyPage() {
         )}
         {suggests.length === 0 && <div style={{ marginBottom: 12 }} />}
 
-        <div className="card row" style={{ marginBottom: 12, cursor: "pointer" }} onClick={() => setMedBook(!medBook)}>
+        {/* Настоящий чекбокс внутри label. Был div с onClick: требование
+            медкнижки нельзя было ни переключить с клавиатуры, ни услышать в
+            озвучке — для человека без мыши и тача поле просто не существовало.
+            В анкете работника такой же переключатель уже сделан правильно. */}
+        <label className="card row" style={{ marginBottom: 12, cursor: "pointer" }}>
           <span style={{ flex: 1 }}>Нужна медкнижка</span>
-          <span
-            aria-hidden
-            style={{
-              width: 26, height: 26, borderRadius: 8,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              background: medBook ? "var(--gold)" : "transparent",
-              border: medBook ? "none" : "2px solid var(--border)",
-              color: "#fff",
-            }}
-          >
-            {medBook && <IconCheck size={16} />}
-          </span>
-        </div>
+          <input
+            type="checkbox"
+            checked={medBook}
+            onChange={(e) => setMedBook(e.target.checked)}
+            style={{ marginLeft: 8 }}
+          />
+        </label>
 
         <div className="form-label">Описание</div>
         <textarea

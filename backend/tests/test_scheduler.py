@@ -7,7 +7,7 @@
 from datetime import datetime
 
 from app.db import SessionLocal
-from app.models import Event
+from app.models import JobRun
 from app.scheduler import SCHEDULE, run_due
 from app.timeutil import business_tz, local_today
 
@@ -17,13 +17,12 @@ def _at(hour: int, minute: int = 0) -> datetime:
 
 
 def _jobs_done() -> list[str]:
-    import json
 
     db = SessionLocal()
     try:
         return [
-            json.loads(e.props)["job"]
-            for e in db.query(Event).filter(Event.name == "job").all()
+            r.job
+            for r in db.query(JobRun).all()
         ]
     finally:
         db.close()

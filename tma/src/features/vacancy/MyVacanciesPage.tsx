@@ -13,11 +13,12 @@ import { Button } from "@/components/Button";
 import { IconFire, IconCalendar, IconEdit, IconWarning } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { EmptyState } from "@/components/EmptyState";
+import { ErrorBox, SkeletonList } from "@/components/States";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["my-vacancies"],
     queryFn: fetchMyVacancies,
   });
@@ -79,9 +80,15 @@ export function MyVacanciesPage() {
         </button>
       </div>
 
+      {/* При отказе сервера экран был просто дырой: ни объяснения, ни
+          «Повторить». У заведения с пятью опубликованными сменами это
+          выглядит как «всё пропало». */}
+      {isLoading && <SkeletonList />}
+      {isError && <ErrorBox onRetry={() => refetch()} />}
+
       {/* Раньше новое заведение видело заголовок и пустоту — непонятно,
           что делать дальше. Теперь экран сам ведёт к размещению смены. */}
-      {data && data.length === 0 && (
+      {!isLoading && !isError && data && data.length === 0 && (
         <EmptyState
           fill
           icon={<IconCalendar size={34} />}

@@ -17,15 +17,27 @@ export function fmtDate(iso: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
-/** Сегодняшняя дата в формате ISO yyyy-mm-dd (совпадает с генерацией mock). */
+/** Дата как ГГГГ-ММ-ДД по МЕСТНОМУ времени телефона.
+ *
+ *  Не через toISOString(): он отдаёт дату по Гринвичу, а Москва на три часа
+ *  впереди. С полуночи до трёх ночи приложение жило вчерашним днём: бармен
+ *  после смены жал чип «Сегодня» и видел «смен нет» (сервер считает дату по
+ *  Москве и всё отсекал), а сегодняшняя смена была подписана «Завтра» и без
+ *  плашки «Сегодня» — ровно в те часы, когда горящие смены и ищут. */
+export function localISO(d: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Сегодняшняя дата в формате ISO гггг-мм-дд (по времени телефона). */
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localISO();
 }
 
 /** Подпись дня смены: «Сегодня»/«Завтра» или дата — для чувства срочности. */
 export function shiftDayLabel(iso: string): string {
   const today = todayISO();
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const tomorrow = localISO(new Date(Date.now() + 86400000));
   if (iso === today) return "Сегодня";
   if (iso === tomorrow) return "Завтра";
   return fmtDate(iso);

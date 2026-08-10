@@ -32,7 +32,7 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
         <span
           className="tag"
           style={{
-            color: "var(--super)", borderColor: "var(--super)",
+            color: "var(--super-text)", borderColor: "var(--super-text)",
             fontWeight: 700, padding: "8px 14px", gap: 6,
           }}
         >
@@ -139,8 +139,8 @@ export function Onboarding() {
             <span
               className="tag"
               style={{
-                color: "var(--super)",
-                borderColor: "var(--super)",
+                color: "var(--super-text)",
+                borderColor: "var(--super-text)",
                 fontWeight: 700,
                 padding: "8px 14px",
                 gap: 6,
@@ -161,7 +161,7 @@ export function Onboarding() {
                 width: idx === i ? 22 : 8,
                 height: 8,
                 borderRadius: 99,
-                background: idx === i ? "var(--gold)" : "var(--border)",
+                background: idx === i ? "var(--gold-fill)" : "var(--border-strong)",
                 transition: "width .2s",
               }}
             />

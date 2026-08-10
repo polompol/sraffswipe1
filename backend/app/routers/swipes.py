@@ -152,8 +152,13 @@ def swipe(
 
     # Сначала валидируем цель — чтобы при 404 не писать свайп в никуда.
     if body.target_type == "vacancy":
-        if db.get(Vacancy, body.target_id) is None:
-            raise HTTPException(status_code=404, detail="Вакансия не найдена")
+        vac_target = db.get(Vacancy, body.target_id)
+        # Заблокированная модератором смена не должна принимать отклики:
+        # из ленты она пропадает, но прямой запрос (или карточка, открытая
+        # раньше) по-прежнему доводил до мэтча — и схема мошенника жила
+        # дальше уже в чате.
+        if vac_target is None or vac_target.status != "active":
+            raise HTTPException(status_code=404, detail="Смена не найдена")
     elif body.target_type == "user":
         if db.get(User, body.target_id) is None:
             raise HTTPException(status_code=404, detail="Кандидат не найден")
@@ -193,7 +198,7 @@ def swipe(
     if principal["role"] == "seeker" and body.target_type == "vacancy":
         vac = db.get(Vacancy, body.target_id)
         if vac is None:
-            raise HTTPException(status_code=404, detail="Вакансия не найдена")
+            raise HTTPException(status_code=404, detail="Смена не найдена")
         reciprocal = (
             db.query(Swipe)
             .filter(
@@ -216,10 +221,11 @@ def swipe(
 
     # Работодатель лайкнул кандидата → ищем его лайк на любую нашу вакансию.
     if principal["role"] == "employer" and body.target_type == "user":
+        # Только действующие смены: по заблокированной мэтч создавать нельзя.
         my_vacs = [
             v.id
             for v in db.query(Vacancy)
-            .filter(Vacancy.employer_id == me)
+            .filter(Vacancy.employer_id == me, Vacancy.status == "active")
             .all()
         ]
         seeker_like = (

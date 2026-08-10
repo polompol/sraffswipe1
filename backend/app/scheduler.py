@@ -13,15 +13,15 @@
 дожидаясь расписания. Повторный запуск ничего не ломает: каждая задача
 идемпотентна, а факт выполнения за день записывается (см. `_already_ran`).
 """
-import json
 import logging
 import time
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal
-from .models import Event
+from .models import JobRun
 from .timeutil import business_tz, local_today
 
 _log = logging.getLogger("staffswipe.scheduler")
@@ -71,22 +71,28 @@ def _already_ran(db: Session, name: str, day: str) -> bool:
     Планировщик может перезапуститься (обновление, падение сервера) и снова
     попасть в то же время. Для рассылок это означало бы второе сообщение
     одному человеку — самый заметный вид «сервис глючит».
+
+    Отметки лежат в своей таблице `job_runs`. Раньше они писались в общую
+    таблицу событий, куда пишет и публичная ручка POST /events, — и любой
+    желающий пятью запросами останавливал планировщик на сутки (см. модель
+    JobRun).
     """
-    marker = json.dumps({"job": name, "day": day}, ensure_ascii=False)
     return (
-        db.query(Event)
-        .filter(Event.name == "job", Event.props == marker)
+        db.query(JobRun)
+        .filter(JobRun.job == name, JobRun.day == day)
         .first()
         is not None
     )
 
 
 def _mark_ran(db: Session, name: str, day: str) -> None:
-    db.add(Event(
-        name="job",
-        props=json.dumps({"job": name, "day": day}, ensure_ascii=False),
-    ))
-    db.commit()
+    """Отметить выполнение. Повторная отметка — не ошибка: уникальность
+    (job, day) страхует от двух параллельных планировщиков."""
+    db.add(JobRun(job=name, day=day))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
 
 
 def run_due(now: datetime | None = None) -> list[tuple[str, int]]:

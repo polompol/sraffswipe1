@@ -177,13 +177,20 @@ services:
   # сборки образа (build args), поэтому важен пересбор при смене домена.
   tma:
     build:
-      context: ./tma
+      # Контекст — корень репозитория: страницы оферты и политики собираются
+      # из docs/legal/, а он лежит выше каталога tma. С контекстом ./tma
+      # сборка падала и образ не создавался вовсе.
+      context: .
+      dockerfile: tma/Dockerfile
       args:
         VITE_USE_BACKEND: "true"
         VITE_API_BASE_URL: https://${DOMAIN}/api
         VITE_OFFER_URL: ${VITE_OFFER_URL:-}
         VITE_PRIVACY_URL: ${VITE_PRIVACY_URL:-}
         VITE_SUPPORT_URL: ${VITE_SUPPORT_URL:-}
+        # Без имени бота ссылки «поделиться» и рекламные вели на чужого бота.
+        VITE_BOT_USERNAME: ${BOT_USERNAME:?set BOT_USERNAME in .env}
+        VITE_SENTRY_DSN: ${SENTRY_DSN:-}
     restart: unless-stopped
 
 volumes:

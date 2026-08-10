@@ -51,7 +51,11 @@ export function MatchOverlay({
         }}
         className="pulse"
       />
-      <div style={{ fontSize: 44, fontWeight: 900, color: "var(--gold)", position: "relative" }}>
+      {/* Оверлей всегда тёмный, независимо от темы, поэтому цвет заголовка
+          фиксированный. --gold в светлой теме — глубокий багровый, и на почти
+          чёрной подложке он давал 2.17:1: самый радостный момент продукта
+          выглядел тёмным пятном. */}
+      <div style={{ fontSize: 44, fontWeight: 900, color: "#e8c268", position: "relative" }}>
         Это мэтч!
       </div>
       <div style={{ margin: "12px 0", position: "relative" }}>

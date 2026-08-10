@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
@@ -56,12 +56,20 @@ export function ChatPage() {
   const [moveStart, setMoveStart] = useState("10:00");
   const [moveEnd, setMoveEnd] = useState("18:00");
 
+  // Прокрутка к последнему сообщению при открытии и на каждое новое.
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
   const { data: messages, isLoading, isError, refetch } = useQuery({
     queryKey: ["messages", matchId],
     queryFn: () => fetchMessages(matchId),
   });
+
+  // К последнему сообщению — при открытии чата и на каждое новое.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
 
   const { data: matches } = useQuery({ queryKey: ["matches"], queryFn: fetchMatches });
   const srvMatch = match ?? matches?.find((m) => m.id === matchId) ?? null;
@@ -109,6 +117,16 @@ export function ChatPage() {
           isSystem: Boolean(raw.is_system),
           timestamp: raw.created_at ?? new Date().toISOString(),
         });
+        // Системные сообщения приходят на смену статуса: вторая сторона
+        // подтвердила, отметилась, перенесла. Без обновления кнопка над
+        // чатом продолжала говорить «Ждём подтверждения второй стороны»,
+        // хотя прямо под ней уже висело «Смена подтверждена».
+        if (raw.is_system) {
+          // Локальную копию мэтча сбрасываем: иначе она навсегда перекрывает
+          // свежие данные сервера (`match ?? matches?.find(...)`).
+          setMatchState(null);
+          qc.invalidateQueries({ queryKey: ["matches"] });
+        }
       } catch {
         /* ignore malformed frame */
       }
@@ -273,6 +291,10 @@ export function ChatPage() {
             </div>
           );
         })}
+        {/* Якорь для прокрутки. Без него чат открывался на самом первом
+            сообщении: свежие оставались ниже экрана, за панелью ввода. Человек
+            отправлял сообщение, не видел его и жал «отправить» ещё раз. */}
+        <div ref={bottomRef} />
       </div>
 
       <div

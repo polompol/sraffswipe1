@@ -55,7 +55,7 @@ function Toggle({
             transition: "background 0.2s",
             // Выключенная дорожка — --border-strong: светлая --border на
             // кремовой карточке почти сливалась, и «выкл» читалось как пустота.
-            background: on ? "var(--gold)" : "var(--border-strong)",
+            background: on ? "var(--gold-fill)" : "var(--border-strong)",
           }}
         />
         <span

@@ -29,9 +29,9 @@ export function CandidateFilterSheet({
         className="tag"
         style={{
           cursor: "pointer",
-          background: on ? "var(--gold)" : "transparent",
+          background: on ? "var(--gold-fill)" : "transparent",
           color: on ? "#fff" : "var(--text)",
-          borderColor: on ? "var(--gold)" : "var(--border-strong)",
+          borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
         }}
         onClick={() => {
           haptic("select");

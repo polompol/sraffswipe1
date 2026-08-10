@@ -26,6 +26,7 @@ import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/Button";
@@ -162,38 +163,38 @@ export function FeedPage() {
     track("swipe", { dir });
     try {
       const res = await sendSwipe(item.id, targetType, dir);
-      if (res.matched && res.matchId && isSeeker) {
+      if (res.matched && res.matchId) {
         track("match");
         pop();
-        const v = item as Vacancy;
-        setMatch({
-          id: res.matchId,
-          seekerId: "me",
-          employerId: v.employerId,
-          vacancyId: v.id,
-          status: "matched",
-          confirmedBySeeker: false,
-          confirmedByEmployer: false,
-          companyName: v.companyName,
-          companyPhotoUrl: v.companyPhotoUrl,
-          role: v.role,
-        });
-        return false; // мэтч → оверлей, тост не нужен
+        if (isSeeker) {
+          const v = item as Vacancy;
+          setMatch({
+            id: res.matchId,
+            seekerId: "me",
+            employerId: v.employerId,
+            vacancyId: v.id,
+            status: "matched",
+            confirmedBySeeker: false,
+            confirmedByEmployer: false,
+            companyName: v.companyName,
+            companyPhotoUrl: v.companyPhotoUrl,
+            role: v.role,
+          });
+          return false; // мэтч → оверлей, тост не нужен
+        }
+        // Заведение о мэтче не узнавало вообще: карточка улетала, экран не
+        // менялся. Человеку уже ушло уведомление и открылся чат, а владелец
+        // кофейни находил его случайно, зайдя в «Мэтчи».
+        toast("Взаимно! Открылся чат — договоритесь о смене", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+        return false;
       }
       return dir === "like";
     } catch (e) {
-      // 402 — просроченная комиссия, 429 — слишком часто.
-      const status = (e as { response?: { status?: number } })?.response?.status;
-      if (status === 402) {
-        toast(
-          "Есть неоплаченная комиссия — пополните баланс в профиле",
-          "error",
-        );
-      } else if (status === 429) {
-        toast("Слишком много действий подряд — подождите пару секунд", "error");
-      } else {
-        toast("Не удалось отправить. Попробуйте ещё раз", "error");
-      }
+      // Сервер объясняет отказ сам: просроченная комиссия (402), слишком
+      // часто (429), «на смену уже набраны все люди» (409). Последнее
+      // подменялось бессмысленным «Не удалось отправить».
+      toast(apiError(e, "Не удалось отправить. Попробуйте ещё раз"), "error");
       return false;
     }
   }
@@ -272,8 +273,8 @@ export function FeedPage() {
             aria-pressed={todayOnly}
             style={{
               cursor: "pointer",
-              borderColor: todayOnly ? "var(--gold)" : "var(--border-strong)",
-              background: todayOnly ? "var(--gold)" : "transparent",
+              borderColor: todayOnly ? "var(--gold-fill)" : "var(--border-strong)",
+              background: todayOnly ? "var(--gold-fill)" : "transparent",
               color: todayOnly ? "#fff" : "var(--text)",
             }}
             onClick={toggleToday}

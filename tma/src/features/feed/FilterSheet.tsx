@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
+import { localISO } from "@/lib/format";
 import {
   ROLE_FAMILIES,
   ROLE_FAMILY_LABELS,
@@ -24,7 +25,9 @@ const SORTS: { id: string; label: string }[] = [
   { id: "date", label: "Раньше" },
 ];
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// Дата по времени телефона, а не по Гринвичу: иначе ночью фильтр «Сегодня»
+// просил у сервера вчерашний день и лента приходила пустой.
+const iso = (d: Date) => localISO(d);
 
 /** Диапазон «через N дней» (один день). */
 function dayRange(plus: number): { date_from: string; date_to: string } {
@@ -113,9 +116,9 @@ export function FilterSheet({
         className="tag"
         style={{
           cursor: "pointer",
-          background: on ? "var(--gold)" : "transparent",
+          background: on ? "var(--gold-fill)" : "transparent",
           color: on ? "#fff" : "var(--text)",
-          borderColor: on ? "var(--gold)" : "var(--border-strong)",
+          borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
         }}
         onClick={() => {
           haptic("select");

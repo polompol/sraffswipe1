@@ -27,7 +27,15 @@ def list_favorites(
     ]
     if not fav_ids:
         return []
-    rows = db.query(Vacancy).filter(Vacancy.id.in_(fav_ids)).all()
+    # Только действующие смены. Заблокированная модератором смена исчезала
+    # из ленты, но в избранном оставалась полной рабочей карточкой: по ней
+    # можно было откликнуться и получить мэтч — то есть блокировка отдельной
+    # смены фактически не работала, спасал только бан всего заведения.
+    rows = (
+        db.query(Vacancy)
+        .filter(Vacancy.id.in_(fav_ids), Vacancy.status == "active")
+        .all()
+    )
     emp_ids = {v.employer_id for v in rows}
     emps = {
         e.id: e for e in db.query(Employer).filter(Employer.id.in_(emp_ids)).all()

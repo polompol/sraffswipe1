@@ -4,6 +4,8 @@ import type { AppRole } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { authTelegram, track } from "@/api/endpoints";
 import { rawInitData, haptic } from "@/telegram/sdk";
+import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
 import { OFFER_URL, PRIVACY_URL } from "@/lib/legal";
 import type { ComponentType } from "react";
@@ -28,7 +30,12 @@ export function RolePage() {
       // пролистало бы карточку без имени и профессии. Знакомство короткое
       // и его можно пропустить.
       nav("/welcome", { replace: true });
-    } catch {
+    } catch (e) {
+      // Раньше отказ был молчаливым: человек жал кнопку, видел «…» и всё
+      // возвращалось как было. В метро это выглядит как «приложение не
+      // работает», и на этом знакомство заканчивалось.
+      haptic("error");
+      toast(apiError(e, "Не удалось войти — проверьте интернет"), "error");
       setBusy(null);
     }
   }
