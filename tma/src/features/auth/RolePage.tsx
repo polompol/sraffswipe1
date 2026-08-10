@@ -45,8 +45,19 @@ export function RolePage() {
 
   return (
     <div className="app">
-      <div className="page">
-        <h1 className="h1" style={{ marginTop: 24 }}>С чего начнём?</h1>
+      {/* Экран короткий: два блока прижимались к верху, а под ними оставалось
+          полэкрана пустоты — первое, что человек видит после знакомства,
+          выглядело недогруженным. Ставим по центру свободной высоты. */}
+      <div
+        className="page"
+        style={{
+          minHeight: "100dvh",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+        }}
+      >
+        <h1 className="h1" style={{ marginTop: 0 }}>С чего начнём?</h1>
         <p className="muted">Это можно поменять позже</p>
 
         <label

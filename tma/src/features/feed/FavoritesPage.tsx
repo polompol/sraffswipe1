@@ -6,6 +6,7 @@ import { listFavorites, sendSwipe } from "@/api/endpoints";
 import { showBackButton } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/Button";
 import { IconBookmark } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { VacancyList } from "./VacancyList";
@@ -38,9 +39,11 @@ export function FavoritesPage() {
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
+            fill
             icon={<IconBookmark size={34} />}
             title="Пока пусто"
             text="Нажимайте на закладку у смены в списке — она сохранится здесь, чтобы откликнуться позже."
+            action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
           />
         )}
         {data && data.length > 0 && (

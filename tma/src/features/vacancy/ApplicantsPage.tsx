@@ -61,9 +61,11 @@ export function ApplicantsPage() {
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
+            fill
             icon={<IconCheck size={34} />}
             title="Откликов пока нет"
             text="Как только кто-то выберет вашу смену, он появится здесь. Если смена висит без откликов — поднимите ставку или нажмите «Позвать людей» в списке смен."
+            action={<Button onClick={() => nav("/vacancy/my")}>Мои смены</Button>}
           />
         )}
 

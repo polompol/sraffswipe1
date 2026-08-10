@@ -127,9 +127,11 @@ export function MatchesPage() {
       {isError && <ErrorBox onRetry={() => refetch()} />}
       {data && data.length === 0 && (
         <EmptyState
+          fill
           icon={<IconTabMatches size={34} active />}
           title="Пока нет мэтчей"
-          text="Свайпайте вправо понравившиеся смены — при взаимном лайке откроется чат."
+          text="Откликайтесь на смены в ленте — как только заведение ответит, здесь откроется чат."
+          action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
         />
       )}
       <div className="stagger" style={{ display: "grid", gap: 12 }}>

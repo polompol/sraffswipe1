@@ -10,7 +10,7 @@ import { haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 
 const REASONS: { id: ReportReason; label: string }[] = [
-  { id: "fake", label: "Фейковая вакансия" },
+  { id: "fake", label: "Фейковая смена" },
   { id: "scam", label: "Обман / мошенничество" },
   { id: "spam", label: "Спам" },
   { id: "abuse", label: "Оскорбления / абьюз" },

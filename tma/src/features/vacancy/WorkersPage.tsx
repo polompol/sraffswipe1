@@ -5,6 +5,7 @@ import { fetchMyWorkers, inviteWorker } from "@/api/endpoints";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/Button";
 import { IconCheck, IconBolt } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
@@ -45,9 +46,11 @@ export function WorkersPage() {
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
+            fill
             icon={<IconCheck size={34} />}
             title="Пока никого"
             text="Здесь появятся те, кто уже выходил на ваши смены — чтобы позвать их снова в один тап."
+            action={<Button onClick={() => nav("/feed")}>Открыть ленту кандидатов</Button>}
           />
         )}
         <div className="stagger" style={{ display: "grid", gap: 12 }}>

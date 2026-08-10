@@ -12,6 +12,7 @@ import {
   estimatedPay,
   fmtTime,
   isUrgentShift,
+  plural,
   rateLabel,
   shiftDayLabel,
 } from "@/lib/format";
@@ -235,7 +236,9 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           {(v.employerShiftsDone || v.employerRating) ? (
             <div>
               ★ {v.employerRating ? v.employerRating.toFixed(1) : "—"}
-              {v.employerShiftsDone ? ` · ${v.employerShiftsDone} смен закрыто` : ""}
+              {v.employerShiftsDone
+                ? ` · ${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто`
+                : ""}
             </div>
           ) : null}
         </div>
@@ -300,25 +303,39 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
 export function SeekerCardContent({ s }: { s: Seeker }) {
   const age = s.age ?? null;
   const roles = s.roles ?? [];
-  const tags = s.experienceTags ?? [];
   const photos = s.photoUrls ?? [];
   const hasPhoto = !!photos[0];
+  const allTags = s.experienceTags ?? [];
   // «Опытный» — по указанному опыту работника (мы не проверяем документы).
-  const experienced = tags.includes("experienced");
+  const experienced = allTags.includes("experienced");
+  // Из общего списка убираем то, что УЖЕ показано отдельно: опыт вынесен в
+  // чип «Опытный», медкнижка — в свою строку, самозанятость — в свой чип.
+  // Без этой чистки карточка писала одно и то же по два раза: «Опытный» и
+  // «Опыт > 2 лет», «Медкнижка: Есть» и «Медкнижка» в перечислении.
+  const tags = allTags.filter(
+    (t) => t !== "experienced" && t !== "medBook" && t !== "selfEmployed",
+  );
+  const [heroShown, setHeroShown] = useState(!hasPhoto);
   return (
     <>
       <SwipePhoto
         src={hasPhoto ? photos[0] : undefined}
         initial={(s.name || "?").charAt(0)}
+        onHero={setHeroShown}
         hero={
           <>
             <div className="swipe-hero-sum" style={{ fontSize: 34 }}>
               {roles.length > 0 ? STAFF_ROLE_LABELS[roles[0]] : "Готов выйти"}
             </div>
-            {/* Надёжность не дублируем: она есть ниже, в теле карточки. */}
-            {!s.shiftsTotal && (
-              <div className="swipe-hero-cap">новичок в сервисе</div>
-            )}
+            {/* Главный вопрос заведения — можно ли на человека положиться.
+                Раньше подпись под должностью была пустой у всех, кто уже
+                работал, а надёжность лежала в самом низу карточки мелким
+                текстом. Теперь она прямо под должностью. */}
+            <div className="swipe-hero-cap">
+              {s.shiftsTotal
+                ? `вышел на ${s.shiftsAttended ?? 0} из ${s.shiftsTotal} смен`
+                : "новичок в сервисе"}
+            </div>
           </>
         }
       />
@@ -326,7 +343,9 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
       <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <span className="glass">{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
         {s.availableToday && (
-          <span className="glass pulse" style={{ background: "var(--super)" }}>
+          // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
+          // самая заметная плашка карточки читалась хуже всего остального.
+          <span className="glass pulse" style={{ background: "var(--super)", color: "#2a1f1a" }}>
             <IconBolt size={13} /> Готов сегодня
           </span>
         )}
@@ -335,32 +354,38 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
       </div>
       <div className="swipe-body">
         <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span>{s.name}{age !== null ? `, ${age}` : ""}</span>
+          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+            {s.name}{age !== null ? `, ${age}` : ""}
+          </span>
           {experienced && (
             <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
               Опытный
             </span>
           )}
           {s.selfEmployed && (
-            <span className="tag" style={{ color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
-              самозанятый
+            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
+              Самозанятый
             </span>
           )}
         </div>
-        <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
-          {roles.map((r) => (
-            <span key={r} className="tag" style={{ background: "var(--gold)", color: "#fff", borderColor: "var(--gold)" }}>
-              {STAFF_ROLE_LABELS[r]}
-            </span>
-          ))}
-        </div>
+        {/* Должность из заголовка карточки не повторяем — только остальные,
+            которыми человек тоже готов выйти. */}
+        {(heroShown ? roles.slice(1) : roles).length > 0 && (
+          <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
+            {(heroShown ? roles.slice(1) : roles).map((r) => (
+              <span key={r} className="tag" style={{ background: "var(--gold)", color: "#fff", borderColor: "var(--gold)" }}>
+                {STAFF_ROLE_LABELS[r]}
+              </span>
+            ))}
+          </div>
+        )}
         {s.about && (
           <div style={{ marginTop: 8, opacity: 0.95, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {s.about}
           </div>
         )}
         <div className="card-meta" style={{ marginTop: 10 }}>
-          {!!s.shiftsTotal && s.shiftsTotal > 0 && (
+          {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
               <IconCheck size={15} /> Вышел на {s.shiftsAttended ?? 0} из {s.shiftsTotal} смен
             </div>

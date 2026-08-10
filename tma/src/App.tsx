@@ -72,7 +72,7 @@ function TabBar() {
     { path: "/feed", Icon: IconTabFeed, label: "Лента" },
     { path: "/matches", Icon: IconTabMatches, label: "Мэтчи" },
     isEmployer
-      ? { path: "/vacancy/my", Icon: IconTabVacancies, label: "Вакансии" }
+      ? { path: "/vacancy/my", Icon: IconTabVacancies, label: "Смены" }
       : { path: "/shifts", Icon: IconTabShifts, label: "Смены" },
     { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
   ];

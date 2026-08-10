@@ -19,16 +19,23 @@
   font-weight: 800;
   letter-spacing: -0.5px;
   margin: 0 0 4px;
+  /* Заголовок разбивается на строки поровну, а не «сколько влезло».
+     Без этого «Смены рядом с домом — на / один день» оставляло тире висеть
+     на краю, а вторую строку — почти пустой. */
+  text-wrap: balance;
 }
 .h2 {
   font-size: 22px;
   font-weight: 700;
   margin: 0 0 8px;
+  text-wrap: balance;
 }
 .muted {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.5;
+  /* Для абзацев — pretty: не оставляет одно слово на последней строке. */
+  text-wrap: pretty;
 }
 .row {
   display: flex;
@@ -1027,4 +1034,26 @@ body[data-large="1"] .tab {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Горизонтальная лента подсказок в чате. Затухание у правого края —
+   единственный намёк на то, что строка продолжается за экраном: без него
+   последний чип просто обрывался на середине слова и читался как баг. */
+.quick-row {
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+}
+.quick-row::-webkit-scrollbar {
+  display: none;
 }

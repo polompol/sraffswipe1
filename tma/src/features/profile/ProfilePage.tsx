@@ -29,6 +29,7 @@ import {
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
+import { plural } from "@/lib/format";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -324,7 +325,7 @@ function ProfileMeter({ pct }: { pct: number }) {
         <b>Профиль готов на {pct}%</b>
         <span className="spacer" />
         <span className="muted" style={{ fontSize: 13 }}>
-          {pct >= 80 ? "почти всё" : "заполни до конца"}
+          {pct >= 80 ? "почти всё" : "заполните до конца"}
         </span>
       </div>
       <div
@@ -387,21 +388,40 @@ export function ProfilePage() {
       </div>
 
       <div className="card row" style={{ gap: 14, marginBottom: 16 }}>
+        {/* Фото из Telegram, если оно есть; иначе первая буква имени.
+            Раньше вместо лица стояла иконка-портфель — та самая, которой на
+            экране выбора роли подписано «Я ищу подработку». В своём профиле
+            она читается как «вакансия», а не «это я». */}
         <span style={{
           width: 56, height: 56, borderRadius: 16, flex: "none",
           background: "var(--grad-brand)", color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", fontWeight: 800, fontSize: 24,
         }}>
-          {role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
+          {me?.photoUrl ? (
+            <img
+              src={me.photoUrl}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : me?.name ? (
+            me.name.trim().charAt(0).toUpperCase()
+          ) : role === "employer" ? (
+            <IconStore size={30} />
+          ) : (
+            <IconBriefcase size={30} />
+          )}
         </span>
-        <span style={{ flex: 1 }}>
-          <div style={{ fontWeight: 800, fontSize: 20 }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 20, overflowWrap: "anywhere" }}>
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
           </div>
           <div className="muted">
             {me ? (me.rating > 0 ? `★ ${me.rating.toFixed(1)}` : "Новичок") : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
-            {me?.shiftsDone ? ` · ${me.shiftsDone} смен` : ""}
+            {me?.shiftsDone
+              ? ` · ${me.shiftsDone} ${plural(me.shiftsDone, "смена", "смены", "смен")}`
+              : ""}
           </div>
         </span>
       </div>
@@ -443,12 +463,12 @@ export function ProfilePage() {
             <IconBolt size={18} />
             {role === "employer"
               ? `Новых откликов: ${me.incomingLikes}`
-              : `Тебя зовут на смены: ${me.incomingLikes}`}
+              : `Вас зовут на смены: ${me.incomingLikes}`}
           </b>
           <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2 }}>
             {role === "employer"
               ? "нажмите, чтобы увидеть, кто именно, и ответить"
-              : "нажми, чтобы увидеть кто зовёт, и ответить в один тап"}
+              : "нажмите, чтобы увидеть, кто зовёт, и ответить в один тап"}
           </div>
         </div>
       )}

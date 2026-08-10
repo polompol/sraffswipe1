@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMatches } from "@/api/endpoints";
 import { baseURL, getToken } from "@/api/client";
@@ -9,6 +10,7 @@ import { ReviewStars } from "@/components/ReviewStars";
 import { IconCalendar, IconDoc } from "@/components/Icons";
 
 export function ShiftsPage() {
+  const nav = useNavigate();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["matches"],
     queryFn: fetchMatches,
@@ -32,9 +34,11 @@ export function ShiftsPage() {
 
       {!isLoading && !isError && shifts.length === 0 && (
         <EmptyState
+          fill
           icon={<IconCalendar size={34} />}
           title="Пока нет смен"
           text="Подтвердите смену в чате после мэтча — она появится здесь с актом."
+          action={<Button onClick={() => nav("/feed")}>Открыть ленту смен</Button>}
         />
       )}
 

@@ -5,7 +5,7 @@ import {
   fetchMyVacancies,
   urgentPing,
 } from "@/api/endpoints";
-import { fmtDate, fmtTime, rateLabel } from "@/lib/format";
+import { fmtDate, fmtTime, plural, rateLabel } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { haptic, confirmAction } from "@/telegram/sdk";
@@ -49,10 +49,10 @@ export function MyVacanciesPage() {
   return (
     <div className="page">
       <div className="row" style={{ marginBottom: 8 }}>
-        <h1 className="h1" style={{ margin: 0 }}>Мои вакансии</h1>
+        <h1 className="h1" style={{ margin: 0 }}>Мои смены</h1>
         <span className="spacer" />
         <Button size="sm" block={false} onClick={() => nav("/vacancy/new")}>
-          + Вакансия
+          + Смена
         </Button>
       </div>
       <div
@@ -83,6 +83,7 @@ export function MyVacanciesPage() {
           что делать дальше. Теперь экран сам ведёт к размещению смены. */}
       {data && data.length === 0 && (
         <EmptyState
+          fill
           icon={<IconCalendar size={34} />}
           title="Смен пока нет"
           text="Разместите первую смену — она появится в ленте у работников рядом, и пойдут отклики."
@@ -102,6 +103,29 @@ export function MyVacanciesPage() {
               {fmtDate(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)} · {rateLabel(v.rate, v.rateType)}
             </div>
             <div className="muted">{v.address}</div>
+            {/* Главный вопрос заведения к своей смене — набрал ли я людей.
+                Ответа на него на экране не было вообще: чтобы понять, закрыта
+                ли смена, приходилось идти в «Кто откликнулся» и считать. */}
+            {(() => {
+              const need = v.headcount ?? 1;
+              const left = v.slotsLeft ?? need;
+              const taken = need - left;
+              const full = left <= 0;
+              return (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: full ? "var(--success)" : "var(--gold)",
+                  }}
+                >
+                  {full
+                    ? "Все места закрыты ✓"
+                    : `Набрано ${taken} из ${need} · ищем ещё ${left} ${plural(left, "человека", "человек", "человек")}`}
+                </div>
+              );
+            })()}
             {/* Сетка, а не ряд с переносом: кнопки разной ширины переносились
                 по-своему в каждой карточке, и одинаковые смены выглядели
                 по-разному. Две ровные колонки читаются как таблица. */}
@@ -138,7 +162,10 @@ export function MyVacanciesPage() {
               </button>
               <button
                 className="tag"
-                style={{ cursor: "pointer", borderColor: "var(--danger)", color: "var(--danger)" }}
+                // Тихая: снимают смену редко, а красным она звала не меньше,
+                // чем «Повторить», и стояла с ней в одном ряду. Подтверждение
+                // всё равно спрашивается отдельно.
+                style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--muted)" }}
                 onClick={() => doRemove(v.id, STAFF_ROLE_LABELS[v.role])}
               >
                 <IconWarning size={13} /> Снять

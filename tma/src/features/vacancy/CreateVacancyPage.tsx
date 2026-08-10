@@ -18,6 +18,7 @@ import {
   type AddressSuggestion,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
 import { IconPin, IconCheck } from "@/components/Icons";
 import { showBackButton, haptic } from "@/telegram/sdk";
@@ -29,6 +30,9 @@ const toMinutes = (t: string): number => {
 
 const fromMinutes = (m: number): string =>
   `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+// Частые варианты. Всё остальное — через «Нужно другое число».
+const HEADCOUNT_PRESETS = [1, 2, 3, 5, 10];
 
 export function CreateVacancyPage() {
   const nav = useNavigate();
@@ -57,6 +61,11 @@ export function CreateVacancyPage() {
   const [medBook, setMedBook] = useState(pre?.requireMedBook ?? true);
   // Сколько человек нужно: на банкет и выходные почти никогда не один.
   const [headcount, setHeadcount] = useState(pre?.headcount ?? 1);
+  // Правим смену, где стояло число не из быстрых кнопок (например 4) —
+  // сразу открываем поле, иначе выбранное значение негде увидеть.
+  const [custom, setCustom] = useState(
+    !HEADCOUNT_PRESETS.includes(pre?.headcount ?? 1),
+  );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
@@ -95,7 +104,7 @@ export function CreateVacancyPage() {
       } else {
         await createVacancy(payload);
         track("vacancy_publish", { role });
-        toast("Вакансия опубликована", "success");
+        toast("Смена опубликована", "success");
       }
       haptic("success");
       qc.invalidateQueries({ queryKey: ["feed"] });
@@ -103,16 +112,17 @@ export function CreateVacancyPage() {
       nav(-1);
     } catch (e) {
       haptic("error");
-      // 409 — по смене уже откликнулись: сервер объясняет причину, покажем её.
-      const status = (e as { response?: { status?: number } })?.response?.status;
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
+      // Сервер объясняет причину сам: и почему нельзя менять смену с
+      // откликом (409), и что не так с полями — например «Смена не может
+      // быть в прошлом» (422). Раньше проверка полей терялась и человек
+      // видел общее «Проверьте поля», не понимая какое.
       toast(
-        status === 409 && detail
-          ? detail
-          : editing
+        apiError(
+          e,
+          editing
             ? "Не удалось сохранить. Проверьте поля."
             : "Не удалось опубликовать. Проверьте поля.",
+        ),
         "error",
       );
     } finally {
@@ -136,7 +146,7 @@ export function CreateVacancyPage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>
-          {editing ? "Исправить смену" : pre ? "Повторить смену" : "Новая вакансия"}
+          {editing ? "Исправить смену" : pre ? "Повторить смену" : "Новая смена"}
         </h1>
         {editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
@@ -213,7 +223,7 @@ export function CreateVacancyPage() {
             marginBottom: 8,
           }}
         >
-          {[1, 2, 3, 5, 10].map((n) => (
+          {HEADCOUNT_PRESETS.map((n) => (
             <button
               key={n}
               className="tag"
@@ -231,21 +241,47 @@ export function CreateVacancyPage() {
             </button>
           ))}
         </div>
-        {/* Своё число — отдельной строкой. В одном ряду с чипами поле
-            выглядело как шестой вариант выбора и рвало ряд пополам. */}
-        <input
-          className="input"
-          type="number"
-          min={1}
-          max={20}
-          aria-label="Другое количество человек"
-          placeholder="другое число"
-          style={{ marginBottom: 16 }}
-          value={headcount}
-          onChange={(e) =>
-            setHeadcount(Math.min(20, Math.max(1, Number(e.target.value) || 1)))
-          }
-        />
+        {/* Поле для своего числа показываем только по запросу. Раньше оно
+            стояло всегда и повторяло выбранный чип: под нажатой «1» висела
+            безымянная строка с той же единицей, и человек не понимал, что это
+            и почему их два. Подсказка «другое число» в нём не появлялась
+            никогда — поле не бывает пустым. */}
+        {custom ? (
+          <>
+            <label className="form-label" htmlFor="headcount">
+              Сколько именно человек
+            </label>
+            <input
+              id="headcount"
+              className="input"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={20}
+              style={{ marginBottom: 16 }}
+              value={headcount}
+              onChange={(e) =>
+                setHeadcount(Math.min(20, Math.max(1, Number(e.target.value) || 1)))
+              }
+            />
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCustom(true)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: "4px 0 12px",
+              color: "var(--link)",
+              font: "inherit",
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            Нужно другое число
+          </button>
+        )}
         <p className="muted" style={{ margin: "-8px 0 16px", fontSize: 13 }}>
           Одна смена на всех — не нужно публиковать несколько одинаковых.
           Когда наберётся столько людей, смена уйдёт из ленты сама.
@@ -362,7 +398,7 @@ export function CreateVacancyPage() {
         />
 
         <Button loading={busy} onClick={publish}>
-          {editing ? "Сохранить изменения" : "Опубликовать вакансию"}
+          {editing ? "Сохранить изменения" : "Опубликовать смену"}
         </Button>
       </div>
     </div>

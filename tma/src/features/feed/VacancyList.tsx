@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { PAY_METHOD_SHORT, STAFF_ROLE_LABELS } from "@/types/domain";
-import { fmtTime, isUrgentShift, rateLabel, shiftDayLabel } from "@/lib/format";
+import { fmtTime, isUrgentShift, plural, rateLabel, shiftDayLabel } from "@/lib/format";
 import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
@@ -124,24 +124,29 @@ export function VacancyList({
                 {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
                 {typeof v.distanceKm === "number" ? ` · ${v.distanceKm.toFixed(1)} км` : ""}
               </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                {v.payMethod && (
-                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
-                    {PAY_METHOD_SHORT[v.payMethod]}
-                  </span>
-                )}
-                {v.employerPaysOnTime && (
-                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
-                    <IconCheck size={12} /> Платит вовремя
-                  </span>
-                )}
-                {!!v.employerShiftsDone && (
-                  <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 13 }}>
-                    {v.employerShiftsDone} смен закрыто
-                  </span>
-                )}
-              </div>
             </div>
+          </div>
+          {/* Чипы — на всю ширину карточки, а не в узкой колонке справа от
+              фото. Там на них оставалось 276px, и каждый вставал на свою
+              строку: три чипа съедали три строки и карточка выглядела
+              сломанной. Подписи заодно короче — теперь помещаются в одну. */}
+          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            {v.payMethod && (
+              <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
+                {PAY_METHOD_SHORT[v.payMethod]}
+              </span>
+            )}
+            {v.employerPaysOnTime && (
+              <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
+                <IconCheck size={12} /> Платит вовремя
+              </span>
+            )}
+            {!!v.employerShiftsDone && (
+              <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 13 }}>
+                {v.employerShiftsDone}{" "}
+                {plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто
+              </span>
+            )}
           </div>
           <div className="row" style={{ gap: 8, marginTop: 12 }}>
             {!hideSkip && (

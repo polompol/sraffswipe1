@@ -288,7 +288,13 @@ export function ChatPage() {
           borderTop: "1px solid var(--border)",
         }}
       >
+        {/* Лента быстрых ответов прокручивается вбок, но выглядела как
+            обрезанная строка: третья подсказка упиралась в край экрана на
+            середине слова, и понять, что там есть продолжение, было нельзя.
+            Плавное затухание у правого края читается как «дальше есть ещё».
+            scrollPadding — чтобы первый чип не прилипал к самому краю. */}
         <div
+          className="quick-row"
           style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 2 }}
         >
           {QUICK_REPLIES.map((q) => (
