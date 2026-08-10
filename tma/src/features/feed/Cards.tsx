@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
@@ -47,15 +47,19 @@ const PAY_ICON: Record<PayMethod, typeof IconCash> = {
  *  огромной пустой буквы показываем главное: сколько платят и за что. Раньше
  *  верхняя половина карточки была пустым полем с инициалом, и лента без фото
  *  выглядела так, будто в сервисе ничего нет. */
-function SwipePhoto({ src, initial, hero }: {
+function SwipePhoto({ src, initial, hero, onHero }: {
   src?: string;
   initial: string;
   hero?: ReactNode;
+  /** Показывается ли крупная плашка вместо фото — чтобы карточка не повторяла
+   *  ту же сумму ещё раз ниже. */
+  onHero?: (shown: boolean) => void;
 }) {
   const [state, setState] = useState<"load" | "ok" | "err">(src ? "load" : "err");
   // Битая ссылка на фото — тот же случай, что и «фото нет»: показываем
   // главное, а не пустую букву.
   const showHero = !!hero && (!src || state === "err");
+  useEffect(() => onHero?.(showHero), [showHero, onHero]);
   return (
     <div className="swipe-photo swipe-photo-fallback">
       {showHero ? (
@@ -147,11 +151,16 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
   const urgent = isUrgentShift(v.date);
   const hasPhoto = !!v.interiorPhotoUrl;
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
+  // Когда фото нет, сумма уже написана крупно поверх карточки — и повторялась
+  // строкой «≈ 2 800 ₽ за смену» на три сантиметра ниже. Два одинаковых числа
+  // на одном экране заставляют сверять, не разные ли они.
+  const [heroShown, setHeroShown] = useState(!hasPhoto);
   return (
     <>
       <SwipePhoto
         src={hasPhoto ? v.interiorPhotoUrl : undefined}
         initial={(v.companyName || "С").charAt(0)}
+        onHero={setHeroShown}
         hero={
           <>
             <div className="swipe-hero-sum">
@@ -278,9 +287,11 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           )}
         </div>
 
-        <div style={{ marginTop: 8, fontWeight: 800, fontSize: 16 }}>
-          ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
-        </div>
+        {!heroShown && (
+          <div style={{ marginTop: 8, fontWeight: 800, fontSize: 16 }}>
+            ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
+          </div>
+        )}
       </div>
     </>
   );
