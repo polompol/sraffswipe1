@@ -14,7 +14,7 @@ PostgreSQL/PostGIS + собранный Mini App. Всё на одном дом�
 
 - Токен бота из @BotFather — **есть**.
 - Домен (или поддомен), напр. `app.tvoy-domen.ru` — **есть**.
-- VPS с Ubuntu 22.04+ и публичным IP. 2 vCPU / 2 ГБ RAM хватит на пилот.
+- VPS с Ubuntu 24.04 (подойдёт и 22.04) и публичным IP. 2 vCPU / 2 ГБ RAM хватит на пилот.
   Подойдёт Timeweb, Selectel, Beget, Hetzner (~300–600 ₽/мес).
 
 ---
@@ -61,7 +61,14 @@ ufw allow 443
 ```sh
 git clone https://github.com/polompol/sraffswipe1.git
 cd sraffswipe1
+git checkout claude/staffswipe-flutter-app-6oqk55
 ```
+
+Третья команда обязательна, пока ветка не слита в `main`: в `main` нет ни
+контейнера `redis`, ни планировщика `scheduler` — то есть ежедневные задачи
+(напоминания о сменах, авто-закрытие, сверка платежей) просто не будут
+работать, и никто об этом не сообщит. После слияния в `main` переключаться
+обратно: `git checkout main`.
 
 ---
 
@@ -205,10 +212,10 @@ crontab -e
 **Восстановление** (проверь его один раз заранее, а не в день аварии):
 
 ```sh
-docker compose -f docker-compose.prod.yml stop api bot
+docker compose -f docker-compose.prod.yml stop api bot scheduler
 zcat /var/backups/staffswipe/staffswipe_2026-08-07_0400.sql.gz \
   | docker compose -f docker-compose.prod.yml exec -T db psql -U staffswipe staffswipe
-docker compose -f docker-compose.prod.yml start api bot
+docker compose -f docker-compose.prod.yml start api bot scheduler
 ```
 
 ---
@@ -227,11 +234,15 @@ docker compose -f docker-compose.prod.yml start api bot
 
 ## Что НЕ входит в этот запуск (осознанно)
 
-- **Платежи в приложении (YooKassa)** — требуют ИП/ООО и модерации. Для пилота
-  не нужны: договорённость и оплата смены идут напрямую заведение ↔ соискатель.
-  Ключи `YOOKASSA_*` добавляются позже, когда оформишь юрлицо.
+- **Приём комиссии картой (ЮKassa)** — подключается отдельно и НЕ требует
+  ИП/ООО: касса доступна самозанятому (см. `docs/LAUNCH.md`, раздел про
+  ЮKassa). Пока ключи `YOOKASSA_*` пустые, баланс заведения пополняет
+  оператор в админке, приняв перевод. Оплата самой смены в любом случае идёт
+  напрямую заведение ↔ работник — через приложение она не проходит никогда.
 - **Загрузка фото (S3)** — без ключей `S3_*` загрузка фото отдаёт 503, остальное
   работает. Подключи Yandex Object Storage, когда понадобится.
-- **Redis / несколько воркеров** — на пилоте API работает в один процесс
-  (WEB_CONCURRENCY=1): WS-чат и рейт-лимит живут в памяти. Масштабирование —
-  отдельный шаг, когда нагрузка вырастет.
+  Не забудь `UPLOAD_ORIGIN` — без него браузер молча зарежет отправку файла.
+- **Несколько воркеров API** — по умолчанию `WEB_CONCURRENCY=1`. Redis при
+  этом поднимается всегда (он в docker-compose.prod.yml), и общая память для
+  чата и счётчиков частоты уже есть — поднять число воркеров можно в любой
+  момент, отдельной подготовки это не требует.

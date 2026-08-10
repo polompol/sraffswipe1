@@ -11,8 +11,9 @@ Telegram Mini App «Tinder для подработок в общепите» (М
   (`src/api/mock.ts` зеркалит `src/api/endpoints.ts`).
 - `backend/` — FastAPI + SQLAlchemy 2 + Pydantic v2, SQLite (dev/тесты) /
   PostgreSQL (прод), Alembic. `backend/bot/` — aiogram-бот (отдельный процесс).
-- `docs/` — LAUNCH.md (запуск), DEPLOY.md, COMMISSION.md (деньги/споры),
-  OPERATIONS.md (операционка), legal/ (оферта, 152-ФЗ).
+- `docs/` — ПУСК.md (запуск с нуля по кнопкам, для владельца), LAUNCH.md и
+  DEPLOY.md (технические подробности), COMMISSION.md (деньги/споры),
+  OPERATIONS.md (операционка), GROWTH.md (привлечение), legal/ (оферта, 152-ФЗ).
 - Деплой: `docker-compose.prod.yml` (Caddy HTTPS + Postgres + API + бот + SPA).
 
 ## Команды проверки (запускать после ЛЮБЫХ правок)
@@ -61,7 +62,8 @@ npm run lint && npx tsc --noEmit && npx vitest run && npm run build
 
 ## Состояние
 
-Продукт готов к пилоту, код в `main`. Ожидает: сервер + домен + токен бота
+Продукт готов к пилоту. Рабочая ветка — `claude/staffswipe-flutter-app-6oqk55`
+(в `main` ещё нет ни redis, ни планировщика). Ожидает: сервер + домен + токен бота
 (см. docs/LAUNCH.md). Автосписание ЮKassa доступно самозанятому БЕЗ ИП (чек —
 в «Мой налог», yookassa_send_receipt=false). Отложено до триггеров:
 эскроу, селфи-чекин, авто-закрытие смен по таймеру.

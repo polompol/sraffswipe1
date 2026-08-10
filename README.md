@@ -11,7 +11,7 @@
 | **`tma/`** — Telegram Mini App (клиент) | React + TS + Vite + @telegram-apps/sdk-react |
 | **`backend/`** — API + бот | FastAPI + SQLAlchemy + aiogram 3 |
 
-Вход через Telegram (без SMS), нативные кнопки/хаптика, оплата внутри Telegram.
+Вход через Telegram (без SMS), нативные кнопки и хаптика.
 
 ## 🚀 Запустить у себя (VS Code, самый простой способ)
 
@@ -72,8 +72,10 @@ cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 
 ## ⚠️ Прод-конфиг: вставить ключи и запустить
 
-Все значения берутся из env (см. **`backend/.env.example`** и **`tma/.env.example`** —
-скопируйте в `.env` и заполните). В прод-режиме (`DEV_MODE=false`) приложение
+Прод настраивается ОДНИМ корневым `.env` — шаблон **`.env.example`** в корне
+репозитория (его читает `docker-compose.prod.yml`). Файлы
+`backend/.env.example` и `tma/.env.example` нужны только для локального
+запуска без docker. В прод-режиме (`DEV_MODE=false`) приложение
 **не стартует** с дефолтными секретами — это защита от случайного небезопасного
 деплоя.
 
@@ -82,7 +84,7 @@ cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 | `JWT_SECRET` | подпись токенов (обязательно сменить) |
 | `INTERNAL_API_SECRET` | защита `/billing/fulfill` и вебхука (бот/ЮKassa) |
 | `ALLOW_INSECURE_TELEGRAM_AUTH=false` | запретить вход без подписи initData |
-| `TELEGRAM_BOT_TOKEN` | валидация initData, инвойсы Stars, уведомления |
+| `TELEGRAM_BOT_TOKEN` | валидация initData, уведомления в Telegram |
 | `ALLOWED_ORIGINS` | CORS: URL Mini App вместо `*` |
 | `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY` | приём рублёвых платежей |
 | `DADATA_TOKEN` | верификация ИНН/ОГРН и подсказки адресов |
@@ -96,11 +98,12 @@ cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 
 🚀 Запуск сегодня по шагам (бот и домен уже есть) — **[`docs/ПУСК.md`](docs/ПУСК.md)**.
 🧭 С чего начать, если пока ничего нет — **[`docs/START-TODAY.md`](docs/START-TODAY.md)**.
-📦 Полная инструкция по запуску в прод — **[`docs/deploy.md`](docs/deploy.md)**.
+📦 Запуск с нуля, по шагам и по кнопкам — **[`docs/ПУСК.md`](docs/%D0%9F%D0%A3%D0%A1%D0%9A.md)**.
+Технические подробности деплоя — **[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
 
 ## Модель данных
 
 `users`, `employers`, `vacancies`, `swipes`, `matches`, `messages`,
-`subscriptions`, `entitlements`, `purchases`, `commissions`, `wallet_txns`,
+`entitlements`, `purchases`, `commissions`, `wallet_txns`, `phone_codes`,
 `referrals`, `reviews`, `events`, `saved_searches`, `favorites`, `reports`.
 См. `backend/app/models.py`.
