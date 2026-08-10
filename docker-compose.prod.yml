@@ -91,6 +91,37 @@ services:
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
       # Часовой пояс смен: сервер в UTC, а «10:00–18:00» — местное время.
       BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
+      # --- Деньги. Этих строк здесь не было ВООБЩЕ, и заполнить их в .env было
+      # бесполезно: до приложения они не доходили. Последствия ровно денежные —
+      # кнопка «Оплатить картой» отвечала «оплата картой скоро» даже с
+      # подключённой кассой, а вебхук об успешном платеже сверялся не с тем
+      # секретом и отвергался: деньги у ЮKassa есть, баланс не пополнен.
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_WEBHOOK_SECRET: ${YOOKASSA_WEBHOOK_SECRET:-}
+      YOOKASSA_SEND_RECEIPT: ${YOOKASSA_SEND_RECEIPT:-false}
+      YOOKASSA_VAT_CODE: ${YOOKASSA_VAT_CODE:-1}
+      # Куда вернётся человек после оплаты. По умолчанию — в чат с ботом,
+      # оттуда одна кнопка до приложения.
+      PAYMENT_RETURN_URL: ${PAYMENT_RETURN_URL:-https://t.me/${BOT_USERNAME}}
+      # Комиссия и сроки (значения по умолчанию — как в коде).
+      COMMISSION_PCT: ${COMMISSION_PCT:-10}
+      COMMISSION_MIN_RUB: ${COMMISSION_MIN_RUB:-0}
+      COMMISSION_DUE_DAYS: ${COMMISSION_DUE_DAYS:-7}
+      LATE_CANCEL_HOURS: ${LATE_CANCEL_HOURS:-6}
+      # Реквизиты получателя платежа: без них счёт и акт юрлицу не выдаются
+      # (ручка честно отвечает 503). Раньше их тоже некуда было передать.
+      ORG_NAME: ${ORG_NAME:-}
+      ORG_INN: ${ORG_INN:-}
+      ORG_KPP: ${ORG_KPP:-}
+      ORG_OGRN: ${ORG_OGRN:-}
+      ORG_ADDRESS: ${ORG_ADDRESS:-}
+      ORG_BANK_NAME: ${ORG_BANK_NAME:-}
+      ORG_BANK_BIC: ${ORG_BANK_BIC:-}
+      ORG_BANK_ACCOUNT: ${ORG_BANK_ACCOUNT:-}
+      ORG_CORR_ACCOUNT: ${ORG_CORR_ACCOUNT:-}
+      ORG_SIGNER: ${ORG_SIGNER:-}
+      ORG_VAT: ${ORG_VAT:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -116,8 +147,15 @@ services:
       ALLOW_INSECURE_TELEGRAM_AUTH: "false"
       MINI_APP_URL: https://${DOMAIN}
       BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
+      # Сверка платежей ходит в ЮKassa читать список успешных.
       YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
       YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      # Авто-закрытие смен начисляет комиссию — проценты и сроки здесь обязаны
+      # совпадать с API, иначе одна и та же смена считалась бы по-разному.
+      COMMISSION_PCT: ${COMMISSION_PCT:-10}
+      COMMISSION_MIN_RUB: ${COMMISSION_MIN_RUB:-0}
+      COMMISSION_DUE_DAYS: ${COMMISSION_DUE_DAYS:-7}
+      LATE_CANCEL_HOURS: ${LATE_CANCEL_HOURS:-6}
     depends_on:
       db:
         condition: service_healthy
