@@ -250,14 +250,18 @@ def test_mutual_checkin_closes_only_when_both_confirm(client):
     assert done["status"] == "completed" and done["checked_in"] is True
 
 
-def test_checkin_geo_and_code_helpers(client):
+def test_checkin_requires_the_venue_code(client):
+    """Отметка «я на смене» — только кодом заведения.
+
+    Геолокацию убрали: она просила разрешение на местоположение (первое, на
+    чём люди закрывают приложение), не работала в подвалах и на кухнях и
+    ничего не доказывала — рядом с кафе можно оказаться и не работая.
+    """
     _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
-    # Гео вдалеке — отказ; на месте — отметка проходит.
     assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                       json={"lat": 55.0, "lng": 38.5}).status_code == 400
-    r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                    json={"lat": 55.75, "lng": 37.61})
-    assert r.status_code == 200 and r.json()["seeker_checked_in"] is True
+                       json={"lat": 55.75, "lng": 37.61}).status_code == 400
+    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                       json={"code": "000000"}).status_code == 400
 
 
 def test_commission_accrued_on_close(client):

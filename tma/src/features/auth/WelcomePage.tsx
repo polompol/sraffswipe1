@@ -176,13 +176,16 @@ export function WelcomePage() {
           )}
           <label
             className="tag"
-            style={{ cursor: "pointer", minHeight: 44, alignItems: "center" }}
+            style={{ cursor: "pointer", minHeight: 44, alignItems: "center", position: "relative" }}
           >
             {uploading ? "Загружаю…" : photo ? "Заменить фото" : "Добавить фото"}
+            {/* Поле спрятано визуально (.visually-hidden), а не display:none:
+                display:none убирает его из порядка табуляции, и добавить
+                фото без мыши было невозможно. */}
             <input
               type="file"
               accept="image/*"
-              style={{ display: "none" }}
+              className="visually-hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) void pickPhoto(f);

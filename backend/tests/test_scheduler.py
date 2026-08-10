@@ -60,7 +60,7 @@ def test_late_start_still_runs_missed_jobs(client):
     """
     done = dict(run_due(now=_at(12, 0)))
     assert "reminders" in done
-    assert "abandoned" in done
+    assert "aftershift" in done
 
 
 def test_broken_job_does_not_stop_the_others(client, monkeypatch):
@@ -70,14 +70,14 @@ def test_broken_job_does_not_stop_the_others(client, monkeypatch):
     real = sched._run_job
 
     def flaky(db, name):
-        if name == "abandoned":
+        if name == "aftershift":
             raise RuntimeError("база недоступна")
         return real(db, name)
 
     monkeypatch.setattr(sched, "_run_job", flaky)
     done = dict(run_due(now=_at(12, 0)))
     assert "reminders" in done, "остальные задачи должны были выполниться"
-    assert "abandoned" not in _jobs_done(), "упавшая не помечается выполненной"
+    assert "aftershift" not in _jobs_done(), "упавшая не помечается выполненной"
 
 
 def test_schedule_is_within_a_day(client):

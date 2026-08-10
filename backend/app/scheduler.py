@@ -29,9 +29,9 @@ _log = logging.getLogger("staffswipe.scheduler")
 # Час и минута по времени бизнеса (BUSINESS_TZ), а не по UTC: «в 9 утра»
 # означает девять утра там, где люди выходят на смены.
 SCHEDULE: list[tuple[int, int, str]] = [
-    (5, 0, "abandoned"),   # ночью — закрыть смены, которые никто не отметил
     (9, 0, "reminders"),   # утром — напомнить о сегодняшних сменах
-    (10, 0, "autoclose"),  # днём — закрыть смены, отмеченные кодом заведения
+    (9, 30, "aftershift"), # утром — спросить про вчерашние: всё прошло?
+    (14, 0, "settle"),     # днём — закрыть вчерашние смены и начислить комиссию
     (19, 0, "unfilled"),   # вечером — предупредить о завтрашних без людей
     (4, 30, "reconcile"),  # ночью — сверить платежи с ЮKassa
 ]
@@ -40,20 +40,20 @@ SCHEDULE: list[tuple[int, int, str]] = [
 def _run_job(db: Session, name: str) -> int:
     """Выполнить задачу по имени. Возвращает число затронутых записей."""
     from .digest import (
-        auto_close_shifts,
-        close_abandoned_shifts,
+        send_aftershift_asks,
         send_reminders,
         send_unfilled_alerts,
+        settle_shifts,
     )
 
     if name == "reminders":
         return send_reminders(db)
     if name == "unfilled":
         return send_unfilled_alerts(db)
-    if name == "autoclose":
-        return auto_close_shifts(db)
-    if name == "abandoned":
-        return close_abandoned_shifts(db)
+    if name == "settle":
+        return settle_shifts(db)
+    if name == "aftershift":
+        return send_aftershift_asks(db)
     if name == "reconcile":
         from .config import settings
 

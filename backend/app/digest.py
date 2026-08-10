@@ -94,9 +94,9 @@ def build_reminders(db: Session) -> list[tuple[str, str, str]]:
         text = (
             f"Сегодня смена в {_fmt_time(v.start_time)}"
             + (f", {where}" if where else "")
-            + ".\n\nКогда придёте — отметьтесь: кнопка ниже, «Я на смене». "
-            "Гео определится само, либо введите код, который назовёт "
-            "заведение. Без отметки смена не закроется."
+            + ".\n\nКогда придёте — попросите у администратора код и введите "
+            "его в приложении. Это не обязательно, смена закроется и так, но "
+            "код — ваше доказательство, что вы были на месте."
         )
         result.append((m.id, m.user_id, text))
     return result
@@ -190,89 +190,95 @@ def _shift_end(v: Vacancy) -> datetime:
     return shift_end_utc(v.date, v.start_time, v.end_time)
 
 
-# Сколько ждём подтверждения заведения, прежде чем закрыть смену самим.
-AUTO_CLOSE_AFTER_HOURS = 12
+# Через сколько часов после конца смены она считается состоявшейся, если
+# никто не сказал обратного. Смена вечером — расчёт на следующий день днём.
+SETTLE_AFTER_HOURS = 12
+
+# Через сколько часов после конца смены спрашиваем обе стороны «всё прошло как
+# договаривались?». Раньше расчёта — чтобы возразить успели без спешки.
+ASK_AFTER_HOURS = 2
 
 
-# Сколько ждём после смены, прежде чем признать её брошенной. Больше, чем
-# авто-закрытие: там есть доказательство выхода (код), здесь доказательств нет
-# вообще, и спешить некуда — дадим людям сутки на то, чтобы вспомнить.
-ABANDONED_AFTER_HOURS = 48
+def build_aftershift_asks(db: Session) -> list[tuple[str, str]]:
+    """Пары (match_id, текст) — «вчера была смена, всё в порядке?».
 
-
-def close_abandoned_shifts(db: Session) -> int:
-    """Закрыть смены, которые не отметила НИ ОДНА сторона.
-
-    Такие смены висели в статусе «подтверждена» вечно. Последствия копились
-    молча: место на смене оставалось занятым, и заведение не могло взять на
-    него другого человека даже через месяц; список мэтчей засорялся мёртвыми
-    записями; надёжность работника не обновлялась никогда.
-
-    Ставим отдельный статус «expired», а НЕ неявку: доказательств нет ни у
-    кого. Может, человек вышел и оба забыли нажать кнопку. Наказывать по
-    догадке нельзя — поэтому надёжность не трогаем и комиссию не начисляем.
-    Заведение, которому это важно, откроет спор.
+    Единственное предупреждение перед тем, как за смену спишется комиссия.
+    Без него авто-расчёт был бы неприятным сюрпризом: заведение узнавало бы о
+    списании постфактум.
     """
-    from .routers.matches import _sys
-
-    deadline = datetime.now(UTC) - timedelta(hours=ABANDONED_AFTER_HOURS)
+    today = _today()
+    deadline = datetime.now(UTC) - timedelta(hours=ASK_AFTER_HOURS)
     rows = (
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
             Match.status == "confirmed",
-            Match.seeker_checked_in.is_(False),
-            Match.employer_checked_in.is_(False),
             Match.disputed.is_(False),
+            Match.settle_notified_on != today,
         )
         .all()
     )
-    closed = 0
+    out: list[tuple[str, str]] = []
     for m, v in rows:
         try:
             if _shift_end(v) > deadline:
                 continue
         except ValueError:
             continue
-        m.status = "expired"
-        _sys(
-            db, m.id,
-            "Смену не отметила ни одна сторона — она закрыта без начисления "
-            "комиссии. Если смена была, откройте спор: оператор разберётся.",
-        )
-        notify_owner(
-            db, m.employer_id,
-            "Смена закрыта: её не отметил никто. Комиссия не начислена, "
-            "место освободилось. Если человек выходил — откройте спор.",
-        )
-        closed += 1
+        out.append((
+            m.id,
+            f"Смена {date_ru(v.date)} в {_fmt_time(v.start_time)} завершилась.\n\n"
+            "Если всё прошло как договаривались — делать ничего не нужно, "
+            "смена закроется сама.\n"
+            "Если смена не состоялась — откройте её и нажмите "
+            "«Смена не состоялась», иначе она будет засчитана.",
+        ))
+    return out
+
+
+def send_aftershift_asks(db: Session) -> int:
+    """Разослать вопрос обеим сторонам. Повторов за день не будет."""
+    today = _today()
+    asks = build_aftershift_asks(db)
+    for match_id, text in asks:
+        m = db.get(Match, match_id)
+        if m is None:
+            continue
+        for owner_id in (m.user_id, m.employer_id):
+            notify_owner(db, owner_id, text,
+                         open_app="Открыть смену", screen="matches")
+        m.settle_notified_on = today
     db.commit()
-    return closed
+    return len(asks)
 
 
-def auto_close_shifts(db: Session) -> int:
-    """Закрыть смены, где работник отметился КОДОМ, а заведение молчит.
+def settle_shifts(db: Session) -> int:
+    """Закрыть состоявшиеся смены и начислить комиссию.
 
-    Оператор в споре всё равно решает по правилу «код знал только
-    работодатель → раз код введён, работник был на месте → засчитать».
-    Правило однозначное, значит его должен исполнять код, а не человек:
-    это снимает самый частый класс споров и разгружает оператора.
+    Главное правило сервиса, и оно намеренно перевёрнуто по сравнению с тем,
+    как было. Раньше смена закрывалась ТОЛЬКО когда обе стороны нажимали
+    кнопку — значит, чтобы не платить 10%, заведению достаточно было ничего
+    не нажимать и не называть работнику код прихода. Сторона, которая должна
+    деньги, выигрывала от бездействия, и никакая отметка (ни код, ни
+    геолокация) этого не лечила: код тоже давало заведение.
 
-    Гео-отметка сюда НЕ попадает: рядом с кафе можно оказаться и не работая.
-    Спорные смены тоже не трогаем — их разбирает оператор.
+    Теперь: договорились о смене — смена считается состоявшейся, пока кто-то
+    явно не сказал обратного кнопкой «Смена не состоялась». Молчание больше
+    не бесплатно.
+
+    Не трогаем: спорные смены (их решает оператор) и те, по которым уже
+    заявили, что смены не было.
     """
     from .routers.matches import _accrue_commission, _sys
 
-    deadline = datetime.now(UTC) - timedelta(hours=AUTO_CLOSE_AFTER_HOURS)
+    deadline = datetime.now(UTC) - timedelta(hours=SETTLE_AFTER_HOURS)
     rows = (
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
             Match.status == "confirmed",
-            Match.seeker_checked_in.is_(True),
-            Match.checkin_by_code.is_(True),
-            Match.employer_checked_in.is_(False),
             Match.disputed.is_(False),
+            Match.not_held_by == "",
         )
         .all()
     )
@@ -285,20 +291,20 @@ def auto_close_shifts(db: Session) -> int:
             continue
         m.status = "completed"
         m.no_show = False
+        m.seeker_checked_in = True
         m.employer_checked_in = True
         _accrue_commission(db, m)
-        _sys(
-            db, m.id,
-            "Смена закрыта автоматически: работник отметился кодом заведения, "
-            f"подтверждения не было {AUTO_CLOSE_AFTER_HOURS} часов. "
-            "Если это ошибка — напишите в поддержку.",
+        _sys(db, m.id, "Смена закрыта ✓ Возражений не поступило.")
+        notify_owner(
+            db, m.employer_id,
+            "Смена закрыта — возражений не было. Комиссия начислена.",
         )
-        notify_owner(db, m.employer_id,
-                     "Смена закрыта автоматически: работник отметился вашим "
-                     "кодом, а подтверждения не поступило. Комиссия начислена.")
-        notify_owner(db, m.user_id,
-                     "Ваша смена закрыта ✓ Заведение не подтвердило вовремя, "
-                     "но код прихода это подтверждает.")
+        notify_owner(
+            db, m.user_id,
+            "Смена закрыта ✓ В разделе «Смены» можно скачать акт "
+            "и оценить заведение.",
+            open_app="Открыть смены", screen="shifts",
+        )
         closed += 1
     db.commit()
     return closed

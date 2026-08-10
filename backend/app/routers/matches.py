@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..conflicts import overlapping_shifts
 from ..db import get_db
-from ..geo import distance_km
 from ..models import (
     Commission,
     Entitlement,
@@ -30,19 +29,24 @@ from .analytics import _is_admin
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
-# Радиус, в пределах которого гео-отметка «я на смене» считается валидной.
-_CHECKIN_RADIUS_KM = 0.3
-
-
 class AttendanceIn(BaseModel):
     attended: bool
 
 
 class CheckinIn(BaseModel):
-    # Помощники для отметки работника: код от заведения ИЛИ геолокация на месте.
+    """Отметка работника «я на смене» — только 6-значным кодом заведения.
+
+    Геолокацию убрали совсем. Она просила у человека разрешение на доступ к
+    местоположению (первое, на чём люди закрывают приложение), не работала в
+    подвалах и на кухнях, где связи нет, и НИЧЕГО не доказывала: оказаться
+    рядом с кафе можно и не работая. Плюс это лишние персональные данные,
+    которые пришлось бы обосновывать по 152-ФЗ.
+
+    Код лучше по существу: его называет заведение при встрече, значит человек
+    физически пришёл и говорил с людьми на месте.
+    """
+
     code: str | None = None
-    lat: float | None = None
-    lng: float | None = None
 
 
 class DisputeIn(BaseModel):
@@ -137,7 +141,7 @@ def _accrue_commission(db: Session, m: Match) -> None:
 
 
 def _maybe_complete(db: Session, m: Match) -> None:
-    """Смена закрывается ТОЛЬКО при взаимном подтверждении обеих сторон."""
+    """Обе стороны подтвердили выход — закрываем сразу, не дожидаясь расчёта."""
     if (
         m.status == "confirmed"
         and m.seeker_checked_in
@@ -148,6 +152,91 @@ def _maybe_complete(db: Session, m: Match) -> None:
         m.no_show = False
         _accrue_commission(db, m)
         _sys(db, m.id, "Обе стороны подтвердили выход ✓ Смена закрыта.")
+
+
+class NotHeldIn(BaseModel):
+    reason: Annotated[str, StringConstraints(max_length=300)] = ""
+
+
+@router.post(
+    "/{match_id}/not-held",
+    response_model=MatchOut,
+    dependencies=[Depends(rate_limit("not-held", 20, 3600))],
+)
+def mark_not_held(
+    match_id: str,
+    body: NotHeldIn,
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """«Смены не было» — единственный способ НЕ платить за договорённую смену.
+
+    Раньше платить было не нужно по умолчанию: смена закрывалась только если
+    обе стороны нажимали кнопку, а комиссия начислялась только при закрытии.
+    Значит, чтобы не платить 10%, заведению достаточно было ничего не делать
+    и не называть работнику код. Сторона, которая должна деньги, выигрывала
+    от бездействия — дыра в самой конструкции.
+
+    Теперь наоборот: договорились — считаем, что смена состоялась, пока
+    кто-то не сказал обратного. И сказать это надо явно, кнопкой, с причиной.
+
+    Что происходит дальше, зависит от того, есть ли возражение второй стороны:
+      • работник назвал код заведения или заведение отметило «человек пришёл»
+        — значит стороны расходятся в показаниях → спор, решает оператор;
+      • вторая сторона молчит → смена закрывается без комиссии. Если это
+        сказало заведение, а работник не отмечался — это неявка, она
+        отражается в надёжности работника.
+    """
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Смена не найдена")
+    is_employer = principal["id"] == m.employer_id and principal["role"] == "employer"
+    is_seeker = principal["id"] == m.user_id and principal["role"] == "seeker"
+    if not (is_employer or is_seeker):
+        raise HTTPException(status_code=403, detail="Нет доступа к смене")
+    if m.status != "confirmed":
+        raise HTTPException(
+            status_code=400,
+            detail="Так можно сказать только про подтверждённую смену",
+        )
+
+    who = "employer" if is_employer else "seeker"
+    m.not_held_by = who
+    m.cancel_reason = body.reason[:300] or m.cancel_reason
+
+    # Вторая сторона уже заявила, что человек был → показания расходятся.
+    contradicted = (
+        (is_employer and m.seeker_checked_in) or (is_seeker and m.employer_checked_in)
+    )
+    if contradicted:
+        m.disputed = True
+        _sys(db, m.id,
+             "Стороны расходятся: одна говорит, что смены не было, вторая — "
+             "что человек был на месте. Разбирает оператор StaffSwipe.")
+        notify_admins(
+            f"⚠️ Спор по смене {m.id[:8]}: одна сторона заявила «смены не было», "
+            f"вторая уже подтвердила выход. Разберите в админ-панели."
+        )
+    else:
+        m.status = "expired"
+        # Неявка — только когда об этом говорит заведение и работник не
+        # отмечался. Если о срыве говорит сам работник, наказывать его не за
+        # что: это сигнал против заведения, он виден оператору в спорах.
+        if is_employer:
+            m.no_show = True
+        tail = f" Причина: {body.reason[:200]}" if body.reason else ""
+        _sys(db, m.id, f"Смена отмечена как несостоявшаяся.{tail} "
+                       "Комиссия не начислена.")
+        other = m.user_id if is_employer else m.employer_id
+        notify_owner(
+            db, other,
+            "Вторая сторона отметила, что смена не состоялась. Комиссия не "
+            "начислена. Если это не так — откройте смену и нажмите «Проблема».",
+            open_app="Открыть смену", screen="matches",
+        )
+    db.commit()
+    db.refresh(m)
+    return _to_out(db, m, principal["role"])
 
 
 @router.post(
@@ -248,9 +337,13 @@ def checkin(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
-    """Сторона работника во взаимном подтверждении: «я на смене». Подтверждается
-    помощниками (код заведения ИЛИ геолокация на месте). Смена закрывается лишь
-    когда заведение тоже подтвердит. Не может отметиться → кнопка «Проблема»."""
+    """Отметка работника «я на смене» по коду заведения.
+
+    Отметка НЕ обязательна для закрытия смены: смена закрывается сама (см.
+    settle_shifts). Код нужен для другого — он доказательство. Если работник
+    его назвал, заведение уже не сможет тихо записать смену в неявку: такое
+    расхождение уходит к оператору.
+    """
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
@@ -264,22 +357,14 @@ def checkin(
         and m.checkin_code
         and secure_equals(body.code.strip(), m.checkin_code)
     )
-    by_geo = False
-    if body.lat is not None and body.lng is not None:
-        v = db.get(Vacancy, m.vacancy_id)
-        if v is not None and (v.lat or v.lng):
-            by_geo = distance_km(body.lat, body.lng, v.lat, v.lng) <= _CHECKIN_RADIUS_KM
-    if not (by_code or by_geo):
+    if not by_code:
         raise HTTPException(
             status_code=400,
-            detail="Не удалось отметиться: неверный код или вы не на месте смены",
+            detail="Неверный код. Попросите его у администратора заведения.",
         )
     m.seeker_checked_in = True
-    # Способ важен: код знает только заведение, поэтому по нему смену можно
-    # закрыть автоматически, если заведение молчит. По гео — нельзя.
-    if by_code:
-        m.checkin_by_code = True
-    _sys(db, m.id, "Работник отметился: на месте. Ждём подтверждения заведения.")
+    m.checkin_by_code = True
+    _sys(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")
     _maybe_complete(db, m)
     db.commit()
     db.refresh(m)
@@ -738,8 +823,9 @@ def confirm(
         # комбинаций; при лимите 5/мин перебор занял бы ~138 дней.
         m.checkin_code = f"{secrets.randbelow(1000000):06d}"
         _sys(db, m.id,
-             "Смена подтверждена. В день смены отметятся обе стороны: работник — "
-             "«я на смене», заведение — «человек пришёл».")
+             "Смена подтверждена ✓ Дальше ничего нажимать не нужно: через 12 "
+             "часов после окончания она закроется сама. Если смена не "
+             "состоится — нажмите «Смена не состоялась», и комиссии не будет.")
     db.commit()
     db.refresh(m)
     return _to_out(db, m, principal["role"])

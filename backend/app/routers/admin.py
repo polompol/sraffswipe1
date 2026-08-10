@@ -453,18 +453,18 @@ def send_shift_reminders(
 
 
 @router.post("/shifts/close-abandoned")
-def close_abandoned(
+def ask_after_shift(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Закрыть смены, которые не отметила ни одна сторона.
+    """Спросить обе стороны про вчерашние смены: всё прошло как договаривались?
 
-    Такие смены висели «подтверждёнными» вечно и держали место занятым.
-    Запускать раз в сутки вместе с остальной уборкой.
+    Это единственное предупреждение перед тем, как за смену спишется
+    комиссия. Планировщик шлёт его сам утром; кнопка — чтобы догнать вручную.
     """
-    from ..digest import close_abandoned_shifts
+    from ..digest import send_aftershift_asks
 
-    return {"closed": close_abandoned_shifts(db)}
+    return {"closed": send_aftershift_asks(db)}
 
 
 @router.post("/shifts/unfilled-alerts")
@@ -483,19 +483,19 @@ def unfilled_alerts(
 
 
 @router.post("/shifts/auto-close")
-def auto_close_hanging_shifts(
+def settle_finished_shifts(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Закрыть смены, где работник отметился кодом, а заведение промолчало.
+    """Закрыть состоявшиеся смены и начислить комиссию.
 
-    Раньше такие смены висели, работник открывал спор, и оператор звонил
-    обеим сторонам — хотя правило разбора однозначное: код знало только
-    заведение. Теперь правило исполняет код.
+    Смена считается состоявшейся, если после её окончания никто не нажал
+    «Смена не состоялась». Планировщик делает это сам днём; кнопка — чтобы
+    догнать вручную, не дожидаясь расписания.
     """
-    from ..digest import auto_close_shifts
+    from ..digest import settle_shifts
 
-    return {"closed": auto_close_shifts(db)}
+    return {"closed": settle_shifts(db)}
 
 
 class RepeatPairOut(BaseModel):

@@ -97,6 +97,38 @@
   outline-offset: 2px;
 }
 
+/* Визуально скрытое поле, которое остаётся в порядке табуляции и доступно
+   скринридеру. display:none выкидывает элемент из табуляции целиком — так
+   поле выбора фото нельзя было открыть без мыши. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+}
+
+/* Само поле спрятано, фокус получает именно оно — подсвечиваем видимую
+   обёртку-ярлык, иначе с клавиатуры не видно, где ты находишься. Правило
+   только для label: у него своего фокуса не бывает, поэтому обводка не
+   появится от обычного тапа по чипу-кнопке. */
+label.tag:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Ползунок (радиус поиска) высотой ~20px — палец мимо. Растягиваем зону
+   нажатия до 44px, дорожка остаётся по центру. */
+input[type="range"] {
+  height: 44px;
+  cursor: pointer;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -251,6 +283,18 @@ input:focus-visible {
   );
   background-size: 800px 100%;
   animation: shimmer 1.3s linear infinite;
+}
+/* Блик скелетона был захардкожен белым (0.5): на тёмном фоне по экрану
+   ездила яркая белая полоса — ночью это буквально слепило. Берём тон из
+   токена рамки, он в каждой теме свой. */
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    var(--border-strong) 37%,
+    var(--border) 63%
+  );
+  background-size: 800px 100%;
 }
 
 .tag {
@@ -425,6 +469,12 @@ button.tag:disabled {
   background: var(--surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
+/* При открытии фокус переводится на сам лист (чтобы скринридер объявил окно),
+   но обводки вокруг всей шторки быть не должно — она читается как ошибка. */
+.sheet:focus,
+.overlay:focus {
+  outline: none;
+}
 .sheet-pad {
   /* Простая шторка без прокручиваемого тела: отступы задаём ей самой,
      иначе текст упирается в края экрана. */
@@ -462,7 +512,10 @@ button.tag:disabled {
   align-items: center;
   background: none;
   border: none;
-  padding: 2px 0 10px;
+  /* 44px — минимальная зона нажатия пальцем. Строка «Смены рядом · Москва»
+     открывает фильтры, а была высотой ~35px: мимо неё промахивались. */
+  min-height: 44px;
+  padding: 2px 0;
   margin: 0;
   color: var(--muted);
   font-size: 15.5px;
@@ -498,14 +551,21 @@ button.tag:disabled {
   background-size: cover;
   background-position: center;
 }
+/* Затемнение под белым текстом карточки. Фото загружает пользователь, и на
+   светлом снимке (белая стена, солнце) прежний градиент давал у верхнего
+   края текста всего ~2.6:1 — название заведения и адрес просто исчезали.
+   Держим ≥0.6 непрозрачности там, где начинается текст: на белом фото это
+   уже ~5:1, а тёмные фото не темнеют заметно — они и так тёмные. */
 .swipe-shade {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     to bottom,
-    transparent 40%,
-    rgba(30, 20, 14, 0.55) 70%,
-    rgba(20, 14, 10, 0.92) 100%
+    rgba(16, 11, 8, 0.14) 0%,
+    rgba(16, 11, 8, 0.1) 30%,
+    rgba(16, 11, 8, 0.62) 58%,
+    rgba(12, 8, 6, 0.9) 80%,
+    rgba(10, 7, 5, 0.96) 100%
   );
 }
 .swipe-body {
@@ -514,6 +574,9 @@ button.tag:disabled {
   right: 20px;
   bottom: 22px;
   color: #fff;
+  /* Подстраховка на случай очень светлого фото: тонкая тень отделяет буквы
+     от фона, не делая текст «жирным». */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 /* Чистые мета-строки карточки: иконка + текст, без рамок */
 .card-meta {
@@ -638,14 +701,18 @@ button.tag:disabled {
   color: rgba(255, 255, 255, 0.18);
   line-height: 1;
 }
+/* Плашки поверх фото карточки (ставка, расстояние, «Сегодня»). Подложка
+   0.45 над светлым фото давала белому тексту 3.36:1 — ниже порога 4.5:1.
+   0.62 даёт ~5:1 даже на белом снимке. */
 .glass {
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.62);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #fff;
   border-radius: 999px;
   padding: 6px 12px;
   font-weight: 700;
   font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .swipe-tint {
   position: absolute;

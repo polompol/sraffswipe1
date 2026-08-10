@@ -1,13 +1,10 @@
-"""Смены, которые никто не отметил, и смены без откликов.
+"""Расчёт по смене и смены без откликов.
 
-Два сценария «не по плану», которые копились молча.
-
-1. Смену не отметила НИ ОДНА сторона. Такая смена висела «подтверждённой»
-   вечно: место оставалось занятым, и заведение не могло взять на него
-   другого человека даже через месяц; надёжность работника не обновлялась.
-
-2. На смену никто не откликнулся. Заведение узнавало об этом утром в день
-   смены — когда искать уже поздно. Напоминания были только работникам.
+Главное правило сервиса: договорились о смене — она считается состоявшейся,
+пока кто-то явно не сказал обратного. Раньше было наоборот, и это была дыра:
+смена закрывалась только когда обе стороны нажимали кнопку, комиссия шла
+только при закрытии — значит, чтобы не платить 10%, заведению достаточно было
+ничего не делать. Сторона, которая должна деньги, выигрывала от бездействия.
 """
 from datetime import UTC, datetime, timedelta
 
@@ -80,9 +77,13 @@ def _status(mid):
         db.close()
 
 
-def test_unmarked_shift_is_closed_and_frees_the_place(client):
-    """Никто не отметил — смена закрывается, место освобождается."""
-    from app.digest import close_abandoned_shifts
+def test_silence_means_the_shift_happened(client):
+    """Никто ничего не нажал — смена засчитана, комиссия начислена.
+
+    Это и есть перевёрнутое правило. Раньше такая смена закрывалась со
+    статусом «не состоялась» и без денег, и заведению было выгодно молчать.
+    """
+    from app.digest import settle_shifts
 
     emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870001, 870002)
     assert v["id"] not in {x["id"] for x in client.get("/vacancies").json()}
@@ -90,58 +91,87 @@ def test_unmarked_shift_is_closed_and_frees_the_place(client):
     _age_the_shift(mid, days=5)
     db = SessionLocal()
     try:
-        assert close_abandoned_shifts(db) == 1
+        assert settle_shifts(db) == 1
+        assert db.query(Commission).filter(Commission.match_id == mid).count() == 1
     finally:
         db.close()
-    assert _status(mid) == "expired"
+    assert _status(mid) == "completed"
 
 
-def test_unmarked_shift_does_not_hurt_the_worker(client):
-    """Доказательств нет ни у кого — надёжность не трогаем.
-
-    Может, человек вышел, а оба забыли нажать кнопку. Наказывать по догадке
-    нельзя: неявку ставит заведение, а спорное разбирает оператор.
-    """
-    from app.digest import close_abandoned_shifts
+def test_venue_can_say_the_shift_did_not_happen(client):
+    """Человек не вышел — заведение говорит об этом, и денег не берём."""
+    from app.digest import settle_shifts
 
     emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870010, 870011)
+    r = client.post(f"/matches/{mid}/not-held", headers=emp_h,
+                    json={"reason": "не вышел, не отвечает"})
+    assert r.status_code == 200
+
     _age_the_shift(mid, days=5)
     db = SessionLocal()
     try:
-        close_abandoned_shifts(db)
+        assert settle_shifts(db) == 0, "заявленную смену расчёт не трогает"
         m = db.get(Match, mid)
-        assert m.no_show is False, "неявку без доказательств ставить нельзя"
-    finally:
-        db.close()
-
-    other_h, _ = _auth(client, "employer")
-    card = [c for c in client.get("/candidates", headers=other_h).json()
-            if c["id"] == sid][0]
-    assert card["shifts_total"] == 0
-
-
-def test_no_commission_for_an_unmarked_shift(client):
-    """Не знаем, была ли смена — денег не берём."""
-    from app.digest import close_abandoned_shifts
-
-    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870020, 870021)
-    _age_the_shift(mid, days=5)
-    db = SessionLocal()
-    try:
-        close_abandoned_shifts(db)
+        assert m.status == "expired"
+        assert m.no_show is True, "неявку фиксируем — это надёжность работника"
         assert db.query(Commission).filter(Commission.match_id == mid).count() == 0
     finally:
         db.close()
 
 
-def test_fresh_shift_is_not_touched(client):
-    """Смена прошла час назад — ещё рано: люди могут вспомнить и отметиться."""
-    from app.digest import close_abandoned_shifts
+def test_worker_can_say_the_shift_did_not_happen(client):
+    """Смену отменили на месте — работник говорит об этом и не наказывается."""
+    from app.digest import settle_shifts
 
-    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870030, 870031)
+    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870020, 870021)
+    assert client.post(f"/matches/{mid}/not-held", headers=seeker_h,
+                       json={"reason": "приехал, смену отменили"}).status_code == 200
+    _age_the_shift(mid, days=5)
     db = SessionLocal()
     try:
-        assert close_abandoned_shifts(db) == 0
+        settle_shifts(db)
+        m = db.get(Match, mid)
+        assert m.status == "expired"
+        # Срыв со стороны заведения — не вина работника.
+        assert m.no_show is False
+        assert db.query(Commission).filter(Commission.match_id == mid).count() == 0
+    finally:
+        db.close()
+
+
+def test_code_beats_a_quiet_no_show(client):
+    """Работник назвал код — заведение уже не спишет смену в неявку молча.
+
+    Код знает только заведение: раз он назван, человек был на месте и говорил
+    с людьми. Такое расхождение уходит к оператору, а не решается в пользу
+    того, кто нажал кнопку последним.
+    """
+    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870030, 870031)
+    code = [m for m in client.get("/matches", headers=emp_h).json()
+            if m["id"] == mid][0]["checkin_code"]
+    assert client.post(f"/matches/{mid}/checkin", headers=seeker_h,
+                       json={"code": code}).status_code == 200
+
+    r = client.post(f"/matches/{mid}/not-held", headers=emp_h,
+                    json={"reason": "не вышел"})
+    assert r.status_code == 200
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        assert m.disputed is True, "показания расходятся → решает оператор"
+        assert m.status == "confirmed", "автоматика спорную смену не закрывает"
+    finally:
+        db.close()
+
+
+def test_fresh_shift_is_not_settled_yet(client):
+    """Смена только что закончилась — даём время возразить."""
+    from app.digest import settle_shifts
+
+    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870040, 870041)
+    db = SessionLocal()
+    try:
+        assert settle_shifts(db) == 0
     finally:
         db.close()
     assert _status(mid) == "confirmed"
@@ -149,15 +179,32 @@ def test_fresh_shift_is_not_touched(client):
 
 def test_disputed_shift_is_left_to_the_operator(client):
     """Спорную смену автоматика не трогает — её разбирает человек."""
-    from app.digest import close_abandoned_shifts
+    from app.digest import settle_shifts
 
-    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870040, 870041)
+    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870050, 870051)
     client.post(f"/matches/{mid}/dispute", headers=seeker_h,
                 json={"note": "не смог отметиться"})
     _age_the_shift(mid, days=5)
     db = SessionLocal()
     try:
-        assert close_abandoned_shifts(db) == 0
+        assert settle_shifts(db) == 0
+    finally:
+        db.close()
+
+
+def test_both_sides_are_asked_before_money_moves(client):
+    """Перед списанием обе стороны получают вопрос «всё прошло как договаривались?»."""
+    from app.digest import build_aftershift_asks, send_aftershift_asks
+
+    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870060, 870061)
+    _age_the_shift(mid, days=1)
+    db = SessionLocal()
+    try:
+        asks = build_aftershift_asks(db)
+        assert mid in {a[0] for a in asks}
+        assert send_aftershift_asks(db) >= 1
+        # Второй раз за тот же день не спрашиваем.
+        assert send_aftershift_asks(db) == 0
     finally:
         db.close()
 

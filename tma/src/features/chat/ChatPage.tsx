@@ -10,6 +10,7 @@ import { fmtTime } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
+import { Sheet } from "@/components/Sheet";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { ErrorBox, SkeletonList } from "@/components/States";
@@ -415,9 +416,7 @@ export function ChatPage() {
       </div>
 
       {troubleOpen && (
-        <div className="sheet-backdrop" onClick={() => setTroubleOpen(false)}>
-          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
-            <h2 className="h2" style={{ marginTop: 0 }}>Что-то пошло не так</h2>
+        <Sheet title="Что-то пошло не так" onClose={() => setTroubleOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
               Планы меняются — это нормально. Главное, чтобы вторая сторона
               узнала об этом заранее, а не в последний момент.
@@ -463,14 +462,11 @@ export function ChatPage() {
                 Закрыть
               </Button>
             </div>
-          </div>
-        </div>
+        </Sheet>
       )}
 
       {hoursOpen && (
-        <div className="sheet-backdrop" onClick={() => setHoursOpen(false)}>
-          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
-            <h2 className="h2" style={{ marginTop: 0 }}>Сколько часов вышло</h2>
+        <Sheet title="Сколько часов вышло" onClose={() => setHoursOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
               Опоздал, ушёл раньше или задержался — оплата и комиссия
               пересчитаются по факту. Работник увидит это в чате.
@@ -499,14 +495,11 @@ export function ChatPage() {
                 Отмена
               </Button>
             </div>
-          </div>
-        </div>
+        </Sheet>
       )}
 
       {moveOpen && (
-        <div className="sheet-backdrop" onClick={() => setMoveOpen(false)}>
-          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
-            <h2 className="h2" style={{ marginTop: 0 }}>Перенести смену</h2>
+        <Sheet title="Перенести смену" onClose={() => setMoveOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
               Человек уже согласился на прежние условия, поэтому перенос — это
               предложение: он может не смочь в новое время.
@@ -546,14 +539,11 @@ export function ChatPage() {
                 Отмена
               </Button>
             </div>
-          </div>
-        </div>
+        </Sheet>
       )}
 
       {cancelOpen && (
-        <div className="sheet-backdrop" onClick={() => setCancelOpen(false)}>
-          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
-            <h2 className="h2" style={{ marginTop: 0 }}>Отменить смену?</h2>
+        <Sheet title="Отменить смену?" onClose={() => setCancelOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
               Вторая сторона получит уведомление сразу. Чем раньше
               предупредите, тем лучше: заранее отменённая смена не влияет на
@@ -575,14 +565,11 @@ export function ChatPage() {
                 Назад
               </Button>
             </div>
-          </div>
-        </div>
+        </Sheet>
       )}
 
       {conflict && (
-        <div className="sheet-backdrop" onClick={() => setConflict(null)}>
-          <div className="sheet sheet-pad" onClick={(e) => e.stopPropagation()}>
-            <h2 className="h2" style={{ marginTop: 0 }}>Смены пересекаются</h2>
+        <Sheet title="Смены пересекаются" onClose={() => setConflict(null)}>
             <p className="muted" style={{ marginBottom: 16 }}>{conflict}</p>
             <div style={{ display: "grid", gap: 10 }}>
               <Button
@@ -598,8 +585,7 @@ export function ChatPage() {
                 Отменить
               </Button>
             </div>
-          </div>
-        </div>
+        </Sheet>
       )}
 
       {reportOpen && (

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import { localISO } from "@/lib/format";
@@ -17,6 +16,7 @@ import {
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { IconBell, IconCheck } from "@/components/Icons";
+import { Sheet } from "@/components/Sheet";
 import { haptic } from "@/telegram/sdk";
 
 const SORTS: { id: string; label: string }[] = [
@@ -130,165 +130,155 @@ export function FilterSheet({
     );
   }
 
-  return createPortal(
-    <div
-      className="sheet-backdrop"
-      onClick={onClose}
-    >
-      <div
-        className="fade-up sheet"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sheet-grab" aria-hidden />
-        <div className="sheet-body">
-        <h2 className="h2" style={{ marginTop: 0 }}>Фильтры</h2>
-
-        <label className="form-label" htmlFor="city">Город</label>
-        <input
-          id="city"
-          className="input"
-          style={{ marginBottom: 16 }}
-          placeholder="например, Москва"
-          value={f.city ?? ""}
-          onChange={(e) => set({ city: e.target.value || undefined })}
-        />
-
-        <div className="form-label">Когда</div>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-          <Chip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
-          <Chip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
-          <Chip on={whenKind === "tomorrow"} label="Завтра" onClick={() => set(dayRange(1))} />
-          <Chip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
-        </div>
-
-        <div className="form-label">Должность</div>
-        <div style={{ margin: "8px 0 16px" }}>
-          {ROLE_FAMILY_ORDER.map((fam) => (
-            <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
-                {ROLE_FAMILY_LABELS[fam]}
-              </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {ROLE_FAMILIES[fam].map((r) => (
-                  <Chip
-                    key={r}
-                    on={f.role === r}
-                    label={STAFF_ROLE_LABELS[r]}
-                    onClick={() => set({ role: f.role === r ? undefined : r })}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="form-label">Тип ставки</div>
-        <div className="row" style={{ margin: "8px 0 16px" }}>
-          <Chip on={!f.rate_type} label="Любая" onClick={() => set({ rate_type: undefined })} />
-          <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
-          <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
-        </div>
-
-        <div className="form-label">Подойдёт мне</div>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-          <Chip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
-          <Chip on={!!f.no_experience} label="Без опыта" onClick={() => set({ no_experience: !f.no_experience })} />
-          <Chip on={!!f.tips_only} label="С чаевыми" onClick={() => set({ tips_only: !f.tips_only })} />
-          <Chip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
-        </div>
-
-        <label className="form-label" htmlFor="minrate">Ставка от, ₽</label>
-        <input
-          id="minrate"
-          className="input"
-          inputMode="numeric"
-          style={{ marginBottom: 16 }}
-          placeholder="например, 300"
-          value={f.min_rate ?? ""}
-          onChange={(e) => set({ min_rate: e.target.value ? Number(e.target.value) : undefined })}
-        />
-
-        <div className="form-label">Сортировка</div>
-        <div className="row" style={{ margin: "8px 0 18px" }}>
-          {SORTS.map((s) => (
-            <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
-          ))}
-        </div>
-
-        <label className="form-label" htmlFor="radius">
-          Радиус{hasLocation ? `: ${f.radius_km ?? 25} км` : ""}
-        </label>
-        {hasLocation ? (
-          <input
-            id="radius"
-            type="range"
-            min={1}
-            max={30}
-            step={1}
-            value={f.radius_km ?? 25}
-            onChange={(e) => set({ radius_km: Number(e.target.value) })}
-            style={{ width: "100%", margin: "8px 0 18px", accentColor: "var(--gold)" }}
-          />
-        ) : (
-          <div className="muted" style={{ fontSize: 13, margin: "6px 0 18px" }}>
-            Разреши доступ к геолокации, чтобы фильтровать смены по расстоянию.
-          </div>
-        )}
-
-        <button
-          className="btn ghost"
-          disabled={saved}
-          onClick={saveSearch}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            {saved ? <IconCheck size={16} /> : <IconBell size={16} />}
-            {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
-          </span>
-        </button>
-
-        {!!searches?.length && (
-          <>
-            <div className="form-label" style={{ marginTop: 18 }}>
-              Мои подписки на новые смены
-            </div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {searches.map((s) => (
-                <div key={s.id} className="row" style={{ gap: 8 }}>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <b style={{ fontSize: 15 }}>{s.title}</b>
-                    <div className="muted" style={{ fontSize: 13 }}>
-                      {s.notify ? "уведомления включены" : "уведомления выключены"}
-                    </div>
-                  </span>
-                  <button
-                    className="tag"
-                    style={{
-                      flex: "none",
-                      cursor: "pointer",
-                      color: "var(--danger)",
-                      borderColor: "var(--danger)",
-                    }}
-                    onClick={() => removeSearch(s.id)}
-                  >
-                    Отключить
-                  </button>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-        </div>
-
-        <div className="sheet-foot">
+  return (
+    <Sheet
+      title="Фильтры"
+      onClose={onClose}
+      footer={
+        <>
           <button className="btn secondary" onClick={() => onApply({ sort: "distance" })}>
             Сбросить
           </button>
           <button className="btn" onClick={() => onApply(f)}>
             Показать
           </button>
-        </div>
+        </>
+      }
+    >
+      <label className="form-label" htmlFor="city">Город</label>
+      <input
+        id="city"
+        className="input"
+        style={{ marginBottom: 16 }}
+        placeholder="например, Москва"
+        value={f.city ?? ""}
+        onChange={(e) => set({ city: e.target.value || undefined })}
+      />
+
+      <div className="form-label">Когда</div>
+      <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+        <Chip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
+        <Chip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
+        <Chip on={whenKind === "tomorrow"} label="Завтра" onClick={() => set(dayRange(1))} />
+        <Chip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
       </div>
-    </div>,
-    document.body,
+
+      <div className="form-label">Должность</div>
+      <div style={{ margin: "8px 0 16px" }}>
+        {ROLE_FAMILY_ORDER.map((fam) => (
+          <div key={fam} style={{ marginBottom: 10 }}>
+            <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
+              {ROLE_FAMILY_LABELS[fam]}
+            </div>
+            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+              {ROLE_FAMILIES[fam].map((r) => (
+                <Chip
+                  key={r}
+                  on={f.role === r}
+                  label={STAFF_ROLE_LABELS[r]}
+                  onClick={() => set({ role: f.role === r ? undefined : r })}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="form-label">Тип ставки</div>
+      <div className="row" style={{ margin: "8px 0 16px" }}>
+        <Chip on={!f.rate_type} label="Любая" onClick={() => set({ rate_type: undefined })} />
+        <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
+        <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
+      </div>
+
+      <div className="form-label">Подойдёт мне</div>
+      <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
+        <Chip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
+        <Chip on={!!f.no_experience} label="Без опыта" onClick={() => set({ no_experience: !f.no_experience })} />
+        <Chip on={!!f.tips_only} label="С чаевыми" onClick={() => set({ tips_only: !f.tips_only })} />
+        <Chip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
+      </div>
+
+      <label className="form-label" htmlFor="minrate">Ставка от, ₽</label>
+      <input
+        id="minrate"
+        className="input"
+        inputMode="numeric"
+        style={{ marginBottom: 16 }}
+        placeholder="например, 300"
+        value={f.min_rate ?? ""}
+        onChange={(e) => set({ min_rate: e.target.value ? Number(e.target.value) : undefined })}
+      />
+
+      <div className="form-label">Сортировка</div>
+      <div className="row" style={{ margin: "8px 0 18px" }}>
+        {SORTS.map((s) => (
+          <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
+        ))}
+      </div>
+
+      <label className="form-label" htmlFor="radius">
+        Радиус{hasLocation ? `: ${f.radius_km ?? 25} км` : ""}
+      </label>
+      {hasLocation ? (
+        <input
+          id="radius"
+          type="range"
+          min={1}
+          max={30}
+          step={1}
+          value={f.radius_km ?? 25}
+          onChange={(e) => set({ radius_km: Number(e.target.value) })}
+          style={{ width: "100%", margin: "8px 0 18px", accentColor: "var(--gold)" }}
+        />
+      ) : (
+        <div className="muted" style={{ fontSize: 13, margin: "6px 0 18px" }}>
+          Разреши доступ к геолокации, чтобы фильтровать смены по расстоянию.
+        </div>
+      )}
+
+      <button
+        className="btn ghost"
+        disabled={saved}
+        onClick={saveSearch}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          {saved ? <IconCheck size={16} /> : <IconBell size={16} />}
+          {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
+        </span>
+      </button>
+
+      {!!searches?.length && (
+        <>
+          <div className="form-label" style={{ marginTop: 18 }}>
+            Мои подписки на новые смены
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {searches.map((s) => (
+              <div key={s.id} className="row" style={{ gap: 8 }}>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <b style={{ fontSize: 15 }}>{s.title}</b>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    {s.notify ? "уведомления включены" : "уведомления выключены"}
+                  </div>
+                </span>
+                <button
+                  className="tag"
+                  style={{
+                    flex: "none",
+                    cursor: "pointer",
+                    color: "var(--danger)",
+                    borderColor: "var(--danger)",
+                  }}
+                  onClick={() => removeSearch(s.id)}
+                >
+                  Отключить
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Sheet>
   );
 }

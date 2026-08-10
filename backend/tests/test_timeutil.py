@@ -123,22 +123,22 @@ def _confirmed_code_checkin(client, hours_ago: int):
     return mid
 
 
-def test_auto_close_waits_twelve_hours_of_local_time(client):
+def test_settlement_waits_twelve_hours_of_local_time(client):
     """Через 10 часов смену не закрываем, через 14 — закрываем.
 
     Раньше время смены считалось как UTC, и смена, закончившаяся 14 часов
-    назад, выглядела закончившейся 11 часов назад — авто-закрытие молчало,
-    хотя в оферте обещаны 12 часов. Берём запас по два часа с каждой стороны,
-    чтобы тест не зависел от того, в какую минуту его запустили.
+    назад, выглядела закончившейся 11 часов назад — расчёт молчал, хотя в
+    оферте обещаны 12 часов. Берём запас по два часа с каждой стороны, чтобы
+    тест не зависел от того, в какую минуту его запустили.
     """
     from app.db import SessionLocal
-    from app.digest import auto_close_shifts
+    from app.digest import settle_shifts
     from app.models import Match
 
     early = _confirmed_code_checkin(client, hours_ago=10)
     db = SessionLocal()
     try:
-        assert auto_close_shifts(db) == 0
+        assert settle_shifts(db) == 0
         assert db.get(Match, early).status == "confirmed"
     finally:
         db.close()
@@ -146,7 +146,7 @@ def test_auto_close_waits_twelve_hours_of_local_time(client):
     late = _confirmed_code_checkin(client, hours_ago=14)
     db = SessionLocal()
     try:
-        assert auto_close_shifts(db) == 1
+        assert settle_shifts(db) == 1
         assert db.get(Match, late).status == "completed"
         assert db.get(Match, early).status == "confirmed"   # эту не тронули
     finally:

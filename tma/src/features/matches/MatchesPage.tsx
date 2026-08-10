@@ -1,16 +1,59 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { checkinShift, disputeShift, fetchMatches, markAttendance } from "@/api/endpoints";
+import { checkinShift, disputeShift, fetchMatches, markAttendance, markNotHeld } from "@/api/endpoints";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { ReviewStars } from "@/components/ReviewStars";
-import { IconTabMatches, IconCheck, IconWarning, IconPin, IconChevronRight } from "@/components/Icons";
+import { IconTabMatches, IconCheck, IconWarning, IconChevronRight } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
 import { haptic, confirmAction } from "@/telegram/sdk";
+
+/** Аватар заведения 52×52: буква на градиенте, поверх — фото, если оно есть
+ *  и загрузилось. Битая ссылка не оставляет пустого места. */
+function MatchAvatar({ src, initial }: { src?: string; initial: string }) {
+  const [ok, setOk] = useState(!!src);
+  return (
+    <span
+      style={{
+        width: 52,
+        height: 52,
+        borderRadius: 12,
+        flex: "none",
+        position: "relative",
+        overflow: "hidden",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "var(--grad-brand)",
+        color: "#fff",
+        fontWeight: 800,
+        fontSize: 21,
+      }}
+    >
+      {!ok && initial}
+      {src && (
+        <img
+          src={src}
+          alt=""
+          onError={() => setOk(false)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: ok ? 1 : 0,
+          }}
+        />
+      )}
+    </span>
+  );
+}
 
 export function MatchesPage() {
   const nav = useNavigate();
@@ -22,20 +65,13 @@ export function MatchesPage() {
     queryFn: fetchMatches,
   });
 
+  // Подтверждение выхода закрывает смену сразу, не дожидаясь расчёта.
+  // Отрицательный путь живёт отдельно — в «Смена не состоялась».
   async function mark(matchId: string, attended: boolean) {
-    // «Не вышел» бьёт по надёжности человека — подтверждаем, чтобы не отметить
-    // случайным тапом.
-    if (
-      !attended
-      && !(await confirmAction(
-        "Отметить, что человек не вышел на смену? Это повлияет на его надёжность.",
-        "Отметить",
-      ))
-    ) return;
     haptic(attended ? "success" : "warning");
     try {
       await markAttendance(matchId, attended);
-      toast(attended ? "Отмечено: вышел" : "Отмечено: не вышел", "success");
+      toast(attended ? "Смена закрыта ✓" : "Отмечено: не вышел", "success");
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
       toast("Не удалось отметить", "error");
@@ -69,55 +105,24 @@ export function MatchesPage() {
     }
   }
 
-  // Отметиться геолокацией — работник физически на месте смены, код не нужен.
-  // Возвращаем промис: определение координат занимает до 8 секунд, и без него
-  // кнопка не крутила спиннер — человек не понимал, идёт ли что-то, и жал ещё.
-  function checkinByGeo(matchId: string): Promise<void> {
-    if (!("geolocation" in navigator)) {
-      toast("Геолокация недоступна — введите код", "error");
-      return Promise.resolve();
+  // «Смены не было» — единственный способ не платить за договорённую смену.
+  // Раньше платить было не нужно по умолчанию: смена закрывалась только когда
+  // обе стороны нажимали кнопку. Теперь наоборот, и отказ надо заявить явно.
+  async function doNotHeld(matchId: string) {
+    const ok = await confirmAction(
+      "Отметить, что смена не состоялась? Комиссия за неё начислена не будет.",
+      "Смена не состоялась",
+    );
+    if (!ok) return;
+    haptic("warning");
+    try {
+      await markNotHeld(matchId);
+      toast("Отмечено: смена не состоялась", "success");
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    } catch (e) {
+      haptic("error");
+      toast(apiError(e, "Не удалось отметить"), "error");
     }
-    return new Promise<void>((resolve) => {
-      // Страховка: пока висит системный запрос разрешения, штатный timeout
-      // не тикает. Без своего таймера кнопка осталась бы со спиннером навсегда.
-      let settled = false;
-      const done = () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      };
-      const guard = setTimeout(() => {
-        toast("Не удалось определить геопозицию — введите код", "error");
-        done();
-      }, 12000);
-      const finish = () => {
-        clearTimeout(guard);
-        done();
-      };
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          try {
-            await checkinShift(matchId, {
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-            });
-            haptic("success");
-            toast("Вы отметились на смене ✓", "success");
-            qc.invalidateQueries({ queryKey: ["matches"] });
-          } catch {
-            haptic("error");
-            toast("Вы не на месте смены — попробуйте код", "error");
-          } finally {
-            finish();
-          }
-        },
-        () => {
-          toast("Нет доступа к геолокации — введите код", "error");
-          finish();
-        },
-        { enableHighAccuracy: true, timeout: 8000 },
-      );
-    });
   }
 
   return (
@@ -156,23 +161,14 @@ export function MatchesPage() {
               }}
               onClick={() => nav(`/chat/${m.id}`)}
             >
-              {/* Раньше сокращённое `background` шло ПОСЛЕ backgroundImage и
-                  затирало size/position, а без фото подставлялся url("").
-                  Теперь ветки не смешиваются. */}
-              <span
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 12,
-                  flex: "none",
-                  ...(m.companyPhotoUrl
-                    ? {
-                        backgroundImage: `url(${m.companyPhotoUrl})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }
-                    : { background: "var(--border-strong)" }),
-                }}
+              {/* Фото заведения с запасным вариантом. Раньше это был
+                  CSS-фон: если ссылка битая (а у большинства заведений фото
+                  просто нет), на месте аватара оставался пустой квадрат и
+                  карточка выглядела недогруженной. Теперь — буква названия на
+                  брендовом градиенте, как в ленте и в профиле. */}
+              <MatchAvatar
+                src={m.companyPhotoUrl}
+                initial={(m.companyName || "З").charAt(0)}
               />
               <span style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700 }}>{m.companyName ?? "Заведение"}</div>
@@ -200,9 +196,19 @@ export function MatchesPage() {
               </>
             )}
 
-            {/* ВЗАИМНОЕ ПОДТВЕРЖДЕНИЕ выхода (день смены). */}
+            {/* День смены. Главное сообщение — «делать ничего не нужно»:
+                смена закроется сама. Раньше приложение требовало действий от
+                обеих сторон, и именно поэтому заведению было выгодно молчать. */}
             {m.status === "confirmed" && !m.disputed && (
               <div style={{ marginTop: 12 }}>
+                <div
+                  className="muted"
+                  style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}
+                >
+                  Смена закроется сама через 12 часов после окончания —
+                  нажимать ничего не нужно.
+                </div>
+
                 {/* Заведение */}
                 {role === "employer" && (
                   <>
@@ -234,18 +240,17 @@ export function MatchesPage() {
                       </div>
                     )}
                     {m.employerCheckedIn ? (
-                      <div className="muted">Вы подтвердили выход ✓ Ждём отметку работника.</div>
+                      <div className="muted">Вы подтвердили выход ✓ Смена закрыта.</div>
                     ) : (
-                      <div className="row" style={{ gap: 8 }}>
-                        <Button block={false} style={{ flex: 1 }} onClick={() => mark(m.id, true)}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                            <IconCheck size={16} /> Человек пришёл
-                          </span>
-                        </Button>
-                        <Button variant="danger" block={false} onClick={() => mark(m.id, false)}>
-                          Не вышел
-                        </Button>
-                      </div>
+                      /* Только подтверждение. Отдельной кнопки «Не вышел»
+                         здесь больше нет: она делала ровно то же, что общая
+                         «Смена не состоялась» ниже, и две одинаковые по смыслу
+                         кнопки рядом заставляли выбирать между ними. */
+                      <Button onClick={() => mark(m.id, true)}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <IconCheck size={16} /> Человек пришёл — закрыть смену
+                        </span>
+                      </Button>
                     )}
                   </>
                 )}
@@ -254,16 +259,18 @@ export function MatchesPage() {
                 {role === "seeker" && (
                   <>
                     {m.seekerCheckedIn ? (
-                      <div className="muted">Вы отметились ✓ Ждём подтверждения заведения.</div>
+                      <div className="muted">
+                        Код принят ✓ Ваше подтверждение, что вы были на месте.
+                      </div>
                     ) : (
                       <>
-                        <Button onClick={() => checkinByGeo(m.id)}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                            <IconPin size={18} /> Я на смене — отметиться
-                          </span>
-                        </Button>
-                        <div className="muted" style={{ fontSize: 13, margin: "12px 0 6px" }}>
-                          …или введите код, если заведение его назвало:
+                        {/* Отметка больше НЕ обязательна: смена закроется сама,
+                            если никто не возразит. Код — доказательство: после
+                            него заведение не сможет тихо записать смену в
+                            неявку, спор уйдёт к оператору. */}
+                        <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+                          На месте попросите у администратора код — так у вас
+                          останется доказательство, что вы приходили:
                         </div>
                         <div className="row" style={{ gap: 8 }}>
                           <input
@@ -293,16 +300,34 @@ export function MatchesPage() {
                   </>
                 )}
 
+                {/* Смена закроется сама, если промолчать. Поэтому «не
+                    состоялась» — заметная кнопка, а не мелкая ссылка: это
+                    единственный способ не платить за смену, которой не было,
+                    и человек должен её увидеть, не разыскивая. */}
+                <button
+                  className="btn ghost"
+                  style={{ marginTop: 10, minHeight: 44, fontSize: 14 }}
+                  onClick={() => doNotHeld(m.id)}
+                >
+                  Смена не состоялась
+                </button>
+
                 {/* Путь спора — обеим сторонам. */}
                 {/* Раньше здесь стоял класс .tab — это класс нижней навигации
                     (колонка, min-height 64). Защитная механика должна быть
                     читаемой кнопкой, а не мелким серым текстом. */}
                 <button
                   className="btn ghost"
-                  style={{ marginTop: 10, minHeight: 44, fontSize: 14 }}
+                  style={{
+                    marginTop: 8,
+                    minHeight: 44,
+                    fontSize: 14,
+                    color: "var(--muted)",
+                    borderColor: "var(--border-strong)",
+                  }}
                   onClick={() => doDispute(m.id)}
                 >
-                  Проблема — не получается подтвердить
+                  Проблема — позвать оператора
                 </button>
               </div>
             )}

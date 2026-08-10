@@ -71,7 +71,9 @@ export function ReviewStars({ matchId }: { matchId: string }) {
               background: "none",
               border: "none",
               cursor: "pointer",
-              padding: 4,
+              // Звезда 34px + padding 4 давали кнопку 42px — чуть меньше
+              // минимальных 44px, и по крайним звёздам промахивались.
+              padding: 6,
               lineHeight: 0,
             }}
           >

@@ -204,14 +204,12 @@ def _code_of(client, emp, mid):
     return [m for m in rows if m["id"] == mid][0]["checkin_code"]
 
 
-def test_shift_with_code_checkin_auto_closes_when_venue_silent(client):
-    """Работник отметился кодом, заведение молчит — смена закрывается сама.
-    Раньше это был самый частый спор: правило разбора однозначное, но
-    исполнял его оператор вручную."""
+def test_shift_settles_itself_after_the_waiting_window(client):
+    """Смена закончилась, никто не возразил — закрывается сама с комиссией."""
     from datetime import UTC, datetime, timedelta
 
     from app.db import SessionLocal
-    from app.digest import auto_close_shifts
+    from app.digest import settle_shifts
     from app.models import Match, Vacancy
 
     emp, seeker, mid = _match_ready_for_checkin(client)
@@ -222,48 +220,37 @@ def test_shift_with_code_checkin_auto_closes_when_venue_silent(client):
     db = SessionLocal()
     try:
         # Смена ещё не закончилась — закрывать рано.
-        assert auto_close_shifts(db) == 0
+        assert settle_shifts(db) == 0
         # Отматываем смену во вчера, чтобы срок ожидания истёк.
         m = db.get(Match, mid)
         v = db.get(Vacancy, m.vacancy_id)
         v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
         db.commit()
 
-        assert auto_close_shifts(db) == 1
+        assert settle_shifts(db) == 1
         db.refresh(m)
         assert m.status == "completed"
         assert m.no_show is False
         # Повторный запуск ничего не делает — смена уже закрыта.
-        assert auto_close_shifts(db) == 0
+        assert settle_shifts(db) == 0
     finally:
         db.close()
 
 
-def test_geo_checkin_never_auto_closes(client):
-    """По гео смена сама НЕ закрывается: рядом с кафе можно оказаться и не
-    работая, это слабое доказательство — такие случаи решает оператор."""
-    from datetime import UTC, datetime, timedelta
+def test_wrong_code_is_rejected(client):
+    """Отметиться можно только настоящим кодом заведения.
 
-    from app.db import SessionLocal
-    from app.digest import auto_close_shifts
-    from app.models import Match, Vacancy
-
+    Геолокацию убрали совсем: она просила разрешение, не работала в подвалах
+    и ничего не доказывала — рядом с кафе можно оказаться и не работая.
+    """
     emp, seeker, mid = _match_ready_for_checkin(client)
-    r = client.post(f"/matches/{mid}/checkin", headers=seeker,
-                    json={"lat": 55.75, "lng": 37.61})
-    assert r.status_code == 200
-
-    db = SessionLocal()
-    try:
-        m = db.get(Match, mid)
-        v = db.get(Vacancy, m.vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
-        db.commit()
-        assert auto_close_shifts(db) == 0
-        db.refresh(m)
-        assert m.status == "confirmed"
-    finally:
-        db.close()
+    bad = client.post(f"/matches/{mid}/checkin", headers=seeker,
+                      json={"code": "000000"})
+    assert bad.status_code == 400
+    # Координаты больше не принимаются как способ отметки.
+    geo = client.post(f"/matches/{mid}/checkin", headers=seeker,
+                      json={"lat": 55.75, "lng": 37.61})
+    assert geo.status_code == 400
 
 
 def test_auto_close_endpoint_available_to_operator(client):

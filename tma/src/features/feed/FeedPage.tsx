@@ -199,6 +199,15 @@ export function FeedPage() {
     }
   }
 
+  // Подпись строки фильтров: «Смены рядом · Москва · 12».
+  const locText =
+    (isSeeker ? "Смены рядом" : "Кандидаты рядом") +
+    (isSeeker && filters.city ? ` · ${filters.city}` : "") +
+    (!isSeeker && filters.role
+      ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}`
+      : "") +
+    (typeof data?.length === "number" ? ` · ${data.length}` : "");
+
   return (
     <div className="page">
       <div className="row" style={{ marginBottom: 6, gap: 4 }}>
@@ -217,9 +226,12 @@ export function FeedPage() {
         >
           <Logo size={24} color="#fff" />
         </span>
-        <h2 className="h2" style={{ margin: 0, flex: 1, fontSize: 26, letterSpacing: -0.3 }}>
+        {/* Именно h1: это главный экран приложения, и заголовка первого уровня
+            на нём не было вовсе — скринридер не мог назвать страницу. Класс
+            .h2 оставляем: он задаёт размер, а не уровень. */}
+        <h1 className="h2" style={{ margin: 0, flex: 1, fontSize: 26, letterSpacing: -0.3 }}>
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
-        </h2>
+        </h1>
         {isSeeker && (
           <button
             className="icon-btn"
@@ -236,7 +248,14 @@ export function FeedPage() {
         )}
         <button
           className="icon-btn"
-          aria-label="Фильтры"
+          // Число активных фильтров нарисовано бейджем поверх иконки, но
+          // aria-label перекрывал его: вслух читалось просто «Фильтры», и
+          // сколько их включено — было не узнать.
+          aria-label={
+            activeFilterCount > 0
+              ? `Фильтры, включено: ${activeFilterCount}`
+              : "Фильтры"
+          }
           style={{ color: activeFilterCount ? "var(--gold)" : undefined }}
           onClick={() => setFilterOpen(true)}
         >
@@ -251,16 +270,17 @@ export function FeedPage() {
           шли отдельными строками и съедали ~54px над карточкой — а карточка
           и есть продукт. */}
       <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        {/* Имя кнопки для скринридера начинается с того же текста, что виден
+            на экране. Прежний aria-label («Сменить город и фильтры») его
+            перекрывал: вслух не читались ни город, ни число найденных смен,
+            а голосовое управление не находило кнопку по надписи. */}
         <button
           className="feed-loc"
           onClick={() => setFilterOpen(true)}
-          aria-label={isSeeker ? "Сменить город и фильтры" : "Фильтры кандидатов"}
+          aria-label={`${locText} — открыть фильтры`}
         >
-          {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
-          {isSeeker && filters.city ? ` · ${filters.city}` : ""}
-          {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
-          {typeof data?.length === "number" ? ` · ${data.length}` : ""}
-          <span style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
+          {locText}
+          <span aria-hidden style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
             <IconChevronRight size={16} />
           </span>
         </button>

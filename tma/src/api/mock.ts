@@ -158,8 +158,67 @@ const SEEKERS: Seeker[] = [
   },
 ];
 
-const matches: MatchModel[] = [];
-const messagesByMatch: Record<string, Message[]> = {};
+// Одна готовая смена в демо-режиме. Без неё «Мэтчи», «Смены» и чат были
+// пустыми до первого свайпа — то есть при показе приложения заведению
+// половина продукта просто не показывалась.
+const DEMO_MATCH_ID = "demo-match";
+const matches: MatchModel[] = [
+  {
+    id: DEMO_MATCH_ID,
+    seekerId: "me",
+    employerId: "emp1",
+    vacancyId: "vac1",
+    status: "confirmed",
+    confirmedBySeeker: true,
+    confirmedByEmployer: true,
+    companyName: "Кофейня «Дрова»",
+    companyPhotoUrl: photo("photo-1554118811-1e0d58224f24"),
+    role: "barista",
+    checkinCode: "482915",
+    seekerCheckedIn: false,
+    employerCheckedIn: false,
+    shiftPay: 2800,
+  },
+];
+const messagesByMatch: Record<string, Message[]> = {
+  [DEMO_MATCH_ID]: [
+    {
+      id: "demo-m1",
+      chatId: DEMO_MATCH_ID,
+      senderId: "system",
+      text: "Это мэтч! Смена: Кофейня «Дрова». Договоритесь о деталях.",
+      isSystem: true,
+      timestamp: new Date(Date.now() - 7200000).toISOString(),
+    },
+    {
+      id: "demo-m2",
+      chatId: DEMO_MATCH_ID,
+      senderId: "emp1",
+      text: "Здравствуйте! Готовы выйти завтра к 8:00?",
+      isSystem: false,
+      timestamp: new Date(Date.now() - 7000000).toISOString(),
+    },
+    {
+      id: "demo-m3",
+      chatId: DEMO_MATCH_ID,
+      senderId: "me",
+      text: "Да, буду. Что взять с собой?",
+      isSystem: false,
+      timestamp: new Date(Date.now() - 6800000).toISOString(),
+    },
+    {
+      id: "demo-m4",
+      chatId: DEMO_MATCH_ID,
+      senderId: "system",
+      text:
+        "Смена подтверждена ✓ Дальше ничего нажимать не нужно: через 12 часов " +
+        "после окончания она закроется сама. Если смена не состоится — нажмите " +
+        "«Смена не состоялась», и комиссии не будет.",
+      isSystem: true,
+      timestamp: new Date(Date.now() - 6600000).toISOString(),
+    },
+  ],
+};
 // Верификация компании по ИНН в моке всегда «не подтверждено»: бейдж
 // «Проверен» ставит DaData на живом сервере.
 const employerVerified = false;
@@ -358,6 +417,18 @@ export function answerReschedule(
   return Promise.resolve({ ...m });
 }
 
+export function markNotHeld(matchId: string, reason = ""): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  m.status = "expired";
+  sysMessage(
+    matchId,
+    `Смена отмечена как несостоявшаяся${reason ? `. Причина: ${reason}` : ""}. ` +
+      "Комиссия не начислена.",
+  );
+  return Promise.resolve({ ...m });
+}
+
 export function markAttendance(matchId: string, attended: boolean): Promise<void> {
   const m = matches.find((x) => x.id === matchId);
   if (m) {
@@ -375,13 +446,12 @@ export function markAttendance(matchId: string, attended: boolean): Promise<void
 }
 export function checkinShift(
   matchId: string,
-  body: { code?: string; lat?: number; lng?: number },
+  body: { code: string },
 ): Promise<MatchModel> {
   const m = matches.find((x) => x.id === matchId);
   if (!m) return Promise.reject(new Error("not found"));
   const byCode = !!body.code && body.code.trim() === (m.checkinCode ?? "123456");
-  const byGeo = body.lat != null && body.lng != null; // в демо гео всегда «на месте»
-  if (!byCode && !byGeo) return Promise.reject(new Error("bad checkin"));
+  if (!byCode) return Promise.reject(new Error("bad checkin"));
   m.seekerCheckedIn = true;
   if (m.employerCheckedIn) {
     m.status = "completed";

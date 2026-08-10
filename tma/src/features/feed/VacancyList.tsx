@@ -188,7 +188,8 @@ export function VacancyList({
             </button>
             <span className="spacer" />
             <button
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, padding: "10px 4px", display: "inline-flex", alignItems: "center", gap: 5 }}
+              // Кнопка была ~39px высотой — ниже минимальных 44px для пальца.
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, minHeight: 44, padding: "0 8px", display: "inline-flex", alignItems: "center", gap: 5 }}
               onClick={() => setReportId(v.id)}
             >
               <IconWarning size={13} /> Пожаловаться

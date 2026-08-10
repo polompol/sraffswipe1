@@ -154,15 +154,42 @@ export async function markAttendance(
   await api.post(`/matches/${matchId}/attendance`, { attended });
 }
 
-/** Сторона работника во взаимном подтверждении: «я на смене» (код ИЛИ гео). */
+/** Отметка работника «я на смене» — только кодом заведения.
+ *
+ *  Геолокацию убрали: она просила разрешение на местоположение, не работала
+ *  в подвалах и на кухнях и ничего не доказывала — рядом с кафе можно
+ *  оказаться и не работая. Отметка больше не обязательна для закрытия смены:
+ *  код нужен как доказательство в споре. */
 export async function checkinShift(
   matchId: string,
-  body: { code?: string; lat?: number; lng?: number },
+  body: { code: string },
 ): Promise<MatchModel> {
   if (!USE_BACKEND) return mock.checkinShift(matchId, body);
   const { data } = await api.post<MatchModel>(
     `/matches/${matchId}/checkin`,
     body,
+  );
+  return data;
+}
+
+/**
+ * «Смена не состоялась» — единственный способ не платить за договорённую смену.
+ *
+ * Раньше платить было не нужно по умолчанию: смена закрывалась только когда
+ * обе стороны нажимали кнопку, и комиссия начислялась только при закрытии.
+ * Значит, чтобы не платить 10%, заведению достаточно было ничего не нажимать
+ * и не называть работнику код. Сторона, которая должна деньги, выигрывала от
+ * бездействия. Теперь наоборот: договорились — смена считается состоявшейся,
+ * пока кто-то явно не заявил обратное.
+ */
+export async function markNotHeld(
+  matchId: string,
+  reason = "",
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.markNotHeld(matchId, reason);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/not-held`,
+    { reason },
   );
   return data;
 }

@@ -1,6 +1,9 @@
+import { useId } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import type { MatchModel } from "@/types/domain";
 import { IconTabMatches, IconChat } from "@/components/Icons";
+import { useDialog } from "@/components/Sheet";
 
 // Конфетти — фирменными токенами, чтобы в тёмной теме они светлели вместе
 // с брендом, а не оставались отдельной светлой палитрой.
@@ -20,13 +23,28 @@ export function MatchOverlay({
 }) {
   const nav = useNavigate();
   const confetti = Array.from({ length: 36 });
+  const titleId = useId();
+  // Оверлей перекрывает весь экран, поэтому ведёт себя как модальное окно:
+  // фокус внутрь, Escape закрывает, фон не читается скринридером. Раньше это
+  // был обычный div — с клавиатуры фокус оставался на кнопках ленты под ним.
+  const box = useDialog<HTMLDivElement>(onClose);
 
-  return (
-    <div className="overlay">
+  // Портал в body: скринридер прячет фон целиком (#root), а оверлей должен
+  // остаться снаружи этого «спрятанного» куска.
+  return createPortal(
+    <div
+      className="overlay"
+      ref={box}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+    >
       {confetti.map((_, i) => (
         <span
           key={i}
           className="confetti"
+          aria-hidden
           style={{
             left: `${(i * 2.8) % 100}%`,
             top: `-${Math.random() * 20}px`,
@@ -55,7 +73,10 @@ export function MatchOverlay({
           фиксированный. --gold в светлой теме — глубокий багровый, и на почти
           чёрной подложке он давал 2.17:1: самый радостный момент продукта
           выглядел тёмным пятном. */}
-      <div style={{ fontSize: 44, fontWeight: 900, color: "#e8c268", position: "relative" }}>
+      <div
+        id={titleId}
+        style={{ fontSize: 44, fontWeight: 900, color: "#e8c268", position: "relative" }}
+      >
         Это мэтч!
       </div>
       <div style={{ margin: "12px 0", position: "relative" }}>
@@ -108,6 +129,7 @@ export function MatchOverlay({
           Продолжить листать
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
