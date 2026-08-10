@@ -89,7 +89,9 @@ class RevenueOut(BaseModel):
     commissionPendingRub: int   # к оплате сейчас
     commissionWrittenOffRub: int  # списано: прощено по спорам и безнадёжный долг
     shiftsBilled: int           # смен, за которые начислена комиссия
-    topupsRub: int              # пополнений баланса (аванс, НЕ выручка)
+    topupsRub: int              # пополнений баланса всего (аванс, НЕ выручка)
+    topupsCardRub: int          # из них картой (ЮKassa)
+    topupsManualRub: int        # из них зачислил оператор (перевод/СБП)
 
 
 @router.get("/revenue", response_model=RevenueOut)
@@ -100,6 +102,24 @@ def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
             q = q.filter(Commission.status == status)
         return int(q.scalar() or 0)
 
+    # Пополнения считаем по движениям баланса, а не по платежам ЮKassa.
+    # Раньше здесь были только карточные платежи, а на пилоте картой не платит
+    # никто: деньги приходят переводом, и оператор зачисляет их руками. Владелец
+    # видел «Пополнено 0 ₽» при живых деньгах на счёте и не мог понять,
+    # доходят платежи или нет.
+    topups_all = int(
+        db.query(func.coalesce(func.sum(WalletTxn.amount), 0))
+        .filter(WalletTxn.kind == "topup")
+        .scalar()
+        or 0
+    )
+    topups_card = int(
+        db.query(func.coalesce(func.sum(Purchase.amount), 0))
+        .filter(Purchase.status == "paid", Purchase.sku == "wallet_topup")
+        .scalar()
+        or 0
+    )
+
     return RevenueOut(
         commissionAccruedRub=_commission(),
         commissionPaidRub=_commission("paid"),
@@ -107,12 +127,9 @@ def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
         commissionWrittenOffRub=_commission("written_off"),
         shiftsBilled=int(db.query(func.count(Commission.id)).scalar() or 0),
         # Аванс — это обязательство перед заведением, а не заработок сервиса.
-        topupsRub=int(
-            db.query(func.coalesce(func.sum(Purchase.amount), 0))
-            .filter(Purchase.status == "paid", Purchase.sku == "wallet_topup")
-            .scalar()
-            or 0
-        ),
+        topupsRub=topups_all,
+        topupsCardRub=topups_card,
+        topupsManualRub=max(0, topups_all - topups_card),
     )
 
 

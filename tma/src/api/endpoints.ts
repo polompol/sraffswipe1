@@ -518,7 +518,10 @@ export interface AdminRevenue {
   /** Прощено по спорам и признано безнадёжным — в выручку не входит. */
   commissionWrittenOffRub: number;
   shiftsBilled: number;
+  /** Пополнений баланса всего: и картой, и зачисленных оператором. */
   topupsRub: number;
+  topupsCardRub: number;
+  topupsManualRub: number;
 }
 
 export async function fetchAdminOverview(): Promise<AdminOverview> {

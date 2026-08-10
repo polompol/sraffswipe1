@@ -505,6 +505,8 @@ export function fetchRevenue() {
     commissionWrittenOffRub: 0,
     shiftsBilled: 31,
     topupsRub: 18000,
+    topupsCardRub: 12000,
+    topupsManualRub: 6000,
   });
 }
 export function resolveReport(id: string): Promise<void> {

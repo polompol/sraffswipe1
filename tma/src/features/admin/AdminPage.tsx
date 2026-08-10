@@ -675,6 +675,8 @@ export function AdminPage() {
                   <b style={{ color: "var(--text)" }}>
                     {rev.data.topupsRub.toLocaleString("ru-RU")} ₽
                   </b>{" "}
+                  (картой {rev.data.topupsCardRub.toLocaleString("ru-RU")} ₽,
+                  зачислено вами {rev.data.topupsManualRub.toLocaleString("ru-RU")} ₽)
                   — это аванс заведений, а не заработок сервиса.
                 </div>
               </div>
