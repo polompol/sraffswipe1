@@ -284,3 +284,24 @@ def test_operator_endpoints_work(client):
 def test_business_tz_is_used_for_tomorrow(client):
     """Служебная проверка: «завтра» считается по местному времени."""
     assert business_tz() is not None
+
+
+def test_very_old_shift_is_not_billed(client):
+    """Смена месячной давности не выставляется счётом задним числом.
+
+    Без этой границы первый же запуск новой механики выставил бы заведениям
+    счёт сразу за все подтверждённые смены, накопившиеся раньше.
+    """
+    from app.digest import settle_shifts
+
+    emp_h, seeker_h, sid, v, mid = _confirmed_but_unmarked(client, 870070, 870071)
+    _age_the_shift(mid, days=40)
+    db = SessionLocal()
+    try:
+        assert settle_shifts(db) == 0, "старую смену в выручку не считаем"
+        db.commit()
+        m = db.get(Match, mid)
+        assert m.status == "expired", "но и висеть вечно она не должна"
+        assert db.query(Commission).filter(Commission.match_id == mid).count() == 0
+    finally:
+        db.close()

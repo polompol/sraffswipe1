@@ -194,6 +194,13 @@ def _shift_end(v: Vacancy) -> datetime:
 # никто не сказал обратного. Смена вечером — расчёт на следующий день днём.
 SETTLE_AFTER_HOURS = 12
 
+# Насколько старую смену расчёт ещё готов закрыть. Дальше — молча оставляем
+# оператору. Две причины. Первая: при включении новой механики в базе могут
+# лежать подтверждённые смены за прошлые месяцы, и без этой границы первый же
+# запуск выставил бы заведениям счёт сразу за всё. Вторая: спорить о смене
+# двухнедельной давности бессмысленно — никто уже не помнит, как было.
+SETTLE_MAX_AGE_DAYS = 14
+
 # Через сколько часов после конца смены спрашиваем обе стороны «всё прошло как
 # договаривались?». Раньше расчёта — чтобы возразить успели без спешки.
 ASK_AFTER_HOURS = 2
@@ -271,7 +278,9 @@ def settle_shifts(db: Session) -> int:
     """
     from .routers.matches import _accrue_commission, _sys
 
-    deadline = datetime.now(UTC) - timedelta(hours=SETTLE_AFTER_HOURS)
+    now = datetime.now(UTC)
+    deadline = now - timedelta(hours=SETTLE_AFTER_HOURS)
+    too_old = now - timedelta(days=SETTLE_MAX_AGE_DAYS)
     rows = (
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
@@ -285,9 +294,19 @@ def settle_shifts(db: Session) -> int:
     closed = 0
     for m, v in rows:
         try:
-            if _shift_end(v) > deadline:
-                continue
+            ends = _shift_end(v)
         except ValueError:  # некорректная дата в вакансии — пропускаем
+            continue
+        if ends > deadline:
+            continue
+        if ends < too_old:
+            # Слишком старая: счёт задним числом за то, чего никто уже не
+            # помнит, — верный способ поссориться с заведением. Закрываем без
+            # комиссии, чтобы смена не висела вечно и не держала место.
+            m.status = "expired"
+            _sys(db, m.id,
+                 "Смена закрыта без комиссии: с её окончания прошло слишком "
+                 "много времени, чтобы разбираться автоматически.")
             continue
         m.status = "completed"
         m.no_show = False
