@@ -34,4 +34,11 @@ export default tseslint.config(
     files: ["src/**/*.test.{ts,tsx}"],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // Service worker живёт не в окне браузера, а в своём потоке: там нет
+    // window, зато есть self и clients. Без этой строки проверка кода падала
+    // на «self is not defined» — а вместе с ней и весь scripts/verify.sh.
+    files: ["public/sw.js"],
+    languageOptions: { globals: { ...globals.serviceworker } },
+  },
 );
