@@ -137,9 +137,10 @@ export function EditProfilePage() {
               className="input"
               style={{ marginBottom: 12 }}
               inputMode="numeric"
+              maxLength={12}
               placeholder="Нужен для актов и бейджа «Проверено»"
               value={inn}
-              onChange={(e) => setInn(e.target.value)}
+              onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
             />
             <p className="muted" style={{ marginTop: 0 }}>
               Название видят работники в ленте. Если поменять название или ИНН,
@@ -232,13 +233,28 @@ export function EditProfilePage() {
             <span>Я самозанятый (плательщик НПД)</span>
           </label>
           {selfEmployed && (
-            <input
-              className="input"
-              style={{ marginTop: 12 }}
-              placeholder="ИНН"
-              value={inn}
-              onChange={(e) => setInn(e.target.value)}
-            />
+            <>
+              {/* Поле было безымянным, с клавиатурой букв и без единой
+                  подсказки, где этот номер взять. Человек либо пропускал его,
+                  либо вписывал что-то не то — и получал отказ сервера. */}
+              <label className="form-label" htmlFor="seeker-inn" style={{ marginTop: 12 }}>
+                Ваш ИНН
+              </label>
+              <input
+                id="seeker-inn"
+                className="input"
+                inputMode="numeric"
+                maxLength={12}
+                placeholder="12 цифр"
+                value={inn}
+                onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              />
+              <p className="muted" style={{ margin: "6px 0 0", fontSize: 13 }}>
+                Номер есть в приложении «Мой налог» и в личном кабинете
+                налоговой. Нужен только для акта по смене — заведениям в ленте
+                он не виден.
+              </p>
+            </>
           )}
         </div>
           </>
