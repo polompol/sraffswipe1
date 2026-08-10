@@ -10,6 +10,7 @@ from ..config import settings
 from ..db import get_db
 from ..models import Employer, Match, Referral, Review, User, Vacancy
 from ..ratelimit import rate_limit
+from ..schemas import ExperienceTag, PhotoUrl, StaffRole
 from ..security import current_principal
 
 router = APIRouter(tags=["social"])
@@ -288,10 +289,10 @@ class MeUpdateIn(BaseModel):
     district: Annotated[str, StringConstraints(max_length=80)] | None = None
     # max_length у списка ограничивает ЧИСЛО элементов, а не их длину:
     # двенадцать строк по мегабайту проходили проверку. Ограничиваем и то, и то.
-    roles: Annotated[
-        list[Annotated[str, StringConstraints(max_length=40)]],
-        Field(max_length=12),
-    ] | None = None
+    # Должности — только из списка приложения. Свободный текст здесь был
+    # каналом рекламы: двенадцать «должностей» по сорок символов показываются
+    # каждому заведению в ленте, а модерации у анкеты нет.
+    roles: Annotated[list[StaffRole], Field(max_length=12)] | None = None
     med_book: Literal["yes", "no", "expired"] | None = None
     self_employed: bool | None = None
     inn: Annotated[
@@ -299,10 +300,9 @@ class MeUpdateIn(BaseModel):
     ] | None = None
     about: Annotated[str, StringConstraints(max_length=1000)] | None = None
     experience_tags: Annotated[
-        list[Annotated[str, StringConstraints(max_length=40)]],
-        Field(max_length=12),
+        list[ExperienceTag], Field(max_length=12)
     ] | None = None
-    photo_url: Annotated[str, StringConstraints(max_length=500)] | None = None
+    photo_url: PhotoUrl | None = None
     company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
 
@@ -377,6 +377,14 @@ def update_me(
     if body.photo_url is not None:
         u.photo_urls = body.photo_url
     db.commit()
+    # «О себе» и имя видит каждое заведение в ленте — это такой же публичный
+    # текст, как описание смены. У смен авто-модерация была с самого начала, а
+    # у анкеты не было: «внеси залог за форму» в поле «о себе» доходило до всех
+    # заведений и никого не настораживало. Теперь оба текста проверяются
+    # одинаково.
+    from ..moderation import auto_flag
+
+    auto_flag(db, "user", u.id, u.about, u.name)
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,

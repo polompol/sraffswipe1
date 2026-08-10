@@ -14,6 +14,25 @@ Code = Annotated[
 Short = Annotated[str, StringConstraints(max_length=120)]
 Longish = Annotated[str, StringConstraints(max_length=2000)]
 
+# Должности — закрытый список, ровно как в приложении (tma/src/types/domain.ts).
+# Раньше здесь принималась любая строка, и это была бесплатная витрина для
+# объявлений: должность выводится крупным шрифтом в ленте, а модерации у неё
+# нет. Заодно чужая должность ломала фильтр — по ней не находилось ничего.
+StaffRole = Literal[
+    "waiter", "waiter_assistant", "barista", "cook", "dishwasher", "hostess",
+    "bartender", "hookah", "florist", "administrator", "courier", "cleaner",
+]
+# Отметки об опыте — тоже закрытый список (галочки в анкете, не свободный текст).
+ExperienceTag = Literal[
+    "medBook", "experienced", "english", "cashRegister", "selfEmployed",
+]
+# Адрес картинки: только http(s). Пусто — «фото нет». Без этой проверки в поле
+# можно было записать что угодно (javascript:, data:, ссылку-счётчик) — а оно
+# подставляется в src картинки на чужом экране.
+PhotoUrl = Annotated[
+    str, StringConstraints(max_length=500, pattern=r"^(https?://\S+)?$")
+]
+
 
 # ---- auth ----
 class RequestCodeIn(BaseModel):
@@ -41,7 +60,7 @@ class TokenOut(BaseModel):
 
 # ---- vacancies ----
 class VacancyIn(BaseModel):
-    role: Short
+    role: StaffRole
     date: Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
     start_time: int = Field(ge=0, le=1440)
     end_time: int = Field(ge=0, le=1440)
@@ -59,7 +78,7 @@ class VacancyIn(BaseModel):
     lng: float = Field(default=0.0, ge=-180, le=180)
     address: Short = ""
     city: Short = ""
-    interior_photo_url: Annotated[str, StringConstraints(max_length=500)] = ""
+    interior_photo_url: PhotoUrl = ""
 
     @model_validator(mode="after")
     def _check_duration(self) -> "VacancyIn":
