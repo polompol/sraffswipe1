@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0    # нужна ВСЯ история: удалить файл мало, коммит остаётся
 
       - name: Поиск секретов (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
