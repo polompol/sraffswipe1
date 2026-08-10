@@ -254,3 +254,32 @@ def test_cancel_stats_requires_admin(client):
     _detach(_auth(client, "employer")[1], 880130)
     r = client.get("/admin/cancel-stats", headers=emp_h)
     assert r.status_code in (401, 403)
+
+
+def test_reschedule_rejects_past_and_zero_length(client):
+    """Перенос шёл мимо проверок публикации: во вчера и «с 10:00 до 10:00».
+
+    Второе для почасовой смены означает «ночная через полночь» — то есть
+    24 часа: оплата и комиссия вырастали втрое от одной опечатки.
+    """
+    emp_h, _seeker_h, _sid, _v, mid = _pair(client, 7401, 7402)
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+
+    past = client.post(
+        f"/matches/{mid}/reschedule", headers=emp_h,
+        json={"date": yesterday, "start_time": 600, "end_time": 1080},
+    )
+    assert past.status_code == 422
+
+    zero = client.post(
+        f"/matches/{mid}/reschedule", headers=emp_h,
+        json={"date": tomorrow, "start_time": 600, "end_time": 600},
+    )
+    assert zero.status_code == 422
+
+    ok = client.post(
+        f"/matches/{mid}/reschedule", headers=emp_h,
+        json={"date": tomorrow, "start_time": 600, "end_time": 1080},
+    )
+    assert ok.status_code == 200

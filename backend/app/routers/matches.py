@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -412,6 +412,23 @@ class RescheduleIn(BaseModel):
     date: Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
     start_time: Annotated[int, Field(ge=0, le=1440)]
     end_time: Annotated[int, Field(ge=0, le=1440)]
+
+    @model_validator(mode="after")
+    def _sane(self) -> "RescheduleIn":
+        # Те же две проверки, что и при публикации смены. Перенос шёл мимо них,
+        # а он переписывает саму смену:
+        #  • перенос во вчера — смена сразу пропадает из ленты и из напоминаний,
+        #    хотя мэтч остаётся «подтверждён»;
+        #  • одинаковые начало и конец у почасовой смены считаются «ночной
+        #    через полночь», то есть 24 часами: оплата и комиссия вырастали
+        #    в три раза от одной опечатки.
+        from ..timeutil import local_today
+
+        if self.date < local_today():
+            raise ValueError("Перенести смену в прошлое нельзя")
+        if self.start_time == self.end_time:
+            raise ValueError("Время начала и конца смены не должно совпадать")
+        return self
 
 
 @router.post(
