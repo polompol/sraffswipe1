@@ -128,8 +128,23 @@ def ensure_token_usable(db: Session, principal: dict) -> None:
 
 def optional_principal(
     creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
 ) -> dict | None:
-    """Принципал, если токен есть и валиден; иначе None (без ошибки)."""
+    """Принципал, если токен есть и валиден; иначе None (без ошибки).
+
+    Бан и отзыв проверяем и здесь. Без этого обещание «бан действует на каждом
+    запросе» не выполнялось на ручках с необязательной авторизацией: лента
+    смен и приём событий продолжали работать у заблокированного человека и по
+    отозванному токену. Для таких ручек это не ошибка входа — просто считаем,
+    что человек не представился.
+    """
     if creds is None:
         return None
-    return decode_token(creds.credentials)
+    principal = decode_token(creds.credentials)
+    if principal is None:
+        return None
+    try:
+        ensure_token_usable(db, principal)
+    except HTTPException:
+        return None
+    return principal

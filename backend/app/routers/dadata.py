@@ -6,7 +6,7 @@
 import json
 import urllib.request
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..config import settings
@@ -44,7 +44,12 @@ class AddressItem(BaseModel):
     # Анти-drain платной квоты DaData.
     dependencies=[Depends(rate_limit("dadata", 30, 60))],
 )
-def suggest_address(q: str, _p: dict = Depends(current_principal)):
+def suggest_address(q: str, principal: dict = Depends(current_principal)):
+    # Подсказки адреса использует только форма публикации смены — то есть
+    # заведение. Соискателю они не нужны нигде, а квота у DaData платная:
+    # любой зарегистрировавшийся мог жечь её по 30 запросов в минуту.
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
     if not settings.dadata_token or len(q) < 3:
         return []
     try:

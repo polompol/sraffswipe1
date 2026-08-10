@@ -366,6 +366,12 @@ class Review(Base):
     """Отзыв после смены: оценка одной стороны другой (1..5)."""
 
     __tablename__ = "reviews"
+    # Один отзыв на смену от одного человека. Проверка была только в коде, а
+    # форма оценки показывается сразу в двух местах («Мэтчи» и «Смены») —
+    # два быстрых нажатия проскакивали мимо неё и дважды двигали рейтинг.
+    __table_args__ = (
+        UniqueConstraint("match_id", "rater_id", name="uq_review_match_rater"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     match_id: Mapped[str] = mapped_column(String, index=True)

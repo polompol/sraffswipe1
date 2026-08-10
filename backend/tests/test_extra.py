@@ -91,7 +91,14 @@ def test_dadata_without_token_is_empty(client):
     Проверка компании по ИНН живёт в /employer/verify — отдельной публичной
     ручки для неё нет: она делала то же самое и так же тратила платную квоту.
     """
-    token, _ = _auth(client)
+    # Подсказки адреса — только заведению: квота DaData платная, а соискателю
+    # они не нужны нигде в приложении.
+    seeker, _ = _auth(client)
+    assert client.get(
+        "/dadata/address?q=Москва", headers=_hdr(seeker)
+    ).status_code == 403
+
+    token, _ = _auth(client, "employer")
     addr = client.get("/dadata/address?q=Москва", headers=_hdr(token))
     assert addr.status_code == 200
     assert addr.json() == []
@@ -150,19 +157,58 @@ def test_production_safe_guard_rejects_default_secrets():
     safe.assert_production_safe()  # не бросает
 
 
+
+def _some_vacancy(client) -> str:
+    """Реальная смена — жалоба теперь принимается только на существующую цель."""
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    return client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": SOON, "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+    }).json()["id"]
+
+
+def _some_match(client) -> str:
+    """Реальный мэтч — для жалобы на переписку."""
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    vac = client.post("/vacancies", headers=eh, json={
+        "role": "waiter", "date": SOON, "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+    }).json()
+    seeker = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    sh = {"Authorization": f"Bearer {seeker.json()['access_token']}"}
+    client.post("/swipes", headers=eh, json={
+        "target_id": seeker.json()["user_id"], "target_type": "user",
+        "direction": "like"})
+    return client.post("/swipes", headers=sh, json={
+        "target_id": vac["id"], "target_type": "vacancy",
+        "direction": "like"}).json()["match_id"]
+
+
 def test_report_create_and_validation(client):
     """Жалоба создаётся; некорректная причина → 422; без токена → 401."""
     r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    vac_id = _some_vacancy(client)
     ok = client.post("/reports", headers=h, json={
-        "target_type": "vacancy", "target_id": "vac1",
+        "target_type": "vacancy", "target_id": vac_id,
         "reason": "fake", "text": "Похоже на обман",
     })
     assert ok.status_code == 201 and ok.json()["ok"] is True
     bad = client.post("/reports", headers=h, json={
-        "target_type": "vacancy", "target_id": "vac1", "reason": "nonsense",
+        "target_type": "vacancy", "target_id": vac_id, "reason": "nonsense",
     })
     assert bad.status_code == 422
+    # Выдуманная цель — 404: раньше так можно было забить очередь оператора.
+    assert client.post("/reports", headers=h, json={
+        "target_type": "vacancy", "target_id": "не-существует", "reason": "spam",
+    }).status_code == 404
+    # Повтор на ту же цель новой строки не создаёт (бригадинг).
+    again = client.post("/reports", headers=h, json={
+        "target_type": "vacancy", "target_id": vac_id, "reason": "fake",
+    })
+    assert again.json().get("duplicate") is True
     assert client.post("/reports", json={
         "target_type": "vacancy", "target_id": "x", "reason": "spam",
     }).status_code == 401
@@ -174,7 +220,8 @@ def test_admin_panel_gating_and_reports(client):
     admin_h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     # Создаём жалобу.
     client.post("/reports", headers=admin_h, json={
-        "target_type": "vacancy", "target_id": "vac1", "reason": "fake",
+        "target_type": "vacancy", "target_id": _some_vacancy(client),
+        "reason": "fake",
     })
     # Обзор и список жалоб доступны админу.
     ov = client.get("/admin/overview", headers=admin_h)
@@ -251,7 +298,8 @@ def test_admin_resolve_with_reply(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
     client.post("/reports", headers=ah, json={
-        "target_type": "vacancy", "target_id": "vacX", "reason": "fake",
+        "target_type": "vacancy", "target_id": _some_vacancy(client),
+        "reason": "fake",
     })
     rid = client.get("/admin/reports", headers=ah).json()[0]["id"]
     # Закрытие с ответом заявителю — без бота notify no-op, но эндпоинт 200.
@@ -299,8 +347,9 @@ def test_admin_warn_increments_and_closes(client):
 def test_admin_warn_on_match_rejected(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    mid = _some_match(client)
     client.post("/reports", headers=ah, json={
-        "target_type": "match", "target_id": "m1", "reason": "abuse",
+        "target_type": "match", "target_id": mid, "reason": "abuse",
     })
     rid = client.get("/admin/reports", headers=ah).json()[0]["id"]
     # По переписке мэтча предупреждение выносить некому → 400.

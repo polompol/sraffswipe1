@@ -318,7 +318,12 @@ def invites(
     "",
     response_model=VacancyOut,
     status_code=201,
-    dependencies=[Depends(rate_limit("vacancy", 20, 60))],
+    # Каждая публикация в фоне рассылает до 200 уведомлений в Telegram.
+    # При 20 публикациях в минуту это до 4000 сообщений в минуту от одного
+    # аккаунта — и заодно flood-limit у самого бота, после которого перестают
+    # доходить и настоящие уведомления (мэтчи, напоминания о сменах).
+    # Живому заведению 10 смен в час хватает с запасом.
+    dependencies=[Depends(rate_limit("vacancy", 10, 3600))],
 )
 def create_vacancy(
     body: VacancyIn,

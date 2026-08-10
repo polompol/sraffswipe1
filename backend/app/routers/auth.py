@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, PhoneCode, User
-from ..ratelimit import hit
+from ..ratelimit import hit, rate_limit_ip
 from ..schemas import RequestCodeIn, RequestCodeOut, TokenOut, VerifyIn
 from ..security import create_token, secure_equals
 from ..sms import generate_code, send_code
@@ -24,7 +24,16 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
-@router.post("/request-code", response_model=RequestCodeOut)
+@router.post(
+    "/request-code",
+    response_model=RequestCodeOut,
+    # Лимит по номеру защищает один номер, но номеров бесконечно много: скрипт
+    # перебирал +79XXXXXXXXX и без счётчика бесконечно раздувал таблицу кодов.
+    # Сейчас SMS не подключены и это стоит только места в базе, но в день
+    # подключения реального шлюза та же ручка стала бы SMS-бомбой и прямым
+    # счётом владельцу.
+    dependencies=[Depends(rate_limit_ip("req-code", 10, 3600))],
+)
 def request_code(body: RequestCodeIn, db: Session = Depends(get_db)):
     # Анти-спам: не чаще 3 SMS в минуту на номер (защита от SMS-бомбинга).
     hit(f"req-code:{body.phone}", limit=3, window=60)
@@ -32,6 +41,10 @@ def request_code(body: RequestCodeIn, db: Session = Depends(get_db)):
     existing = db.get(PhoneCode, body.phone)
     if existing:
         existing.code = code
+        # И время выдачи тоже: без этого повторно запрошенный код наследовал
+        # срок первого и приходил уже просроченным — человек получал «код
+        # истёк» на только что присланный код.
+        existing.created_at = datetime.now(UTC)
     else:
         db.add(PhoneCode(phone=body.phone, code=code))
     db.commit()
