@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .models import Match, Swipe, User, Vacancy
 from .notify import notify_owner
+from .roles import date_ru, role_ru
 from .timeutil import local_today, shift_end_utc
 
 
@@ -51,7 +52,9 @@ def build_digest(db: Session, limit: int = 3) -> dict[str, list[str]]:
                 continue
             if v.id in swiped:
                 continue
-            picked.append(f"{v.role} · {v.rate}₽ · {v.date}")
+            # Должность по-русски и дата по-человечески: в базе лежит
+            # «barista» и «2026-08-12», а в дайджест это уходило как есть.
+            picked.append(f"{role_ru(v.role)} · {v.rate}₽ · {date_ru(v.date)}")
             if len(picked) >= limit:
                 break
         if picked:

@@ -27,6 +27,7 @@ from ..models import (
     WalletTxn,
 )
 from ..notify import notify_owner
+from ..roles import role_ru
 from ..security import current_principal
 from .analytics import _is_admin
 
@@ -126,27 +127,10 @@ class ReportOut(BaseModel):
     createdAt: str
 
 
-# Должности в админке — по-русски. В базе они лежат латиницей (waiter,
-# barista…), и оператор видел в жалобах «waiter · 300₽»: читать это в спешке
-# неудобно, а панель — русскоязычная, как и всё остальное в проекте.
-ROLE_RU = {
-    "waiter": "Официант",
-    "runner": "Помощник официанта",
-    "hostess": "Хостес",
-    "manager": "Администратор",
-    "barista": "Бариста",
-    "bartender": "Бармен",
-    "hookah": "Кальянщик",
-    "cook": "Повар",
-    "dishwasher": "Посудомой",
-    "cleaner": "Уборщик",
-    "courier": "Курьер",
-    "florist": "Флорист",
-}
-
-
-def role_ru(role: str) -> str:
-    return ROLE_RU.get(role, role)
+# Должности в админке — по-русски (общий словарь, см. app/roles.py). Здесь
+# лежала своя копия, и в ней два ключа были выдуманы — `runner` и `manager`
+# вместо настоящих `waiter_assistant` и `administrator`: оператор видел в
+# жалобах «waiter_assistant · 300₽».
 
 
 def _describe_target(db: Session, target_type: str, target_id: str) -> str:

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, Match, User, Vacancy
+from ..roles import role_ru
 from ..rubles import plural, rubles_in_words
 from ..security import decode_token, ensure_token_usable
 
@@ -30,16 +31,6 @@ def _pdf() -> FPDF:
     pdf.add_font("DejaVu", "B", str(_FONT_DIR / "DejaVuSans-Bold.ttf"))
     pdf.add_page()
     return pdf
-
-
-# Русские названия должностей для акта (ключи — как в вакансии).
-_ROLE_RU = {
-    "waiter": "Официант", "waiter_assistant": "Помощник официанта",
-    "barista": "Бариста", "cook": "Повар", "dishwasher": "Посудомойщик",
-    "hostess": "Хостес", "bartender": "Бармен", "hookah": "Кальянщик",
-    "florist": "Флорист", "administrator": "Администратор",
-    "courier": "Курьер", "cleaner": "Уборщик",
-}
 
 
 def _fmt_time(minutes: int) -> str:
@@ -97,7 +88,7 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
         dur_min += 1440
     pay = vac.rate if vac.rate_type == "perShift" else round(vac.rate * dur_min / 60)
     hours = dur_min / 60
-    role_ru = _ROLE_RU.get(vac.role, vac.role)
+    role_name = role_ru(vac.role)
     city = vac.city or "Москва"
 
     pdf = _pdf()
@@ -150,7 +141,7 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
             int(hours), "час", "часа", "часов")
         price = vac.rate
     name = (
-        f"Услуги по профессии «{role_ru}», "
+        f"Услуги по профессии «{role_name}», "
         f"{_fmt_date(vac.date)}, "
         f"{_fmt_time(vac.start_time)}–{_fmt_time(vac.end_time)}"
     )

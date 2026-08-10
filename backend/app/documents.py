@@ -19,20 +19,12 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .models import Commission, Employer, Vacancy
+from .roles import role_ru
 from .rubles import plural, rubles_in_words
 from .timeutil import local_now
 
 _NL = {"new_x": XPos.LMARGIN, "new_y": YPos.NEXT}
 _FONT_DIR = Path(__file__).resolve().parent / "fonts"
-
-_ROLE_RU = {
-    "waiter": "Официант", "waiter_assistant": "Помощник официанта",
-    "barista": "Бариста", "cook": "Повар", "dishwasher": "Посудомойщик",
-    "hostess": "Хостес", "bartender": "Бармен", "hookah": "Кальянщик",
-    "florist": "Флорист", "administrator": "Администратор",
-    "courier": "Курьер", "cleaner": "Уборщик",
-}
-
 
 class RequisitesMissing(Exception):
     """Не заполнены реквизиты получателя платежа."""
@@ -214,7 +206,7 @@ def invoice_pdf(db: Session, employer_id: str) -> tuple[bytes, str]:
         # Должность известна не всегда (смену могли снять) — тогда пишем
         # просто про смену, без «смена, смена».
         what = (
-            f"{_ROLE_RU.get(vac.role, vac.role)}, смена {when}" if vac
+            f"{role_ru(vac.role)}, смена {when}" if vac
             else f"смена {when}"
         )
         rows.append((

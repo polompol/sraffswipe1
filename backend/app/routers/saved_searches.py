@@ -9,6 +9,7 @@ from ..db import get_db
 from ..models import SavedSearch, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
+from ..roles import date_ru, role_ru
 from ..security import current_principal
 
 router = APIRouter(prefix="/saved-searches", tags=["saved-searches"])
@@ -152,7 +153,8 @@ def notify_matching_searches(vacancy_id: str, max_notify: int = 200) -> int:
                     db,
                     s.owner_id,
                     f"🔔 Новая смена по вашему поиску «{s.title}»: "
-                    f"{vacancy.role}, {vacancy.rate} ₽. Откройте StaffSwipe.",
+                    f"{role_ru(vacancy.role)}, {vacancy.rate} ₽ "
+                    f"({date_ru(vacancy.date)}). Откройте StaffSwipe.",
                 )
                 sent += 1
         return sent

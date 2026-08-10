@@ -11,6 +11,7 @@ from ..geo import distance_km
 from ..models import Employer, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
+from ..roles import role_ru
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal, optional_principal
 from ..timeutil import local_today
@@ -476,7 +477,12 @@ def urgent_ping(
         .all()
     )
     sent = 0
-    text = f"Срочно нужен человек: {v.role} · {v.rate}₽ · {v.address or v.city}"
+    # По-русски: сообщение читает живой человек в Telegram, а в базе должность
+    # лежит латиницей — уходило «Срочно нужен человек: waiter».
+    text = (
+        f"Срочно нужен человек: {role_ru(v.role)} · "
+        f"{v.rate}₽ · {v.address or v.city}"
+    )
     for u in seekers:
         if city and (u.city or "").strip().lower() != city:
             continue
