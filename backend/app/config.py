@@ -147,6 +147,15 @@ class Settings(BaseSettings):
             problems.append("INTERNAL_API_SECRET не задан")
         if self.allow_insecure_telegram_auth:
             problems.append("ALLOW_INSECURE_TELEGRAM_AUTH=true в проде")
+        # Без токена бота подпись Telegram не проверить, и вход отвергается у
+        # ВСЕХ. Приложение при этом поднимается как ни в чём не бывало, отвечает
+        # /health «ok», а люди видят «Невалидный initData» — и понять, что не
+        # хватает одной строки в .env, по такому симптому невозможно. Пусть
+        # лучше сервер честно не стартует и напишет причину в лог.
+        if not self.telegram_bot_token:
+            problems.append(
+                "TELEGRAM_BOT_TOKEN не задан — вход через Telegram работать не будет"
+            )
         if problems:
             raise RuntimeError(
                 "Небезопасная конфигурация для прод-режима: "
