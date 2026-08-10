@@ -79,6 +79,7 @@ export function PhotoUpload({
           <input
             className="input"
             style={{ marginTop: 6 }}
+            aria-label="Ссылка на фото"
             placeholder="https://… ссылка на фото"
             defaultValue={value}
             onBlur={(e) => e.target.value && onChange(e.target.value)}

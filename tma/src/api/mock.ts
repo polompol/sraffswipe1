@@ -293,6 +293,71 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
   return Promise.resolve({ ...m });
 }
 
+/** Служебное сообщение в чат демо-мэтча. */
+function sysMessage(matchId: string, text: string): void {
+  (messagesByMatch[matchId] ??= []).push({
+    id: uid(),
+    chatId: matchId,
+    senderId: "system",
+    text,
+    isSystem: true,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/* Отмена, часы и перенос смены в демо-режиме.
+ *
+ * Все четыре действия раньше вызывали confirmShift: нажимаешь «Не смогу
+ * выйти», получаешь тост «Смена отменена» — и тут же в переписке появляется
+ * «Смена подтверждена ✅», а кнопка гаснет в «Смена подтверждена ✓». Показать
+ * такое заведению нельзя. */
+export function cancelShift(matchId: string, reason = ""): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  m.status = "cancelled";
+  sysMessage(matchId, `Смена отменена${reason ? `. Причина: ${reason}` : ""}.`);
+  return Promise.resolve({ ...m });
+}
+
+export function setActualHours(
+  matchId: string,
+  minutes: number,
+  note = "",
+): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  const hours = (minutes / 60).toFixed(1);
+  sysMessage(
+    matchId,
+    `Заведение указало фактическую длительность: ${hours} ч.` +
+      (note ? ` Комментарий: ${note}` : ""),
+  );
+  return Promise.resolve({ ...m });
+}
+
+export function proposeReschedule(
+  matchId: string,
+  date: string,
+): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  sysMessage(matchId, `Заведение предлагает перенести смену на ${date}.`);
+  return Promise.resolve({ ...m });
+}
+
+export function answerReschedule(
+  matchId: string,
+  accept: boolean,
+): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  sysMessage(
+    matchId,
+    accept ? "Работник согласился на перенос." : "Работник отказался от переноса.",
+  );
+  return Promise.resolve({ ...m });
+}
+
 export function markAttendance(matchId: string, attended: boolean): Promise<void> {
   const m = matches.find((x) => x.id === matchId);
   if (m) {
@@ -426,6 +491,14 @@ export function updateMe(patch: {
   name?: string;
   birth_date?: string;
   city?: string;
+  district?: string;
+  roles?: string[];
+  about?: string;
+  experience_tags?: string[];
+  photo_url?: string;
+  self_employed?: boolean;
+  inn?: string;
+  company_name?: string;
 }): Promise<Me> {
   // Серверный 18+ имитируем и в mock, чтобы UI-поток совпадал с backend.
   if (patch.birth_date) {
@@ -434,8 +507,24 @@ export function updateMe(patch: {
       return Promise.reject(new Error("Сервис доступен только с 18 лет"));
     }
   }
-  if (patch.name) meProfile.name = patch.name;
-  if (patch.city) meProfile.city = patch.city;
+  // Применяем ВСЕ поля. Раньше сохранялись только имя и город: в демо можно
+  // было заполнить анкету целиком, нажать «Сохранить» и вернуться к пустым
+  // должностям, пустому району и той же полоске «Профиль готов на 70%».
+  if (patch.name !== undefined) meProfile.name = patch.name;
+  if (patch.company_name !== undefined) meProfile.name = patch.company_name;
+  if (patch.birth_date !== undefined) meProfile.birthDate = patch.birth_date;
+  if (patch.city !== undefined) meProfile.city = patch.city;
+  if (patch.district !== undefined) meProfile.district = patch.district;
+  if (patch.roles !== undefined) meProfile.roles = patch.roles;
+  if (patch.about !== undefined) meProfile.about = patch.about;
+  if (patch.experience_tags !== undefined) {
+    meProfile.experienceTags = patch.experience_tags;
+  }
+  if (patch.photo_url !== undefined) meProfile.photoUrl = patch.photo_url;
+  if (patch.self_employed !== undefined) {
+    meProfile.selfEmployed = patch.self_employed;
+  }
+  if (patch.inn !== undefined) meProfile.inn = patch.inn;
   return Promise.resolve({ ...meProfile });
 }
 

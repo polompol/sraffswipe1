@@ -269,6 +269,7 @@ export function MatchesPage() {
                           <input
                             className="input"
                             inputMode="numeric"
+                            aria-label="6-значный код прихода от заведения"
                             maxLength={6}
                             placeholder="код"
                             style={{ width: 110, letterSpacing: 4, fontWeight: 800 }}

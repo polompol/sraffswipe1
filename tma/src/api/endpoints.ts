@@ -178,7 +178,7 @@ export async function cancelShift(
   matchId: string,
   reason = "",
 ): Promise<MatchModel> {
-  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  if (!USE_BACKEND) return mock.cancelShift(matchId, reason);
   const { data } = await api.post<MatchModel>(`/matches/${matchId}/cancel`, {
     reason,
   });
@@ -196,7 +196,7 @@ export async function setActualHours(
   minutes: number,
   note = "",
 ): Promise<MatchModel> {
-  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  if (!USE_BACKEND) return mock.setActualHours(matchId, minutes, note);
   const { data } = await api.post<MatchModel>(`/matches/${matchId}/hours`, {
     minutes,
     note,
@@ -211,7 +211,7 @@ export async function proposeReschedule(
   startTime: number,
   endTime: number,
 ): Promise<MatchModel> {
-  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  if (!USE_BACKEND) return mock.proposeReschedule(matchId, date);
   const { data } = await api.post<MatchModel>(
     `/matches/${matchId}/reschedule`,
     { date, start_time: startTime, end_time: endTime },
@@ -223,7 +223,7 @@ export async function answerReschedule(
   matchId: string,
   accept: boolean,
 ): Promise<MatchModel> {
-  if (!USE_BACKEND) return mock.confirmShift(matchId);
+  if (!USE_BACKEND) return mock.answerReschedule(matchId, accept);
   const { data } = await api.post<MatchModel>(
     `/matches/${matchId}/reschedule/${accept ? "accept" : "decline"}`,
     {},

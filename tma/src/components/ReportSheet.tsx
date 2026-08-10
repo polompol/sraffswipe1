@@ -94,6 +94,7 @@ export function ReportSheet({
         <textarea
           className="input"
           style={{ marginBottom: 14, minHeight: 70 }}
+          aria-label="Что случилось"
           placeholder="Опишите подробнее (необязательно)"
           value={text}
           maxLength={1000}

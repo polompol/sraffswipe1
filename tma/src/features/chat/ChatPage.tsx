@@ -397,6 +397,7 @@ export function ChatPage() {
         <div className="row">
           <input
             className="input"
+            aria-label="Текст сообщения"
             placeholder="Сообщение…"
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -487,6 +488,7 @@ export function ChatPage() {
             <input
               className="input"
               maxLength={200}
+              aria-label="Комментарий к длительности смены"
               placeholder="Отпустили раньше"
               value={hoursNote}
               onChange={(e) => setHoursNote(e.target.value)}
@@ -559,6 +561,7 @@ export function ChatPage() {
             </p>
             <input
               className="input"
+              aria-label="Причина отмены смены"
               placeholder="Причина (по желанию)"
               maxLength={200}
               value={cancelReason}
