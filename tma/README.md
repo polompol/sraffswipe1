@@ -27,7 +27,7 @@ npm run build             # tsc + production-сборка в dist/
 
 ```
 src/
-├── telegram/sdk.ts        # обёртка над @telegram-apps/sdk-react (init, haptics, back-button, Stars, share)
+├── telegram/sdk.ts        # обёртка над @telegram-apps/sdk-react (init, haptics, back-button, share)
 ├── api/                   # axios + JWT, endpoints, mock-данные
 ├── store/session.ts       # zustand-сессия (jwt, роль)
 ├── types/domain.ts        # доменные типы (зеркало backend)
