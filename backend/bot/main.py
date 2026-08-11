@@ -9,7 +9,7 @@
 import asyncio
 import os
 
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
     BotCommand,
@@ -123,7 +123,11 @@ async def support_cmd(message: Message) -> None:
 # Любое другое сообщение. Люди пишут боту — «здравствуйте», «есть работа?»,
 # «когда смена» — и до сих пор получали тишину: обработчиков не было вовсе.
 # Молчащий бот читается как «сервис не работает».
-@dp.message(F.text)
+#
+# Без фильтра по типу: раньше стоял F.text, и на голосовое, стикер, фото или
+# пересланное сообщение бот по-прежнему молчал — а именно ими чаще всего и
+# отвечают («ок 👍», голосовое «когда смена?»).
+@dp.message()
 async def anything_else(message: Message) -> None:
     await message.answer(
         "Я бот-уведомлялка: сюда приходят мэтчи, подтверждения смен и "

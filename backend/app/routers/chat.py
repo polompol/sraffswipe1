@@ -87,7 +87,10 @@ async def send(
         if principal["id"] == match.user_id
         else match.user_id
     )
-    notify_owner(db, other, f"💬 Новое сообщение: {body.text[:60]}")
+    notify_owner(
+        db, other, f"💬 Новое сообщение: {body.text[:60]}",
+        open_app="Ответить", screen="matches",
+    )
     # Авто-модерация чата: «переведи предоплату» и т.п. → флаг админу.
     from ..moderation import auto_flag
 

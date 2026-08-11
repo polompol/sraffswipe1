@@ -46,7 +46,7 @@ export function Toaster() {
         position: "fixed",
         left: 0,
         right: 0,
-        bottom: 92,
+        bottom: "calc(92px + env(safe-area-inset-bottom))",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

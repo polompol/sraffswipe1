@@ -391,6 +391,9 @@ def _to_out(
         shift_date=v.date if v is not None else "",
         shift_start=v.start_time if v is not None else 0,
         shift_end=v.end_time if v is not None else 0,
+        reschedule_date=m.reschedule_date or "",
+        reschedule_start=m.reschedule_start,
+        reschedule_end=m.reschedule_end,
     )
 
 

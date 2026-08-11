@@ -21,7 +21,7 @@ import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
 import { IconPin } from "@/components/Icons";
-import { showBackButton, haptic } from "@/telegram/sdk";
+import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 
 const toMinutes = (t: string): number => {
   const [h, m] = t.split(":").map(Number);
@@ -72,6 +72,16 @@ export function CreateVacancyPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
+
+  // Форма длинная: дата, время, ставка, адрес с подсказками, описание — три
+  // минуты работы. Задел крестик или смахнул вниз — всё пропадало без
+  // единого вопроса. Пока в форме есть несохранённое, Telegram спрашивает
+  // подтверждение при закрытии.
+  const dirty = !!date || !!desc || address !== (pre?.address ?? "");
+  useEffect(() => {
+    guardClosing(dirty);
+    return () => guardClosing(false);
+  }, [dirty]);
 
   async function publish() {
     if (!date) {

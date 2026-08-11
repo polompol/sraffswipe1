@@ -3,7 +3,11 @@ import { useNavigate } from "react-router-dom";
 import type { AppRole } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { authTelegram, track } from "@/api/endpoints";
-import { rawInitData, haptic, openExternal } from "@/telegram/sdk";
+import { rawInitData, haptic, openExternal, insideTelegram } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
+
+// Куда отправить человека, открывшего приложение в обычном браузере.
+const BOT_LINK = `https://t.me/${import.meta.env.VITE_BOT_USERNAME ?? "staffswipe_bot"}`;
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
@@ -48,6 +52,36 @@ export function RolePage() {
     } else {
       localStorage.removeItem("ss_consent");
     }
+  }
+
+  // Вне Telegram войти невозможно в принципе: подписи запуска нет, сервер
+  // отвечает отказом, и человек упирался в «Не удалось войти — проверьте
+  // интернет», хотя интернет ни при чём. Заходят так регулярно: по ссылке из
+  // рекламы, из истории браузера.
+  if (!insideTelegram()) {
+    return (
+      <div className="app">
+        <div
+          className="page"
+          style={{
+            minHeight: "100dvh",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            textAlign: "center",
+          }}
+        >
+          <h1 className="h1">StaffSwipe работает в Telegram</h1>
+          <p className="muted" style={{ marginBottom: 20 }}>
+            Смены, чат и отклики живут внутри мессенджера — так вход не требует
+            ни пароля, ни номера телефона.
+          </p>
+          <Button onClick={() => openExternal(BOT_LINK)}>
+            Открыть в Telegram
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

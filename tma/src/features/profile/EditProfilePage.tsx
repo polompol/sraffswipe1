@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/Button";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
-import { showBackButton, haptic } from "@/telegram/sdk";
+import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { apiError } from "@/lib/errors";
 
@@ -41,6 +41,19 @@ export function EditProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
+
+  // Пока анкета отличается от сохранённой, Telegram спрашивает подтверждение
+  // при закрытии: иначе случайный тап по крестику стирал всё заполненное.
+  const dirty =
+    !!me
+    && (name !== (me.name ?? "")
+      || about !== (me.about ?? "")
+      || district !== (me.district ?? "")
+      || roles.length !== (me.roles ?? []).length);
+  useEffect(() => {
+    guardClosing(dirty);
+    return () => guardClosing(false);
+  }, [dirty]);
 
   // Предзаполняем форму РОВНО ОДИН раз. Иначе повторная загрузка профиля
   // (рефетч при возврате на вкладку) затирала бы уже введённый текст.

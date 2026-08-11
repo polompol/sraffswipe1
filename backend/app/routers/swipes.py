@@ -116,11 +116,18 @@ def _ensure_match(
 def _on_match(db: Session, match: Match, created: bool) -> None:
     if not created:
         return
-    notify_owner(db, match.user_id, "🔥 У вас новый мэтч в StaffSwipe!")
+    # С кнопкой. Раньше соискатель — самая мотивированная сторона — получал
+    # голый текст: чтобы попасть в чат, надо было промотать переписку с ботом
+    # вверх до /start, найти кнопку, открыть ленту и искать нужный мэтч.
+    notify_owner(
+        db, match.user_id,
+        "🔥 Заведение ответило взаимно! Откройте чат и договоритесь о смене.",
+        open_app="Открыть чат", screen="matches",
+    )
     notify_owner(
         db, match.employer_id,
         "Новый мэтч в StaffSwipe — договоритесь о деталях смены.",
-        open_app="Открыть чат", screen="matches",
+        open_app="Открыть мэтчи", screen="matches",
     )
 
 
