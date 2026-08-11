@@ -6,7 +6,7 @@ import { HashRouter } from "react-router-dom";
 import "./theme/theme.css";
 import "./index.css";
 import { initTelegram } from "./telegram/sdk";
-import { initTheme } from "./lib/theme";
+import { initTheme, syncTelegramTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
 import { reportError } from "./lib/report";
 import { initSentry } from "./lib/sentry";
@@ -25,7 +25,10 @@ window.addEventListener("unhandledrejection", (e) =>
 );
 
 void initSentry();
-void initTelegram();
+// Тему ставим сразу, до первого кадра (иначе вспышка светлого экрана у тех, у
+// кого тёмная), а после подъёма SDK уточняем её по самому Telegram.
+initTheme();
+void initTelegram().then(syncTelegramTheme);
 
 // Установка на домашний экран (вне Telegram). Внутри Mini App приложение уже
 // живёт в оболочке Telegram, и лишний слой там не нужен — поэтому регистрируем
@@ -37,7 +40,6 @@ if ("serviceWorker" in navigator && !window.location.hash.includes("tgWebApp")) 
     });
   });
 }
-initTheme();
 // Крупный режим (доступность) — применяем до первого рендера, если включён.
 if (localStorage.getItem("ss_large") === "1") {
   document.body.dataset.large = "1";

@@ -206,3 +206,104 @@ def test_disputes_reach_the_operator(client):
         assert rep is not None, "спор обязан попасть в очередь оператора"
     finally:
         db.close()
+
+
+def _future_shift(client, tg_emp, tg_seeker, days=3):
+    """Смена, до которой ещё далеко."""
+    from datetime import date as _date
+    from datetime import timedelta as _td
+
+    from app.timeutil import local_today
+
+    emp_h, eid = _auth(client, "employer")
+    when = (_date.fromisoformat(local_today()) + _td(days=days)).isoformat()
+    v = client.post("/vacancies", headers=emp_h, json={
+        "role": "waiter", "date": when, "start_time": 600,
+        "end_time": 1080, "rate": 400, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Никольская, 10",
+    }).json()
+    seeker_h, sid = _auth(client, "seeker")
+    client.post("/swipes", headers=emp_h, json={
+        "target_id": sid, "target_type": "user", "direction": "like"})
+    mid = client.post("/swipes", headers=seeker_h, json={
+        "target_id": v["id"], "target_type": "vacancy",
+        "direction": "like"}).json()["match_id"]
+    client.post(f"/matches/{mid}/confirm", headers=seeker_h)
+    client.post(f"/matches/{mid}/confirm", headers=emp_h)
+    _detach(eid, tg_emp)
+    _detach(sid, tg_seeker)
+    return emp_h, seeker_h, v, mid
+
+
+def test_shift_cannot_close_before_it_happens(client):
+    """Пара аккаунтов набивала себе рейтинг и бейдж «Платит вовремя» за минуты.
+
+    Заведение жало «человек пришёл», видело собственный код в своём же ответе
+    и вводило его за работника — и смена, назначенная на следующую неделю,
+    уже «состоялась». Отсюда закрытые смены, отзывы и знак доверия в ленте.
+    """
+    emp_h, seeker_h, v, mid = _future_shift(client, 890001, 890002)
+    code = [m for m in client.get("/matches", headers=emp_h).json()
+            if m["id"] == mid][0]["checkin_code"]
+    client.post(f"/matches/{mid}/checkin", headers=seeker_h, json={"code": code})
+    client.post(f"/matches/{mid}/attendance", headers=emp_h, json={"attended": True})
+
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        assert m.status == "confirmed", "смена не может закрыться до своего конца"
+    finally:
+        db.close()
+    assert _commission(mid) is None
+    # И отзыв по незакрытой смене не принимается.
+    r = client.post(f"/matches/{mid}/review", headers=seeker_h, json={"stars": 5})
+    assert r.status_code == 400
+
+
+def test_no_show_cannot_be_marked_before_the_shift(client):
+    """«Не вышел» до начала отправлял человека работать по закрытой смене."""
+    emp_h, seeker_h, v, mid = _future_shift(client, 890010, 890011)
+    r = client.post(f"/matches/{mid}/attendance", headers=emp_h,
+                    json={"attended": False})
+    assert r.status_code == 409
+
+
+def test_old_reschedule_cannot_be_accepted_after_the_shift(client):
+    """Заранее предложенный перенос уводил отработанную смену из-под расчёта.
+
+    Работник жал «Согласен» на следующий день, думая, что речь о новой смене,
+    — и своими руками стирал уже отработанную.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    emp_h, seeker_h, v, mid = _future_shift(client, 890020, 890021, days=1)
+    future = (datetime.now(UTC) + timedelta(days=20)).strftime("%Y-%m-%d")
+    assert client.post(f"/matches/{mid}/reschedule", headers=emp_h, json={
+        "date": future, "start_time": 600, "end_time": 1080}).status_code == 200
+
+    # Смена тем временем прошла.
+    db = SessionLocal()
+    try:
+        vac = db.get(Vacancy, db.get(Match, mid).vacancy_id)
+        vac.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.post(f"/matches/{mid}/reschedule/accept", headers=seeker_h)
+    assert r.status_code == 409
+
+    from app.digest import settle_shifts
+    db = SessionLocal()
+    try:
+        assert settle_shifts(db) == 1, "смена должна закрыться и дать комиссию"
+    finally:
+        db.close()
+    assert _commission(mid) is not None
+
+
+def test_hours_cannot_be_set_before_the_shift(client):
+    """«Уточнить часы» работало ЗА НЕДЕЛЮ до смены — скидка 50% на комиссию."""
+    emp_h, seeker_h, v, mid = _future_shift(client, 890030, 890031)
+    r = client.post(f"/matches/{mid}/hours", headers=emp_h, json={"minutes": 240})
+    assert r.status_code == 409

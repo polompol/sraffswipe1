@@ -21,6 +21,16 @@ import {
   showPopup,
   isPopupSupported,
   cloudStorage,
+  openLink as sdkOpenLink,
+  openTelegramLink as sdkOpenTelegramLink,
+  isTMA as sdkIsTMA,
+  setMiniAppHeaderColor,
+  setMiniAppBackgroundColor,
+  setMiniAppBottomBarColor,
+  isMiniAppDark,
+  mountClosingBehavior,
+  enableClosingConfirmation,
+  disableClosingConfirmation,
 } from "@telegram-apps/sdk-react";
 
 let started = false;
@@ -50,10 +60,26 @@ export async function initTelegram(): Promise<void> {
     /* noop */
   }
 
+  // Раскрытие — отдельно и ПЕРВЫМ делом. Раньше оно стояло после await
+  // mountViewport(): приложение, открытое из кнопки уведомления, показывалось
+  // в половину экрана и рывком раскрывалось через мгновение. А если
+  // монтирование вьюпорта падало (это бывает при перезагрузке в разработке),
+  // раскрытие не выполнялось вообще.
+  try {
+    expandViewport();
+  } catch {
+    /* noop */
+  }
+
   try {
     await mountViewport();
     bindViewportCssVars();
-    expandViewport();
+  } catch {
+    /* noop */
+  }
+
+  try {
+    mountClosingBehavior();
   } catch {
     /* noop */
   }
@@ -192,6 +218,127 @@ type CloudApi = { setItem?: (k: string, v: string) => unknown };
 export function cloudSet(key: string, value: string): void {
   try {
     (cloudStorage as CloudApi).setItem?.(key, value);
+  } catch {
+    /* noop */
+  }
+}
+
+// --- Открытие ссылок ---
+
+/** Открыть внешнюю ссылку.
+ *
+ *  `window.open` внутри Telegram молча не срабатывает: вебвью не создаёт новых
+ *  окон, а после `await` браузер вдобавок считает вызов не-пользовательским.
+ *  Именно так ломалась оплата: заведение жало «Пополнить 3 000 ₽», получало
+ *  вибрацию — и ничего. Пробовало ещё раз, комиссия уходила в просрочку,
+ *  публикация смен блокировалась.
+ */
+export function openExternal(url: string): void {
+  // Относительные адреса (страницы оферты рядом с приложением) SDK не примет.
+  const abs = new URL(url, window.location.href).href;
+  try {
+    if (sdkOpenLink.isAvailable()) {
+      sdkOpenLink(abs);
+      return;
+    }
+  } catch {
+    /* вне Telegram или старый клиент */
+  }
+  window.open(abs, "_blank", "noopener");
+}
+
+/** Открыть ссылку внутри Telegram (t.me/...). Через обычный openLink клиент
+ *  открыл бы собственный домен во встроенном браузере вместо перехода в чат. */
+export function openTelegram(url: string): void {
+  try {
+    if (sdkOpenTelegramLink.isAvailable()) {
+      sdkOpenTelegramLink(url);
+      return;
+    }
+  } catch {
+    /* noop */
+  }
+  openExternal(url);
+}
+
+/** Запущены ли мы внутри Telegram. Вне его вход невозможен в принципе:
+ *  подписи initData нет, и человек упирался в «Не удалось войти — проверьте
+ *  интернет», хотя интернет ни при чём. */
+export function insideTelegram(): boolean {
+  try {
+    return sdkIsTMA();
+  } catch {
+    return false;
+  }
+}
+
+// --- Цвета оболочки Telegram ---
+
+/** Покрасить шапку, фон и нижнюю панель Telegram под тему приложения.
+ *
+ *  Без этого фирменный кремовый экран висел в стандартной белой (или
+ *  тёмно-серой) рамке Telegram: стык виден сразу, и приложение читается как
+ *  «сайт в окне», а не как часть мессенджера. Особенно заметно, когда у
+ *  человека тёмный Telegram, а приложение светлое.
+ */
+export function paintChrome(dark: boolean): void {
+  const bg = dark ? "#160d0f" : "#efe7d3";      // --bg
+  const bar = dark ? "#201316" : "#fffdf8";     // --surface (цвет таббара)
+  try {
+    if (setMiniAppHeaderColor.isAvailable()) setMiniAppHeaderColor(bg);
+  } catch {
+    /* старый клиент — оставит стандартную шапку */
+  }
+  try {
+    setMiniAppBackgroundColor.ifAvailable(bg);
+  } catch {
+    /* noop */
+  }
+  try {
+    setMiniAppBottomBarColor.ifAvailable(bar);
+  } catch {
+    /* noop */
+  }
+}
+
+/** Тёмная ли тема В САМОМ TELEGRAM.
+ *
+ *  Не `prefers-color-scheme`: он отражает тему ТЕЛЕФОНА, а у Telegram своя
+ *  настройка. Частая комбинация «телефон светлый, Telegram тёмный» давала
+ *  чёрный интерфейс вокруг и кремовое приложение внутри.
+ */
+export function telegramDark(): boolean | null {
+  // Вне Telegram сигнал темы просто отдаёт false, а не бросает исключение —
+  // и приложение в обычном браузере всегда стартовало бы в светлой теме,
+  // игнорируя системную. Поэтому сначала проверяем, что мы вообще внутри.
+  if (!insideTelegram()) return null;
+  try {
+    return isMiniAppDark();
+  } catch {
+    return null;
+  }
+}
+
+/** Подписка на смену темы в Telegram, пока приложение открыто. */
+export function onTelegramThemeChange(fn: (dark: boolean) => void): () => void {
+  try {
+    return isMiniAppDark.sub(fn);
+  } catch {
+    return () => {};
+  }
+}
+
+// --- Защита от случайного закрытия ---
+
+/** Спрашивать подтверждение при закрытии, пока в форме есть несохранённое.
+ *
+ *  Заведение по три минуты заполняет смену (дата, время, ставка, адрес,
+ *  описание), задевает крестик — и всё пропадает без единого вопроса.
+ */
+export function guardClosing(dirty: boolean): void {
+  try {
+    if (dirty) enableClosingConfirmation();
+    else disableClosingConfirmation();
   } catch {
     /* noop */
   }

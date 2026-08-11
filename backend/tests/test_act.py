@@ -66,8 +66,16 @@ def test_sum_in_words(amount, words):
 def test_words_reject_impossible_amounts():
     with pytest.raises(ValueError):
         rubles_in_words(-1)
-    with pytest.raises(ValueError):
-        rubles_in_words(1_000_000)
+
+
+def test_big_sums_do_not_break_the_document():
+    """Раньше от миллиона функция бросала исключение — и акт отвечал 500-й.
+
+    Миллион достижим штатно: ставка до 1 000 000 ₽ разрешена схемой, да и долг
+    заведения за месяц столько набрать может. Документ важнее красоты прописи.
+    """
+    text = rubles_in_words(1_600_000)
+    assert "1 600 000" in text and "рублей" in text
 
 
 def test_plural_forms():
@@ -99,6 +107,24 @@ def _confirmed_match(client):
     mid = sw["match_id"]
     client.post(f"/matches/{mid}/confirm", headers=sh)
     client.post(f"/matches/{mid}/confirm", headers=eh)
+
+    # Доводим смену до закрытия: акт — документ о ВЫПОЛНЕННОЙ работе.
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    db = SessionLocal()
+    try:
+        vac = db.get(Vacancy, db.get(Match, mid).vacancy_id)
+        vac.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+    code = [m for m in client.get("/matches", headers=eh).json()
+            if m["id"] == mid][0]["checkin_code"]
+    client.post(f"/matches/{mid}/checkin", headers=sh, json={"code": code})
+    client.post(f"/matches/{mid}/attendance", headers=eh, json={"attended": True})
     return mid, seek["access_token"]
 
 
@@ -121,5 +147,7 @@ def test_act_contains_calculation_and_signatures(client):
     assert "Две тысячи восемьсот рублей" in text      # прописью
     assert "Заказчик:" in text and "Исполнитель:" in text
     assert "подпись" in text
-    # Дата по-русски, а не в ISO.
-    assert date.fromisoformat(local_today()).strftime("%d.%m.%Y") in text
+    # Дата по-русски, а не в ISO. Смена вчерашняя: акт выдаётся только по
+    # закрытой смене, то есть уже после её окончания.
+    yesterday = date.fromisoformat(local_today()) - timedelta(days=1)
+    assert yesterday.strftime("%d.%m.%Y") in text

@@ -55,7 +55,14 @@
 	# (/me, /vacancies, /auth/..., /ws/chat/...).
 	handle_path /api/* {
 		import security_headers
-		reverse_proxy api:8000
+		reverse_proxy api:8000 {
+			# Перезаписываем заголовок с исходным адресом, а не дописываем к
+			# присланному. По умолчанию Caddy добавляет реальный IP в конец, и
+			# начало списка задаёт сам клиент — этим обходились ВСЕ
+			# ограничения по IP (вход, запрос кода, аналитика): достаточно было
+			# слать каждый раз новый X-Forwarded-For.
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	# Всё остальное — собранный Mini App.

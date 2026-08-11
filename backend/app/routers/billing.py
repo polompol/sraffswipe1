@@ -21,6 +21,7 @@ from ..config import settings
 from ..db import get_db
 from ..entitlements import ensure, get_or_create
 from ..models import Commission, Entitlement, Purchase, WalletTxn
+from ..ratelimit import rate_limit_ip
 from ..security import (
     current_principal,
     decode_token,
@@ -57,7 +58,10 @@ def _document_response(
     )
 
 
-@router.get("/invoice.pdf")
+@router.get(
+    "/invoice.pdf",
+    dependencies=[Depends(rate_limit_ip("doc", 20, 60))],
+)
 def commission_invoice(
     token: str = "",
     db: Session = Depends(get_db),
@@ -76,7 +80,10 @@ def commission_invoice(
     return _document_response("invoice", db, principal["id"])
 
 
-@router.get("/act.pdf")
+@router.get(
+    "/act.pdf",
+    dependencies=[Depends(rate_limit_ip("doc", 20, 60))],
+)
 def commission_act(
     token: str = "",
     period: str = "",
@@ -92,7 +99,9 @@ def commission_act(
     ensure_token_usable(db, principal)
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
-    if period and not re.fullmatch(r"\d{4}-\d{2}", period):
+    # Месяц именно 01–12: под прежний шаблон подходило и «2026-13», и
+    # «2026-00» — из них строилась дата «2026-13-01», и запрос падал 500-й.
+    if period and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", period):
         raise HTTPException(status_code=400, detail="Период в формате ГГГГ-ММ")
     return _document_response("act", db, principal["id"], period)
 

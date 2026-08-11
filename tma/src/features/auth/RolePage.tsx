@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { AppRole } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { authTelegram, track } from "@/api/endpoints";
-import { rawInitData, haptic } from "@/telegram/sdk";
+import { rawInitData, haptic, openExternal } from "@/telegram/sdk";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
@@ -79,8 +79,23 @@ export function RolePage() {
           />
           <span className="muted" style={{ fontSize: 13 }}>
             Мне есть 18 лет. Принимаю{" "}
-            <a href={OFFER_URL} target="_blank" rel="noreferrer">оферту</a>,{" "}
-            <a href={PRIVACY_URL} target="_blank" rel="noreferrer">политику обработки ПДн (152-ФЗ)</a>{" "}
+            {/* Через openLink, а не target="_blank": внутри Telegram новое
+                окно молча не открывается. Человек ставил галочку «принимаю
+                оферту», не имея физической возможности её прочитать — для
+                152-ФЗ это плохо. Тап по ссылке не должен переключать
+                галочку, поэтому останавливаем событие. */}
+            <a
+              href={OFFER_URL}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExternal(OFFER_URL); }}
+            >
+              оферту
+            </a>,{" "}
+            <a
+              href={PRIVACY_URL}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExternal(PRIVACY_URL); }}
+            >
+              политику обработки ПДн (152-ФЗ)
+            </a>{" "}
             и даю согласие на обработку персональных данных.
           </span>
         </label>

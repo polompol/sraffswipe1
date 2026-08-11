@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { showBackButton, haptic } from "@/telegram/sdk";
+import { showBackButton, haptic, openTelegram } from "@/telegram/sdk";
 import { IconChat } from "@/components/Icons";
 
 // Ссылка на поддержку (Telegram-чат/бот). Задаётся через env перед запуском.
@@ -100,12 +100,13 @@ export function SupportPage() {
             настоящая <button>: вложенные интерактивные элементы — скринридер
             объявлял их как два разных объекта, а с клавиатуры фокус
             останавливался дважды на одном и том же действии. */}
+        {/* openTelegramLink, а не новое окно: ссылка ведёт на t.me, и через
+            обычное открытие Telegram показал бы собственный домен во
+            встроенном браузере вместо перехода в чат поддержки. */}
         <a
           className="ui-btn ui-btn--secondary"
           href={SUPPORT_URL}
-          target="_blank"
-          rel="noreferrer"
-          onClick={() => haptic("light")}
+          onClick={(e) => { e.preventDefault(); haptic("light"); openTelegram(SUPPORT_URL); }}
           style={{
             width: "100%",
             minHeight: 54,

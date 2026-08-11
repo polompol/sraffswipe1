@@ -55,6 +55,17 @@ def _employer_with_debt(client):
     rows = client.get("/matches", headers=eh).json()
     code = [m for m in rows if m["id"] == mid][0]["checkin_code"]
     client.post(f"/matches/{mid}/checkin", headers=sh, json={"code": code})
+    # Смену нельзя закрыть раньше её окончания — доводим до конца.
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Vacancy
+    db0 = SessionLocal()
+    try:
+        vac = db0.get(Vacancy, db0.get(Match, mid).vacancy_id)
+        vac.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db0.commit()
+    finally:
+        db0.close()
     client.post(f"/matches/{mid}/attendance", headers=eh, json={"attended": True})
 
     db = SessionLocal()

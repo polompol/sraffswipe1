@@ -232,6 +232,7 @@ def test_invites_shows_employers_who_liked_me(client):
 
 def test_mutual_checkin_closes_only_when_both_confirm(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    _age(match_id)  # закрыть смену раньше её окончания нельзя
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
     assert code and len(code) == 6
@@ -269,6 +270,7 @@ def test_commission_accrued_on_close(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
@@ -339,10 +341,31 @@ def test_blocked_user_cannot_pull_act(client):
     assert banned.status_code == 403
 
 
+def _age(match_id: str, days: int = 1) -> None:
+    """Перемотать смену в прошлое: закрыть её можно только после окончания."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    db = SessionLocal()
+    try:
+        m = db.get(Match, match_id)
+        v = db.get(Vacancy, m.vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+
+
 def _close_shift(client, emp_token, seeker_token, match_id):
-    """Взаимное подтверждение: работник по коду + заведение «пришёл»."""
+    """Взаимное подтверждение: работник по коду + заведение «пришёл».
+
+    Сначала доводим смену до конца — раньше её закрыть нельзя."""
+    _age(match_id)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
@@ -640,6 +663,7 @@ def test_conflict_creates_dispute(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     # Работник отметился, а заведение говорит «не вышел» → спор, не закрываем.
@@ -797,7 +821,11 @@ def test_attendance_and_reliability(client):
     assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(seeker_token),
                        json={"attended": True}).status_code == 403
 
-    # работодатель смены отмечает «не вышел»
+    # работодатель смены отмечает «не вышел» — но только ПОСЛЕ смены: до её
+    # окончания это отправляло человека работать по уже закрытой смене.
+    assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                       json={"attended": False}).status_code == 409
+    _age(match_id)
     r = client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
                     json={"attended": False})
     assert r.status_code == 200 and r.json()["noShow"] is True

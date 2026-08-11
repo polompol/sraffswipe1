@@ -124,6 +124,27 @@ def test_full_match_flow(client):
     r = client.post(f"/matches/{match_id}/confirm", headers=_hdr(emp_token))
     assert r.json()["status"] == "confirmed"
 
+    # Доводим смену до закрытия: акт — документ о ВЫПОЛНЕННОЙ работе, и
+    # раньше он выдавался ещё до самой смены.
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    db = SessionLocal()
+    try:
+        v = db.get(Vacancy, db.get(Match, match_id).vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+    code = [m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+            if m["id"] == match_id][0]["checkin_code"]
+    client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                json={"code": code})
+    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                json={"attended": True})
+
     # PDF-акт генерируется (токен участника передаётся query-параметром)
     r = client.get(f"/matches/{match_id}/act.pdf?token={seeker_token}")
     assert r.status_code == 200

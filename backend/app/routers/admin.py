@@ -29,6 +29,7 @@ from ..models import (
 from ..notify import notify_owner
 from ..roles import role_ru
 from ..security import current_principal
+from ..timeutil import local_today
 from .analytics import _is_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -312,8 +313,24 @@ def unblock_user(
     if target is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     target.blocked = False
+    # Возвращаем и смены. Блокировка заведения снимала все его смены с
+    # публикации, а разблокировка их не возвращала: заведение снова входило,
+    # видело свои смены у себя в списке, а в ленте их не было и откликов не
+    # приходило — понять причину изнутри приложения невозможно.
+    # Только не прошедшие: воскрешать вчерашние смены смысла нет.
+    restored = 0
+    if isinstance(target, Employer):
+        restored = (
+            db.query(Vacancy)
+            .filter(
+                Vacancy.employer_id == user_id,
+                Vacancy.status == "blocked",
+                Vacancy.date >= local_today(),
+            )
+            .update({Vacancy.status: "active"}, synchronize_session=False)
+        )
     db.commit()
-    return {"ok": True, "blocked": False}
+    return {"ok": True, "blocked": False, "restoredVacancies": int(restored)}
 
 
 @router.post("/vacancies/{vacancy_id}/unblock")
@@ -513,6 +530,12 @@ class CancelStatRow(BaseModel):
     cancels: int         # всего отмен
     lateCancels: int     # из них поздних
     noShows: int         # неявок (для работника)
+    # Сколько раз сторона заявила «смена не состоялась». Единственный способ
+    # не платить за договорённую смену — значит он и должен быть на виду.
+    # Раньше такое заявление не оставляло вообще НИКАКОГО следа: ни жалобы, ни
+    # счётчика. Самый дешёвый обход правила «молчание = смена состоялась» —
+    # попросить работника нажать эту кнопку.
+    notHeld: int
 
 
 @router.get("/cancel-stats", response_model=list[CancelStatRow])
@@ -538,10 +561,15 @@ def cancel_stats(
         db.query(Match)
         .filter(
             Match.created_at >= since,
-            or_(Match.status == "cancelled", Match.no_show.is_(True)),
+            or_(
+                Match.status == "cancelled",
+                Match.no_show.is_(True),
+                Match.not_held_by != "",
+            ),
         )
         .all()
     )
+    blank = {"cancels": 0, "late": 0, "no_shows": 0, "not_held": 0}
     agg: dict[tuple[str, str], dict] = {}
     for m in rows:
         if m.status == "cancelled" and m.cancelled_by:
@@ -549,13 +577,20 @@ def cancel_stats(
                 m.user_id if m.cancelled_by == "seeker" else m.employer_id,
                 m.cancelled_by,
             )
-            st = agg.setdefault(key, {"cancels": 0, "late": 0, "no_shows": 0})
+            st = agg.setdefault(key, dict(blank))
             st["cancels"] += 1
             st["late"] += 1 if m.cancelled_late else 0
         if m.no_show:
             key = (m.user_id, "seeker")
-            st = agg.setdefault(key, {"cancels": 0, "late": 0, "no_shows": 0})
+            st = agg.setdefault(key, dict(blank))
             st["no_shows"] += 1
+        if m.not_held_by:
+            key = (
+                m.user_id if m.not_held_by == "seeker" else m.employer_id,
+                m.not_held_by,
+            )
+            st = agg.setdefault(key, dict(blank))
+            st["not_held"] += 1
 
     out: list[CancelStatRow] = []
     for (owner_id, role), st in agg.items():
@@ -566,10 +601,13 @@ def cancel_stats(
         out.append(CancelStatRow(
             ownerId=owner_id, name=name, role=role,
             cancels=st["cancels"], lateCancels=st["late"],
-            noShows=st["no_shows"],
+            noShows=st["no_shows"], notHeld=st["not_held"],
         ))
-    # Сначала те, кто подводит чаще: поздние отмены и неявки весомее ранних.
-    out.sort(key=lambda r: -(r.lateCancels * 2 + r.noShows * 2 + r.cancels))
+    # Сначала те, кто подводит чаще: поздние отмены, неявки и заявления
+    # «смены не было» весомее ранних отмен.
+    out.sort(key=lambda r: -(
+        r.lateCancels * 2 + r.noShows * 2 + r.notHeld * 2 + r.cancels
+    ))
     return out[:50]
 
 
@@ -930,7 +968,26 @@ def erase_account(
     removed["жалобы"] = _drop(Report, Report.reporter_id == owner_id)
     removed["рефералы"] = _drop(Referral, Referral.referrer_id == owner_id,
                                 Referral.referred_id == owner_id)
-    removed["права/баланс"] = _drop(Entitlement, Entitlement.owner_id == owner_id)
+    # Баланс обнуляем ПРОВОДКОЙ, а не удалением строки. Раньше строка прав
+    # удалялась целиком: в журнале оставалось пополнение «+5000», а остатка и
+    # списания не было — журнал переставал сходиться, и на просьбу вернуть
+    # аванс доказать было нечем. Персональных данных здесь нет, под 152-ФЗ
+    # удалять её и не требуется.
+    ent = db.get(Entitlement, owner_id)
+    left = int(ent.balance_rub) if ent is not None else 0
+    if left:
+        db.query(Entitlement).filter(
+            Entitlement.owner_id == owner_id,
+            Entitlement.balance_rub >= left,
+        ).update(
+            {Entitlement.balance_rub: Entitlement.balance_rub - left},
+            synchronize_session=False,
+        )
+        db.add(WalletTxn(
+            owner_id=owner_id, amount=-left, kind="erase",
+            note="Обнуление баланса при удалении данных по заявлению",
+        ))
+    removed["обнулено с баланса, ₽"] = left
     # Текст отзыва — свободный, там может быть что угодно про человека.
     # Оценку оставляем: она уже вошла в рейтинг второй стороны.
     removed["тексты отзывов"] = (

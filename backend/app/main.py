@@ -93,16 +93,42 @@ app.add_middleware(
 )
 
 
+# Заголовки, которые должны быть на КАЖДОМ ответе, включая аварийный 500.
+def _base_headers(request: Request, rid: str) -> dict[str, str]:
+    headers = {
+        "X-Request-ID": rid,
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "no-referrer",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    }
+    # CORS на 500 тоже нужен: обработчик ошибок стоит ВЫШЕ middleware, и без
+    # этого приложение вместо понятного «Внутренняя ошибка сервера» получало
+    # глухую ошибку доступа — человеку показывалось «нет связи», а в поддержку
+    # нести было нечего.
+    origin = request.headers.get("origin")
+    if origin and origin in _cors_origins():
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Vary"] = "Origin"
+    elif "*" in _cors_origins():
+        headers["Access-Control-Allow-Origin"] = "*"
+    return headers
+
+
 @app.exception_handler(Exception)
 async def unhandled_error(request: Request, exc: Exception):
     """Любая необработанная ошибка → чистый 500 без утечки трейсбека наружу.
     Полная ошибка пишется в лог (и в Sentry, если подключён)."""
-    rid = request.headers.get("X-Request-ID", "-")
+    # Свой номер запроса, а не «-»: обработчик ошибок вызывается ДО middleware,
+    # где номер генерировался, и в теле ответа всегда стояло «-» — спросить у
+    # человека было нечего.
+    rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
     logger.exception("Необработанная ошибка rid=%s %s %s", rid, request.method,
                      request.url.path)
     return JSONResponse(
         status_code=500,
         content={"detail": "Внутренняя ошибка сервера", "request_id": rid},
+        headers=_base_headers(request, rid),
     )
 
 

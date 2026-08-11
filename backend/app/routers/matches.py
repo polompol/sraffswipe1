@@ -145,17 +145,43 @@ def _accrue_commission(db: Session, m: Match) -> None:
 
 
 def _maybe_complete(db: Session, m: Match) -> None:
-    """Обе стороны подтвердили выход — закрываем сразу, не дожидаясь расчёта."""
+    """Обе стороны подтвердили выход — закрываем сразу, не дожидаясь расчёта.
+
+    Но НЕ раньше конца самой смены. Иначе пара аккаунтов набивала себе
+    закрытые смены, рейтинг и бейдж «Платит вовремя» за пару минут: заведение
+    жмёт «человек пришёл», видит собственный код и вводит его за работника —
+    и смена, назначенная на следующую неделю, уже «состоялась».
+    """
     if (
         m.status == "confirmed"
         and m.seeker_checked_in
         and m.employer_checked_in
         and not m.disputed
+        and _shift_is_over(db, m)
     ):
         m.status = "completed"
         m.no_show = False
         _accrue_commission(db, m)
         _sys(db, m.id, "Обе стороны подтвердили выход ✓ Смена закрыта.")
+
+
+def _shift_is_over(db: Session, m: Match) -> bool:
+    """Смена уже закончилась по времени?
+
+    Одно правило на весь модуль. Без него «закрыть смену» и «отметить неявку»
+    работали в любой момент, в том числе за неделю ДО смены, и это ломало сразу
+    три вещи: работник получал ложную неявку и не мог даже отметиться кодом;
+    пара аккаунтов набивала себе рейтинг и бейдж «Платит вовремя» за минуты, не
+    дожидаясь никаких смен; акт «услуги оказаны полностью и в срок» выдавался
+    на работу, которой ещё не было.
+    """
+    v = db.get(Vacancy, m.vacancy_id)
+    if v is None:
+        return True  # смены нет — блокировать нечего
+    try:
+        return datetime.now(UTC) >= shift_end_utc(v.date, v.start_time, v.end_time)
+    except (ValueError, TypeError):
+        return True  # битая дата — не мешаем людям работать
 
 
 def _open_dispute(db: Session, m: Match, note: str) -> None:
@@ -303,6 +329,17 @@ def mark_attendance(
     # по completed-смене и спамил оператора ложными уведомлениями.
     if m.status != "confirmed":
         raise HTTPException(status_code=400, detail="Смена не в статусе подтверждённой")
+
+    # Отметка «не вышел» до начала смены отправляла человека работать по
+    # закрытой смене: он приезжал, отработать успевал, а отметиться уже не мог
+    # — ручка отвечала «смена не подтверждена». Плюс ложная неявка в профиле.
+    # В «Смена не состоялась» эта проверка уже стояла; здесь была вторая дверь.
+    if not body.attended and not _shift_is_over(db, m):
+        raise HTTPException(
+            status_code=409,
+            detail="Смена ещё не закончилась. Если она не нужна — отмените "
+                   "её, так работник успеет перестроиться.",
+        )
 
     if body.attended:
         m.employer_checked_in = True
@@ -519,6 +556,15 @@ def set_actual_hours(
     # усыхал заработок и сумма в акте.
     try:
         ends = shift_end_utc(v.date, v.start_time, v.end_time)
+        # Нижняя граница окна. Её не было, и «уточнить часы» работало ЗА НЕДЕЛЮ
+        # до смены: заведение сразу после подтверждения урезало объявленные
+        # часы вдвое — то есть выдавало себе скидку 50% на комиссию по каждой
+        # смене, без согласия работника.
+        if datetime.now(UTC) < ends:
+            raise HTTPException(
+                status_code=409,
+                detail="Часы уточняют после смены, а не до неё.",
+            )
         if (datetime.now(UTC) - ends).total_seconds() > _HOURS_EDIT_WINDOW_H * 3600:
             raise HTTPException(
                 status_code=409,
@@ -693,10 +739,35 @@ def accept_reschedule(
         raise HTTPException(status_code=403, detail="Только работник смены")
     if not m.reschedule_date:
         raise HTTPException(status_code=404, detail="Переноса не предлагали")
+    if m.status not in ("matched", "confirmed"):
+        raise HTTPException(status_code=409, detail="Смена уже закрыта")
 
     v = db.get(Vacancy, m.vacancy_id)
     if v is None:
         raise HTTPException(status_code=404, detail="Смена не найдена")
+
+    # Согласиться можно только на перенос ещё не начавшейся смены.
+    #
+    # Проверка стояла только на СТОРОНЕ ПРЕДЛОЖЕНИЯ, а принять старое
+    # предложение можно было когда угодно — и это уводило отработанную смену
+    # из-под расчёта навсегда: дата вакансии переезжала в будущее, комиссия не
+    # начислялась, а предложение можно было повторить и крутить бесконечно.
+    # Для честного работника это ловушка: ему приходит «откройте чат, чтобы
+    # согласиться», он жмёт на следующий день, думая, что речь о новой смене,
+    # — и своими руками стирает отработанную.
+    try:
+        if datetime.now(UTC) >= shift_start_utc(v.date, v.start_time):
+            m.reschedule_date = ""
+            m.reschedule_start = None
+            m.reschedule_end = None
+            db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail="Смена уже началась — переносить поздно. "
+                       "Договоритесь в чате о новой смене.",
+            )
+    except (ValueError, TypeError):
+        pass
 
     # Новое время может пересечься с другой сменой человека — предупреждать
     # поздно, он уже согласился, поэтому просто фиксируем это в чате.

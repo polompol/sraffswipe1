@@ -19,6 +19,11 @@ from .billing import commission_overdue, overdue_employer_ids
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 
+# Потолок получателей рассылки «Срочно». У рассылки по сохранённым поискам он
+# есть, а здесь не было: заведение с тремя вызовами в час поднимало столько
+# потоков отправки, сколько в городе людей с отметкой «готов сегодня».
+_URGENT_MAX = 200
+
 
 def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
     """Сколько ЗАКРЫТЫХ смен (completed) у каждого работодателя.
@@ -494,6 +499,8 @@ def urgent_ping(
         f"{v.rate}₽ · {v.address or v.city}"
     )
     for u in seekers:
+        if sent >= _URGENT_MAX:
+            break
         if city and (u.city or "").strip().lower() != city:
             continue
         notify_owner(db, u.id, text)

@@ -13,7 +13,7 @@ import {
   verifyEmployer,
   walletTopup,
 } from "@/api/endpoints";
-import { share, haptic, confirmAction } from "@/telegram/sdk";
+import { share, haptic, confirmAction, openExternal } from "@/telegram/sdk";
 import {
   IconBolt,
   IconGift,
@@ -45,7 +45,7 @@ function CommissionCard() {
     try {
       const { url } = await walletTopup(amount);
       haptic("light");
-      window.open(url, "_blank");
+      openExternal(url);
     } catch {
       haptic("error");
       toast("Не удалось открыть оплату", "error");
@@ -110,7 +110,7 @@ function CommissionCard() {
                   style={{ flex: 1, minWidth: 120, cursor: "pointer" }}
                   onClick={() => {
                     haptic("light");
-                    window.open(billingDocUrl(kind), "_blank");
+                    openExternal(billingDocUrl(kind));
                   }}
                 >
                   {label}

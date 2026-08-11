@@ -27,6 +27,22 @@ def _hdr(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _age(client, match_id: str) -> None:
+    """Домотать смену до конца: закрыть её раньше окончания уже нельзя."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    db = SessionLocal()
+    try:
+        v = db.get(Vacancy, db.get(Match, match_id).vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+
+
 def test_me_endpoint(client):
     token, uid = _auth(client, "seeker")
     r = client.get("/me", headers=_hdr(token))
@@ -110,6 +126,7 @@ def test_review_updates_rating(client):
     # Закрываем смену взаимной отметкой (код прихода → «человек пришёл»).
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(client, match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),

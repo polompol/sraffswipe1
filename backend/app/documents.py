@@ -80,8 +80,15 @@ def _for_period(
     счёт, и получалось наоборот: заведение с балансом (комиссия списывается
     сразу и помечается оплаченной) не могло получить акт вообще.
     """
-    start = f"{period}-01"
-    year, month = (int(x) for x in period.split("-"))
+    # Месяц обязан быть 01–12: строка вроде «2026-13» проходила прежнюю
+    # проверку формата, превращалась в дату «2026-13-01» и роняла документ.
+    try:
+        year, month = (int(x) for x in period.split("-"))
+    except ValueError:
+        raise LookupError("Период указан неверно") from None
+    if not 1 <= month <= 12:
+        raise LookupError("Период указан неверно")
+    start = f"{year:04d}-{month:02d}-01"
     end = f"{year + (month // 12)}-{(month % 12) + 1:02d}-01"
     return (
         db.query(Commission)

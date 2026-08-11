@@ -156,6 +156,26 @@ def test_chat_history_and_send_require_participant(client):
     ).status_code == 200
 
 
+def _close_shift(client, mid: str, emp_h, seeker_h) -> None:
+    """Довести смену до закрытия: акт выдаётся только по закрытой смене."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    db = SessionLocal()
+    try:
+        v = db.get(Vacancy, db.get(Match, mid).vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+    code = [m for m in client.get("/matches", headers=emp_h).json()
+            if m["id"] == mid][0]["checkin_code"]
+    client.post(f"/matches/{mid}/checkin", headers=seeker_h, json={"code": code})
+    client.post(f"/matches/{mid}/attendance", headers=emp_h, json={"attended": True})
+
+
 def test_act_blocked_until_confirmed(client):
     match_id, s_token, e_token = _make_match(client)
     # До подтверждения смены акт недоступен.
@@ -164,6 +184,8 @@ def test_act_blocked_until_confirmed(client):
     ).status_code == 409
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(s_token))
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(e_token))
+    # Акт — документ о ВЫПОЛНЕННОЙ работе, поэтому только по закрытой смене.
+    _close_shift(client, match_id, _hdr(e_token), _hdr(s_token))
     # После подтверждения — PDF отдаётся.
     assert client.get(
         f"/matches/{match_id}/act.pdf?token={s_token}"

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, Match, User, Vacancy
+from ..ratelimit import rate_limit_ip
 from ..roles import role_ru
 from ..rubles import plural, rubles_in_words
 from ..security import decode_token, ensure_token_usable
@@ -56,7 +57,14 @@ def act_number(match_id: str) -> str:
     return f"{zlib.crc32(match_id.encode()) % 100000:05d}"
 
 
-@router.get("/{match_id}/act.pdf")
+@router.get(
+    "/{match_id}/act.pdf",
+    # Генерация PDF — ~40 мс процессора на запрос, а токен передаётся в
+    # адресе: гонять можно было чем угодно, хоть curl в цикле. Лимит по IP,
+    # а не по аккаунту: заголовка Authorization здесь нет — браузер открывает
+    # PDF по прямой ссылке и заголовков не шлёт.
+    dependencies=[Depends(rate_limit_ip("act", 20, 60))],
+)
 def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     # Браузер открывает PDF через window.open — токен передаётся как query-параметр.
     principal = decode_token(token)
@@ -70,10 +78,14 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["id"] not in (m.user_id, m.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа к акту")
-    # Акт выполненных работ имеет смысл только для подтверждённой смены.
-    if m.status not in ("confirmed", "completed"):
+    # Только по ЗАКРЫТОЙ смене. Раньше акт выдавался и по «подтверждённой»,
+    # то есть за неделю до самой смены: получался первичный бухгалтерский
+    # документ «услуги оказаны полностью и в срок» на работу, которой ещё не
+    # было, — и с ИНН обеих сторон внутри.
+    if m.status != "completed":
         raise HTTPException(
-            status_code=409, detail="Акт доступен после подтверждения смены"
+            status_code=409,
+            detail="Акт будет доступен после закрытия смены.",
         )
     vac = db.get(Vacancy, m.vacancy_id)
     emp = db.get(Employer, m.employer_id)

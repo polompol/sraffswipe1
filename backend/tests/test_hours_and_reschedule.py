@@ -50,7 +50,23 @@ def _pair(client, tg_emp, tg_seeker, rate=400, rate_type="perHour", headcount=1)
     return emp_h, seeker_h, sid, v, mid
 
 
+def _age(match_id: str, days: int = 1) -> None:
+    """Домотать смену до конца: закрыть её раньше окончания уже нельзя."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Vacancy
+
+    db = SessionLocal()
+    try:
+        v = db.get(Vacancy, db.get(Match, match_id).vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+
+
 def _close(client, emp_h, seeker_h, mid):
+    _age(mid)
     rows = client.get("/matches", headers=emp_h).json()
     code = [m for m in rows if m["id"] == mid][0]["checkin_code"]
     client.post(f"/matches/{mid}/checkin", headers=seeker_h, json={"code": code})
@@ -71,6 +87,7 @@ def _commission(mid):
 def test_short_shift_reduces_pay_and_commission(client):
     """Ушёл через 4 часа вместо 8 — платим и берём комиссию по факту."""
     emp_h, seeker_h, sid, v, mid = _pair(client, 880001, 880002)
+    _age(mid)
     r = client.post(f"/matches/{mid}/hours", headers=emp_h,
                     json={"minutes": 240, "note": "отпустили раньше"})
     assert r.status_code == 200, r.text
@@ -85,6 +102,7 @@ def test_short_shift_reduces_pay_and_commission(client):
 def test_worker_sees_the_change(client):
     """Молча уменьшать оплату нельзя — человек должен видеть и мочь спорить."""
     emp_h, seeker_h, sid, v, mid = _pair(client, 880010, 880011)
+    _age(mid)
     client.post(f"/matches/{mid}/hours", headers=emp_h,
                 json={"minutes": 300, "note": "ушёл раньше"})
     msgs = client.get(f"/matches/{mid}/messages", headers=seeker_h).json()
@@ -98,6 +116,7 @@ def test_worker_sees_the_change(client):
 def test_longer_shift_increases_pay(client):
     """Задержался — платим больше, а не «как договаривались»."""
     emp_h, seeker_h, sid, v, mid = _pair(client, 880020, 880021)
+    _age(mid)
     r = client.post(f"/matches/{mid}/hours", headers=emp_h, json={"minutes": 600})
     assert r.json()["shift_pay"] == 4000      # 10 ч × 400 ₽
 
@@ -106,6 +125,7 @@ def test_per_shift_rate_is_not_recalculated(client):
     """Посменная оплата от часов не зависит: договорились на смену целиком."""
     emp_h, seeker_h, sid, v, mid = _pair(
         client, 880030, 880031, rate=3000, rate_type="perShift")
+    _age(mid)
     r = client.post(f"/matches/{mid}/hours", headers=emp_h, json={"minutes": 240})
     assert r.json()["shift_pay"] == 3000
 
@@ -132,6 +152,7 @@ def test_paid_commission_is_not_touched(client):
 
 def test_only_employer_sets_hours(client):
     emp_h, seeker_h, sid, v, mid = _pair(client, 880050, 880051)
+    _age(mid)
     r = client.post(f"/matches/{mid}/hours", headers=seeker_h,
                     json={"minutes": 600})
     assert r.status_code == 403

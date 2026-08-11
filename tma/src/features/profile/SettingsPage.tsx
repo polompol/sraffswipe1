@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { applyTheme, currentTheme } from "@/lib/theme";
-import { haptic, showBackButton } from "@/telegram/sdk";
+import { haptic, showBackButton , openExternal } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 import { IconHelp } from "@/components/Icons";
 import { LEGAL_LINKS } from "@/lib/legal";
@@ -176,8 +176,7 @@ export function SettingsPage() {
             <a
               key={l.href}
               href={l.href}
-              target="_blank"
-              rel="noreferrer"
+              onClick={(e) => { e.preventDefault(); openExternal(l.href); }}
               style={{ minHeight: 44, display: "flex", alignItems: "center" }}
             >
               {l.title}

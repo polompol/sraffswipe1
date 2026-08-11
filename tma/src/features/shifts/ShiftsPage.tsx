@@ -4,6 +4,7 @@ import { fetchMatches } from "@/api/endpoints";
 import { baseURL, getToken } from "@/api/client";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
 import { shiftWhen } from "@/lib/format";
+import { openExternal } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
@@ -23,7 +24,7 @@ export function ShiftsPage() {
   function downloadAct(matchId: string) {
     const token = getToken();
     const url = `${baseURL}/matches/${matchId}/act.pdf${token ? `?token=${token}` : ""}`;
-    window.open(url, "_blank");
+    openExternal(url);
   }
 
   return (

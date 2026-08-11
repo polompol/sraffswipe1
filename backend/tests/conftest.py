@@ -27,3 +27,31 @@ def client():
     reset_rate_limit()
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def age_shift():
+    """Перемотать смену мэтча в прошлое.
+
+    Закрыть смену (и отметить неявку, и уточнить часы) теперь можно только
+    ПОСЛЕ её окончания: без этого правила пара аккаунтов набивала себе
+    закрытые смены и рейтинг за минуты, а работник мог получить ложную неявку
+    ещё до того, как выйдет на работу. Тестам, которые проверяют закрытие,
+    нужно сначала довести смену до конца.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    def _age(match_id: str, days: int = 1) -> None:
+        db = SessionLocal()
+        try:
+            m = db.get(Match, match_id)
+            v = db.get(Vacancy, m.vacancy_id)
+            v.date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
+            db.commit()
+        finally:
+            db.close()
+
+    return _age
