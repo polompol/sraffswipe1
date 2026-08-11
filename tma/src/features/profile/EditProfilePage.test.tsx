@@ -16,6 +16,8 @@ vi.mock("@/api/endpoints", () => ({
 vi.mock("@/telegram/sdk", () => ({
   showBackButton: () => () => {},
   haptic: () => {},
+  // Защита от случайного закрытия: в тесте — заглушка.
+  guardClosing: () => {},
 }));
 vi.mock("@/store/session", () => ({
   useSession: (sel: (s: { role: string }) => unknown) => sel({ role: currentRole }),
