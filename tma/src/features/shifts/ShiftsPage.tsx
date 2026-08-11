@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchMatches } from "@/api/endpoints";
 import { baseURL, getToken } from "@/api/client";
 import { MATCH_STATUS_LABELS } from "@/types/domain";
+import { shiftWhen } from "@/lib/format";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
@@ -45,9 +46,10 @@ export function ShiftsPage() {
       <div className="stagger" style={{ display: "grid", gap: 12 }}>
         {shifts.map((m) => (
           <div key={m.id} className="card">
-            <div className="row">
-              <b>{m.companyName ?? "Заведение"}</b>
-              <span className="spacer" />
+            <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+              <b style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+                {m.companyName ?? "Заведение"}
+              </b>
               {/* Разный цвет по смыслу: «подтверждена» — впереди, «завершена»
                   — уже отработана. Раньше оба статуса были одинаковыми. */}
               <span
@@ -61,6 +63,18 @@ export function ShiftsPage() {
                 {MATCH_STATUS_LABELS[m.status]}
               </span>
             </div>
+            {/* Когда смена и сколько за неё. В собственном списке смен этих
+                двух фактов не было вообще — оставались название заведения и
+                кнопка «скачать акт». */}
+            {shiftWhen(m) && (
+              <div className="muted" style={{ marginTop: 6 }}>{shiftWhen(m)}</div>
+            )}
+            {!!m.shiftPay && m.shiftPay > 0 && (
+              <div style={{ marginTop: 4, fontWeight: 800, fontSize: 17 }}>
+                {m.shiftPay.toLocaleString("ru-RU")} ₽
+                {m.status === "completed" ? " заработано" : " за смену"}
+              </div>
+            )}
             <div style={{ marginTop: 12 }}>
               <Button variant="secondary" onClick={() => downloadAct(m.id)}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>

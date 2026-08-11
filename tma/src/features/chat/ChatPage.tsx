@@ -357,8 +357,10 @@ export function ChatPage() {
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <IconCheck size={17} />
+              {/* Без второй галочки в тексте: слева уже стоит иконка, и
+                  вместе получалось «✓ Смена подтверждена ✓». */}
               {bothConfirmed
-                ? "Смена подтверждена ✓"
+                ? "Смена подтверждена"
                 : iConfirmed
                   ? "Ждём подтверждения второй стороны"
                   : "Подтвердить смену"}

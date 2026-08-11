@@ -72,5 +72,11 @@ npm run lint && npx tsc --noEmit && npx vitest run && npm run build
 Продукт готов к пилоту. Рабочая ветка — `claude/staffswipe-flutter-app-6oqk55`
 (в `main` ещё нет ни redis, ни планировщика). Ожидает: сервер + домен + токен бота
 (см. docs/LAUNCH.md). Автосписание ЮKassa доступно самозанятому БЕЗ ИП (чек —
-в «Мой налог», yookassa_send_receipt=false). Отложено до триггеров:
-эскроу, селфи-чекин, авто-закрытие смен по таймеру.
+в «Мой налог», yookassa_send_receipt=false).
+
+Планировщик (`scheduler`, отдельный процесс): reminders 9:00, aftershift 9:30,
+settle 14:00, unfilled 19:00, reconcile 4:30 — по `BUSINESS_TZ`, повтор за день
+блокируется таблицей `job_runs`. Без него смены не закрываются и комиссия не
+начисляется вообще.
+
+Отложено до триггеров: эскроу, селфи-чекин.
