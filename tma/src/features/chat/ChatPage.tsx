@@ -6,7 +6,7 @@ import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeResc
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
-import { fmtTime } from "@/lib/format";
+import { fmtTime, shiftEnded, shiftStarted, shiftWhen } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
@@ -82,13 +82,20 @@ export function ChatPage() {
   // Смена ещё «живая»: не отменена и не закрыта сама собой.
   const alive =
     !!srvMatch && !["cancelled", "expired", "completed"].includes(srvMatch.status);
-  // Никто ещё не отметился — значит смена не началась: можно переносить и
-  // отменять. После отметки остаётся только уточнение часов и спор.
+  // Смена ещё не началась — по отметкам И ПО ВРЕМЕНИ. Только по отметкам было
+  // мало: сервер теперь отказывает в отмене и переносе начавшейся смены (это
+  // была универсальная кнопка «не платить»), а приложение об этом не знало и
+  // показывало кнопки, которые отвечали ошибкой.
   const notStarted =
-    !!srvMatch && !srvMatch.seekerCheckedIn && !srvMatch.employerCheckedIn;
+    !!srvMatch
+    && !srvMatch.seekerCheckedIn
+    && !srvMatch.employerCheckedIn
+    && !shiftStarted(srvMatch);
   const canCancel = alive && notStarted;
   const canMove = role === "employer" && alive && notStarted;
-  const canSetHours = role === "employer" && alive;
+  // Уточнить часы можно только в первые сутки после смены.
+  const canSetHours =
+    role === "employer" && alive && !!srvMatch && shiftEnded(srvMatch);
   const canAct = canCancel || canMove || canSetHours;
 
   // Добавить сообщение в кэш с дедупликацией по id (echo от WS не задвоит).
@@ -262,7 +269,16 @@ export function ChatPage() {
           <button className="icon-btn" aria-label="Назад" onClick={() => nav(-1)}>
             <IconBack size={22} />
           </button>
-          <b style={{ flex: 1 }}>Чат по смене</b>
+          {/* Когда смена — прямо в шапке. Раньше в чате не было ни даты, ни
+              времени: человек договорился и потом искал их в переписке. */}
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ display: "block" }}>Чат по смене</b>
+            {srvMatch && shiftWhen(srvMatch) && (
+              <span className="muted" style={{ fontSize: 13 }}>
+                {shiftWhen(srvMatch)}
+              </span>
+            )}
+          </span>
           <button
             className="icon-btn"
             style={{ color: "var(--muted)" }}

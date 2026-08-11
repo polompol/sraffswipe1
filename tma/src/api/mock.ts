@@ -178,6 +178,9 @@ const matches: MatchModel[] = [
     seekerCheckedIn: false,
     employerCheckedIn: false,
     shiftPay: 2800,
+    shiftDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    shiftStart: 8 * 60,
+    shiftEnd: 16 * 60,
   },
 ];
 const messagesByMatch: Record<string, Message[]> = {

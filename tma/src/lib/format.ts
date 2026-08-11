@@ -69,3 +69,48 @@ export function plural(n: number, one: string, few: string, many: string): strin
   if (b === 1) return one;
   return many;
 }
+
+/** Момент начала/конца смены по времени телефона. Пусто — считаем, что смена
+ *  ещё не начиналась: лучше показать лишнюю кнопку, чем спрятать нужную. */
+function shiftMoment(date?: string, minutes?: number): Date | null {
+  if (!date) return null;
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const at = new Date(y, m - 1, d, 0, 0, 0, 0);
+  at.setMinutes(minutes ?? 0);
+  return at;
+}
+
+/** Смена уже началась? Отменять и переносить её поздно — сервер откажет. */
+export function shiftStarted(m: {
+  shiftDate?: string;
+  shiftStart?: number;
+}): boolean {
+  const at = shiftMoment(m.shiftDate, m.shiftStart);
+  return at !== null && Date.now() >= at.getTime();
+}
+
+/** Смена уже закончилась? Только после этого можно сказать «не состоялась».
+ *  Ночная смена (конец меньше начала) заканчивается на следующий день. */
+export function shiftEnded(m: {
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
+}): boolean {
+  const at = shiftMoment(m.shiftDate, m.shiftEnd);
+  if (at === null) return false;
+  if ((m.shiftEnd ?? 0) <= (m.shiftStart ?? 0)) {
+    at.setDate(at.getDate() + 1);
+  }
+  return Date.now() >= at.getTime();
+}
+
+/** «12 августа, 10:00–18:00» — одной строкой для карточки смены. */
+export function shiftWhen(m: {
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
+}): string {
+  if (!m.shiftDate) return "";
+  return `${shiftDayLabel(m.shiftDate)} · ${fmtTime(m.shiftStart ?? 0)}–${fmtTime(m.shiftEnd ?? 0)}`;
+}

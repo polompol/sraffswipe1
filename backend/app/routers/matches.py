@@ -351,6 +351,9 @@ def _to_out(
         employer_checked_in=m.employer_checked_in,
         shift_pay=pay,
         disputed=m.disputed,
+        shift_date=v.date if v is not None else "",
+        shift_start=v.start_time if v is not None else 0,
+        shift_end=v.end_time if v is not None else 0,
     )
 
 

@@ -106,9 +106,9 @@ export type MatchStatus = "matched" | "confirmed" | "completed" | "cancelled" | 
 export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
   matched: "Мэтч",
   confirmed: "Смена подтверждена",
-  completed: "Завершено",
+  completed: "Смена закрыта",
   cancelled: "Отменена",
-  expired: "Не отмечена",
+  expired: "Не состоялась",
 };
 
 export type ExperienceTag =
@@ -213,6 +213,12 @@ export interface MatchModel {
   employerCheckedIn?: boolean;
   disputed?: boolean;
   shiftPay?: number; // оплата смены, ₽ — для празднования дохода при закрытии
+  /** Когда смена. Раньше приложение не знало о ней ничего, кроме названия
+   *  заведения: человек открывал чат и не видел, на какой день и час он
+   *  вообще договорился. По этим же полям видно, какие действия ещё уместны. */
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
 }
 
 export interface Message {

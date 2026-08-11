@@ -10,6 +10,7 @@ import { ReviewStars } from "@/components/ReviewStars";
 import { IconTabMatches, IconCheck, IconWarning, IconChevronRight } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
+import { shiftEnded, shiftWhen } from "@/lib/format";
 import { Button } from "@/components/Button";
 import { haptic, confirmAction } from "@/telegram/sdk";
 
@@ -170,9 +171,17 @@ export function MatchesPage() {
                 src={m.companyPhotoUrl}
                 initial={(m.companyName || "З").charAt(0)}
               />
-              <span style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{m.companyName ?? "Заведение"}</div>
-                <div className="muted">{MATCH_STATUS_LABELS[m.status]}</div>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
+                  {m.companyName ?? "Заведение"}
+                </div>
+                {/* Дата и время смены. Их не было видно нигде: человек
+                    открывал список мэтчей и не понимал, на какой день он
+                    вообще договорился. */}
+                {shiftWhen(m) && <div className="muted">{shiftWhen(m)}</div>}
+                <div className="muted" style={{ fontSize: 13 }}>
+                  {MATCH_STATUS_LABELS[m.status]}
+                </div>
               </span>
               <span style={{ color: "var(--muted)", display: "inline-flex" }}>
                 <IconChevronRight size={20} />
@@ -304,13 +313,18 @@ export function MatchesPage() {
                     состоялась» — заметная кнопка, а не мелкая ссылка: это
                     единственный способ не платить за смену, которой не было,
                     и человек должен её увидеть, не разыскивая. */}
-                <button
-                  className="btn ghost"
-                  style={{ marginTop: 10, minHeight: 44, fontSize: 14 }}
-                  onClick={() => doNotHeld(m.id)}
-                >
-                  Смена не состоялась
-                </button>
+                {/* Только после окончания смены: заявить «не состоялась»
+                    раньше — значит отправить человека работать по отменённой
+                    смене. До начала для отказа есть отмена в чате. */}
+                {shiftEnded(m) && (
+                  <button
+                    className="btn ghost"
+                    style={{ marginTop: 10, minHeight: 44, fontSize: 14 }}
+                    onClick={() => doNotHeld(m.id)}
+                  >
+                    Смена не состоялась
+                  </button>
+                )}
 
                 {/* Путь спора — обеим сторонам. */}
                 {/* Раньше здесь стоял класс .tab — это класс нижней навигации
