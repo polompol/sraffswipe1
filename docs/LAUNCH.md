@@ -122,7 +122,8 @@ git checkout claude/staffswipe-flutter-app-6oqk55
 начисляется вообще** — сервис будет работать, а денег не принесёт. После
 слияния в `main` переключаться обратно: `git checkout main`.
 
-Сгенерировать секреты (выведет три случайные строки):
+Сгенерировать секреты (выведет четыре готовые строки, у каждой слева
+написано её имя):
 
 ```sh
 bash scripts/gen-secrets.sh
@@ -142,9 +143,9 @@ nano .env
 | `DOMAIN=` | `app.твойдомен.ру` (без https://) |
 | `TELEGRAM_BOT_TOKEN=` | токен из шага 1 |
 | `BOT_USERNAME=` | username бота без @ (напр. `staffswipe_bot`) |
-| `POSTGRES_PASSWORD=` | 1-я строка из gen-secrets.sh |
-| `JWT_SECRET=` | 2-я строка |
-| `INTERNAL_API_SECRET=` | 3-я строка |
+| `POSTGRES_PASSWORD=` | значение из строки `POSTGRES_PASSWORD=` в выводе gen-secrets.sh |
+| `JWT_SECRET=` | значение из строки `JWT_SECRET=` |
+| `INTERNAL_API_SECRET=` | значение из строки `INTERNAL_API_SECRET=` |
 | `ADMIN_TG_IDS=` | твой Telegram-id (узнать у бота **@userinfobot**) |
 | `VITE_SUPPORT_URL=` | ссылка на твой чат поддержки, напр. `https://t.me/имя_чата`. Пусто — кнопка «Написать в поддержку» ведёт в чужой несуществующий чат |
 | `VITE_OFFER_URL=` | оставь пустым — оферта открывается из самого приложения |
@@ -239,14 +240,17 @@ Button → Configure menu button**, URL `https://app.твойдомен.ру`, �
       и предложить кнопку запуска, а не промолчать.
 - [ ] Открой `https://app.твойдомен.ру` в обычном браузере телефона (не в
       Telegram) → меню → «Добавить на главный экран». На экране появится
-      фирменная иконка, приложение откроется без адресной строки.
+      фирменная иконка, и приложение откроется без адресной строки. Внутри
+      будет экран «StaffSwipe работает в Telegram» с кнопкой — **так и
+      задумано**: входа без Telegram нет вовсе, там нет ни пароля, ни номера
+      телефона. Значок на экране — просто короткий путь в приложение.
 
 Всё прошло — **ты в проде**.
 
 ## Шаг 10. Как обновлять приложение потом
 
 ```sh
-cd sraffswipe1
+cd ~/sraffswipe1
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
@@ -271,8 +275,8 @@ docker compose -f docker-compose.prod.yml up -d --build
    Нужны паспорт + ИНН, расчётный счёт НЕ требуется, абонплаты нет —
    только комиссия за проведённые платежи.
 2. Получи `SHOP_ID` и `SECRET_KEY`, впиши в `.env`: `YOOKASSA_SHOP_ID`,
-   `YOOKASSA_SECRET_KEY`, отдельный `YOOKASSA_WEBHOOK_SECRET` (сгенерируй
-   командой `openssl rand -hex 32`), перезапусти. Кнопки «Пополнить картой»
+   `YOOKASSA_SECRET_KEY`, отдельный `YOOKASSA_WEBHOOK_SECRET` (это
+   четвёртая строка из `scripts/gen-secrets.sh`), перезапусти. Кнопки «Пополнить картой»
    в приложении включатся сами.
 3. **Обязательно: настрой уведомление в кабинете ЮKassa.** Без этого шага
    деньги придут на счёт ЮKassa, а баланс заведения в приложении НЕ

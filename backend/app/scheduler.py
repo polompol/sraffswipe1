@@ -61,7 +61,11 @@ def _run_job(db: Session, name: str) -> int:
             return 0
         from .reconcile import reconcile
 
-        return int(reconcile(db, hours=48).get("credited", 0))
+        # Ключ именно `restored`: «credited» такого ключа нет, и ночная
+        # сверка всегда писала в журнал «выполнена: 0» — даже в ту ночь,
+        # когда подобрала потерянный платёж. Единственный признак, что
+        # вебхук не дошёл, выглядел как «ничего не произошло».
+        return int(reconcile(db, hours=48).get("restored", 0))
     raise ValueError(f"неизвестная задача: {name}")
 
 

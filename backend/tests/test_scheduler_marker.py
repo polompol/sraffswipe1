@@ -50,6 +50,31 @@ def test_forged_event_row_does_not_stop_scheduler(client):
         db.close()
 
 
+def test_reconcile_reports_what_it_actually_restored(client, monkeypatch):
+    """Ночная сверка должна писать в журнал настоящее число, а не ноль.
+
+    Она читала из ответа ключ, которого там нет, и всегда сообщала «0» —
+    даже в ту ночь, когда подобрала потерянный платёж. А «0» здесь и есть
+    нормальная ночь: отличить её от найденной пропажи было невозможно.
+    """
+    from app import reconcile as rec
+    from app import scheduler as sch
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "yookassa_shop_id", "shop", False)
+    monkeypatch.setattr(settings, "yookassa_secret_key", "key", False)
+    monkeypatch.setattr(
+        rec, "reconcile",
+        lambda db, hours=48: {"checked": 5, "restored": 2,
+                              "restored_rub": 6000, "skipped": 3},
+    )
+    db = SessionLocal()
+    try:
+        assert sch._run_job(db, "reconcile") == 2
+    finally:
+        db.close()
+
+
 def test_marker_is_idempotent(client):
     """Два планировщика в одну секунду не отправят людям по два сообщения."""
     day = local_today()

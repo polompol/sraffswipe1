@@ -147,6 +147,10 @@ services:
       ALLOW_INSECURE_TELEGRAM_AUTH: "false"
       MINI_APP_URL: https://${DOMAIN}
       BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
+      # Кому писать, если ночная задача захочет позвать оператора. Сегодня
+      # она молчит, но пустая строка здесь означала бы, что первое же такое
+      # сообщение уйдёт в никуда и никто этого не заметит.
+      ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
       # Сверка платежей ходит в ЮKassa читать список успешных.
       YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
       YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
