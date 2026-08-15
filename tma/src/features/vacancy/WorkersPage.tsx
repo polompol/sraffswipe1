@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
 import { IconCheck, IconBolt } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { reliabilityText } from "@/lib/reliability";
 import { apiError } from "@/lib/errors";
 
 /** «Мои работники» — кто уже выходил, чтобы позвать снова (постоянство). */
@@ -66,7 +67,9 @@ export function WorkersPage() {
               </div>
               <div className="muted" style={{ marginTop: 4 }}>
                 ★ {w.rating.toFixed(1)}
-                {w.shiftsTotal > 0 ? ` · вышел на ${w.shiftsAttended} из ${w.shiftsTotal} смен` : ""}
+                {w.shiftsTotal > 0
+                  ? ` · ${reliabilityText(w.shiftsTotal, w.shiftsAttended, w.employersTotal)}`
+                  : ""}
               </div>
               <button
                 className="btn secondary"

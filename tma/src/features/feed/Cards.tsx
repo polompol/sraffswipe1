@@ -32,6 +32,7 @@ import {
 } from "@/components/Icons";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { reliabilityText } from "@/lib/reliability";
 import { haptic } from "@/telegram/sdk";
 
 const PAY_ICON: Record<PayMethod, typeof IconCash> = {
@@ -339,7 +340,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
                 текстом. Теперь она прямо под должностью. */}
             <div className="swipe-hero-cap">
               {s.shiftsTotal
-                ? `вышел на ${s.shiftsAttended ?? 0} из ${s.shiftsTotal} смен`
+                ? reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)
                 : "новичок в сервисе"}
             </div>
           </>
@@ -393,7 +394,8 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         <div className="card-meta" style={{ marginTop: 10 }}>
           {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
-              <IconCheck size={15} /> Вышел на {s.shiftsAttended ?? 0} из {s.shiftsTotal} смен
+              <IconCheck size={15} />{" "}
+              {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
             </div>
           )}
           <div>

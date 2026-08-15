@@ -10,6 +10,10 @@ from app.models import Commission, Employer, Match, User, Vacancy
 from app.timeutil import local_today
 
 
+def _tomorrow():
+    return (date.fromisoformat(local_today()) + timedelta(days=1)).isoformat()
+
+
 def _auth(client, role):
     r = client.post("/auth/telegram",
                     json={"init_data": "", "role": role}).json()
@@ -29,10 +33,16 @@ def _detach(owner_id, tg_id):
 
 
 def _pair(client, tg_emp, tg_seeker, rate=400, rate_type="perHour", headcount=1):
-    """Пара с подтверждённой сменой 10:00–18:00 (8 часов)."""
+    """Пара с подтверждённой сменой 10:00–18:00 (8 часов) — на ЗАВТРА.
+
+    Именно завтра, а не сегодня: отменить и перенести можно только смену,
+    которая ещё не началась. Со «сегодня, 10:00» половина тестов этого файла
+    проходила до десяти утра по Москве и падала после — код при этом был
+    исправен. Тесты, которым нужна ПРОШЕДШАЯ смена, домотают её сами (_age).
+    """
     emp_h, eid = _auth(client, "employer")
     v = client.post("/vacancies", headers=emp_h, json={
-        "role": "waiter", "date": local_today(), "start_time": 600,
+        "role": "waiter", "date": _tomorrow(), "start_time": 600,
         "end_time": 1080, "rate": rate, "rate_type": rate_type,
         "headcount": headcount,
         "lat": 55.75, "lng": 37.61, "address": "Никольская, 10",
@@ -159,10 +169,6 @@ def test_absurd_hours_are_rejected(client):
 
 # ---------- перенос смены ----------
 
-def _tomorrow():
-    return (date.fromisoformat(local_today()) + timedelta(days=1)).isoformat()
-
-
 def test_reschedule_needs_the_workers_consent(client):
     """Условия смены человек уже принял — менять их односторонне нельзя."""
     emp_h, seeker_h, sid, v, mid = _pair(client, 880070, 880071)
@@ -173,7 +179,7 @@ def test_reschedule_needs_the_workers_consent(client):
 
     db = SessionLocal()
     try:
-        assert db.get(Vacancy, v["id"]).date == local_today(), (
+        assert db.get(Vacancy, v["id"]).date == v["date"], (
             "смена не должна меняться до согласия работника"
         )
     finally:
@@ -201,7 +207,7 @@ def test_worker_can_decline_and_the_shift_stays(client):
 
     db = SessionLocal()
     try:
-        assert db.get(Vacancy, v["id"]).date == local_today()
+        assert db.get(Vacancy, v["id"]).date == v["date"]
     finally:
         db.close()
 

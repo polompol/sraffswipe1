@@ -1,3 +1,11 @@
+// Нижняя граница оплаты смены. Держится в паре с backend/app/schemas.py —
+// там она обязательна к соблюдению, здесь нужна, чтобы человек узнал об
+// ошибке до того, как заполнит форму до конца. Смысл границы: смена за
+// бесценок — не предложение работы, а способ бесплатно накрутить репутацию
+// парой сговорившихся аккаунтов (за неё не берётся комиссия).
+export const MIN_RATE_PER_HOUR = 100;
+export const MIN_RATE_PER_SHIFT = 500;
+
 // Доменные типы — зеркало backend (app/schemas.py) и Flutter (lib/data/models).
 
 export type AppRole = "seeker" | "employer";
@@ -154,6 +162,7 @@ export interface Seeker {
   availableToday?: boolean;
   shiftsTotal?: number; // надёжность: всего подтверждённых смен
   shiftsAttended?: number; // из них вышел
+  employersTotal?: number; // со сколькими РАЗНЫМИ заведениями работал
 }
 
 export interface Vacancy {

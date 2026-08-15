@@ -370,18 +370,19 @@ export interface Worker {
   availableToday: boolean;
   shiftsTotal: number;
   shiftsAttended: number;
+  employersTotal?: number;
 }
 
 /** Работники, уже выходившие на смены заведения — чтобы позвать снова. */
 export async function fetchMyWorkers(): Promise<Worker[]> {
   if (!USE_BACKEND) return mock.fetchMyWorkers();
-  const { data } = await api.get<
-    { id: string; name: string; rating: number; available_today: boolean; shifts_total: number; shifts_attended: number }[]
-  >("/employer/workers");
-  return data.map((w) => ({
-    id: w.id, name: w.name, rating: w.rating, availableToday: w.available_today,
-    shiftsTotal: w.shifts_total, shiftsAttended: w.shifts_attended,
-  }));
+  // Имена полей — уже camelCase: ответы переименовывает перехватчик в
+  // client.ts. Здесь читались серверные имена со знаком подчёркивания, то
+  // есть всегда undefined: на экране «Мои работники» пропадали и надёжность
+  // («вышел на N из M»), и отметка «готов сегодня». В mock-режиме всё
+  // выглядело правильно — потому и не замечалось.
+  const { data } = await api.get<Worker[]>("/employer/workers");
+  return data;
 }
 
 /**
@@ -409,6 +410,7 @@ export interface Applicant {
   availableToday: boolean;
   shiftsTotal: number;
   shiftsAttended: number;
+  employersTotal?: number;
   vacancyId: string;
   vacancyRole: string;
   vacancyDate: string;
@@ -683,9 +685,9 @@ export async function writeOffCommission(
   reason: string,
 ): Promise<number> {
   if (!USE_BACKEND) return mock.writeOffCommission();
-  const { data } = await api.post<{ amount_rub: number }>(
+  const { data } = await api.post<{ amountRub: number }>(
     `/admin/commissions/${employerId}/write-off`, { reason });
-  return data.amount_rub;
+  return data.amountRub;
 }
 
 /** Вернуть деньги с баланса заведения (возврат или исправление ошибки). */
@@ -983,7 +985,15 @@ export async function uploadPhoto(file: File): Promise<string> {
     fields: Record<string, string>;
     public_url: string;
     max_bytes: number;
-  }>("/uploads/photo-url", { content_type: file.type, head_hex: headHex });
+  }>(
+    "/uploads/photo-url",
+    { content_type: file.type, head_hex: headHex },
+    // raw: поля формы подписаны хранилищем, переименование ломает подпись.
+    // Заодно это чинило бы саму загрузку: без него адрес хранилища приезжал
+    // как undefined, и файл уходил «в никуда» — на пилоте с подключённым
+    // S3 фото не сохранялось бы вообще.
+    { raw: true },
+  );
 
   if (file.size > data.max_bytes) {
     throw new Error(

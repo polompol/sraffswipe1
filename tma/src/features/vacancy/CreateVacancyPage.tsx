@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/domain";
+import { MIN_RATE_PER_HOUR, MIN_RATE_PER_SHIFT } from "@/types/domain";
 import {
   PAY_METHOD_LABELS,
   ROLE_FAMILIES,
@@ -90,6 +91,21 @@ export function CreateVacancyPage() {
     }
     if (!city.trim()) {
       toast("Укажите город", "error");
+      return;
+    }
+    // Нижняя граница оплаты. Сервер такую смену не примет, и без проверки
+    // здесь человек получил бы отказ уже после нажатия «Опубликовать» —
+    // с длинной формой это самый обидный момент. Заодно ловится случайный
+    // ноль (стёр ставку, забыл вписать заново).
+    const rateNum = Number(rate) || 0;
+    const minRate = rateType === "perHour" ? MIN_RATE_PER_HOUR : MIN_RATE_PER_SHIFT;
+    if (rateNum < minRate) {
+      toast(
+        rateType === "perHour"
+          ? `Ставка не может быть ниже ${minRate} ₽ в час`
+          : `Оплата за смену не может быть ниже ${minRate} ₽`,
+        "error",
+      );
       return;
     }
     setBusy(true);
@@ -228,7 +244,14 @@ export function CreateVacancyPage() {
 
         <div className="form-label">Ставка</div>
         <div className="row" style={{ marginBottom: 12 }}>
-          <input className="input" type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
+          <input
+            className="input"
+            type="number"
+            inputMode="numeric"
+            min={rateType === "perHour" ? MIN_RATE_PER_HOUR : MIN_RATE_PER_SHIFT}
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
           <button
             className="tag"
             style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border)" }}

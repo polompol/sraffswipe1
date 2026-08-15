@@ -136,6 +136,7 @@ const SEEKERS: Seeker[] = [
     availableToday: true,
     shiftsTotal: 12,
     shiftsAttended: 12,
+    employersTotal: 5,
   },
   {
     id: "s3",
@@ -155,6 +156,7 @@ const SEEKERS: Seeker[] = [
     about: "Холодный и горячий цех, опыт 2 года.",
     shiftsTotal: 4,
     shiftsAttended: 3,
+    employersTotal: 2,
   },
 ];
 
@@ -822,8 +824,8 @@ export function urgentPing(_vacancyId: string): Promise<number> {
 
 export function fetchMyWorkers() {
   return Promise.resolve([
-    { id: "s2", name: "Мария", rating: 4.9, availableToday: true, shiftsTotal: 12, shiftsAttended: 12 },
-    { id: "s3", name: "Иван", rating: 4.4, availableToday: false, shiftsTotal: 4, shiftsAttended: 3 },
+    { id: "s2", name: "Мария", rating: 4.9, availableToday: true, shiftsTotal: 12, shiftsAttended: 12, employersTotal: 5 },
+    { id: "s3", name: "Иван", rating: 4.4, availableToday: false, shiftsTotal: 4, shiftsAttended: 3, employersTotal: 2 },
   ]);
 }
 

@@ -50,14 +50,23 @@ class CandidateOut(BaseModel):
     # Надёжность: вышел на `attended` из `shifts_total` подтверждённых смен.
     shifts_total: int = 0
     shifts_attended: int = 0
+    # Со сколькими РАЗНЫМИ заведениями человек уже работал. Без этой цифры
+    # «вышел на 12 из 12» ничем не отличалось от двенадцати смен, закрытых
+    # с одним и тем же дружественным (или своим же, заведённым на второй
+    # Telegram-аккаунт) заведением. Теперь накрутка видна сразу: 12 смен и
+    # 1 заведение — это не опыт, а один и тот же человек с двух сторон.
+    employers_total: int = 0
 
 
 def _csv(value: str) -> list[str]:
     return [x for x in (value or "").split(",") if x]
 
 
-def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]:
-    """{user_id: (всего подтверждённых смен, из них вышел)} — одним запросом."""
+def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int, int]]:
+    """{user_id: (всего смен, из них вышел, со сколькими заведениями)}.
+
+    Одним запросом — иначе на каждую анкету в ленте уходил бы свой.
+    """
     if not user_ids:
         return {}
     rows = (
@@ -69,6 +78,7 @@ def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]
                 or_(Match.no_show.is_(True), Match.cancelled_late.is_(True)),
                 Integer,
             )),
+            func.count(func.distinct(Match.employer_id)),
         )
         .filter(
             Match.user_id.in_(user_ids),
@@ -93,11 +103,11 @@ def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int]]
         .group_by(Match.user_id)
         .all()
     )
-    out: dict[str, tuple[int, int]] = {}
-    for uid, total, noshows in rows:
+    out: dict[str, tuple[int, int, int]] = {}
+    for uid, total, noshows, employers in rows:
         total = int(total or 0)
         noshows = int(noshows or 0)
-        out[uid] = (total, total - noshows)
+        out[uid] = (total, total - noshows, int(employers or 0))
     return out
 
 
@@ -159,7 +169,7 @@ def list_candidates(
         # Надёжный = без единой неявки (вышел на все подтверждённые смены).
         users = [
             u for u in users
-            if rel.get(u.id, (0, 0))[0] == rel.get(u.id, (0, 0))[1]
+            if rel.get(u.id, (0, 0, 0))[0] == rel.get(u.id, (0, 0, 0))[1]
         ]
     return [
         CandidateOut(
@@ -182,8 +192,9 @@ def list_candidates(
             photo_urls=_csv(u.photo_urls),
             about=u.about,
             available_today=u.available_today,
-            shifts_total=rel.get(u.id, (0, 0))[0],
-            shifts_attended=rel.get(u.id, (0, 0))[1],
+            shifts_total=rel.get(u.id, (0, 0, 0))[0],
+            shifts_attended=rel.get(u.id, (0, 0, 0))[1],
+            employers_total=rel.get(u.id, (0, 0, 0))[2],
         )
         for u in users
     ]

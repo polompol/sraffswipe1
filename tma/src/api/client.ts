@@ -1,6 +1,16 @@
 import axios from "axios";
 import { reportError } from "@/lib/report";
 
+// Ответы сервера мы переименовываем в camelCase (см. toCamel ниже). Но есть
+// ответы, которые трогать НЕЛЬЗЯ: подписанные хранилищем поля формы загрузки
+// — там любое переименование ломает подпись, и файл не примут. Такой запрос
+// помечается `raw: true`, и его ответ доходит слово в слово.
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    raw?: boolean;
+  }
+}
+
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 let token: string | null = localStorage.getItem("ss_jwt");
@@ -68,7 +78,9 @@ async function silentReauth(): Promise<string | null> {
 
 api.interceptors.response.use(
   (response) => {
-    response.data = toCamel(response.data);
+    if (!response.config?.raw) {
+      response.data = toCamel(response.data);
+    }
     return response;
   },
   async (error) => {

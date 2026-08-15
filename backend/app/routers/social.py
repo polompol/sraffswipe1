@@ -48,12 +48,29 @@ class ReviewIn(BaseModel):
 
 
 def _recompute_rating(db: Session, ratee_id: str) -> float:
-    avg = (
+    """Средняя оценка, где у каждой ВТОРОЙ СТОРОНЫ один голос.
+
+    Сначала усредняем оценки внутри каждой пары, и только потом — по парам.
+    Раньше все отзывы складывались в одну кучу, и десять пятёрок от одного
+    заведения весили как десять мнений. Это открытая дверь для накрутки:
+    заведение на второй учётке Telegram (а значит, формально другой человек)
+    закрывает со «своим» работником смену за сменой и ставит по пятёрке —
+    и в ленте появляется ★5,0, за которым нет ни одного независимого мнения.
+
+    Честному человеку это ничего не портит: постоянное заведение, которое
+    зовёт вас снова и снова, — сигнал хороший, но всё-таки один голос.
+    """
+    per_pair = (
         db.query(func.avg(Review.stars))
         .filter(Review.ratee_id == ratee_id)
-        .scalar()
+        .group_by(Review.rater_id)
+        .all()
     )
-    rating = round(float(avg), 1) if avg is not None else 0.0
+    rating = (
+        round(sum(float(x[0]) for x in per_pair) / len(per_pair), 1)
+        if per_pair
+        else 0.0
+    )
     target = db.get(User, ratee_id) or db.get(Employer, ratee_id)
     if target is not None:
         target.rating = rating

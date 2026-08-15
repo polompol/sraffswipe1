@@ -7,6 +7,7 @@ import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
+import { reliabilityText } from "@/lib/reliability";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { MED_BOOK_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
@@ -84,7 +85,7 @@ export function ApplicantsPage() {
                     {a.rating > 0 ? `★ ${a.rating.toFixed(1)}` : "Новичок"}
                     {a.district ? ` · ${a.district}` : ""}
                     {a.shiftsTotal > 0
-                      ? ` · вышел на ${a.shiftsAttended} из ${a.shiftsTotal} смен`
+                      ? ` · ${reliabilityText(a.shiftsTotal, a.shiftsAttended, a.employersTotal)}`
                       : ""}
                   </div>
                 </span>

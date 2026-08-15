@@ -23,6 +23,9 @@ class WorkerOut(BaseModel):
     available_today: bool
     shifts_total: int
     shifts_attended: int
+    # Со сколькими разными заведениями человек работал — см. пояснение
+    # в candidates.py: без этой цифры накрутку одной парой не отличить.
+    employers_total: int = 0
 
 
 @router.get("/workers", response_model=list[WorkerOut])
@@ -60,8 +63,9 @@ def my_workers(
         WorkerOut(
             id=u.id, name=u.name or "Соискатель", rating=u.rating,
             available_today=u.available_today,
-            shifts_total=rel.get(u.id, (0, 0))[0],
-            shifts_attended=rel.get(u.id, (0, 0))[1],
+            shifts_total=rel.get(u.id, (0, 0, 0))[0],
+            shifts_attended=rel.get(u.id, (0, 0, 0))[1],
+            employers_total=rel.get(u.id, (0, 0, 0))[2],
         )
         for u in users
     ]
@@ -89,6 +93,7 @@ class ApplicantOut(BaseModel):
     available_today: bool = False
     shifts_total: int = 0
     shifts_attended: int = 0
+    employers_total: int = 0
     # На какую именно смену откликнулся — заведение обычно ведёт несколько.
     vacancy_id: str
     vacancy_role: str
@@ -170,8 +175,9 @@ def applicants(
             photo_urls=_csv(u.photo_urls),
             about=u.about,
             available_today=u.available_today,
-            shifts_total=rel.get(u.id, (0, 0))[0],
-            shifts_attended=rel.get(u.id, (0, 0))[1],
+            shifts_total=rel.get(u.id, (0, 0, 0))[0],
+            shifts_attended=rel.get(u.id, (0, 0, 0))[1],
+            employers_total=rel.get(u.id, (0, 0, 0))[2],
             vacancy_id=v.id,
             vacancy_role=v.role,
             vacancy_date=v.date,

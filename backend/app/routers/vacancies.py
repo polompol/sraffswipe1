@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..geo import distance_km
-from ..models import Employer, Match, Swipe, User, Vacancy
+from ..models import Commission, Employer, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..roles import role_ru
@@ -45,6 +45,30 @@ def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
     return {emp_id: cnt for emp_id, cnt in rows}
 
 
+def _paid_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
+    """Сколько комиссий заведение УЖЕ ОПЛАТИЛО — по каждому заведению.
+
+    На этом держится знак «платит вовремя», который соискатель видит до
+    отклика. Раньше он выводился из рейтинга и числа закрытых смен, то есть
+    об оплате не говорил ничего: заведение с долгом в просрочке носило знак
+    «платит вовремя», а накрутить его можно было тремя фиктивными сменами и
+    тремя отзывами со второй учётки. Теперь знак означает ровно то, что
+    написано, — деньги за смены сервису дошли.
+    """
+    if not emp_ids:
+        return {}
+    rows = (
+        db.query(Commission.employer_id, func.count(Commission.id))
+        .filter(
+            Commission.employer_id.in_(emp_ids),
+            Commission.status == "paid",
+        )
+        .group_by(Commission.employer_id)
+        .all()
+    )
+    return {emp_id: int(cnt) for emp_id, cnt in rows}
+
+
 def taken_counts(db: Session, vacancy_ids: list[str]) -> dict[str, int]:
     """Сколько мест уже занято по каждой смене.
 
@@ -66,17 +90,27 @@ def taken_counts(db: Session, vacancy_ids: list[str]) -> dict[str, int]:
     return {vid: int(n) for vid, n in rows}
 
 
+# Сколько оплаченных смен подряд считаем поводом для знака «платит вовремя».
+# Одна — случайность, две — уже поведение.
+_PAID_FOR_BADGE = 2
+
+
 def _to_out(
     v: Vacancy,
     emp: Employer | None,
     dist: float | None,
     shifts_done: int = 0,
     taken: int = 0,
+    paid_commissions: int = 0,
+    overdue: bool = False,
 ) -> VacancyOut:
     rating = emp.rating if emp else 0.0
-    # «Платит вовремя» — заслуженный знак доверия: высокий рейтинг от
-    # соискателей И уже несколько закрытых смен (не выдаётся «авансом»).
-    pays_on_time = bool(emp) and rating >= 4.5 and shifts_done >= 3
+    # «Платит вовремя» — про деньги, а не про рейтинг: комиссия за смены
+    # реально оплачена И сейчас нет просроченного счёта. Человек читает этот
+    # знак как «здесь не обманут с оплатой» и едет на смену через полгорода.
+    pays_on_time = (
+        bool(emp) and paid_commissions >= _PAID_FOR_BADGE and not overdue
+    )
     return VacancyOut(
         id=v.id,
         employer_id=v.employer_id,
@@ -144,12 +178,16 @@ def list_vacancies(
             .all()
         )
         done = _shifts_done_by_employer(db, {principal["id"]})
+        paid = _paid_by_employer(db, {principal["id"]})
+        late = commission_overdue(db, principal["id"])
         taken = taken_counts(db, [v.id for v in rows])
         return [
             _to_out(
                 v, emp, None,
                 shifts_done=done.get(v.employer_id, 0),
                 taken=taken.get(v.id, 0),
+                paid_commissions=paid.get(v.employer_id, 0),
+                overdue=late,
             )
             for v in rows
         ]
@@ -239,6 +277,7 @@ def list_vacancies(
         else {}
     )
     done = _shifts_done_by_employer(db, emp_ids)
+    paid = _paid_by_employer(db, emp_ids)
     taken = taken_counts(db, [v.id for v in rows])
 
     result: list[VacancyOut] = []
@@ -264,6 +303,10 @@ def list_vacancies(
             v, emp, dist,
             shifts_done=done.get(v.employer_id, 0),
             taken=taken.get(v.id, 0),
+            paid_commissions=paid.get(v.employer_id, 0),
+            # Должников в ленте нет вовсе (см. debtors выше) — значит, у всех
+            # оставшихся просрочки нет.
+            overdue=False,
         ))
 
     # Порядок ленты определяет только выбранная сортировка. Платного
@@ -315,10 +358,14 @@ def invites(
     ids = {v.employer_id for v in rows}
     emps = {e.id: e for e in db.query(Employer).filter(Employer.id.in_(ids)).all()}
     done = _shifts_done_by_employer(db, ids)
+    paid = _paid_by_employer(db, ids)
+    overdue = overdue_employer_ids(db)
     return [
         _to_out(
             v, emps.get(v.employer_id), None,
             shifts_done=done.get(v.employer_id, 0),
+            paid_commissions=paid.get(v.employer_id, 0),
+            overdue=v.employer_id in overdue,
         )
         for v in rows
     ]
