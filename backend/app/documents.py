@@ -104,10 +104,15 @@ def _for_period(
 
 def _requisites_block(pdf: FPDF) -> None:
     """Шапка с реквизитами получателя — по ней бухгалтер делает платёж."""
+    # ОГРН и адрес печатались бы «в никуда»: их просили заполнить в .env, а в
+    # счёт они не попадали. Бухгалтерия заведения именно по ним сверяет
+    # получателя платежа — без них счёт возвращают на доработку.
     rows = [
         ("Получатель", settings.org_name),
         ("ИНН / КПП", f"{settings.org_inn}"
                       + (f" / {settings.org_kpp}" if settings.org_kpp else "")),
+        ("ОГРН / ОГРНИП", settings.org_ogrn),
+        ("Адрес", settings.org_address),
         ("Счёт получателя", settings.org_bank_account),
         ("Банк", settings.org_bank_name),
         ("БИК", settings.org_bank_bic),

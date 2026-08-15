@@ -40,10 +40,18 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U staffswipe"]
+      # Именно по TCP (-h 127.0.0.1), а не по сокету. При САМОМ первом запуске
+      # образ postgis поднимает временный сервер только на сокете, чтобы
+      # создать расширения: `pg_isready` в этот момент уже отвечает «готов», а
+      # порт 5432 ещё закрыт. API стартовал, спотыкался на миграциях и
+      # перезапускался — а инструкция называет перезапуск api признаком
+      # поломки. Владелец решал, что всё сломано, хотя через полминуты
+      # чинилось само.
+      test: ["CMD-SHELL", "pg_isready -U staffswipe -d staffswipe -h 127.0.0.1"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 15s
 
   # Общее состояние процессов приложения: счётчики частоты и раздача чата.
   # Наружу не выставлен — только внутренняя сеть compose.
@@ -151,6 +159,8 @@ services:
       # она молчит, но пустая строка здесь означала бы, что первое же такое
       # сообщение уйдёт в никуда и никто этого не заметит.
       ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
+      # Ошибки ночных задач иначе видит только тот, кто откроет logs scheduler.
+      SENTRY_DSN: ${SENTRY_DSN:-}
       # Сверка платежей ходит в ЮKassa читать список успешных.
       YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
       YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}

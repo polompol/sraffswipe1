@@ -125,8 +125,32 @@ def run_due(now: datetime | None = None) -> list[tuple[str, int]]:
     return done
 
 
+def _init_sentry() -> None:  # pragma: no cover — зависит от окружения
+    """Ошибки планировщика тоже должны быть видны снаружи.
+
+    Sentry поднимался только в веб-приложении, а именно в этот процесс никто
+    не заглядывает: он молча делает всю работу по расписанию. Упавшая задача
+    была видна лишь тому, кто откроет `docker compose logs scheduler` — то
+    есть никому, а без задач не закрываются смены и не идёт комиссия.
+    """
+    from .config import settings
+
+    if not settings.sentry_dsn:
+        return
+    try:
+        import sentry_sdk
+    except ModuleNotFoundError:
+        _log.warning("sentry_sdk не установлен — пропускаю Sentry")
+        return
+    try:
+        sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1)
+    except Exception:  # noqa: BLE001 — наблюдаемость не повод не работать
+        _log.warning("Sentry не поднялся — продолжаю без него")
+
+
 def main() -> None:  # pragma: no cover — вечный цикл
     logging.basicConfig(level=logging.INFO)
+    _init_sentry()
     _log.info("планировщик запущен, часовой пояс: %s", business_tz())
     while True:
         try:

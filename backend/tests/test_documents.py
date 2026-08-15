@@ -16,6 +16,11 @@ REQUISITES = {
     "org_bank_name": "ПАО Сбербанк",
     "org_corr_account": "30101810400000000225",
     "org_signer": "Петров П.П.",
+    # ОГРНИП и адрес: их просили заполнить в настройках, а в счёт они не
+    # попадали. Бухгалтерия заведения сверяет получателя платежа именно по
+    # ним — счёт без них возвращают на доработку.
+    "org_ogrn": "321774600123456",
+    "org_address": "Москва, ул. Никольская, д. 10",
 }
 
 
@@ -98,6 +103,8 @@ def test_invoice_has_everything_a_bookkeeper_needs(client, requisites):
     assert REQUISITES["org_inn"] in text            # ИНН получателя
     assert REQUISITES["org_bank_account"] in text   # расчётный счёт
     assert REQUISITES["org_bank_bic"] in text       # БИК
+    assert REQUISITES["org_ogrn"] in text           # ОГРНИП получателя
+    assert "Никольская" in text                     # адрес получателя
     assert "Лак Бистро" in text                     # плательщик
     assert "7707123456" in text                     # ИНН плательщика
     assert "280" in text                            # комиссия 10% от 2800
