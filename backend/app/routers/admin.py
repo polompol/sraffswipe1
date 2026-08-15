@@ -158,7 +158,13 @@ def _describe_target(db: Session, target_type: str, target_id: str) -> str:
         if v is None:
             return "вакансия удалена"
         emp = db.get(Employer, v.employer_id)
-        return f"{role_ru(v.role)} · {emp.company_name if emp else '—'} · {v.rate}₽"
+        # Неразрывный пробел перед знаком рубля: «300₽» слипалось в одно
+        # слово, а с обычным пробелом сумма переносилась на новую строку
+        # отдельно от знака.
+        return (
+            f"{role_ru(v.role)} · {emp.company_name if emp else '—'} · "
+            f"{v.rate} ₽"
+        )
     if target_type == "user":
         u = db.get(User, target_id) or db.get(Employer, target_id)
         return getattr(u, "name", None) or getattr(u, "company_name", None) or "—"

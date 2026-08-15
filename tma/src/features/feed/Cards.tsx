@@ -347,17 +347,20 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         }
       />
       <div className="swipe-shade" />
-      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
-        <span className="glass">{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
+      {/* Ряд бейджей НЕ переносится на вторую строку: перенесённый район
+          налезал прямо на крупную должность под ним — она стоит на
+          фиксированной высоте. Сам район теперь в теле карточки, где для
+          длинных названий («Северное Медведково») есть место. */}
+      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "nowrap" }}>
+        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
         {s.availableToday && (
           // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
           // самая заметная плашка карточки читалась хуже всего остального.
-          <span className="glass pulse" style={{ background: "var(--super)", color: "#2a1f1a" }}>
+          <span className="glass pulse" style={{ background: "var(--super)", color: "#2a1f1a", flex: "none", whiteSpace: "nowrap" }}>
             <IconBolt size={13} /> Готов сегодня
           </span>
         )}
         <span className="spacer" />
-        <span className="glass">{s.district}</span>
       </div>
       <div className="swipe-body">
         <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -396,6 +399,11 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
               <IconCheck size={15} />{" "}
               {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
+            </div>
+          )}
+          {s.district && (
+            <div>
+              <IconPin size={15} /> {s.district}
             </div>
           )}
           <div>

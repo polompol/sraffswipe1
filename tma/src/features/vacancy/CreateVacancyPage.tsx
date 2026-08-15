@@ -323,6 +323,7 @@ export function CreateVacancyPage() {
               color: "var(--link)",
               font: "inherit",
               fontSize: 14,
+              textDecoration: "underline",
               cursor: "pointer",
             }}
           >

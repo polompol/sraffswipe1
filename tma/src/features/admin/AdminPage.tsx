@@ -48,6 +48,14 @@ const PAYMENT_STATUS_RU: Record<string, string> = {
   failed: "не прошёл",
 };
 
+// На что жалуются. Раньше выводилось служебное слово из базы — оператор
+// читал «vacancy» и «match» вместо «Смена» и «Переписка».
+const TARGET_LABEL: Record<string, string> = {
+  vacancy: "Смена",
+  user: "Человек",
+  match: "Переписка",
+};
+
 const REASON_LABEL: Record<string, string> = {
   fake: "Фейк",
   scam: "Мошенничество",
@@ -611,7 +619,7 @@ export function AdminPage() {
                   )}
                   <span className="spacer" />
                   <span className="muted" style={{ fontSize: 12 }}>
-                    {r.targetType} · {fmtDate(r.createdAt)}
+                    {TARGET_LABEL[r.targetType] ?? r.targetType} · {fmtDate(r.createdAt)}
                   </span>
                 </div>
                 <div style={{ fontWeight: 700, margin: "4px 0" }}>{r.targetInfo}</div>
@@ -633,7 +641,7 @@ export function AdminPage() {
                       {r.targetType === "vacancy" && (
                         <Button variant="danger" onClick={() => blockTarget("vacancy", r.targetId)}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                            <IconWarning size={16} /> Снять вакансию
+                            <IconWarning size={16} /> Снять смену
                           </span>
                         </Button>
                       )}

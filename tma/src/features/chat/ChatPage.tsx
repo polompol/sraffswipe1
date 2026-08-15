@@ -17,13 +17,22 @@ import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { IconSend, IconBack, IconWarning, IconCheck, IconChat } from "@/components/Icons";
 
-// Быстрые ответы — частые фразы в один тап (экономят время, снижают трение).
-const QUICK_REPLIES = [
+// Быстрые ответы — частые фразы в один тап. У сторон они РАЗНЫЕ: заведению
+// предлагались реплики работника («Готов выйти на смену», «Какой адрес?»),
+// то есть человеку показывали вопросы, ответы на которые он и должен дать.
+const QUICK_REPLIES_SEEKER = [
   "Здравствуйте!",
   "Готов выйти на смену",
   "Во сколько выходить?",
   "Какой адрес?",
   "Что взять с собой?",
+];
+const QUICK_REPLIES_EMPLOYER = [
+  "Здравствуйте!",
+  "Ждём вас на смене",
+  "Подходите к началу смены",
+  "Спросите администратора на входе",
+  "Форма: чёрный верх, фартук дадим",
 ];
 
 export function ChatPage() {
@@ -295,7 +304,11 @@ export function ChatPage() {
           <EmptyState
             icon={<IconChat size={34} />}
             title="Напишите первым"
-            text="Спросите про адрес, время и что взять с собой — заведение ответит здесь."
+            text={
+              role === "employer"
+                ? "Подскажите адрес, во сколько подойти и что взять с собой — человек ответит здесь."
+                : "Спросите про адрес, время и что взять с собой — заведение ответит здесь."
+            }
           />
         )}
 
@@ -336,7 +349,7 @@ export function ChatPage() {
           className="quick-row"
           style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 2 }}
         >
-          {QUICK_REPLIES.map((q) => (
+          {(role === "employer" ? QUICK_REPLIES_EMPLOYER : QUICK_REPLIES_SEEKER).map((q) => (
             <button
               key={q}
               className="tag"

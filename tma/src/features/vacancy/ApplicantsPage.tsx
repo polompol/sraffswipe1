@@ -141,7 +141,6 @@ export function ApplicantsPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
                   gap: 8,
                   marginTop: 12,
                 }}
