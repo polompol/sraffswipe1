@@ -708,7 +708,7 @@ export function fetchRepeatPairs() {
   ]);
 }
 
-export function autoCloseShifts(): Promise<number> {
+export function settleShifts(): Promise<number> {
   return Promise.resolve(1);
 }
 
@@ -716,7 +716,7 @@ export function sendShiftReminders(): Promise<number> {
   return Promise.resolve(3);
 }
 
-export function closeAbandonedShifts(): Promise<number> {
+export function askAfterShift(): Promise<number> {
   return Promise.resolve(2);
 }
 

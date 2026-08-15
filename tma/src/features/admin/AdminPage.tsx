@@ -16,8 +16,8 @@ import {
   fetchRepeatPairs,
   sendShiftReminders,
   sendUnfilledAlerts,
-  autoCloseShifts,
-  closeAbandonedShifts,
+  settleShifts,
+  askAfterShift,
   reconcilePayments,
   adminRelink,
   adminSearchUsers,
@@ -224,7 +224,7 @@ export function AdminPage() {
       id: "settle",
       title: "Закрыть вчерашние смены и начислить комиссию",
       hint: "Смена считается состоявшейся, если после её окончания никто не нажал «Смена не состоялась». Планировщик делает это сам в 14:00 — кнопка нужна, чтобы не ждать.",
-      run: () => runJob("settle", autoCloseShifts,
+      run: () => runJob("settle", settleShifts,
         (n) => `Закрыто смен: ${n}`, "Закрывать пока нечего"),
     },
     {
@@ -234,7 +234,7 @@ export function AdminPage() {
       // Подписи от старой механики («закрыто смен», «брошенных смен нет»)
       // остались от прежней задачи и врали оператору: кнопка ничего не
       // закрывает, она рассылает вопрос.
-      run: () => runJob("aftershift", closeAbandonedShifts,
+      run: () => runJob("aftershift", askAfterShift,
         (n) => `Спросили по ${n} ${plural(n, "смене", "сменам", "сменам")}`,
         "Вчерашних смен нет — спрашивать не о чем"),
     },

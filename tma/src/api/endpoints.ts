@@ -616,9 +616,13 @@ export async function fetchRepeatPairs(): Promise<RepeatPair[]> {
   return data;
 }
 
-/** Закрыть смены, где работник отметился кодом, а заведение промолчало. */
-export async function autoCloseShifts(): Promise<number> {
-  if (!USE_BACKEND) return mock.autoCloseShifts();
+/** Закрыть состоявшиеся смены и начислить комиссию.
+ *
+ *  Смена состоялась, если после её окончания никто не сказал обратного —
+ *  название `autoCloseShifts` осталось от старого правила, когда смену
+ *  закрывали только две нажатые кнопки. */
+export async function settleShifts(): Promise<number> {
+  if (!USE_BACKEND) return mock.settleShifts();
   const { data } = await api.post<{ closed: number }>("/admin/shifts/auto-close", {});
   return data.closed;
 }
@@ -630,9 +634,10 @@ export async function sendShiftReminders(): Promise<number> {
   return data.sent;
 }
 
-/** Закрыть смены, которые не отметила ни одна сторона (спустя двое суток). */
-export async function closeAbandonedShifts(): Promise<number> {
-  if (!USE_BACKEND) return mock.closeAbandonedShifts();
+/** Спросить обе стороны про вчерашние смены — единственное предупреждение
+ *  перед списанием комиссии. Ничего не закрывает. */
+export async function askAfterShift(): Promise<number> {
+  if (!USE_BACKEND) return mock.askAfterShift();
   const { data } = await api.post<{ closed: number }>(
     "/admin/shifts/close-abandoned", {});
   return data.closed;
