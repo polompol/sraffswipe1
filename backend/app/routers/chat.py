@@ -87,9 +87,12 @@ async def send(
         if principal["id"] == match.user_id
         else match.user_id
     )
+    # Открываем ИМЕННО этот разговор, а не общий список мэтчей: раньше на
+    # каждое сообщение человек попадал в список и искал нужный чат сам. Именно
+    # из-за такой мелочи переписку уводят в личку — а там мы её не видим.
     notify_owner(
         db, other, f"💬 Новое сообщение: {body.text[:60]}",
-        open_app="Ответить", screen="matches",
+        open_app="Ответить", screen="chat", ident=match_id,
     )
     # Авто-модерация чата: «переведи предоплату» и т.п. → флаг админу.
     from ..moderation import auto_flag

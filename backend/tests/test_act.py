@@ -109,29 +109,28 @@ def _confirmed_match(client):
     client.post(f"/matches/{mid}/confirm", headers=eh)
 
     # Доводим смену до закрытия: акт — документ о ВЫПОЛНЕННОЙ работе.
-    from datetime import UTC, datetime, timedelta
-
     from app.db import SessionLocal
     from app.models import Match, Vacancy
 
+    from .shifttime import age_shift
+
+    age_shift(mid)
     db = SessionLocal()
     try:
-        vac = db.get(Vacancy, db.get(Match, mid).vacancy_id)
-        vac.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        db.commit()
+        shift_date = db.get(Vacancy, db.get(Match, mid).vacancy_id).date
     finally:
         db.close()
     code = [m for m in client.get("/matches", headers=eh).json()
             if m["id"] == mid][0]["checkin_code"]
     client.post(f"/matches/{mid}/checkin", headers=sh, json={"code": code})
     client.post(f"/matches/{mid}/attendance", headers=eh, json={"attended": True})
-    return mid, seek["access_token"]
+    return mid, seek["access_token"], shift_date
 
 
 def test_act_contains_calculation_and_signatures(client):
     """В акте видно, откуда взялась сумма, и есть где расписаться."""
     pypdf = pytest.importorskip("pypdf")
-    mid, token = _confirmed_match(client)
+    mid, token, shift_date = _confirmed_match(client)
 
     r = client.get(f"/matches/{mid}/act.pdf", params={"token": token})
     assert r.status_code == 200
@@ -147,7 +146,6 @@ def test_act_contains_calculation_and_signatures(client):
     assert "Две тысячи восемьсот рублей" in text      # прописью
     assert "Заказчик:" in text and "Исполнитель:" in text
     assert "подпись" in text
-    # Дата по-русски, а не в ISO. Смена вчерашняя: акт выдаётся только по
-    # закрытой смене, то есть уже после её окончания.
-    yesterday = date.fromisoformat(local_today()) - timedelta(days=1)
-    assert yesterday.strftime("%d.%m.%Y") in text
+    # Дата по-русски, а не в ISO — и именно дата смены, а не «вчера»
+    # по часам сервера: сервер живёт в UTC, а смена — по Москве.
+    assert date.fromisoformat(shift_date).strftime("%d.%m.%Y") in text

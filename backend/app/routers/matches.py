@@ -300,7 +300,7 @@ def mark_not_held(
             db, other,
             "Вторая сторона отметила, что смена не состоялась. Комиссия не "
             "начислена. Если это не так — откройте смену и нажмите «Проблема».",
-            open_app="Открыть смену", screen="matches",
+            open_app="Открыть смену", screen="chat", ident=m.id,
         )
     db.commit()
     db.refresh(m)
@@ -721,7 +721,7 @@ def propose_reschedule(
         f"Заведение предлагает перенести смену на {_fmt_date(body.date)} "
         f"({_fmt_time(body.start_time)}–{_fmt_time(body.end_time)}). "
         "Откройте чат смены, чтобы согласиться или отказаться.",
-        open_app="Открыть смену", screen="matches",
+        open_app="Открыть смену", screen="chat", ident=m.id,
     )
     db.commit()
     db.refresh(m)

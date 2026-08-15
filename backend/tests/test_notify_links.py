@@ -32,3 +32,18 @@ def test_without_screen_url_is_untouched(monkeypatch):
 def test_without_configured_url_nothing_breaks(monkeypatch):
     monkeypatch.setattr(settings, "mini_app_url", "")
     assert webapp_url("shifts") == ""
+
+
+def test_chat_opens_exact_conversation(monkeypatch):
+    """Уведомление о сообщении ведёт в нужный разговор, а не в список мэтчей.
+
+    Искать чат заново на каждое сообщение — ровно та причина, по которой
+    переписку уводят в личку, где сервис её уже не видит.
+    """
+    monkeypatch.setattr(settings, "mini_app_url", "https://app.example.ru")
+    assert webapp_url("chat", "m-42") == "https://app.example.ru?go=chat&id=m-42"
+
+
+def test_ident_without_screen_is_ignored(monkeypatch):
+    monkeypatch.setattr(settings, "mini_app_url", "https://app.example.ru")
+    assert webapp_url("", "m-42") == "https://app.example.ru"

@@ -23,7 +23,7 @@ def _tg_id(db: Session, owner_id: str) -> int | None:
     return e.tg_id if e is not None else None
 
 
-def webapp_url(screen: str = "") -> str:
+def webapp_url(screen: str = "", ident: str = "") -> str:
     """Ссылка на Mini App с указанием экрана, который надо открыть.
 
     Экран передаём query-параметром, а НЕ через #/путь: Telegram кладёт
@@ -33,12 +33,20 @@ def webapp_url(screen: str = "") -> str:
     Без этого кнопка в уведомлении открывала корень: человеку приходило
     «отметьтесь на смене», он жал кнопку и попадал в ленту вакансий — искать
     нужный экран самому.
+
+    `ident` — на какую именно запись открыть экран. Нужен чату: уведомление
+    «Новое сообщение» вело в общий список мэтчей, и человеку приходилось
+    искать нужный разговор самому — на каждое сообщение. Ради этого люди и
+    уходят переписываться в личку.
     """
     base = settings.mini_app_url
     if not base or not screen:
         return base
     sep = "&" if "?" in base else "?"
-    return f"{base}{sep}go={screen}"
+    url = f"{base}{sep}go={screen}"
+    if ident:
+        url += f"&id={ident}"
+    return url
 
 
 def _send(
@@ -47,6 +55,7 @@ def _send(
     text: str,
     open_app: str | None = None,
     screen: str = "",
+    ident: str = "",
 ) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     body: dict = {"chat_id": tg, "text": text}
@@ -58,7 +67,7 @@ def _send(
         body["reply_markup"] = {
             "inline_keyboard": [[{
                 "text": open_app,
-                "web_app": {"url": webapp_url(screen)},
+                "web_app": {"url": webapp_url(screen, ident)},
             }]]
         }
     try:
@@ -78,11 +87,13 @@ def notify_owner(
     text: str,
     open_app: str | None = None,
     screen: str = "",
+    ident: str = "",
 ) -> None:
     """Отправить текст пользователю/работодателю по его tg_id (не блокируя).
 
     `open_app` — подпись кнопки, открывающей Mini App прямо из сообщения;
-    `screen` — какой экран открыть (`shifts`, `matches`, `applicants`…).
+    `screen` — какой экран открыть (`shifts`, `matches`, `chat`…);
+    `ident` — на какую запись (для чата — id мэтча).
     """
     token = settings.telegram_bot_token
     if not token:
@@ -91,7 +102,8 @@ def notify_owner(
     if not tg:
         return
     threading.Thread(
-        target=_send, args=(token, tg, text, open_app, screen), daemon=True
+        target=_send, args=(token, tg, text, open_app, screen, ident),
+        daemon=True
     ).start()
 
 

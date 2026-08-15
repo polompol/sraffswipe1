@@ -56,8 +56,15 @@ const GO_SCREENS: Record<string, string> = {
   profile: "/profile",
 };
 try {
-  const go = new URLSearchParams(window.location.search).get("go") ?? "";
-  const path = GO_SCREENS[go];
+  const q = new URLSearchParams(window.location.search);
+  const go = q.get("go") ?? "";
+  // id — какую именно запись открыть. Уведомление «Новое сообщение» ведёт
+  // сразу в нужный разговор, а не в общий список: искать чат заново на каждое
+  // сообщение — ровно та причина, по которой переписку уводят в личку.
+  // Пропускаем только безопасные идентификаторы, чтобы из ссылки нельзя было
+  // подставить произвольный путь в адресе.
+  const id = (q.get("id") ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  const path = go === "chat" && id ? `/chat/${id}` : GO_SCREENS[go];
   if (path && localStorage.getItem("ss_jwt")) {
     window.location.hash = `#${path}`;
   }

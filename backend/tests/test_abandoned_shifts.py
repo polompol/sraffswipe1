@@ -6,10 +6,10 @@
 только при закрытии — значит, чтобы не платить 10%, заведению достаточно было
 ничего не делать. Сторона, которая должна деньги, выигрывала от бездействия.
 """
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from app.db import SessionLocal
-from app.models import Commission, Employer, Match, User, Vacancy
+from app.models import Commission, Employer, Match, User
 from app.timeutil import business_tz, local_today
 
 
@@ -59,14 +59,9 @@ def _confirmed_but_unmarked(client, tg_emp, tg_seeker):
 
 def _age_the_shift(mid, days):
     """Отматываем смену в прошлое."""
-    db = SessionLocal()
-    try:
-        m = db.get(Match, mid)
-        v = db.get(Vacancy, m.vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
-        db.commit()
-    finally:
-        db.close()
+    from .shifttime import age_shift
+
+    age_shift(mid, days)
 
 
 def _status(mid):

@@ -29,18 +29,9 @@ def _hdr(token):
 
 def _age(client, match_id: str) -> None:
     """Домотать смену до конца: закрыть её раньше окончания уже нельзя."""
-    from datetime import UTC, datetime, timedelta
+    from .shifttime import age_shift
 
-    from app.db import SessionLocal
-    from app.models import Match, Vacancy
-
-    db = SessionLocal()
-    try:
-        v = db.get(Vacancy, db.get(Match, match_id).vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        db.commit()
-    finally:
-        db.close()
+    age_shift(match_id)
 
 
 def test_me_endpoint(client):

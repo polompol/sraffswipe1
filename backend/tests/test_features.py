@@ -341,21 +341,11 @@ def test_blocked_user_cannot_pull_act(client):
     assert banned.status_code == 403
 
 
-def _age(match_id: str, days: int = 1) -> None:
+def _age(match_id: str, days: int = 0) -> None:
     """Перемотать смену в прошлое: закрыть её можно только после окончания."""
-    from datetime import UTC, datetime, timedelta
+    from .shifttime import age_shift
 
-    from app.db import SessionLocal
-    from app.models import Match, Vacancy
-
-    db = SessionLocal()
-    try:
-        m = db.get(Match, match_id)
-        v = db.get(Vacancy, m.vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
-        db.commit()
-    finally:
-        db.close()
+    age_shift(match_id, days)
 
 
 def _close_shift(client, emp_token, seeker_token, match_id):

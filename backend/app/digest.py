@@ -255,8 +255,12 @@ def send_aftershift_asks(db: Session) -> int:
         if m is None:
             continue
         for owner_id in (m.user_id, m.employer_id):
+            # Сразу в нужную смену: в письме сказано «откройте её и нажмите»,
+            # а кнопка вела в общий список — человек искал смену сам, и это
+            # единственный шанс возразить до начисления комиссии.
             notify_owner(db, owner_id, text,
-                         open_app="Открыть смену", screen="matches")
+                         open_app="Открыть смену", screen="chat",
+                         ident=match_id)
         m.settle_notified_on = today
     db.commit()
     return len(asks)

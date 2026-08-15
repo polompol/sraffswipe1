@@ -122,7 +122,7 @@ def _on_match(db: Session, match: Match, created: bool) -> None:
     notify_owner(
         db, match.user_id,
         "🔥 Заведение ответило взаимно! Откройте чат и договоритесь о смене.",
-        open_app="Открыть чат", screen="matches",
+        open_app="Открыть чат", screen="chat", ident=match.id,
     )
     notify_owner(
         db, match.employer_id,

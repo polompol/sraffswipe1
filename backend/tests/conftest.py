@@ -39,19 +39,6 @@ def age_shift():
     ещё до того, как выйдет на работу. Тестам, которые проверяют закрытие,
     нужно сначала довести смену до конца.
     """
-    from datetime import UTC, datetime, timedelta
+    from .shifttime import age_shift
 
-    from app.db import SessionLocal
-    from app.models import Match, Vacancy
-
-    def _age(match_id: str, days: int = 1) -> None:
-        db = SessionLocal()
-        try:
-            m = db.get(Match, match_id)
-            v = db.get(Vacancy, m.vacancy_id)
-            v.date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
-            db.commit()
-        finally:
-            db.close()
-
-    return _age
+    return age_shift

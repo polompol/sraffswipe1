@@ -50,19 +50,11 @@ def _pair(client, tg_emp, tg_seeker, rate=400, rate_type="perHour", headcount=1)
     return emp_h, seeker_h, sid, v, mid
 
 
-def _age(match_id: str, days: int = 1) -> None:
+def _age(match_id: str, days: int = 0) -> None:
     """Домотать смену до конца: закрыть её раньше окончания уже нельзя."""
-    from datetime import UTC, datetime, timedelta
+    from .shifttime import age_shift
 
-    from app.models import Vacancy
-
-    db = SessionLocal()
-    try:
-        v = db.get(Vacancy, db.get(Match, match_id).vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
-        db.commit()
-    finally:
-        db.close()
+    age_shift(match_id, days)
 
 
 def _close(client, emp_h, seeker_h, mid):
