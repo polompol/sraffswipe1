@@ -20,7 +20,6 @@ import {
   shareURL,
   showPopup,
   isPopupSupported,
-  cloudStorage,
   openLink as sdkOpenLink,
   openTelegramLink as sdkOpenTelegramLink,
   isTMA as sdkIsTMA,
@@ -210,18 +209,11 @@ export function share(url: string, text?: string): void {
   }
 }
 
-// --- Telegram CloudStorage (зашифрованное хранилище токена, best-effort) ---
-// Дублируем JWT в CloudStorage; источник для синхронного чтения — localStorage.
-
-type CloudApi = { setItem?: (k: string, v: string) => unknown };
-
-export function cloudSet(key: string, value: string): void {
-  try {
-    (cloudStorage as CloudApi).setItem?.(key, value);
-  } catch {
-    /* noop */
-  }
-}
+// CloudStorage здесь больше нет намеренно. Ключ входа клали в облако
+// Telegram «про запас», но не читали оттуда ни разу: при потере локального
+// токена приложение молча входит заново по подписи запуска (см. silentReauth
+// в api/client.ts) — это и надёжнее, и свежее. Оставалась лишняя копия
+// ключа в чужом хранилище, которая никому не помогала.
 
 // --- Открытие ссылок ---
 
