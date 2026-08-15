@@ -37,6 +37,9 @@ def _hdr(token: str) -> dict:
 
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
+    # Сторожа доступности (UptimeRobot и подобные) по умолчанию шлют HEAD.
+    # Раньше на него отвечало 405, и сервис числился упавшим круглосуточно.
+    assert client.head("/health").status_code == 200
 
 
 def test_wrong_code_rejected(client):

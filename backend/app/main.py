@@ -177,6 +177,10 @@ app.include_router(admin.router)
 app.include_router(favorites.router)
 
 
-@app.get("/health", tags=["meta"])
+# HEAD, а не только GET: внешние «сторожа» (UptimeRobot и подобные) по
+# умолчанию шлют HEAD, а FastAPI, в отличие от Starlette, сам его не добавляет.
+# Сервис отвечал таким проверкам 405 — сторож считал сайт упавшим и слал
+# ложную тревогу, а на настоящее падение владелец уже не реагировал.
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["meta"])
 def health():
     return {"status": "ok"}
