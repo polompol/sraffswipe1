@@ -532,6 +532,16 @@ def urgent_ping(
     v = db.get(Vacancy, vacancy_id)
     if v is None or v.employer_id != principal["id"]:
         raise HTTPException(status_code=404, detail="Вакансия не найдена")
+    # Прошедшую смену звать людей нельзя. Проверки на дату не было вовсе:
+    # смена остаётся «активной», пока её не сняли руками, и «Срочно» на
+    # вчерашнюю смену рассылало приглашение всем, кто готов выйти сегодня.
+    # Люди откликались на то, чего уже не существует.
+    if v.date < local_today():
+        raise HTTPException(
+            status_code=409,
+            detail="Эта смена уже прошла — позвать на неё нельзя. "
+                   "Нажмите «Повторить», чтобы создать такую же на другой день.",
+        )
     city = (v.city or "").strip().lower()
     seekers = (
         db.query(User)

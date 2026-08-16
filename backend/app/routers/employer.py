@@ -93,6 +93,9 @@ class ApplicantOut(BaseModel):
     shifts_total: int = 0
     shifts_attended: int = 0
     employers_total: int = 0
+    # Заведение уже отказало этому человеку, но он остаётся в списке: отказ
+    # больше не приговор, передумать можно в один тап.
+    declined: bool = False
     # На какую именно смену откликнулся — заведение обычно ведёт несколько.
     vacancy_id: str
     vacancy_role: str
@@ -136,20 +139,29 @@ def applicants(
     )
     if not likes:
         return []
-    # Кому заведение уже ответило — из списка убираем.
-    answered = {
-        uid for (uid,) in db.query(Swipe.target_id).filter(
+    # Кого заведение уже позвало — из списка убираем: они в мэтчах.
+    # А вот те, кому отказали, ОСТАЮТСЯ, просто уходят вниз с пометкой.
+    # Раньше отказ прятал человека навсегда — и из этого списка, и из ленты
+    # кандидатов, — а он сам выбрал вашу смену. Один случайный свайп влево
+    # (в приложении с карточками их много) означал потерянного работника.
+    answers = {
+        uid: direction
+        for uid, direction in db.query(Swipe.target_id, Swipe.direction).filter(
             Swipe.swiper_id == principal["id"],
             Swipe.target_type == "user",
         ).all()
     }
+    invited = {uid for uid, d in answers.items() if d in ("like",)}
+    declined = {uid for uid, d in answers.items() if d not in ("like",)}
     seen: set[str] = set()
     pairs: list[tuple[Swipe, object]] = []
     for s in likes:
-        if s.swiper_id in answered or s.swiper_id in seen:
+        if s.swiper_id in invited or s.swiper_id in seen:
             continue
         seen.add(s.swiper_id)
         pairs.append((s, vacancies[s.target_id]))
+    # Отклонённые — в конец списка: сначала те, кому вы ещё не ответили.
+    pairs.sort(key=lambda pair: pair[0].swiper_id in declined)
     if not pairs:
         return []
     users = {
@@ -177,6 +189,7 @@ def applicants(
             shifts_total=rel.get(u.id, (0, 0, 0))[0],
             shifts_attended=rel.get(u.id, (0, 0, 0))[1],
             employers_total=rel.get(u.id, (0, 0, 0))[2],
+            declined=u.id in declined,
             vacancy_id=v.id,
             vacancy_role=v.role,
             vacancy_date=v.date,
@@ -215,18 +228,26 @@ def invite_again(
     # откликнуться. Приглашение без смены — это обманутое ожидание.
     from ..models import Vacancy
 
+    # Смена должна быть не только активной, но и БУДУЩЕЙ. Проверка на дату
+    # отсутствовала: смена висит «активной», пока её не снимут руками, и
+    # заведение звало людей на вчерашний день — человек открывал приложение и
+    # не находил, на что откликнуться.
+    from ..timeutil import local_today
+
     has_shift = (
         db.query(Vacancy)
         .filter(
             Vacancy.employer_id == principal["id"],
             Vacancy.status == "active",
+            Vacancy.date >= local_today(),
         )
         .first()
     )
     if has_shift is None:
         raise HTTPException(
             status_code=409,
-            detail="Сначала опубликуйте смену — иначе человеку некуда выйти.",
+            detail="Сначала опубликуйте смену на будущую дату — "
+                   "иначе человеку некуда выйти.",
         )
     exists = (
         db.query(Swipe)

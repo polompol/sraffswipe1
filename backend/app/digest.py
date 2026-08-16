@@ -148,21 +148,33 @@ def build_unfilled_alerts(db: Session) -> list[tuple[str, str, str]]:
     )
     if not rows:
         return []
-    taken = {
-        vid: n
-        for vid, n in db.query(Match.vacancy_id, func.count(Match.id))
-        .filter(
-            Match.vacancy_id.in_([v.id for v in rows]),
-            Match.status.in_(("matched", "confirmed", "completed")),
-            Match.no_show.is_(False),
-        )
-        .group_by(Match.vacancy_id)
-        .all()
-    }
+    # Считаем ЗАКРЫТЫМИ только подтверждённые места. Мэтч без подтверждения
+    # («договариваемся») тоже занимает место в ленте — и это правильно, иначе
+    # на одно место набежит десять человек. Но для предупреждения он ничего не
+    # значит: заведение видело «мест не осталось», успокаивалось, а утром на
+    # смену не приходил никто. Такие места считаем отдельно и говорим про них
+    # прямо — это единственный момент, когда ещё можно успеть.
+    def _count(*statuses: str) -> dict[str, int]:
+        return {
+            vid: int(n)
+            for vid, n in db.query(Match.vacancy_id, func.count(Match.id))
+            .filter(
+                Match.vacancy_id.in_([v.id for v in rows]),
+                Match.status.in_(statuses),
+                Match.no_show.is_(False),
+            )
+            .group_by(Match.vacancy_id)
+            .all()
+        }
+
+    confirmed = _count("confirmed", "completed")
+    pending = _count("matched")
+
     out: list[tuple[str, str, str]] = []
     for v in rows:
         need = v.headcount or 1
-        got = taken.get(v.id, 0)
+        got = confirmed.get(v.id, 0)
+        waiting = pending.get(v.id, 0)
         if got >= need:
             continue
         left = need - got
@@ -171,6 +183,16 @@ def build_unfilled_alerts(db: Session) -> list[tuple[str, str, str]]:
             f"Завтра смена в {_fmt_time(v.start_time)}"
             + (f", {v.address}" if v.address else "")
             + f" — не хватает {left} {who}.\n\n"
+        )
+        if waiting:
+            ppl = "человек" if waiting == 1 else "человека"
+            text += (
+                f"С {waiting} {ppl} вы уже договорились, но смена ещё не "
+                "подтверждена с обеих сторон — напомните им в чате и нажмите "
+                "«Подтвердить смену». Без этого место считается занятым, а "
+                "выйти человек не обязан.\n\n"
+            )
+        text += (
             "Что помогает за день до смены: поднять ставку, нажать «Срочно» "
             "(разошлём тем, кто готов выйти) или позвать своих через "
             "«Мои работники»."

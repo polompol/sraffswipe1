@@ -325,8 +325,8 @@ export function MatchesPage() {
                             inputMode="numeric"
                             aria-label="6-значный код прихода от заведения"
                             maxLength={6}
-                            placeholder="код"
-                            style={{ width: 110, letterSpacing: 4, fontWeight: 800 }}
+                            placeholder="000000"
+                            style={{ width: 128, letterSpacing: 4, fontWeight: 800 }}
                             value={codes[m.id] ?? ""}
                             onChange={(e) =>
                               setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))

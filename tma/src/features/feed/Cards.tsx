@@ -4,7 +4,7 @@ import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
   EXPERIENCE_TAG_LABELS,
   MED_BOOK_LABELS,
-  PAY_METHOD_LABELS,
+  PAY_METHOD_SHORT,
   STAFF_ROLE_LABELS,
   TIPS_BADGE,
 } from "@/types/domain";
@@ -65,7 +65,14 @@ function SwipePhoto({ src, initial, hero, onHero }: {
   return (
     <div className="swipe-photo swipe-photo-fallback">
       {showHero ? (
-        <div className="swipe-hero">{hero}</div>
+        <>
+          <div className="swipe-hero">{hero}</div>
+          {/* Буква — под плашкой, а не вместо неё. Без фото середина карточки
+              оставалась большим пустым пятном: главное было прижато к верху,
+              подробности к низу, а между ними полкарточки багрового ничего.
+              Буква заполняет провал и даёт карточке лицо. */}
+          <span className="swipe-initial swipe-initial-ghost">{initial}</span>
+        </>
       ) : (
         <span className="swipe-initial">{initial}</span>
       )}
@@ -267,7 +274,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         >
           {PayGlyph && v.payMethod && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
-              <PayGlyph size={16} /> {PAY_METHOD_LABELS[v.payMethod]}
+              <PayGlyph size={16} /> {PAY_METHOD_SHORT[v.payMethod]}
             </span>
           )}
           {v.tips && v.tips !== "none" && (

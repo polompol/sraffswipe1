@@ -234,6 +234,8 @@ def me(
             rating=e.rating, tgUsername=e.tg_username,
             incomingLikes=_incoming_likes(db, principal),
             shiftsDone=shifts,
+            inn=e.inn or None,
+            photoUrl=e.photo_url or "",
         )
     u = db.get(User, principal["id"])
     if u is None:
@@ -360,12 +362,21 @@ def update_me(
             e.company_name = body.company_name
         if body.inn is not None:
             e.inn = body.inn
+        # Фото заведения. Эта строка тут не обрабатывалась вовсе: поле в базе
+        # есть, лента и список мэтчей его показывают, а поставить его было
+        # нельзя ничем — у каждого живого заведения в приложении оставалась
+        # буква на цветном квадрате. Для сервиса, где решение принимают
+        # свайпом за секунду, карточка без фото — это карточка, которую
+        # пролистывают.
+        if body.photo_url is not None:
+            e.photo_url = body.photo_url
         if changed_identity and e.verified:
             e.verified = False
         db.commit()
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
+            photoUrl=e.photo_url or "",
         )
 
     u = db.get(User, principal["id"])

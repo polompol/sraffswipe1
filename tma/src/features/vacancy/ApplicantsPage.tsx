@@ -81,6 +81,16 @@ export function ApplicantsPage() {
                     {a.name}
                     {a.age ? `, ${a.age}` : ""}
                   </b>
+                  {/* Отказ больше не прячет человека навсегда: он сам выбрал
+                      вашу смену, а свайп влево легко сделать случайно. */}
+                  {a.declined && (
+                    <span
+                      className="tag"
+                      style={{ marginLeft: 8, fontSize: 12, color: "var(--muted)", borderColor: "var(--border)" }}
+                    >
+                      вы отказали
+                    </span>
+                  )}
                   <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
                     {a.rating > 0 ? `★ ${a.rating.toFixed(1)}` : "Новичок"}
                     {a.district ? ` · ${a.district}` : ""}
@@ -145,10 +155,14 @@ export function ApplicantsPage() {
                   marginTop: 12,
                 }}
               >
-                <Button onClick={() => answer(a, true)}>Беру на смену</Button>
-                <Button variant="ghost" onClick={() => answer(a, false)}>
-                  Не подходит
+                <Button onClick={() => answer(a, true)}>
+                  {a.declined ? "Передумал — беру" : "Беру на смену"}
                 </Button>
+                {!a.declined && (
+                  <Button variant="ghost" onClick={() => answer(a, false)}>
+                    Не подходит
+                  </Button>
+                )}
               </div>
             </div>
           ))}

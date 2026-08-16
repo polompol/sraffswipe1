@@ -100,7 +100,11 @@ export function EditProfilePage() {
     try {
       await updateMe(
         isEmployer
-          ? { company_name: name, inn: inn || undefined }
+          ? {
+              company_name: name,
+              inn: inn || undefined,
+              photo_url: photo || undefined,
+            }
           : {
               name,
               // Пустые строки не шлём: сервер ждёт либо дату в формате
@@ -139,6 +143,13 @@ export function EditProfilePage() {
 
         {isEmployer ? (
           <>
+            {/* Фото заведения. Его нельзя было поставить ничем: поле в базе
+                есть, лента и список мэтчей его показывают — а у каждого
+                живого заведения оставалась буква на цветном квадрате.
+                В приложении, где выбирают свайпом за секунду, карточка без
+                фото — это карточка, которую пролистывают. */}
+            <PhotoUpload label="Фото заведения" value={photo} onChange={setPhoto} />
+
             <label className="form-label" htmlFor="name">Название заведения</label>
             <input
               id="name"

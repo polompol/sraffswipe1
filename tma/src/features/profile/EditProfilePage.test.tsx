@@ -54,7 +54,10 @@ describe("Редактирование профиля: форма зависит
     await screen.findByText("Название заведения");
     expect(screen.queryByText("Дата рождения (только 18+)")).toBeNull();
     expect(screen.queryByText("Должности")).toBeNull();
-    expect(screen.queryByTestId("photo-upload")).toBeNull();
+    // А вот фото заведению как раз НУЖНО: его поле есть в базе, лента и список
+    // мэтчей его показывают — а поставить было нельзя ничем, и у каждого
+    // живого заведения оставалась буква на цветном квадрате.
+    expect(screen.queryByTestId("photo-upload")).not.toBeNull();
   });
 
   it("заведение отправляет company_name, а не name", async () => {

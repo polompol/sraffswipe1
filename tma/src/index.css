@@ -602,6 +602,13 @@ button.tag:disabled {
   gap: 6px;
 }
 /* Изящный фолбэк, когда нет фото: бренд-градиент + крупный инициал */
+/* Буква на карточке без фото, когда сверху уже стоит крупная плашка: тише и
+   не спорит с ней за внимание. */
+.swipe-initial-ghost {
+  opacity: 0.22;
+  transform: translateY(14%);
+}
+
 .swipe-photo-fallback {
   background: linear-gradient(150deg, var(--crimson-dark), var(--gold-soft) 65%, var(--super));
   display: flex;

@@ -825,6 +825,7 @@ export function fetchMyCommission() {
   return Promise.resolve({
     pendingRub: 560, pendingShifts: 2, overdue: false, dueDays: 7, pct: 10,
     balanceRub: 1500, topupAvailable: true,
+    docsAvailable: true,
   });
 }
 export function adminRelink(

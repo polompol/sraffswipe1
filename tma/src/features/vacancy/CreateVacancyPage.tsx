@@ -21,6 +21,7 @@ import {
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { IconPin } from "@/components/Icons";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 
@@ -51,6 +52,7 @@ export function CreateVacancyPage() {
   const [start, setStart] = useState(pre ? fromMinutes(pre.startTime) : "10:00");
   const [end, setEnd] = useState(pre ? fromMinutes(pre.endTime) : "22:00");
   const [rate, setRate] = useState(pre ? String(pre.rate) : "350");
+  const [interiorPhoto, setInteriorPhoto] = useState(pre?.interiorPhotoUrl ?? "");
   const [rateType, setRateType] = useState<RateType>(pre?.rateType ?? "perHour");
   const [payMethod, setPayMethod] = useState<PayMethod>(pre?.payMethod ?? "cash");
   const [tips, setTips] = useState<TipsMode>(pre?.tips ?? "none");
@@ -122,6 +124,7 @@ export function CreateVacancyPage() {
         description: desc,
         require_med_book: medBook,
         headcount,
+        interior_photo_url: interiorPhoto || undefined,
         address,
         city: city.trim(),
         lat: coords?.lat,
@@ -434,6 +437,16 @@ export function CreateVacancyPage() {
             style={{ marginLeft: 8 }}
           />
         </label>
+
+        {/* Фото места. Сервер это поле принимал и отдавал, карточка в ленте
+            на него рассчитана — а в форме его не было вовсе, и поставить
+            фотографию смене было нельзя ничем. Именно фото решает, листнут
+            карточку дальше или остановятся. */}
+        <PhotoUpload
+          label="Фото места (необязательно, но с ним откликаются заметно чаще)"
+          value={interiorPhoto}
+          onChange={setInteriorPhoto}
+        />
 
         <div className="form-label">Описание</div>
         <textarea

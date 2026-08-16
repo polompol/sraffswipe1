@@ -203,6 +203,14 @@ def swipe(
             # Гонка: параллельный запрос уже записал этот свайп — откатываем
             # списание баланса и считаем операцию идемпотентной.
             db.rollback()
+    elif body.direction in _POSITIVE and existing.direction not in _POSITIVE:
+        # Передумали. Отказ был вечным приговором: человек исчезал и из ленты,
+        # и из списка откликнувшихся, и вернуть его было нельзя ничем — даже
+        # если смахнули влево случайно, а таких свайпов в приложении с
+        # карточками много. Обратный путь (лайк → отказ) намеренно не
+        # разрешаем: он ломал бы уже созданный мэтч и договорённость.
+        existing.direction = body.direction
+        db.commit()
 
     if body.direction not in _POSITIVE:
         return SwipeOut(recorded=True, matched=False)

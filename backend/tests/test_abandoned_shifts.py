@@ -229,11 +229,9 @@ def test_venue_is_warned_about_tomorrow_without_people(client):
     assert "Срочно" in mine[0][2], "нужен совет, что делать, а не просто факт"
 
 
-def test_no_alert_when_the_shift_is_full(client):
-    """Все места набраны — беспокоить незачем."""
+def _tomorrow_shift_with_match(client, tg_emp, tg_seeker, confirm: bool):
+    """Смена на завтра, на которую откликнулись. По желанию — подтверждённая."""
     from datetime import date
-
-    from app.digest import build_unfilled_alerts
 
     emp_h, eid = _auth(client, "employer")
     tomorrow = (date.fromisoformat(local_today()) + timedelta(days=1)).isoformat()
@@ -241,17 +239,51 @@ def test_no_alert_when_the_shift_is_full(client):
     seeker_h, sid = _auth(client, "seeker")
     client.post("/swipes", headers=emp_h, json={
         "target_id": sid, "target_type": "user", "direction": "like"})
-    client.post("/swipes", headers=seeker_h, json={
-        "target_id": v["id"], "target_type": "vacancy", "direction": "like"})
-    _detach(eid, 870060)
-    _detach(sid, 870061)
+    mid = client.post("/swipes", headers=seeker_h, json={
+        "target_id": v["id"], "target_type": "vacancy",
+        "direction": "like"}).json()["match_id"]
+    if confirm:
+        client.post(f"/matches/{mid}/confirm", headers=seeker_h)
+        client.post(f"/matches/{mid}/confirm", headers=emp_h)
+    _detach(eid, tg_emp)
+    _detach(sid, tg_seeker)
+    return v, mid
 
+
+def test_no_alert_when_the_shift_is_full(client):
+    """Смена ПОДТВЕРЖДЕНА обеими сторонами — беспокоить незачем."""
+    from app.digest import build_unfilled_alerts
+
+    v, _mid = _tomorrow_shift_with_match(client, 870060, 870061, confirm=True)
     db = SessionLocal()
     try:
         alerts = build_unfilled_alerts(db)
     finally:
         db.close()
     assert not [a for a in alerts if a[0] == v["id"]]
+
+
+def test_unconfirmed_match_does_not_count_as_a_filled_slot(client):
+    """Договорились, но не подтвердили — заведение обязано об этом узнать.
+
+    Такой мэтч держит место (и правильно: иначе на одно место набежит десять
+    человек), но выйти человек не обязан. Заведение видело «мест не осталось»,
+    успокаивалось — а утром на смену не приходил никто. Вечер накануне —
+    последний момент, когда ещё можно успеть найти замену.
+    """
+    from app.digest import build_unfilled_alerts
+
+    v, _mid = _tomorrow_shift_with_match(client, 870064, 870065, confirm=False)
+    db = SessionLocal()
+    try:
+        alerts = build_unfilled_alerts(db)
+    finally:
+        db.close()
+    mine = [a for a in alerts if a[0] == v["id"]]
+    assert mine, "предупреждение обязано прийти"
+    text = mine[0][2]
+    assert "не подтверждена" in text
+    assert "Подтвердить смену" in text
 
 
 def test_alerts_ignore_other_days(client):

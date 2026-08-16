@@ -80,8 +80,14 @@ def test_answered_applicant_leaves_the_list(client):
     assert _applicants(client, emp_h) == []
 
 
-def test_refused_applicant_does_not_come_back(client):
-    """Отказ — тоже ответ: человек не должен всплывать в списке снова."""
+def test_refused_applicant_stays_with_a_mark(client):
+    """Отказ — не приговор: человек остаётся в списке, но уходит вниз.
+
+    Раньше отказ прятал его навсегда — и отсюда, и из ленты кандидатов, —
+    хотя он сам выбрал вашу смену. Один случайный свайп влево (а в приложении
+    с карточками их много) означал потерянного работника: вернуть его было
+    нельзя ничем.
+    """
     emp_h, eid = _auth(client, "employer")
     v = _shift(client, emp_h)
     seeker_h, sid = _auth(client, "seeker")
@@ -91,6 +97,28 @@ def test_refused_applicant_does_not_come_back(client):
     _detach(sid, 890021)
     client.post("/swipes", headers=emp_h, json={
         "target_id": sid, "target_type": "user", "direction": "dislike"})
+
+    rows = _applicants(client, emp_h)
+    assert [r["id"] for r in rows] == [sid], "человек остаётся в списке"
+    assert rows[0]["declined"] is True, "и честно помечен как отклонённый"
+
+
+def test_employer_can_change_its_mind_after_a_refusal(client):
+    """Передумали — мэтч создаётся, как будто отказа не было."""
+    emp_h, eid = _auth(client, "employer")
+    v = _shift(client, emp_h)
+    seeker_h, sid = _auth(client, "seeker")
+    client.post("/swipes", headers=seeker_h, json={
+        "target_id": v["id"], "target_type": "vacancy", "direction": "like"})
+    _detach(eid, 890024)
+    _detach(sid, 890025)
+    client.post("/swipes", headers=emp_h, json={
+        "target_id": sid, "target_type": "user", "direction": "dislike"})
+
+    r = client.post("/swipes", headers=emp_h, json={
+        "target_id": sid, "target_type": "user", "direction": "like"}).json()
+    assert r["matched"] is True and r["match_id"], "мэтч должен состояться"
+    # И из списка откликов человек уходит: он уже в мэтчах.
     assert _applicants(client, emp_h) == []
 
 

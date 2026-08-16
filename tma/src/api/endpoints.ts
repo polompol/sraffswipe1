@@ -411,6 +411,8 @@ export interface Applicant {
   shiftsTotal: number;
   shiftsAttended: number;
   employersTotal?: number;
+  /** Заведение уже отказало — но человек остаётся в списке: передумать можно. */
+  declined?: boolean;
   vacancyId: string;
   vacancyRole: string;
   vacancyDate: string;
@@ -441,6 +443,7 @@ export interface VacancyInput {
   city?: string;
   lat?: number;
   lng?: number;
+  interior_photo_url?: string;
 }
 
 /** Публикация вакансии работодателем. */
@@ -792,6 +795,9 @@ export interface CommissionInfo {
   pct: number;
   balanceRub: number;
   topupAvailable: boolean;
+  /** Выдаются ли счёт и акт: без реквизитов получателя документы не
+   *  формируются, и кнопки показывать нельзя. */
+  docsAvailable?: boolean;
 }
 
 /** Мой счёт по комиссии (для заведения): сколько накопилось и не просрочен ли. */

@@ -150,6 +150,12 @@ class CommissionInfoOut(BaseModel):
     pct: int
     balanceRub: int  # денежный баланс (аванс) — комиссия списывается сама
     topupAvailable: bool  # оплата картой доступна (ЮKassa подключена / dev)
+    # Выдаются ли счёт и акт. Без реквизитов получателя (ORG_*) документы не
+    # формируются: бумага с прочерками вместо ИНН и расчётного счёта
+    # бесполезна, бухгалтерия вернёт её. Приложение при этом рисовало обе
+    # кнопки, и заведение упиралось в отказ ровно в тот момент, когда собралось
+    # платить, — худший момент из возможных.
+    docsAvailable: bool
 
 
 @router.get("/commission", response_model=CommissionInfoOut)
@@ -181,6 +187,7 @@ def commission_info(
         pct=settings.commission_pct,
         balanceRub=ent.balance_rub,
         topupAvailable=settings.yookassa_ready or settings.dev_mode,
+        docsAvailable=settings.org_ready,
     )
 
 
