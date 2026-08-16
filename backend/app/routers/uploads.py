@@ -98,6 +98,7 @@ def photo_url(
             endpoint_url=settings.s3_endpoint,
             aws_access_key_id=settings.s3_key,
             aws_secret_access_key=settings.s3_secret,
+            region_name=settings.s3_region or None,
         )
         presigned = s3.generate_presigned_post(
             Bucket=settings.s3_bucket,

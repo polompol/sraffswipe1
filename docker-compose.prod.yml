@@ -91,6 +91,7 @@ services:
       S3_KEY: ${S3_KEY:-}
       S3_SECRET: ${S3_SECRET:-}
       S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
+      S3_REGION: ${S3_REGION:-ru-central1}
       SENTRY_DSN: ${SENTRY_DSN:-}
       # Общее состояние процессов. Без него WEB_CONCURRENCY обязан быть 1.
       REDIS_URL: redis://redis:6379/0

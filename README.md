@@ -111,6 +111,7 @@ cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 🧭 С чего начать, если пока ничего нет — **[`docs/START-TODAY.md`](docs/START-TODAY.md)**.
 📦 Запуск с нуля, по шагам и по кнопкам — **[`docs/ПУСК.md`](docs/%D0%9F%D0%A3%D0%A1%D0%9A.md)**.
 Технические подробности деплоя — **[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
+📷 Хранилище фото (S3, Россия — 152-ФЗ) — **[`docs/ФОТО.md`](docs/%D0%A4%D0%9E%D0%A2%D0%9E.md)**.
 
 ## Модель данных
 
