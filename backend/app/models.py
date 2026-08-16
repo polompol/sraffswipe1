@@ -85,6 +85,11 @@ class Employer(Base):
     inn: Mapped[str] = mapped_column(String, default="")
     ogrn: Mapped[str] = mapped_column(String, default="")
     address: Mapped[str] = mapped_column(String, default="")
+    # Город заведения. Его не было вовсе — был только адрес строкой из DaData.
+    # Пока город один, это не мешало, но с выходом в другие города именно по
+    # нему заведению показывается лента кандидатов: без него кафе в Казани
+    # листало бы москвичей.
+    city: Mapped[str] = mapped_column(String, default="", index=True)
     lat: Mapped[float] = mapped_column(Float, default=0.0)
     lng: Mapped[float] = mapped_column(Float, default=0.0)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)

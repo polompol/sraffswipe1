@@ -22,6 +22,7 @@ import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { CityPicker } from "@/components/CityPicker";
 import { IconPin } from "@/components/Icons";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 
@@ -56,7 +57,9 @@ export function CreateVacancyPage() {
   const [rateType, setRateType] = useState<RateType>(pre?.rateType ?? "perHour");
   const [payMethod, setPayMethod] = useState<PayMethod>(pre?.payMethod ?? "cash");
   const [tips, setTips] = useState<TipsMode>(pre?.tips ?? "none");
-  const [city, setCity] = useState(pre?.city || "Москва");
+  // Без «Москвы» по умолчанию: заведение в Казани не заметило бы подстановку
+  // и опубликовало смену в чужом городе — там её никто не увидит.
+  const [city, setCity] = useState(pre?.city || "");
   const [address, setAddress] = useState(pre?.address || "Москва, ул. Льва Толстого, 16");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
@@ -383,14 +386,10 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <label className="form-label" htmlFor="city">Город</label>
-        <input
-          id="city"
-          className="input"
-          style={{ marginBottom: 12 }}
-          placeholder="например, Москва"
+        <CityPicker
           value={city}
-          onChange={(e) => setCity(e.target.value)}
+          onChange={setCity}
+          hint="Смену увидят люди из этого города. Время смены тоже считается по нему."
         />
 
         <label className="form-label" htmlFor="addr">Адрес</label>

@@ -23,8 +23,8 @@ def _bounds(v: Vacancy):
     """Начало и конец смены в UTC. None, если дата битая."""
     try:
         return (
-            shift_start_utc(v.date, v.start_time),
-            shift_end_utc(v.date, v.start_time, v.end_time),
+            shift_start_utc(v.date, v.start_time, v.city),
+            shift_end_utc(v.date, v.start_time, v.end_time, v.city),
         )
     except (ValueError, TypeError):
         return None

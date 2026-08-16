@@ -6,8 +6,9 @@ from pydantic import BaseModel
 from sqlalchemy import Integer, and_, func, or_
 from sqlalchemy.orm import Session
 
+from ..cities import normalize, same_city
 from ..db import get_db
-from ..models import Match, Swipe, User
+from ..models import Employer, Match, Swipe, User
 from ..ratelimit import rate_limit
 from ..security import current_principal
 
@@ -123,17 +124,24 @@ def _reliability(db: Session, user_ids: list[str]) -> dict[str, tuple[int, int, 
 def list_candidates(
     role: str | None = None,
     district: str | None = None,
+    city: str | None = None,
     available_today: bool = False,
     reliable_only: bool = False,
     principal: dict = Depends(current_principal),
     db: Session = Depends(get_db),
 ):
-    """Лента кандидатов для заведения. Фильтры: роль, район, «готов сегодня»,
-    «надёжные» (без неявок). Роль/район фильтруем в Python — CSV-роли и
-    кириллица корректнее, чем LIKE/lower() на SQLite."""
+    """Лента кандидатов для заведения. Фильтры: город, роль, район, «готов
+    сегодня», «надёжные» (без неявок). Роль/район/город фильтруем в Python —
+    CSV-роли и кириллица корректнее, чем LIKE/lower() на SQLite."""
     # Ленту кандидатов с ПДн видит только работодатель.
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
+    # Город. Фильтра не было вообще: пока город один, это незаметно, но кафе в
+    # Казани листало бы москвичей — то есть главный экран заведения переставал
+    # работать в тот день, когда появляется второй город. По умолчанию берём
+    # город самого заведения, чтобы ничего не надо было выбирать руками.
+    me = db.get(Employer, principal["id"])
+    city_f = normalize(city) if city else normalize(getattr(me, "city", "") or "")
     # Не показываем кандидатов, которых работодатель уже свайпнул (иначе колода
     # зацикливается после «кандидаты закончились»).
     swiped = [
@@ -160,6 +168,10 @@ def list_candidates(
         if role_f and role_f not in _csv(u.roles):
             return False
         if dist_f and (u.district or "").strip().lower() != dist_f:
+            return False
+        # Город человека может быть не заполнен (старые анкеты) — таких не
+        # прячем: лучше показать заведению лишнего, чем спрятать своего.
+        if city_f and u.city and not same_city(u.city, city_f):
             return False
         return True
 

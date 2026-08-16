@@ -604,6 +604,22 @@ export async function warnReport(id: string, note = ""): Promise<number> {
   return data.warnings;
 }
 
+export interface City {
+  name: string;
+  tz: string;
+}
+
+/** Города, в которых работает сервис.
+ *
+ *  Список берём с сервера, а не держим копию здесь: две копии неизбежно
+ *  разъезжаются, а разъехавшийся город — это пустая лента, причину которой
+ *  невозможно объяснить человеку. */
+export async function fetchCities(): Promise<City[]> {
+  if (!USE_BACKEND) return mock.fetchCities();
+  const { data } = await api.get<City[]>("/cities");
+  return data;
+}
+
 export interface AdminUser {
   id: string;
   role: "seeker" | "employer";

@@ -180,7 +180,9 @@ def _shift_is_over(db: Session, m: Match) -> bool:
     if v is None:
         return True  # смены нет — блокировать нечего
     try:
-        return datetime.now(UTC) >= shift_end_utc(v.date, v.start_time, v.end_time)
+        return datetime.now(UTC) >= shift_end_utc(
+            v.date, v.start_time, v.end_time, v.city
+        )
     except (ValueError, TypeError):
         return True  # битая дата — не мешаем людям работать
 
@@ -259,7 +261,7 @@ def mark_not_held(
     if v_now is not None:
         try:
             if datetime.now(UTC) < shift_end_utc(
-                v_now.date, v_now.start_time, v_now.end_time
+                v_now.date, v_now.start_time, v_now.end_time, v_now.city
             ):
                 raise HTTPException(
                     status_code=409,
@@ -559,7 +561,7 @@ def set_actual_hours(
     # весь месяц перед счётом — платить около 4% от долга. Заодно у работника
     # усыхал заработок и сумма в акте.
     try:
-        ends = shift_end_utc(v.date, v.start_time, v.end_time)
+        ends = shift_end_utc(v.date, v.start_time, v.end_time, v.city)
         # Нижняя граница окна. Её не было, и «уточнить часы» работало ЗА НЕДЕЛЮ
         # до смены: заведение сразу после подтверждения урезало объявленные
         # часы вдвое — то есть выдавало себе скидку 50% на комиссию по каждой
@@ -681,7 +683,9 @@ def propose_reschedule(
     _vac = db.get(Vacancy, m.vacancy_id)
     if _vac is not None:
         try:
-            if datetime.now(UTC) >= shift_start_utc(_vac.date, _vac.start_time):
+            if datetime.now(UTC) >= shift_start_utc(
+                _vac.date, _vac.start_time, _vac.city
+            ):
                 raise HTTPException(
                     status_code=409,
                     detail="Смена уже началась — переносить поздно. "
@@ -760,7 +764,7 @@ def accept_reschedule(
     # согласиться», он жмёт на следующий день, думая, что речь о новой смене,
     # — и своими руками стирает отработанную.
     try:
-        if datetime.now(UTC) >= shift_start_utc(v.date, v.start_time):
+        if datetime.now(UTC) >= shift_start_utc(v.date, v.start_time, v.city):
             m.reschedule_date = ""
             m.reschedule_start = None
             m.reschedule_end = None
@@ -877,7 +881,7 @@ def cancel_shift(
     v = db.get(Vacancy, m.vacancy_id)
     if v is not None:
         try:
-            start = shift_start_utc(v.date, v.start_time)
+            start = shift_start_utc(v.date, v.start_time, v.city)
             # Отмена — про БУДУЩУЮ смену. Отменять начавшуюся нельзя: это была
             # универсальная кнопка «не платить». Заведение просто не называло
             # код, не жало «человек пришёл», а наутро отменяло смену — статус

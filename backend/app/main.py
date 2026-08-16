@@ -22,6 +22,7 @@ from .routers import (
     employer,
     favorites,
     matches,
+    meta,
     reports,
     saved_searches,
     social,
@@ -175,6 +176,7 @@ app.include_router(uploads.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
 app.include_router(favorites.router)
+app.include_router(meta.router)
 
 
 # HEAD, а не только GET: внешние «сторожа» (UptimeRobot и подобные) по

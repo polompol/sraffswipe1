@@ -970,3 +970,14 @@ export function adminVerifyEmployer(
 ): Promise<boolean> {
   return Promise.resolve(verified);
 }
+
+export function fetchCities(): Promise<{ name: string; tz: string }[]> {
+  return Promise.resolve([
+    { name: "Москва", tz: "Europe/Moscow" },
+    { name: "Санкт-Петербург", tz: "Europe/Moscow" },
+    { name: "Казань", tz: "Europe/Moscow" },
+    { name: "Екатеринбург", tz: "Asia/Yekaterinburg" },
+    { name: "Новосибирск", tz: "Asia/Novosibirsk" },
+    { name: "Владивосток", tz: "Asia/Vladivostok" },
+  ]);
+}

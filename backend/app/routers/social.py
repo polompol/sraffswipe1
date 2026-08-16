@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..cities import normalize
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Match, Referral, Review, User, Vacancy
@@ -236,6 +237,7 @@ def me(
             shiftsDone=shifts,
             inn=e.inn or None,
             photoUrl=e.photo_url or "",
+            city=e.city or "",
         )
     u = db.get(User, principal["id"])
     if u is None:
@@ -370,6 +372,10 @@ def update_me(
         # пролистывают.
         if body.photo_url is not None:
             e.photo_url = body.photo_url
+        # Город заведения. По нему показывается лента кандидатов — без него
+        # заведение в другом городе листало бы москвичей.
+        if body.city is not None:
+            e.city = normalize(body.city)
         if changed_identity and e.verified:
             e.verified = False
         db.commit()
@@ -377,6 +383,7 @@ def update_me(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
             photoUrl=e.photo_url or "",
+            city=e.city or "",
         )
 
     u = db.get(User, principal["id"])
@@ -387,7 +394,7 @@ def update_me(
     if body.birth_date is not None:
         u.birth_date = body.birth_date
     if body.city is not None:
-        u.city = body.city
+        u.city = normalize(body.city)
     if body.district is not None:
         u.district = body.district
     if body.roles is not None:

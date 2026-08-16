@@ -115,7 +115,11 @@ class VacancyIn(BaseModel):
         # телефона соседние числа стоят вплотную.
         from .timeutil import local_today
 
-        if self.date < local_today():
+        # Именно по времени ГОРОДА смены. С одним поясом на сервис заведение
+        # во Владивостоке не могло опубликовать смену на сегодня уже с двух
+        # часов дня по местному: для московского сервера этот день ещё не
+        # наступил.
+        if self.date < local_today(self.city):
             raise ValueError("Смена не может быть в прошлом")
         return self
 

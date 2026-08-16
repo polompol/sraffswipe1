@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/Button";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { CityPicker } from "@/components/CityPicker";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { apiError } from "@/lib/errors";
@@ -102,6 +103,7 @@ export function EditProfilePage() {
         isEmployer
           ? {
               company_name: name,
+              city,
               inn: inn || undefined,
               photo_url: photo || undefined,
             }
@@ -160,6 +162,12 @@ export function EditProfilePage() {
               onChange={(e) => setName(e.target.value)}
             />
 
+            <CityPicker
+              value={city}
+              onChange={setCity}
+              hint="По нему вам показывают людей, которые рядом."
+            />
+
             <label className="form-label" htmlFor="inn">ИНН (необязательно)</label>
             <input
               id="inn"
@@ -186,8 +194,7 @@ export function EditProfilePage() {
         <label className="form-label" htmlFor="bdate">Дата рождения (только 18+)</label>
         <input id="bdate" className="input" type="date" style={{ marginBottom: 12 }} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
 
-        <label className="form-label" htmlFor="city">Город</label>
-        <input id="city" className="input" style={{ marginBottom: 12 }} value={city} onChange={(e) => setCity(e.target.value)} />
+        <CityPicker value={city} onChange={setCity} />
 
         <label className="form-label" htmlFor="district">Район (чтобы звали на смены рядом)</label>
         <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />

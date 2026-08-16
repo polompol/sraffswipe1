@@ -12,6 +12,8 @@ let currentRole: "seeker" | "employer" = "seeker";
 vi.mock("@/api/endpoints", () => ({
   fetchMe: async () => meFixture,
   updateMe: (payload: Payload) => updateMe(payload),
+  // Город теперь выбирается из списка, а список приходит с сервера.
+  fetchCities: async () => [{ name: "Москва", tz: "Europe/Moscow" }],
 }));
 vi.mock("@/telegram/sdk", () => ({
   showBackButton: () => () => {},

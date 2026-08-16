@@ -16,6 +16,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/Button";
+import { CityPicker } from "@/components/CityPicker";
 import { updateMe, uploadPhoto } from "@/api/endpoints";
 import { useSession } from "@/store/session";
 import { haptic } from "@/telegram/sdk";
@@ -38,13 +39,17 @@ export function WelcomePage() {
   // Город спрашиваем здесь же: по нему работает подбор смен рядом и
   // рассылка «смены в вашем городе». Без него человек просто не попадает
   // в выборку — а сам он об этом никогда не догадается.
-  const [city, setCity] = useState("Москва");
+  // Без подстановки «Москва»: человек в Казани её не заметил бы и увидел
+  // московские смены вместо своих — молча, без единой ошибки.
+  const [city, setCity] = useState("");
   const [photo, setPhoto] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const canSave =
-    name.trim().length >= 2 && (isEmployer || (roles.length > 0 && !!city.trim()));
+    name.trim().length >= 2
+    && !!city.trim()
+    && (isEmployer || roles.length > 0);
 
   function toggleRole(r: StaffRole) {
     haptic("select");
@@ -72,7 +77,11 @@ export function WelcomePage() {
     try {
       await updateMe(
         isEmployer
-          ? { company_name: name.trim(), photo_url: photo || undefined }
+          ? {
+              company_name: name.trim(),
+              city: city.trim(),
+              photo_url: photo || undefined,
+            }
           : {
               name: name.trim(),
               roles,
@@ -150,18 +159,15 @@ export function WelcomePage() {
           </>
         )}
 
-        {!isEmployer && (
-          <>
-            <div className="form-label">Город</div>
-            <input
-              className="input"
-              value={city}
-              maxLength={80}
-              placeholder="Москва"
-              onChange={(e) => setCity(e.target.value)}
-            />
-          </>
-        )}
+        <CityPicker
+          value={city}
+          onChange={setCity}
+          hint={
+            isEmployer
+              ? "По городу вам будут показывать людей, которые рядом."
+              : "По городу вам будут показывать смены, которые рядом."
+          }
+        />
 
         <div className="form-label" style={{ marginTop: 20 }}>
           Фото {isEmployer ? "заведения" : ""} — по желанию

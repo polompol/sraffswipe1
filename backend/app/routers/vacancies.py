@@ -1,10 +1,12 @@
 """Лента вакансий и их создание."""
 import math
+from datetime import date, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
+from ..cities import normalize
 from ..config import settings
 from ..db import get_db
 from ..geo import distance_km
@@ -225,7 +227,13 @@ def list_vacancies(
     # ленте вечно — на них откликались, а они давно прошли.
     # Дата смены — местная (см. timeutil): по часам сервера вчерашние
     # смены висели бы в ленте ещё три часа после полуночи в Москве.
-    query = query.filter(Vacancy.date >= local_today())
+    # Отсечка прошедших смен — по местному времени ГОРОДА смены, а не сервера.
+    # В базе фильтруем с запасом в сутки (город может быть и западнее Москвы,
+    # и восточнее), а точную отсечку делаем ниже по каждой смене отдельно.
+    _edge = (
+        date.fromisoformat(local_today(city or "")) - timedelta(days=1)
+    ).isoformat()
+    query = query.filter(Vacancy.date >= _edge)
     if date_from:
         query = query.filter(Vacancy.date >= date_from)
     if date_to:
@@ -298,6 +306,10 @@ def list_vacancies(
         # на неё — потерянное время обеих сторон. Раньше поля «сколько нужно»
         # не было вовсе, и смена висела, пока заведение не снимет её руками.
         if taken.get(v.id, 0) >= (v.headcount or 1):
+            continue
+        # Точная отсечка по городу смены: в Калининграде ещё вчерашний вечер,
+        # когда в Москве уже новый день, и наоборот.
+        if v.date < local_today(v.city):
             continue
         result.append(_to_out(
             v, emp, dist,
@@ -402,7 +414,12 @@ def create_vacancy(
                    "оплатите счёт, чтобы публиковать новые вакансии.",
         )
 
-    v = Vacancy(employer_id=emp.id, **body.model_dump())
+    data = body.model_dump()
+    # Приводим город к каноническому названию: со свободным вводом
+    # «Санкт-Петербург», «СПб» и «Питер» становятся тремя разными городами, и
+    # лента у людей из одного города оказывается пустой — без единой ошибки.
+    data["city"] = normalize(data.get("city", ""))
+    v = Vacancy(employer_id=emp.id, **data)
     db.add(v)
     db.commit()
     db.refresh(v)
@@ -447,6 +464,7 @@ def update_vacancy(
     v = _own_vacancy_or_404(db, vacancy_id, principal)
     taken = taken_counts(db, [v.id]).get(v.id, 0)
     fields = body.model_dump()
+    fields["city"] = normalize(fields.get("city", ""))
 
     # Нельзя объявить, что нужно меньше людей, чем уже набрано, — иначе
     # человек, с которым договорились, остаётся «лишним».

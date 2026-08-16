@@ -80,19 +80,33 @@ def build_reminders(db: Session) -> list[tuple[str, str, str]]:
     Берём только смены, по которым работник ЕЩЁ НЕ отметился, и по которым
     сегодня ещё не напоминали."""
     today = _today()
+    # В базе берём с запасом в сутки в обе стороны, а «сегодня» сверяем по
+    # городу каждой смены: во Владивостоке новый день наступает на семь часов
+    # раньше московского, и напоминание «сегодня смена» приходило либо на день
+    # раньше, либо ночью.
+    from datetime import date as _date
+    from datetime import timedelta as _td
+
+    span = [
+        (_date.fromisoformat(today) + _td(days=d)).isoformat()
+        for d in (-1, 0, 1)
+    ]
     rows = (
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
             Match.status == "confirmed",
             Match.seeker_checked_in.is_(False),
-            Match.reminded_on != today,
-            Vacancy.date == today,
+            Vacancy.date.in_(span),
         )
         .all()
     )
     result: list[tuple[str, str, str]] = []
     for m, v in rows:
+        if v.date != local_today(v.city):
+            continue
+        if m.reminded_on == v.date:
+            continue
         where = v.address or v.city or ""
         text = (
             f"Сегодня смена в {_fmt_time(v.start_time)}"
@@ -111,14 +125,17 @@ def send_reminders(db: Session) -> int:
     Повторный запуск в тот же день ничего не дублирует: у мэтча проставляется
     дата напоминания. Поэтому вызывать можно и вручную из админки, и по крону.
     """
-    today = _today()
     reminders = build_reminders(db)
     for match_id, user_id, text in reminders:
         notify_owner(db, user_id, text,
                      open_app="Я на смене — отметиться", screen="shifts")
         m = db.get(Match, match_id)
         if m is not None:
-            m.reminded_on = today
+            v = db.get(Vacancy, m.vacancy_id)
+            # Помечаем ДАТОЙ СМЕНЫ, а не датой сервера: в восточном городе
+            # день смены и день сервера расходятся, и напоминание уходило
+            # человеку дважды.
+            m.reminded_on = v.date if v is not None else _today()
     db.commit()
     return len(reminders)
 
@@ -212,7 +229,7 @@ def send_unfilled_alerts(db: Session) -> int:
 
 def _shift_end(v: Vacancy) -> datetime:
     """Момент окончания смены в UTC (время смены — местное, см. timeutil)."""
-    return shift_end_utc(v.date, v.start_time, v.end_time)
+    return shift_end_utc(v.date, v.start_time, v.end_time, v.city)
 
 
 # Через сколько часов после конца смены она считается состоявшейся, если
