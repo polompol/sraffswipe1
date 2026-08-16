@@ -19,6 +19,7 @@ from ..models import (
     Entitlement,
     Event,
     Match,
+    Message,
     Purchase,
     Report,
     Swipe,
@@ -27,7 +28,7 @@ from ..models import (
     WalletTxn,
 )
 from ..notify import notify_owner
-from ..roles import role_ru
+from ..roles import date_ru, role_ru, time_ru
 from ..security import current_principal
 from ..timeutil import local_today
 from .analytics import _is_admin
@@ -134,6 +135,28 @@ def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
     )
 
 
+class DisputeFacts(BaseModel):
+    """Всё, по чему оператор решает спор, — в одном месте.
+
+    Раньше в карточке жалобы было ровно два слова: «переписка по мэтчу». Ни
+    имён, ни даты смены, ни главного — называл ли работник код прихода. А
+    выбирать оператору предлагалось между «засчитать смену» и «зафиксировать
+    неявку», то есть вслепую. Код знает только заведение: если работник его
+    назвал — он был на месте и говорил с людьми, и это решает спор почти
+    всегда.
+    """
+
+    worker: str = ""
+    venue: str = ""
+    shiftWhen: str = ""          # «16 августа, 10:00–18:00»
+    checkedInByCode: bool = False  # работник назвал код — доказательство прихода
+    venueMarkedAttended: bool = False
+    notHeldBy: str = ""          # кто заявил «смена не состоялась»
+    payRub: int = 0
+    commission: str = ""         # не начислена / к оплате / оплачена / списана
+    status: str = ""
+
+
 class ReportOut(BaseModel):
     id: str
     targetType: str
@@ -143,6 +166,8 @@ class ReportOut(BaseModel):
     text: str
     status: str
     createdAt: str
+    # Заполняется только для спора по смене.
+    dispute: DisputeFacts | None = None
 
 
 # Должности в админке — по-русски (общий словарь, см. app/roles.py). Здесь
@@ -171,6 +196,44 @@ def _describe_target(db: Session, target_type: str, target_id: str) -> str:
     return "переписка по мэтчу"
 
 
+_COMMISSION_RU = {
+    "pending": "к оплате",
+    "paid": "оплачена",
+    "written_off": "списана оператором",
+}
+
+
+def _dispute_facts(db: Session, match_id: str) -> DisputeFacts | None:
+    """Собрать факты по спорной смене одним заходом."""
+    m = db.get(Match, match_id)
+    if m is None:
+        return None
+    u = db.get(User, m.user_id)
+    e = db.get(Employer, m.employer_id)
+    v = db.get(Vacancy, m.vacancy_id)
+    when = ""
+    if v is not None:
+        when = f"{date_ru(v.date)}, {time_ru(v.start_time)}–{time_ru(v.end_time)}"
+        if v.role:
+            when = f"{role_ru(v.role)} · {when}"
+    c = db.query(Commission).filter(Commission.match_id == match_id).first()
+    # Оплата — та же, что видят стороны: по факту, если часы уточняли.
+    from .matches import _shift_pay
+
+    pay = _shift_pay(v, m.actual_minutes) if v is not None else 0
+    return DisputeFacts(
+        worker=(u.name if u else "") or "работник без имени",
+        venue=(e.company_name if e else "") or "заведение без названия",
+        shiftWhen=when,
+        checkedInByCode=bool(m.checkin_by_code),
+        venueMarkedAttended=bool(m.employer_checked_in),
+        notHeldBy=m.not_held_by or "",
+        payRub=int(pay),
+        commission=_COMMISSION_RU.get(c.status, c.status) if c else "не начислена",
+        status=m.status,
+    )
+
+
 @router.get("/reports", response_model=list[ReportOut])
 def list_reports(
     status: str = "open",
@@ -191,6 +254,10 @@ def list_reports(
             text=r.text,
             status=r.status,
             createdAt=r.created_at.isoformat(),
+            dispute=(
+                _dispute_facts(db, r.target_id)
+                if r.target_type == "match" else None
+            ),
         )
         for r in rows
     ]
@@ -211,6 +278,25 @@ def resolve_report(
     if rep is None:
         raise HTTPException(status_code=404, detail="Жалоба не найдена")
     rep.status = "reviewed"
+    # Жалоба по СМЕНЕ — это спор, и спорную смену расчёт не трогает вообще.
+    # Раньше «Закрыть жалобу» помечало жалобу разобранной, а признак спора со
+    # смены не снимало: смена зависала навсегда — не закрывалась, комиссия по
+    # ней не начислялась никогда, и обе стороны видели вечный «спор». Один
+    # неверный тап в админке стоил денег без единого следа.
+    #
+    # «Закрыть жалобу» без вердикта = «оснований нет, пусть идёт своим
+    # чередом». Явные вердикты — отдельные кнопки «Засчитать смену» и
+    # «Зафиксировать неявку» (POST /matches/{id}/resolve), они снимают спор
+    # сами и ставят исход.
+    if rep.target_type == "match":
+        m = db.get(Match, rep.target_id)
+        if m is not None and m.disputed:
+            m.disputed = False
+            db.add(Message(
+                match_id=m.id, sender_id="system", is_system=True,
+                text="Оператор разобрал спор: оснований не нашлось, "
+                     "смена идёт своим чередом.",
+            ))
     db.commit()
     # Если админ написал ответ — доставляем заявителю (чтобы человек видел, что
     # его услышали). Без bot-токена notify_owner — no-op.
@@ -270,6 +356,43 @@ def _resolve_reports_for(db: Session, target_id: str) -> None:
         Report.target_id == target_id, Report.status == "open"
     ).all():
         r.status = "reviewed"
+
+
+class VerifyEmployerIn(BaseModel):
+    verified: bool = True
+
+
+@router.post("/employers/{employer_id}/verify")
+def set_employer_verified(
+    employer_id: str,
+    body: VerifyEmployerIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Поставить или снять заведению бейдж «Проверено».
+
+    Бейдж виден работнику в ленте ДО отклика и означает ровно одно: оператор
+    сервиса лично убедился, что заведение существует и работает. Автоматически
+    его выдать нельзя — ИНН публичен, и «нашёлся в справочнике» доказывает
+    только умение гуглить. Раньше поставить бейдж не мог никто вообще: во всём
+    коде не было ни одной строки, где он выдаётся, а интерфейс при этом обещал
+    его «после оплаты верификации» — то есть продавал несуществующую услугу.
+
+    При ручной правке названия или ИНН бейдж слетает сам (см. social.py) —
+    иначе проверенным оказывалось бы любое новое название.
+    """
+    emp = db.get(Employer, employer_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Заведение не найдено")
+    emp.verified = bool(body.verified)
+    db.commit()
+    if emp.verified:
+        notify_owner(
+            db, emp.id,
+            "Ваше заведение проверено оператором StaffSwipe ✓ "
+            "Теперь работники видят бейдж «Проверено» в ленте смен.",
+        )
+    return {"ok": True, "verified": emp.verified}
 
 
 @router.post("/users/{user_id}/block")
@@ -421,6 +544,7 @@ class AdminUserOut(BaseModel):
     blocked: bool
     warnings: int
     balanceRub: int = 0  # денежный баланс (аванс) заведения
+    verified: bool = False  # бейдж «Проверено» (только у заведений)
 
 
 def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
@@ -430,6 +554,7 @@ def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
         id=obj.id, role=role, name=name, username=obj.tg_username,
         blocked=obj.blocked, warnings=obj.warnings,
         balanceRub=ent.balance_rub,
+        verified=bool(getattr(obj, "verified", False)),
     )
 
 

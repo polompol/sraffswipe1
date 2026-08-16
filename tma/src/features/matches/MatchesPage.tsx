@@ -10,7 +10,7 @@ import { ReviewStars } from "@/components/ReviewStars";
 import { IconTabMatches, IconCheck, IconWarning, IconChevronRight } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
-import { shiftEnded, shiftWhen } from "@/lib/format";
+import { canReportNoPay, shiftEnded, shiftWhen } from "@/lib/format";
 import { Button } from "@/components/Button";
 import { haptic, confirmAction } from "@/telegram/sdk";
 
@@ -91,6 +91,26 @@ export function MatchesPage() {
     } catch {
       haptic("error");
       toast("Неверный код прихода", "error");
+    }
+  }
+
+  // Смена закрыта, а денег нет. До этой кнопки в приложении не оставалось
+  // НИ ОДНОГО хода: «Проблема — позвать оператора» жила только пока смена не
+  // закрыта, а закрывается она сама через 12 часов. Человек отработал, наличные
+  // не отдали — и пожаловаться некуда. Это ровно тот случай, ради которого
+  // сервис и нужен, поэтому кнопка живёт две недели после смены.
+  async function doNotPaid(matchId: string) {
+    if (!(await confirmAction(
+      "Заведение не рассчиталось за смену? Оператор свяжется с обеими сторонами и разберётся.",
+      "Пожаловаться",
+    ))) return;
+    haptic("warning");
+    try {
+      await disputeShift(matchId, "Не заплатили за смену");
+      toast("Оператор получил вашу жалобу и свяжется с вами", "success");
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    } catch {
+      toast("Не удалось отправить жалобу", "error");
     }
   }
 
@@ -203,6 +223,24 @@ export function MatchesPage() {
                 </div>
                 <ReviewStars matchId={m.id} />
               </>
+            )}
+
+            {/* Деньги за смену платит заведение напрямую, и сервис этого не
+                видит. Единственное, что он может, — позвать оператора и
+                оставить след на заведении. Раньше и этого не было. */}
+            {role === "seeker" && canReportNoPay(m) && (
+              <button
+                className="btn ghost"
+                style={{
+                  marginTop: 12,
+                  fontSize: 14,
+                  color: "var(--muted)",
+                  borderColor: "var(--border-strong)",
+                }}
+                onClick={() => doNotPaid(m.id)}
+              >
+                Мне не заплатили за смену
+              </button>
             )}
 
             {/* День смены. Главное сообщение — «делать ничего не нужно»:

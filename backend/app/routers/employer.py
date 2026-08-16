@@ -5,7 +5,6 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..entitlements import get_or_create
 from ..models import Employer, Match, Swipe, User
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
@@ -295,17 +294,21 @@ def verify_employer(
         if party.name:
             emp.company_name = party.name
 
-    # Бейдж «Проверен» выдаётся только при оплаченной верификации (verify_year).
-    ent = get_or_create(db, emp.id)
-    if ent.employer_verified and party.found:
-        emp.verified = True
     db.commit()
 
+    # Бейдж «Проверено» НЕ выдаётся за найденный ИНН. ИНН — публичные данные:
+    # любой наберёт ИНН известного ресторана и получит чужой бейдж вместе с
+    # названием и адресом. Доказательства владения бизнесом у сервиса нет и на
+    # пилоте быть не может, поэтому бейдж ставит оператор — руками, поговорив
+    # с заведением. Раньше здесь стояла ссылка на «оплаченную верификацию»:
+    # такой услуги в сервисе нет и не было, а поставить бейдж не мог никто
+    # вообще — во всём коде не было ни одного места, где он выдаётся.
     hint = ""
     if not party.found:
         hint = "Организация не найдена в DaData (проверьте ИНН или ключ DaData)."
-    elif not ent.employer_verified:
-        hint = "Данные подтянуты. Бейдж «Проверен» — после оплаты верификации."
+    elif not emp.verified:
+        hint = ("Данные подтянуты. Бейдж «Проверено» ставит оператор "
+                "StaffSwipe после короткого разговора с вами.")
 
     return VerifyOut(
         found=party.found,

@@ -149,3 +149,37 @@ def test_act_contains_calculation_and_signatures(client):
     # Дата по-русски, а не в ISO — и именно дата смены, а не «вчера»
     # по часам сервера: сервер живёт в UTC, а смена — по Москве.
     assert date.fromisoformat(shift_date).strftime("%d.%m.%Y") in text
+
+
+def test_act_shows_the_hours_that_were_actually_worked(client):
+    """Уточнили часы — акт обязан показать их, а не план.
+
+    Акт считал по расписанию смены. Если заведение отметило, что человек ушёл
+    раньше, в приложении он видел 1 600 ₽ и комиссия бралась с 1 600 ₽, а в
+    акте — документе, который он несёт в свою бухгалтерию, — стояло 2 800 ₽ за
+    восемь часов, которых не было.
+    """
+    pypdf = pytest.importorskip("pypdf")
+    import io
+
+    from app.db import SessionLocal
+    from app.models import Match
+
+    mid, token, _shift_date = _confirmed_match(client)
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        m.actual_minutes = 240          # ушёл через 4 часа вместо 8
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.get(f"/matches/{mid}/act.pdf", params={"token": token})
+    assert r.status_code == 200, r.text
+    text = " ".join(
+        pypdf.PdfReader(io.BytesIO(r.content)).pages[0].extract_text().split()
+    )
+    assert "4 часа" in text, "часы — фактические"
+    assert "1400" in text, "350 ₽ × 4 ч = 1400 ₽"
+    assert "2800" not in text, "плановой суммы в акте быть не должно"
+    assert "по фактической длительности" in text

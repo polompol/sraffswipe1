@@ -15,6 +15,24 @@ from ..sms import generate_code, send_code
 router = APIRouter(prefix="/auth", tags=["auth"])
 _log = logging.getLogger("staffswipe")
 
+
+def _sms_enabled() -> None:
+    """Вход по SMS открыт, только если реально подключён шлюз.
+
+    Это запасная дверь на случай, если бота заблокируют (см. docs/START-TODAY.md).
+    Пока шлюза нет, дверь закрыта наглухо: приложение ею не пользуется вовсе —
+    вход идёт по подписи Telegram, — а открытая ручка позволяла заводить
+    аккаунты в обход Telegram. Такой аккаунт живёт без tg_id, а значит не
+    получает ни одного уведомления: ни про мэтч, ни про смену, ни про деньги.
+    Заведение с таким аккаунтом при этом может публиковать смены.
+
+    Ответ 404, а не 403: снаружи не должно быть видно даже того, что дверь есть.
+    """
+    from ..config import settings
+
+    if settings.sms_provider == "none" and not settings.dev_mode:
+        raise HTTPException(status_code=404, detail="Not Found")
+
 # Код живёт 10 минут — после этого считаем его недействительным.
 _CODE_TTL = timedelta(minutes=10)
 
@@ -35,6 +53,7 @@ def _aware(dt: datetime) -> datetime:
     dependencies=[Depends(rate_limit_ip("req-code", 10, 3600))],
 )
 def request_code(body: RequestCodeIn, db: Session = Depends(get_db)):
+    _sms_enabled()
     # Анти-спам: не чаще 3 SMS в минуту на номер (защита от SMS-бомбинга).
     hit(f"req-code:{body.phone}", limit=3, window=60)
     code = generate_code()
@@ -64,6 +83,7 @@ def request_code(body: RequestCodeIn, db: Session = Depends(get_db)):
 
 @router.post("/verify", response_model=TokenOut)
 def verify(body: VerifyIn, db: Session = Depends(get_db)):
+    _sms_enabled()
     # Анти-брутфорс: не больше 5 попыток ввода кода в минуту на номер.
     hit(f"verify:{body.phone}", limit=5, window=60)
     record = db.get(PhoneCode, body.phone)

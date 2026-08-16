@@ -41,3 +41,9 @@ def date_ru(iso: str) -> str:
     if len(parts) != 3:
         return iso or ""
     return f"{parts[2]}.{parts[1]}"
+
+
+def time_ru(minutes: int) -> str:
+    """Минуты от полуночи → «10:00». Одна копия на весь сервер: раньше эта
+    функция была написана заново в четырёх файлах."""
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"

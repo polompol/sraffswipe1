@@ -222,7 +222,7 @@ def invoice_pdf(db: Session, employer_id: str) -> tuple[bytes, str]:
             else f"смена {when}"
         )
         rows.append((
-            f"Услуги подбора персонала: {what} "
+            f"Вознаграждение за доступ к Сервису StaffSwipe: {what} "
             f"(оплата смены {c.shift_pay} ₽)",
             "1", str(c.amount),
         ))
@@ -273,7 +273,7 @@ def act_pdf(
     _party_block(pdf, emp)
 
     rows = [(
-        f"Услуги подбора персонала на смену "
+        f"Вознаграждение за доступ к Сервису StaffSwipe (закрытая смена) "
         f"(оплата смены {c.shift_pay} ₽)", "1", str(c.amount),
     ) for c in items]
     _table(pdf, rows, total)

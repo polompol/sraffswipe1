@@ -532,6 +532,19 @@ export interface AdminReport {
   text: string;
   status: string;
   createdAt: string;
+  /** Факты по спорной смене — только для жалоб на смену. Без них оператору
+   *  предлагалось выбрать между «засчитать смену» и «неявкой» вслепую. */
+  dispute?: {
+    worker: string;
+    venue: string;
+    shiftWhen: string;
+    checkedInByCode: boolean;
+    venueMarkedAttended: boolean;
+    notHeldBy: string;
+    payRub: number;
+    commission: string;
+    status: string;
+  } | null;
 }
 
 export interface AdminBlocked {
@@ -596,6 +609,24 @@ export interface AdminUser {
   blocked: boolean;
   warnings: number;
   balanceRub: number;
+  /** Бейдж «Проверено» — только для заведений. */
+  verified?: boolean;
+}
+
+/** Поставить или снять заведению бейдж «Проверено».
+ *
+ *  Автоматически его выдать нельзя: ИНН — публичные данные, и «нашёлся в
+ *  справочнике» доказывает только умение гуглить. Ставит оператор, поговорив
+ *  с заведением. */
+export async function adminVerifyEmployer(
+  employerId: string,
+  verified: boolean,
+): Promise<boolean> {
+  if (!USE_BACKEND) return mock.adminVerifyEmployer(employerId, verified);
+  const { data } = await api.post<{ verified: boolean }>(
+    `/admin/employers/${employerId}/verify`, { verified },
+  );
+  return data.verified;
 }
 
 /** Поиск людей/заведений в админке (по имени, @нику, телефону). */

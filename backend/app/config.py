@@ -32,7 +32,6 @@ class Settings(BaseSettings):
 
     # DaData — проверка ИНН/ОГРН и подсказки адресов.
     dadata_token: str = ""
-    dadata_secret: str = ""
 
     # --- Telegram ---
     # Токен бота (BotFather). Нужен для валидации initData и уведомлений.

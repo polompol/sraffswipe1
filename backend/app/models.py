@@ -264,6 +264,10 @@ class Entitlement(Base):
     __tablename__ = "entitlements"
 
     owner_id: Mapped[str] = mapped_column(String, primary_key=True)
+    # Наследие «платной верификации», которой в сервисе нет. Бейдж «Проверено»
+    # живёт на самом заведении (Employer.verified) и ставится оператором
+    # руками. Колонку оставили, чтобы не гонять миграцию ради пустого поля;
+    # читать её не нужно ничему.
     employer_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     # Денежный баланс заведения, ₽ — аванс, с которого автоматически
     # списывается комиссия за закрытые смены. Пополнение: оператор (принял

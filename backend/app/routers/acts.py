@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Employer, Match, User, Vacancy
 from ..ratelimit import rate_limit_ip
-from ..roles import role_ru
+from ..roles import role_ru, time_ru
 from ..rubles import plural, rubles_in_words
 from ..security import decode_token, ensure_token_usable
 
@@ -35,7 +35,7 @@ def _pdf() -> FPDF:
 
 
 def _fmt_time(minutes: int) -> str:
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+    return time_ru(minutes)
 
 
 def _fmt_date(iso: str) -> str:
@@ -98,6 +98,13 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     dur_min = vac.end_time - vac.start_time
     if dur_min <= 0:
         dur_min += 1440
+    # Если заведение уточнило фактические часы (человек ушёл раньше или
+    # задержался) — акт обязан показать ИХ. Он считал по плану, и документ
+    # расходился со всем остальным: в приложении человек видел 1600 ₽ и
+    # комиссия бралась с 1600 ₽, а в акте, который он несёт в свою
+    # бухгалтерию, стояло 2800 ₽ за восемь часов, которых не было.
+    if m.actual_minutes:
+        dur_min = m.actual_minutes
     pay = vac.rate if vac.rate_type == "perShift" else round(vac.rate * dur_min / 60)
     hours = dur_min / 60
     role_name = role_ru(vac.role)
@@ -157,6 +164,8 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
         f"{_fmt_date(vac.date)}, "
         f"{_fmt_time(vac.start_time)}–{_fmt_time(vac.end_time)}"
     )
+    if m.actual_minutes and vac.rate_type != "perShift":
+        name += " (по фактической длительности)"
     pdf.set_font("DejaVu", size=9)
     y0 = pdf.get_y()
     pdf.multi_cell(95, 6, name, border=1)

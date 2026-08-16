@@ -56,3 +56,27 @@ def test_env_example_documents_money_vars():
     example = (COMPOSE.parent / ".env.example").read_text(encoding="utf-8")
     missing = [v for v in MONEY_VARS if f"{v}=" not in example]
     assert not missing, f"Нет в .env.example: {missing}"
+
+
+def test_sms_door_is_shut_without_a_gateway(client, monkeypatch):
+    """Вход по SMS закрыт, пока не подключён шлюз.
+
+    Приложение этой дверью не пользуется вовсе — вход идёт по подписи Telegram.
+    А открытая ручка позволяла заводить аккаунты в обход Telegram: такой
+    аккаунт живёт без tg_id и не получает ни одного уведомления, при этом
+    заведение с него может публиковать смены.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "dev_mode", False, False)
+    monkeypatch.setattr(settings, "sms_provider", "none", False)
+    assert client.post("/auth/request-code",
+                       json={"phone": "+79001234567"}).status_code == 404
+    assert client.post("/auth/verify", json={
+        "phone": "+79001234567", "code": "123456"}).status_code == 404
+
+    # Шлюз подключили — дверь открывается. Что дальше ответит сам шлюз (у нас
+    # он не интегрирован и честно отвечает 502) — уже не про эту проверку.
+    monkeypatch.setattr(settings, "sms_provider", "exolve", False)
+    assert client.post("/auth/request-code",
+                       json={"phone": "+79001234567"}).status_code != 404

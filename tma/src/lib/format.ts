@@ -92,6 +92,34 @@ export function shiftStarted(m: {
 
 /** Смена уже закончилась? Только после этого можно сказать «не состоялась».
  *  Ночная смена (конец меньше начала) заканчивается на следующий день. */
+/** Сколько дней после смены работник может пожаловаться, что ему не заплатили.
+ *
+ *  Две недели — с запасом: наличные обычно отдают в тот же вечер, а «занесу
+ *  завтра» тянется несколько дней. Бесконечное окно не годится: через полгода
+ *  разобраться, кто прав, уже невозможно, а оператору такая жалоба ничего не
+ *  даст. */
+export const NOT_PAID_WINDOW_DAYS = 14;
+
+/** Можно ли ещё пожаловаться «мне не заплатили».
+ *
+ *  Только по закрытой смене и только пока не вышло окно. До этого в приложении
+ *  не оставалось ни одного хода: кнопка «Проблема» жила лишь пока смена не
+ *  закрыта, а закрывается она сама через 12 часов после окончания. */
+export function canReportNoPay(m: {
+  status?: string;
+  disputed?: boolean;
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
+}): boolean {
+  if (m.status !== "completed" || m.disputed) return false;
+  if (!shiftEnded(m)) return false;
+  const at = shiftMoment(m.shiftDate, m.shiftEnd);
+  if (at === null) return true; // даты нет — не отнимаем у человека ход
+  const days = (Date.now() - at.getTime()) / 86400000;
+  return days <= NOT_PAID_WINDOW_DAYS;
+}
+
 export function shiftEnded(m: {
   shiftDate?: string;
   shiftStart?: number;

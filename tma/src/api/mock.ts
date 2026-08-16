@@ -640,6 +640,27 @@ const adminReports = [
     status: "reviewed",
     createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
   },
+  {
+    id: "rep3",
+    targetType: "match",
+    targetId: "m13",
+    targetInfo: "переписка по мэтчу",
+    reason: "other",
+    text: "Спор по смене (работник): Не заплатили за смену",
+    status: "open",
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    dispute: {
+      worker: "Мария",
+      venue: "Кофейня «Дрова»",
+      shiftWhen: "Бариста · 15 августа, 08:00–16:00",
+      checkedInByCode: true,
+      venueMarkedAttended: false,
+      notHeldBy: "",
+      payRub: 2800,
+      commission: "к оплате",
+      status: "completed",
+    },
+  },
 ];
 
 const adminBlocked = [
@@ -918,4 +939,11 @@ export function suggestAddress(q: string): Promise<AddressSuggestion[]> {
     { value: `Москва, ${q}, 10`, lat: 55.76, lng: 37.62 },
     { value: `Санкт-Петербург, ${q}, 5`, lat: 59.93, lng: 30.34 },
   ]);
+}
+
+export function adminVerifyEmployer(
+  _employerId: string,
+  verified: boolean,
+): Promise<boolean> {
+  return Promise.resolve(verified);
 }

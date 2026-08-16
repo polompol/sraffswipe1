@@ -7,7 +7,7 @@ import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { ReportSheet } from "@/components/ReportSheet";
-import { IconFire, IconShare, IconCheck, IconWarning, IconBookmark } from "@/components/Icons";
+import { IconFire, IconShare, IconWarning, IconBookmark } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
 
 /** Миниатюра 64×64 с фолбэком: бренд-градиент+инициал, поверх — фото (если
@@ -134,11 +134,6 @@ export function VacancyList({
             {v.payMethod && (
               <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
                 {PAY_METHOD_SHORT[v.payMethod]}
-              </span>
-            )}
-            {v.employerPaysOnTime && (
-              <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
-                <IconCheck size={12} /> Платит вовремя
               </span>
             )}
             {!!v.employerShiftsDone && (

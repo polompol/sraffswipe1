@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .models import Match, Swipe, User, Vacancy
 from .notify import notify_owner
-from .roles import date_ru, role_ru
+from .roles import date_ru, role_ru, time_ru
 from .timeutil import local_today, shift_end_utc
 
 _log = logging.getLogger("staffswipe")
@@ -25,7 +25,7 @@ def _today() -> str:
 
 
 def _fmt_time(minutes: int) -> str:
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+    return time_ru(minutes)
 
 
 def build_digest(db: Session, limit: int = 3) -> dict[str, list[str]]:

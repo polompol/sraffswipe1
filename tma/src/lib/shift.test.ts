@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shiftEnded, shiftStarted, shiftWhen } from "./format";
+import { canReportNoPay, shiftEnded, shiftStarted, shiftWhen } from "./format";
 
 /** Смена сегодня с заданными часами относительно текущего времени. */
 function todayShift(startOffsetH: number, endOffsetH: number) {
@@ -51,5 +51,35 @@ describe("время смены", () => {
     expect(shiftStarted({})).toBe(false);
     expect(shiftEnded({})).toBe(false);
     expect(shiftWhen({})).toBe("");
+  });
+});
+
+describe("жалоба «мне не заплатили»", () => {
+  const closed = (daysAgo: number) => {
+    const d = new Date(Date.now() - daysAgo * 86400000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return {
+      status: "completed",
+      shiftDate: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      shiftStart: 600,
+      shiftEnd: 1080,
+    };
+  };
+
+  it("доступна по свежей закрытой смене", () => {
+    expect(canReportNoPay(closed(1))).toBe(true);
+    expect(canReportNoPay(closed(13))).toBe(true);
+  });
+
+  it("через две недели уже поздно — разбирать нечего", () => {
+    expect(canReportNoPay(closed(20))).toBe(false);
+  });
+
+  it("по незакрытой смене не показывается: там своя кнопка «Проблема»", () => {
+    expect(canReportNoPay({ ...closed(1), status: "confirmed" })).toBe(false);
+  });
+
+  it("не дублируется, если спор уже открыт", () => {
+    expect(canReportNoPay({ ...closed(1), disputed: true })).toBe(false);
   });
 });

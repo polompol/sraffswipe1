@@ -22,6 +22,7 @@ from ..models import (
 )
 from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
+from ..roles import time_ru
 from ..schemas import MatchOut
 from ..security import current_principal, secure_equals
 from ..timeutil import shift_end_utc, shift_start_utc
@@ -62,7 +63,7 @@ def _sys(db: Session, match_id: str, text: str) -> None:
 
 
 def _fmt_time(minutes: int) -> str:
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+    return time_ru(minutes)
 
 
 def _fmt_date(iso: str) -> str:

@@ -220,11 +220,6 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           <span className="tag" style={{ background: "var(--gold-fill)", color: "#fff", borderColor: "var(--gold-fill)" }}>
             {STAFF_ROLE_LABELS[v.role]}
           </span>
-          {v.employerPaysOnTime && (
-            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
-              <IconCheck size={13} /> Платит вовремя
-            </span>
-          )}
         </div>
 
         <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

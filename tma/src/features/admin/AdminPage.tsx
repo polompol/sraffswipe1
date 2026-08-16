@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AdminReport } from "@/api/endpoints";
 import {
   fetchCommissions,
   fetchSources,
@@ -21,6 +22,7 @@ import {
   reconcilePayments,
   adminRelink,
   adminSearchUsers,
+  adminVerifyEmployer,
   blockUser,
   blockVacancy,
   fetchAdminOverview,
@@ -32,7 +34,7 @@ import {
   unblockVacancy,
   warnReport,
 } from "@/api/endpoints";
-import { showBackButton, haptic } from "@/telegram/sdk";
+import { confirmAction, showBackButton, haptic } from "@/telegram/sdk";
 import { Loading } from "@/components/States";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
@@ -55,6 +57,50 @@ const TARGET_LABEL: Record<string, string> = {
   user: "Человек",
   match: "Переписка",
 };
+
+/** Факты по спорной смене — то, по чему оператор принимает решение.
+ *
+ *  Главная строка здесь — про код прихода. Код знает только заведение: если
+ *  работник его назвал, значит он был на месте и говорил с людьми, и спор
+ *  почти всегда решается этим. Раньше в карточке жалобы было два слова —
+ *  «переписка по мэтчу», — а выбирать предлагалось между «засчитать смену» и
+ *  «зафиксировать неявку». Вслепую. */
+function DisputeFacts({ d }: { d: NonNullable<AdminReport["dispute"]> }) {
+  const rows: [string, string, boolean?][] = [
+    ["Работник", d.worker],
+    ["Заведение", d.venue],
+    ["Смена", d.shiftWhen],
+    [
+      "Назвал код прихода",
+      d.checkedInByCode ? "да — был на месте" : "нет",
+      d.checkedInByCode,
+    ],
+    ["Заведение отметило выход", d.venueMarkedAttended ? "да" : "нет"],
+    ...(d.notHeldBy
+      ? ([[
+          "Заявил «смены не было»",
+          d.notHeldBy === "employer" ? "заведение" : "работник",
+        ]] as [string, string][])
+      : []),
+    ["Оплата смены", `${d.payRub.toLocaleString("ru-RU")} ₽`],
+    ["Комиссия", d.commission],
+  ];
+  return (
+    <div
+      className="card"
+      style={{ margin: "8px 0", padding: 12, background: "var(--bg)" }}
+    >
+      {rows.map(([label, value, strong]) => (
+        <div key={label} className="row" style={{ gap: 8, fontSize: 13.5 }}>
+          <span className="muted" style={{ minWidth: 0, flex: 1 }}>{label}</span>
+          <span style={{ fontWeight: strong ? 700 : 600, color: strong ? "var(--like)" : undefined, textAlign: "right" }}>
+            {value || "—"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const REASON_LABEL: Record<string, string> = {
   fake: "Фейк",
@@ -300,6 +346,20 @@ export function AdminPage() {
 
   // Завершить все сессии: человек потерял телефон. Не блокировка — он просто
   // откроет приложение заново и войдёт сам.
+  async function toggleVerified(id: string, next: boolean) {
+    if (next && !(await confirmAction(
+      "Вы лично убедились, что заведение существует и работает? Работники видят этот знак до отклика.",
+      "Проверено",
+    ))) return;
+    try {
+      await adminVerifyEmployer(id, next);
+      toast(next ? "Бейдж «Проверено» поставлен" : "Бейдж снят", "success");
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (e) {
+      toast(apiError(e, "Не удалось изменить бейдж"), "error");
+    }
+  }
+
   async function logoutAll(id: string) {
     try {
       await adminLogoutAll(id);
@@ -623,6 +683,7 @@ export function AdminPage() {
                   </span>
                 </div>
                 <div style={{ fontWeight: 700, margin: "4px 0" }}>{r.targetInfo}</div>
+                {r.dispute && <DisputeFacts d={r.dispute} />}
                 {r.text && <div className="muted" style={{ margin: "2px 0 6px" }}>{r.text}</div>}
                 {r.status === "open" ? (
                   <div style={{ marginTop: 8 }}>
@@ -861,6 +922,9 @@ export function AdminPage() {
                   <div className="row">
                     <span style={{ flex: 1 }}>
                       <b>{u.name}</b>
+                      {u.verified && (
+                        <span className="tag" style={{ marginLeft: 8, color: "var(--gold)", borderColor: "var(--gold)" }}>проверено</span>
+                      )}
                       {u.blocked && (
                         <span className="tag" style={{ marginLeft: 8, color: "var(--crimson-dark)", borderColor: "var(--crimson-dark)" }}>бан</span>
                       )}
@@ -901,6 +965,18 @@ export function AdminPage() {
                           }}
                         >
                           Вернуть с баланса
+                        </button>
+                        {/* Бейдж «Проверено» ставит человек, а не программа:
+                            ИНН публичен, и «нашёлся в справочнике» доказывает
+                            только умение гуглить. Раньше поставить его не мог
+                            никто вообще, а приложение обещало его «после
+                            оплаты верификации» — услуги, которой нет. */}
+                        <button
+                          className="tag"
+                          style={{ cursor: "pointer" }}
+                          onClick={() => toggleVerified(u.id, !u.verified)}
+                        >
+                          {u.verified ? "Снять «Проверено»" : "✓ Проверено"}
                         </button>
                       </>
                     )}

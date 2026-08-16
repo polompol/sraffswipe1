@@ -121,7 +121,6 @@ export function FeedPage() {
       (filters.date_from ? 1 : 0) +
       (filters.rate_type ? 1 : 0) +
       (filters.no_med_book ? 1 : 0) +
-      (filters.no_experience ? 1 : 0) +
       (filters.tips_only ? 1 : 0) +
       (filters.verified_only ? 1 : 0)
     : (filters.role ? 1 : 0) +
