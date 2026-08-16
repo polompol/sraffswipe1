@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CityPicker } from "@/components/CityPicker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import { localISO } from "@/lib/format";
@@ -136,7 +137,10 @@ export function FilterSheet({
       onClose={onClose}
       footer={
         <>
-          <button className="btn secondary" onClick={() => onApply({ sort: "distance" })}>
+          <button
+            className="btn secondary"
+            onClick={() => onApply({ sort: "distance", city: f.city })}
+          >
             Сбросить
           </button>
           <button className="btn" onClick={() => onApply(f)}>
@@ -145,14 +149,13 @@ export function FilterSheet({
         </>
       }
     >
-      <label className="form-label" htmlFor="city">Город</label>
-      <input
-        id="city"
-        className="input"
-        style={{ marginBottom: 16 }}
-        placeholder="например, Москва"
+      {/* Тот же выбор из справочника, что в анкете и при публикации. Со
+          свободным вводом человек писал «Питер» — и лента оказывалась пустой:
+          смены в базе приводятся к «Санкт-Петербург», а сравнение шло буква в
+          букву. Ошибки при этом никакой, просто пусто. */}
+      <CityPicker
         value={f.city ?? ""}
-        onChange={(e) => set({ city: e.target.value || undefined })}
+        onChange={(c) => set({ city: c || undefined })}
       />
 
       <div className="form-label">Когда</div>

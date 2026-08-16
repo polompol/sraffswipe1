@@ -60,12 +60,15 @@ export function CreateVacancyPage() {
   // Без «Москвы» по умолчанию: заведение в Казани не заметило бы подстановку
   // и опубликовало смену в чужом городе — там её никто не увидит.
   const [city, setCity] = useState(pre?.city || "");
-  const [address, setAddress] = useState(pre?.address || "Москва, ул. Льва Толстого, 16");
+  // Пусто, а не московская улица. Подстановку легко не заметить: заведение в
+  // Казани заполняло дату и ставку, адрес не трогало — и публиковало смену по
+  // московскому адресу. Он потом уходит и в напоминание работнику, и в акт.
+  const [address, setAddress] = useState(pre?.address || "");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
   // Последний адрес, выбранный из списка (или подставленный при входе): для
   // него подсказки не запрашиваем.
-  const chosenAddress = useRef<string>(pre?.address || "Москва, ул. Льва Толстого, 16");
+  const chosenAddress = useRef<string>(pre?.address || "");
   const [desc, setDesc] = useState(pre?.description ?? "");
   const [medBook, setMedBook] = useState(pre?.requireMedBook ?? true);
   // Сколько человек нужно: на банкет и выходные почти никогда не один.

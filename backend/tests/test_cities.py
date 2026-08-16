@@ -188,3 +188,85 @@ def test_the_city_list_is_served_to_the_app(client):
     assert {"Москва", "Санкт-Петербург", "Владивосток"} <= names
     by_name = {r["name"]: r["tz"] for r in rows}
     assert by_name["Владивосток"] == "Asia/Vladivostok"
+
+
+def test_seeker_feed_defaults_to_his_own_city(client):
+    """Лента смен без явного города — по городу самого человека.
+
+    Город соискателя жил только в приложении: стоило нажать «Сбросить» в
+    фильтрах или открыть ленту до загрузки профиля — и в колоде оказывались
+    смены всей страны. Человек лайкал смену в другом городе, дело доходило до
+    мэтча и подтверждения, а на смену никто не приезжал. Поэтому подстановка
+    делается на СЕРВЕРЕ, как у заведения.
+    """
+    from datetime import date, timedelta
+
+    day = (date.fromisoformat(local_today()) + timedelta(days=2)).isoformat()
+    shift = {"role": "waiter", "date": day, "start_time": 600, "end_time": 1080,
+             "rate": 400, "rate_type": "perHour", "lat": 0, "lng": 0}
+
+    kaz_h, kaz_id = _auth(client, "employer")
+    _set_city(kaz_id, "Казань", 941001)
+    client.post("/vacancies", headers=kaz_h, json={**shift, "city": "Казань"})
+
+    vlv_h, vlv_id = _auth(client, "employer")
+    _set_city(vlv_id, "Владивосток", 941002)
+    client.post("/vacancies", headers=vlv_h, json={**shift, "city": "Владивосток"})
+
+    see_h, see_id = _auth(client, "seeker")
+    client.put("/me", headers=see_h, json={"name": "Ильдар", "city": "Казань"})
+    _set_city(see_id, "Казань", 941003)
+
+    cities = {v["city"] for v in client.get("/vacancies", headers=see_h).json()}
+    assert cities == {"Казань"}, "без города в запросе — лента своего города"
+
+    # Гость без входа по-прежнему видит всё: ему город взять неоткуда.
+    assert len(client.get("/vacancies").json()) == 2
+
+
+def test_a_subscription_to_piter_actually_fires(client):
+    """Подписка «Питер» обязана срабатывать на смены «Санкт-Петербург».
+
+    Город в сохранённом поиске сравнивался строкой: подписка на «Питер» не
+    сработала бы ни разу, потому что смены приводятся к «Санкт-Петербург».
+    """
+    from app.models import Vacancy as V
+    from app.routers.saved_searches import _matches
+
+    v = V(employer_id="e", role="waiter", date="2030-01-01", start_time=600,
+          end_time=1080, rate=400, rate_type="perHour", city="Санкт-Петербург")
+    assert _matches({"city": "Питер"}, v) is True
+    assert _matches({"city": "спб"}, v) is True
+    assert _matches({"city": "Казань"}, v) is False
+
+
+def test_tomorrow_alert_uses_the_shift_city_clock(client):
+    """«Завтра смена без людей» — «завтра» по времени города смены.
+
+    Рассылка идёт вечером по Москве. Во Владивостоке это уже глубокая ночь
+    следующего дня: заведение получало письмо про «завтра», когда смена уже
+    сегодня и искать замену поздно.
+    """
+    from datetime import date, timedelta
+
+    from app.digest import build_unfilled_alerts
+
+    emp_h, emp_id = _auth(client, "employer")
+    _set_city(emp_id, "Владивосток", 941010)
+    vlv_tomorrow = (
+        date.fromisoformat(local_today("Владивосток")) + timedelta(days=1)
+    ).isoformat()
+    v = client.post("/vacancies", headers=emp_h, json={
+        "role": "waiter", "date": vlv_tomorrow, "start_time": 600,
+        "end_time": 1080, "rate": 400, "rate_type": "perHour",
+        "city": "Владивосток", "lat": 0, "lng": 0,
+    }).json()
+
+    db = SessionLocal()
+    try:
+        alerts = build_unfilled_alerts(db)
+    finally:
+        db.close()
+    assert v["id"] in {a[0] for a in alerts}, (
+        "«завтра» для Владивостока — по владивостокскому календарю"
+    )

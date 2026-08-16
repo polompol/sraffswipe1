@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
+from ..cities import normalize, same_city
 from ..db import get_db
 from ..models import SavedSearch, Vacancy
 from ..notify import notify_owner
@@ -99,8 +100,13 @@ def create_search(
             status_code=400,
             detail=f"Слишком много сохранённых поисков (максимум {_MAX_SEARCHES})",
         )
+    # Город приводим к каноническому написанию при СОХРАНЕНИИ: иначе подписка
+    # хранит «спб» и не совпадает ни с одной сменой.
+    _flt = body.filters.model_dump(exclude_none=True)
+    if _flt.get("city"):
+        _flt["city"] = normalize(str(_flt["city"]))
     filters_json = json.dumps(
-        body.filters.model_dump(exclude_none=True), ensure_ascii=False
+        _flt, ensure_ascii=False
     )
     if len(filters_json) > _MAX_FILTERS_CHARS:
         raise HTTPException(status_code=400, detail="Слишком большой фильтр")
@@ -132,9 +138,9 @@ def delete_search(
 
 def _matches(flt: dict, v: Vacancy) -> bool:
     # Город — главный фильтр: алерт о смене не в своём городе бесполезен.
-    if flt.get("city") and (v.city or "").strip().lower() != str(
-        flt["city"]
-    ).strip().lower():
+    # Сравниваем через справочник, а не строкой: подписка на «Питер» не
+    # сработала бы никогда — смены в базе приводятся к «Санкт-Петербург».
+    if flt.get("city") and not same_city(str(flt["city"]), v.city or ""):
         return False
     if flt.get("role") and v.role != flt["role"]:
         return False

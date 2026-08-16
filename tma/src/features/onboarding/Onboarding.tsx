@@ -39,7 +39,7 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
           <IconBolt size={15} /> Оплата напрямую · без опыта берут
         </span>
         <p className="muted" style={{ fontSize: 12.5 }}>
-          Москва · новые смены появляются каждый день
+          Новые смены появляются каждый день
         </p>
         <button
           className="btn"
@@ -151,7 +151,7 @@ export function Onboarding() {
           )}
         </div>
         <p className="muted" style={{ textAlign: "center", fontSize: 12.5, marginBottom: 12 }}>
-          Москва · новые смены появляются каждый день
+          Новые смены появляются каждый день
         </p>
         <div className="row" style={{ justifyContent: "center", marginBottom: 20 }}>
           {SLIDES.map((_, idx) => (

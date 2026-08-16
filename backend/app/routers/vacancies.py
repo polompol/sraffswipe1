@@ -239,10 +239,19 @@ def list_vacancies(
     if date_to:
         query = query.filter(Vacancy.date <= date_to)
 
-    # Город: на PostgreSQL фильтруем в SQL (lower() корректен и для кириллицы),
-    # на SQLite — в Python, т.к. его lower() не сворачивает кириллицу. Так лента
-    # не тянет в память все смены страны и пользователь видит только свой город.
-    city_norm = city.strip().lower() if city else None
+    # Город. Если приложение его не прислало — берём из профиля самого
+    # человека. Это делается ИМЕННО НА СЕРВЕРЕ: у заведения так и было, а у
+    # соискателя город жил только в приложении, и стоило нажать «Сбросить» в
+    # фильтрах (или открыть ленту до загрузки профиля) — в колоде оказывались
+    # смены всей страны вперемешку. Человек лайкал смену в другом городе,
+    # доходило до мэтча и подтверждения, а на смену никто не приезжал.
+    if not city and principal and principal.get("role") == "seeker":
+        _me = db.get(User, principal["id"])
+        city = getattr(_me, "city", "") or None
+    # Приводим к каноническому написанию: в базе города уже нормализованы,
+    # и сравнение «Питер» с «Санкт-Петербург» иначе не сойдётся никогда —
+    # лента окажется пустой без единой ошибки.
+    city_norm = normalize(city).lower() if city else None
     is_sqlite = settings.database_url.startswith("sqlite")
     if city_norm and not is_sqlite:
         query = query.filter(func.lower(Vacancy.city) == city_norm)
@@ -554,7 +563,7 @@ def urgent_ping(
     # смена остаётся «активной», пока её не сняли руками, и «Срочно» на
     # вчерашнюю смену рассылало приглашение всем, кто готов выйти сегодня.
     # Люди откликались на то, чего уже не существует.
-    if v.date < local_today():
+    if v.date < local_today(v.city):
         raise HTTPException(
             status_code=409,
             detail="Эта смена уже прошла — позвать на неё нельзя. "

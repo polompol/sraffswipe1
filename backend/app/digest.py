@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from .cities import normalize
 from .models import Match, Swipe, User, Vacancy
 from .notify import notify_owner
 from .roles import date_ru, role_ru, time_ru
@@ -36,7 +37,10 @@ def build_digest(db: Session, limit: int = 3) -> dict[str, list[str]]:
     for u in users:
         if not u.city:
             continue
-        city = u.city.strip().lower()
+        # Через справочник, а не строкой: у человека в анкете может лежать
+        # «Питер», а у смены — «Санкт-Петербург». Буква в букву они не
+        # совпадут никогда, и дайджест этому человеку не придёт вовсе.
+        city = normalize(u.city).lower()
         swiped = {
             s.target_id
             for s in db.query(Swipe.target_id)
@@ -51,7 +55,7 @@ def build_digest(db: Session, limit: int = 3) -> dict[str, list[str]]:
         )
         picked: list[str] = []
         for v in vacs:
-            if (v.city or "").strip().lower() != city:
+            if normalize(v.city or "").lower() != city:
                 continue
             if v.id in swiped:
                 continue
@@ -153,16 +157,25 @@ def build_unfilled_alerts(db: Session) -> list[tuple[str, str, str]]:
     from datetime import date
     from datetime import timedelta as _td
 
+    # «Завтра» у каждого города своё. Берём в базе с запасом в сутки в обе
+    # стороны, а точное «завтра» сверяем по городу смены: во Владивостоке
+    # московское «завтра» — это уже сегодня, и предупреждение «людей нет»
+    # приходило туда, когда искать замену поздно.
     try:
-        tomorrow = (date.fromisoformat(local_today()) + _td(days=1)).isoformat()
+        base = date.fromisoformat(local_today())
     except ValueError:
         return []
+    span = [(base + _td(days=d)).isoformat() for d in (0, 1, 2)]
 
-    rows = (
-        db.query(Vacancy)
-        .filter(Vacancy.status == "active", Vacancy.date == tomorrow)
+    rows = [
+        v
+        for v in db.query(Vacancy)
+        .filter(Vacancy.status == "active", Vacancy.date.in_(span))
         .all()
-    )
+        if v.date == (
+            date.fromisoformat(local_today(v.city)) + _td(days=1)
+        ).isoformat()
+    ]
     if not rows:
         return []
     # Считаем ЗАКРЫТЫМИ только подтверждённые места. Мэтч без подтверждения
