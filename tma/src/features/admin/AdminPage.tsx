@@ -172,6 +172,9 @@ export function AdminPage() {
   // Черновики ответов заявителю — по одному на жалобу.
   const [replies, setReplies] = useState<Record<string, string>>({});
   const [userQ, setUserQ] = useState("");
+  // Зачисление произвольной суммы: перевод по СБП приходит не круглым числом.
+  const [creditFor, setCreditFor] = useState<string | null>(null);
+  const [creditSum, setCreditSum] = useState("");
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
   const ov = useQuery({ queryKey: ["admin-overview"], queryFn: fetchAdminOverview });
@@ -945,6 +948,16 @@ export function AdminPage() {
                             идемпотентно, и двойной тап по подтормаживающему
                             экрану клал на баланс вдвое больше. У Button
                             блокировка на время запроса встроена. */}
+                        <button
+                          className="tag"
+                          style={{ cursor: "pointer" }}
+                          onClick={() => {
+                            setCreditFor(creditFor === u.id ? null : u.id);
+                            setCreditSum("");
+                          }}
+                        >
+                          Зачислить сумму
+                        </button>
                         {[1000, 5000].map((a) => (
                           <Button
                             key={a}
@@ -1013,6 +1026,33 @@ export function AdminPage() {
                   >
                     Удалить данные по заявлению
                   </button>
+                  {creditFor === u.id && (
+                    <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        placeholder="Сколько зачислить, ₽"
+                        value={creditSum}
+                        onChange={(e) => setCreditSum(e.target.value.replace(/\D/g, ""))}
+                      />
+                      <button
+                        className="btn"
+                        style={{ width: "auto", padding: "0 14px", height: 46 }}
+                        onClick={() => {
+                          const sum = Number(creditSum) || 0;
+                          if (sum <= 0) {
+                            toast("Укажите сумму", "error");
+                            return;
+                          }
+                          credit(u.id, sum);
+                          setCreditFor(null);
+                          setCreditSum("");
+                        }}
+                      >
+                        Зачислить
+                      </button>
+                    </div>
+                  )}
                   {refundFor === u.id && (
                     <div className="row" style={{ gap: 8, marginTop: 8 }}>
                       <input
@@ -1099,7 +1139,18 @@ export function AdminPage() {
                         неявок: {c.noShows}
                       </div>
                     )}
-                    <div className="muted">всего отмен: {c.cancels}</div>
+                    {/* Единственный способ не платить за договорённую смену —
+                        значит он и должен быть на виду. Сервер это число
+                        считает специально для оператора, а экран его молча
+                        не показывал. */}
+                    {!!c.notHeld && c.notHeld > 0 && (
+                      <div style={{ color: "var(--danger)", fontWeight: 700 }}>
+                        заявил «смены не было»: {c.notHeld}
+                      </div>
+                    )}
+                    {c.cancels > 0 && (
+                      <div className="muted">всего отмен: {c.cancels}</div>
+                    )}
                   </span>
                 </div>
               ))}

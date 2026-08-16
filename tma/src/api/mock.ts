@@ -777,7 +777,7 @@ export function fetchCancelStats() {
   return Promise.resolve([
     {
       ownerId: "seek1", name: "Мария", role: "seeker" as const,
-      cancels: 4, lateCancels: 3, noShows: 1,
+      cancels: 4, lateCancels: 3, noShows: 1, notHeld: 2,
     },
     {
       ownerId: "emp1", name: "Кофейня «Дрова»", role: "employer" as const,
