@@ -184,6 +184,28 @@ const matches: MatchModel[] = [
     shiftStart: 8 * 60,
     shiftEnd: 16 * 60,
   },
+  // Вчерашняя закрытая смена: без неё в демо-режиме не увидеть ни акта, ни
+  // кнопки «Мне не заплатили» — то есть половины экрана «Мои смены».
+  {
+    id: "demo-match-done",
+    seekerId: "me",
+    employerId: "emp2",
+    vacancyId: "vac2",
+    status: "completed",
+    confirmedBySeeker: true,
+    confirmedByEmployer: true,
+    companyName: "Бар «Полночь»",
+    companyPhotoUrl: photo("photo-1514933651103-005eec06c04b"),
+    role: "bartender",
+    checkinCode: null,
+    seekerCheckedIn: true,
+    employerCheckedIn: true,
+    checkedIn: true,
+    shiftPay: 4500,
+    shiftDate: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+    shiftStart: 20 * 60,
+    shiftEnd: 4 * 60,
+  },
 ];
 const messagesByMatch: Record<string, Message[]> = {
   [DEMO_MATCH_ID]: [
@@ -624,7 +646,7 @@ const adminReports = [
     id: "rep1",
     targetType: "vacancy",
     targetId: "vac3",
-    targetInfo: "Официант · Ресторан «Грядка» · 300 ₽",
+    targetInfo: "Официант · Ресторан «Грядка» · 300 ₽",
     reason: "fake",
     text: "Похоже на обман — просят предоплату",
     status: "open",

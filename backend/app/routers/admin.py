@@ -497,7 +497,7 @@ def list_blocked(
         )
     for v in db.query(Vacancy).filter(Vacancy.status == "blocked").limit(100).all():
         out.append(BlockedOut(
-            type="vacancy", id=v.id, info=f"{role_ru(v.role)} · {v.rate}₽"))
+            type="vacancy", id=v.id, info=f"{role_ru(v.role)} · {v.rate} ₽"))
     return out
 
 
