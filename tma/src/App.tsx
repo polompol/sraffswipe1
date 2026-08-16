@@ -34,9 +34,6 @@ const CreateVacancyPage = lazy(() =>
 const MyVacanciesPage = lazy(() =>
   import("@/features/vacancy/MyVacanciesPage").then((m) => ({ default: m.MyVacanciesPage })),
 );
-const ShiftsPage = lazy(() =>
-  import("@/features/shifts/ShiftsPage").then((m) => ({ default: m.ShiftsPage })),
-);
 const FunnelPage = lazy(() =>
   import("@/features/analytics/FunnelPage").then((m) => ({ default: m.FunnelPage })),
 );
@@ -68,14 +65,25 @@ function TabBar() {
   const loc = useLocation();
   const isEmployer = role === "employer";
 
-  const tabs = [
-    { path: "/feed", Icon: IconTabFeed, label: "Лента" },
-    { path: "/matches", Icon: IconTabMatches, label: "Мэтчи" },
-    isEmployer
-      ? { path: "/vacancy/my", Icon: IconTabVacancies, label: "Смены" }
-      : { path: "/shifts", Icon: IconTabShifts, label: "Смены" },
-    { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
-  ];
+  // У работника «Мэтчи» и «Мои смены» показывали одну и ту же смену в двух
+  // местах с разными кнопками: в одном — код прихода, в другом — акт. Человеку
+  // приходилось помнить, где что лежит. Теперь у него один раздел со всеми
+  // сменами — от «договариваемся» до закрытых.
+  //
+  // У заведения это РАЗНЫЕ вещи и остаются раздельными: «Мэтчи» — люди, с
+  // которыми договорились, «Смены» — собственные объявления.
+  const tabs = isEmployer
+    ? [
+        { path: "/feed", Icon: IconTabFeed, label: "Лента" },
+        { path: "/matches", Icon: IconTabMatches, label: "Мэтчи" },
+        { path: "/vacancy/my", Icon: IconTabVacancies, label: "Смены" },
+        { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
+      ]
+    : [
+        { path: "/feed", Icon: IconTabFeed, label: "Лента" },
+        { path: "/matches", Icon: IconTabShifts, label: "Мои смены" },
+        { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
+      ];
 
   return (
     <nav className="tabbar">
@@ -137,7 +145,11 @@ export function App() {
       />
       <Route
         path="/shifts"
-        element={ready ? <Shell><ShiftsPage /></Shell> : <Navigate to="/onboarding" />}
+        // Отдельного экрана «Мои смены» у работника больше нет — он слился с
+        // «Мэтчами». Адрес оставляем: по нему приходят кнопки из уведомлений
+        // бота («Я на смене — отметиться», «Открыть смены»), и ссылки из уже
+        // отправленных сообщений должны продолжать работать.
+        element={<Navigate to="/matches" replace />}
       />
       <Route
         path="/vacancy/my"

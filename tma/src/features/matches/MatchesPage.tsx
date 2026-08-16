@@ -7,12 +7,13 @@ import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { ReviewStars } from "@/components/ReviewStars";
-import { IconTabMatches, IconCheck, IconWarning, IconChevronRight } from "@/components/Icons";
+import { IconTabMatches, IconCheck, IconWarning, IconChevronRight , IconDoc } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { canReportNoPay, shiftEnded, shiftWhen } from "@/lib/format";
 import { Button } from "@/components/Button";
-import { haptic, confirmAction } from "@/telegram/sdk";
+import { baseURL, getToken } from "@/api/client";
+import { haptic, confirmAction, openExternal } from "@/telegram/sdk";
 
 /** Аватар заведения 52×52: буква на градиенте, поверх — фото, если оно есть
  *  и загрузилось. Битая ссылка не оставляет пустого места. */
@@ -99,6 +100,13 @@ export function MatchesPage() {
   // закрыта, а закрывается она сама через 12 часов. Человек отработал, наличные
   // не отдали — и пожаловаться некуда. Это ровно тот случай, ради которого
   // сервис и нужен, поэтому кнопка живёт две недели после смены.
+  function downloadAct(matchId: string) {
+    const token = getToken();
+    openExternal(
+      `${baseURL}/matches/${matchId}/act.pdf${token ? `?token=${token}` : ""}`,
+    );
+  }
+
   async function doNotPaid(matchId: string) {
     if (!(await confirmAction(
       "Заведение не рассчиталось за смену? Оператор свяжется с обеими сторонами и разберётся.",
@@ -148,7 +156,9 @@ export function MatchesPage() {
 
   return (
     <div className="page">
-      <h1 className="h1" style={{ marginBottom: 12 }}>Мэтчи</h1>
+      <h1 className="h1" style={{ marginBottom: 12 }}>
+        {role === "employer" ? "Мэтчи" : "Мои смены"}
+      </h1>
       {isLoading && <SkeletonList />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
       {data && data.length === 0 && (
@@ -214,12 +224,31 @@ export function MatchesPage() {
               </div>
             )}
 
+            {!!m.shiftPay && m.shiftPay > 0 && (
+              <div style={{ marginTop: 8, fontWeight: 800, fontSize: 17 }}>
+                {m.shiftPay.toLocaleString("ru-RU")} ₽
+                {m.status === "completed" ? " заработано" : " за смену"}
+              </div>
+            )}
+
+            {/* Акт — только по закрытой смене: это документ о ВЫПОЛНЕННОЙ
+                работе, и по незакрытой сервер отвечает отказом. */}
+            {role === "seeker" && m.status === "completed" && (
+              <div style={{ marginTop: 10 }}>
+                <Button variant="secondary" onClick={() => downloadAct(m.id)}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <IconDoc size={17} /> Скачать акт (PDF)
+                  </span>
+                </Button>
+              </div>
+            )}
+
             {/* Смена закрыта: обе стороны подтвердили. Сразу просим оценку —
                 момент наивысшей эмоции, отзывов собирается больше. */}
             {m.checkedIn && (
               <>
-                <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--like)" }}>
-                  <IconCheck size={16} /> <b>Смена закрыта — обе стороны подтвердили ✓</b>
+                <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--success)" }}>
+                  <IconCheck size={16} /> <b>Смена закрыта — обе стороны подтвердили</b>
                 </div>
                 <ReviewStars matchId={m.id} />
               </>
