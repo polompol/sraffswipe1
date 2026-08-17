@@ -7,12 +7,10 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..entitlements import get_or_create
 from ..models import Employer, Entitlement, Event, Referral, User
 from ..ratelimit import rate_limit_ip
 from ..schemas import TokenOut
 from ..security import create_token
-from ..streaks import touch_streak
 from ..telegram import parse_start_param, parse_user, validate_init_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -37,9 +35,12 @@ def _owner_tg_id(db, owner_id: str) -> int | None:
 
 
 def _apply_referral(db, referred_id: str, code: str) -> None:
-    """Бонус рефереру за нового приглашённого. Один раз на приглашённого.
-    Валюта зависит от того, КТО пригласил: работнику — супер-лайки «Срочно»,
-    заведению — Boost вакансии (супер-лайки ему почти не нужны)."""
+    """Записать, кто кого привёл. Один раз на приглашённого.
+
+    Наград за приглашение нет: внутренних «валют» в сервисе не осталось, а
+    обещать то, чего нет, нельзя. Запись нужна для честного ответа на вопрос
+    «откуда пришли люди» — по ней видно, какое заведение или работник реально
+    приводит других."""
     if not code.startswith("ref_"):
         return
     referrer_id = code[4:]
@@ -56,12 +57,7 @@ def _apply_referral(db, referred_id: str, code: str) -> None:
         return
     if db.query(Referral).filter(Referral.referred_id == referred_id).first():
         return
-    db.add(Referral(referrer_id=referrer_id, referred_id=referred_id, rewarded=True))
-    ent = get_or_create(db, referrer_id)
-    if db.get(Employer, referrer_id) is not None:
-        ent.boost_balance += 1
-    else:
-        ent.superlike_balance += settings.referral_bonus_superlikes
+    db.add(Referral(referrer_id=referrer_id, referred_id=referred_id, rewarded=False))
     db.commit()
 
 
@@ -83,11 +79,19 @@ def _track_source(db, owner_id: str, code: str, role: str) -> None:
 @router.post(
     "/telegram",
     response_model=TokenOut,
-    # Вход не требует авторизации, поэтому ограничиваем по IP:
-    # иначе скрипт бесконечно дёргает проверку подписи и базу.
-    # 30 в минуту — с запасом для человека, который переоткрывает
-    # приложение, и мало для перебора.
-    dependencies=[Depends(rate_limit_ip("tg-login", 30, 60))],
+    # Вход не требует авторизации, поэтому ограничиваем по IP: иначе скрипт
+    # бесконечно дёргает проверку подписи и базу.
+    #
+    # 300 в минуту, а не 30. Мобильные операторы прячут тысячи абонентов за
+    # одним публичным адресом (CGNAT): при всплеске — реклама, репост, ролик —
+    # живые люди с одного оператора упирались бы в отказ на входе. Симптом
+    # самый обидный: «приложение не работает», при том что в логах всё
+    # спокойно, а человек больше не вернётся.
+    #
+    # Подбирать здесь всё равно нечего: initData подписан токеном бота, и
+    # чужая подпись отвергается сразу. Лимит защищает не от подбора, а от
+    # нагрузки на базу — для этого 300 в минуту с одного адреса достаточно.
+    dependencies=[Depends(rate_limit_ip("tg-login", 300, 60))],
 )
 def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     valid = validate_init_data(
@@ -131,9 +135,8 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
             db.refresh(emp)
             _apply_referral(db, emp.id, ref_code)
             _track_source(db, emp.id, ref_code, "employer")
-        touch_streak(db, emp.id)
         return TokenOut(
-            access_token=create_token(emp.id, "employer"),
+            access_token=create_token(emp.id, "employer", emp.token_version),
             role="employer",
             user_id=emp.id,
         )
@@ -156,9 +159,8 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         db.refresh(user)
         _apply_referral(db, user.id, ref_code)
         _track_source(db, user.id, ref_code, "seeker")
-    touch_streak(db, user.id)
     return TokenOut(
-        access_token=create_token(user.id, "seeker"),
+        access_token=create_token(user.id, "seeker", user.token_version),
         role="seeker",
         user_id=user.id,
     )

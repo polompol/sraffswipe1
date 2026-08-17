@@ -6,9 +6,12 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..cities import normalize
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Match, Referral, Review, User, Vacancy
+from ..ratelimit import rate_limit
+from ..schemas import ExperienceTag, PhotoUrl, StaffRole
 from ..security import current_principal
 
 router = APIRouter(tags=["social"])
@@ -21,7 +24,6 @@ class ReferralOut(BaseModel):
     code: str
     link: str
     invited: int
-    bonusSuperlikes: int
 
 
 @router.get("/referral/me", response_model=ReferralOut)
@@ -35,7 +37,6 @@ def referral_me(
         code=code,
         link=f"https://t.me/{settings.bot_username}?startapp={code}",
         invited=invited,
-        bonusSuperlikes=settings.referral_bonus_superlikes,
     )
 
 
@@ -48,12 +49,29 @@ class ReviewIn(BaseModel):
 
 
 def _recompute_rating(db: Session, ratee_id: str) -> float:
-    avg = (
+    """Средняя оценка, где у каждой ВТОРОЙ СТОРОНЫ один голос.
+
+    Сначала усредняем оценки внутри каждой пары, и только потом — по парам.
+    Раньше все отзывы складывались в одну кучу, и десять пятёрок от одного
+    заведения весили как десять мнений. Это открытая дверь для накрутки:
+    заведение на второй учётке Telegram (а значит, формально другой человек)
+    закрывает со «своим» работником смену за сменой и ставит по пятёрке —
+    и в ленте появляется ★5,0, за которым нет ни одного независимого мнения.
+
+    Честному человеку это ничего не портит: постоянное заведение, которое
+    зовёт вас снова и снова, — сигнал хороший, но всё-таки один голос.
+    """
+    per_pair = (
         db.query(func.avg(Review.stars))
         .filter(Review.ratee_id == ratee_id)
-        .scalar()
+        .group_by(Review.rater_id)
+        .all()
     )
-    rating = round(float(avg), 1) if avg is not None else 0.0
+    rating = (
+        round(sum(float(x[0]) for x in per_pair) / len(per_pair), 1)
+        if per_pair
+        else 0.0
+    )
     target = db.get(User, ratee_id) or db.get(Employer, ratee_id)
     if target is not None:
         target.rating = rating
@@ -61,7 +79,10 @@ def _recompute_rating(db: Session, ratee_id: str) -> float:
     return rating
 
 
-@router.post("/matches/{match_id}/review")
+@router.post(
+    "/matches/{match_id}/review",
+    dependencies=[Depends(rate_limit("review", 20, 60))],
+)
 def leave_review(
     match_id: str,
     body: ReviewIn,
@@ -105,7 +126,6 @@ class MeOut(BaseModel):
     name: str
     rating: float
     tgUsername: str | None = None
-    streak: int = 0
     city: str = ""
     district: str = ""
     incomingLikes: int = 0  # «тебя хотят»: входящие лайки/отклики
@@ -123,19 +143,11 @@ class MeOut(BaseModel):
     photoUrl: str = ""
 
 
-def _streak(db: Session, owner_id: str) -> int:
-    from ..models import Streak
-
-    s = db.get(Streak, owner_id)
-    return s.count if s else 0
-
-
 def _incoming_likes(db: Session, principal: dict) -> int:
     """Сколько входящих лайков: соискателю — от заведений на него; заведению —
     отклики соискателей на его вакансии. Крючок «тебя хотят»."""
     from ..models import Swipe, Vacancy
 
-    positive = ("like", "superlike")
     if principal["role"] == "employer":
         vac_ids = [
             v.id for v in db.query(Vacancy.id)
@@ -148,7 +160,7 @@ def _incoming_likes(db: Session, principal: dict) -> int:
             .filter(
                 Swipe.target_type == "vacancy",
                 Swipe.target_id.in_(vac_ids),
-                Swipe.direction.in_(positive),
+                Swipe.direction == "like",
             )
             .count()
         )
@@ -157,7 +169,7 @@ def _incoming_likes(db: Session, principal: dict) -> int:
         .filter(
             Swipe.target_type == "user",
             Swipe.target_id == principal["id"],
-            Swipe.direction.in_(positive),
+            Swipe.direction == "like",
         )
         .count()
     )
@@ -196,6 +208,10 @@ def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
 def _profile_completion(u) -> int:
     """% заполненности анкеты — ключевые поля, что влияют на мэтчи."""
     fields = [
+        # Имя не считалось вовсе, хотя безымянная карточка — худшее, что
+        # видит заведение: заполнив имя, человек не двигал шкалу и не
+        # понимал, чего от него хотят.
+        bool((u.name or "").strip()),
         bool(u.birth_date),
         bool(u.city),
         bool(u.roles),
@@ -217,9 +233,11 @@ def me(
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
-            streak=_streak(db, e.id),
             incomingLikes=_incoming_likes(db, principal),
             shiftsDone=shifts,
+            inn=e.inn or None,
+            photoUrl=e.photo_url or "",
+            city=e.city or "",
         )
     u = db.get(User, principal["id"])
     if u is None:
@@ -231,7 +249,7 @@ def me(
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city, district=u.district,
+        city=u.city, district=u.district,
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
         availableToday=u.available_today,
@@ -247,7 +265,10 @@ class AvailableIn(BaseModel):
     available: bool
 
 
-@router.post("/me/available")
+@router.post(
+    "/me/available",
+    dependencies=[Depends(rate_limit("available", 30, 60))],
+)
 def set_available(
     body: AvailableIn,
     db: Session = Depends(get_db),
@@ -278,6 +299,18 @@ def _age_from_iso(iso: str) -> int | None:
     )
 
 
+def _check_photo(url: str) -> None:
+    """Фото — только своё загруженное (или аватарка из Telegram)."""
+    from ..photos import is_allowed_photo_url
+
+    if not is_allowed_photo_url(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Фото нужно загрузить в приложении — "
+                   "ссылка на чужой сайт не подойдёт.",
+        )
+
+
 class MeUpdateIn(BaseModel):
     # Лимиты длины — анти-абуз: без них можно записать мегабайтные строки в
     # имя/«о себе» и раздуть БД.
@@ -287,19 +320,32 @@ class MeUpdateIn(BaseModel):
     ] | None = None
     city: Annotated[str, StringConstraints(max_length=80)] | None = None
     district: Annotated[str, StringConstraints(max_length=80)] | None = None
-    roles: Annotated[list[str], Field(max_length=12)] | None = None
+    # max_length у списка ограничивает ЧИСЛО элементов, а не их длину:
+    # двенадцать строк по мегабайту проходили проверку. Ограничиваем и то, и то.
+    # Должности — только из списка приложения. Свободный текст здесь был
+    # каналом рекламы: двенадцать «должностей» по сорок символов показываются
+    # каждому заведению в ленте, а модерации у анкеты нет.
+    roles: Annotated[list[StaffRole], Field(max_length=12)] | None = None
     med_book: Literal["yes", "no", "expired"] | None = None
     self_employed: bool | None = None
     inn: Annotated[
         str, StringConstraints(pattern=r"^\d{10,12}$")
     ] | None = None
     about: Annotated[str, StringConstraints(max_length=1000)] | None = None
-    experience_tags: Annotated[list[str], Field(max_length=12)] | None = None
-    photo_url: Annotated[str, StringConstraints(max_length=500)] | None = None
+    experience_tags: Annotated[
+        list[ExperienceTag], Field(max_length=12)
+    ] | None = None
+    photo_url: PhotoUrl | None = None
     company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
 
-@router.put("/me", response_model=MeOut)
+@router.put(
+    "/me",
+    response_model=MeOut,
+    # Профиль правят редко; без лимита это была ручка для раздувания базы
+    # длинными текстами «о себе».
+    dependencies=[Depends(rate_limit("profile", 20, 60))],
+)
 def update_me(
     body: MeUpdateIn,
     db: Session = Depends(get_db),
@@ -330,13 +376,27 @@ def update_me(
             e.company_name = body.company_name
         if body.inn is not None:
             e.inn = body.inn
+        # Фото заведения. Эта строка тут не обрабатывалась вовсе: поле в базе
+        # есть, лента и список мэтчей его показывают, а поставить его было
+        # нельзя ничем — у каждого живого заведения в приложении оставалась
+        # буква на цветном квадрате. Для сервиса, где решение принимают
+        # свайпом за секунду, карточка без фото — это карточка, которую
+        # пролистывают.
+        if body.photo_url is not None:
+            _check_photo(body.photo_url)
+            e.photo_url = body.photo_url
+        # Город заведения. По нему показывается лента кандидатов — без него
+        # заведение в другом городе листало бы москвичей.
+        if body.city is not None:
+            e.city = normalize(body.city)
         if changed_identity and e.verified:
             e.verified = False
         db.commit()
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
-            streak=_streak(db, e.id),
+            photoUrl=e.photo_url or "",
+            city=e.city or "",
         )
 
     u = db.get(User, principal["id"])
@@ -347,7 +407,7 @@ def update_me(
     if body.birth_date is not None:
         u.birth_date = body.birth_date
     if body.city is not None:
-        u.city = body.city
+        u.city = normalize(body.city)
     if body.district is not None:
         u.district = body.district
     if body.roles is not None:
@@ -363,10 +423,19 @@ def update_me(
     if body.experience_tags is not None:
         u.experience_tags = ",".join(body.experience_tags)
     if body.photo_url is not None:
+        _check_photo(body.photo_url)
         u.photo_urls = body.photo_url
     db.commit()
+    # «О себе» и имя видит каждое заведение в ленте — это такой же публичный
+    # текст, как описание смены. У смен авто-модерация была с самого начала, а
+    # у анкеты не было: «внеси залог за форму» в поле «о себе» доходило до всех
+    # заведений и никого не настораживало. Теперь оба текста проверяются
+    # одинаково.
+    from ..moderation import auto_flag
+
+    auto_flag(db, "user", u.id, u.about, u.name)
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city,
+        city=u.city,
     )

@@ -1,23 +1,21 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
 import {
+  billingDocUrl,
   fetchAdminOverview,
-  fetchEntitlements,
   fetchMe,
   fetchMyCommission,
   fetchReferral,
-  walletTopup,
   setAvailability,
-  verifyEmployer,
-  type Me,
   type VerifyResult,
+  verifyEmployer,
+  walletTopup,
 } from "@/api/endpoints";
-import { share, haptic, confirmAction } from "@/telegram/sdk";
+import { share, haptic, confirmAction, openExternal } from "@/telegram/sdk";
 import {
   IconBolt,
-  IconFire,
   IconGift,
   IconEdit,
   IconHelp,
@@ -31,6 +29,7 @@ import {
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
+import { plural } from "@/lib/format";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -46,7 +45,7 @@ function CommissionCard() {
     try {
       const { url } = await walletTopup(amount);
       haptic("light");
-      window.open(url, "_blank");
+      openExternal(url);
     } catch {
       haptic("error");
       toast("Не удалось открыть оплату", "error");
@@ -90,9 +89,46 @@ function CommissionCard() {
         <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
       </div>
       <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-        Комиссия списывается с баланса сама — без счетов, реквизитов
-        и переписки. Всё внутри приложения.
+        Комиссия списывается с баланса сама — пополняйте его заранее, и
+        считать ничего не придётся.
       </div>
+      {/* Документы для бухгалтерии. Ресторан-юрлицо не проведёт оплату по
+          безналу без счёта с реквизитами и не поставит расход без акта —
+          «оплатите картой» для него не ответ. Кнопки показываем только когда
+          есть за что платить. */}
+      {due && bill.docsAvailable !== false && (
+        <>
+          <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+            Документы для бухгалтерии
+          </div>
+          <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+            {([["invoice", "Счёт на оплату"], ["act", "Акт услуг"]] as const).map(
+              ([kind, label]) => (
+                <button
+                  key={kind}
+                  className="tag"
+                  style={{ flex: 1, minWidth: 120, cursor: "pointer" }}
+                  onClick={() => {
+                    haptic("light");
+                    openExternal(billingDocUrl(kind));
+                  }}
+                >
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
+        </>
+      )}
+      {/* Реквизиты ещё не заполнены — документы не выдаются. Молча рисовать
+          кнопки нельзя: заведение упирается в отказ ровно в тот момент,
+          когда собралось платить. */}
+      {due && bill.docsAvailable === false && (
+        <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+          Нужен счёт или акт для бухгалтерии? Напишите в поддержку — пришлём.
+        </div>
+      )}
+
       {bill.topupAvailable ? (
         <>
           <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
@@ -190,6 +226,11 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
 
+  // Профиль приходит с сервера уже после первой отрисовки, и без этой
+  // синхронизации тумблер навсегда оставался выключенным: человек включал
+  // доступность, возвращался в профиль — и видел «выключено».
+  useEffect(() => setOn(initial), [initial]);
+
   async function toggle() {
     const next = !on;
     setOn(next);
@@ -257,7 +298,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
             height: 30,
             borderRadius: 999,
             transition: "background 0.2s",
-            background: on ? "var(--gold)" : "var(--border-strong)",
+            background: on ? "var(--gold-fill)" : "var(--border-strong)",
           }}
         />
         <span
@@ -279,132 +320,8 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
   );
 }
 
-// Доход через сервис — мотивация деньгами, а не «зашёл N дней подряд».
-function EarningsCard({ me }: { me: Me }) {
-  const nav = useNavigate();
-  const earned = me.earnedRub ?? 0;
-  const shifts = me.shiftsDone ?? 0;
-  if (!earned && !shifts) return null;
-  return (
-    <div
-      className="card"
-      style={{
-        marginBottom: 16,
-        background: "linear-gradient(135deg, var(--crimson-dark), var(--super))",
-        color: "#fff",
-        border: "none",
-      }}
-    >
-      <div style={{ opacity: 0.9, fontSize: 14 }}>Заработано через StaffSwipe</div>
-      <div style={{ fontWeight: 800, fontSize: 28, marginTop: 2 }}>
-        {earned.toLocaleString("ru-RU")} ₽
-      </div>
-      <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
-        {shifts} {shifts === 1 ? "смена закрыта" : "смен закрыто"} · так держать
-        <IconFire size={13} />
-      </div>
-      <button
-        onClick={() => nav("/share")}
-        style={{
-          marginTop: 12,
-          width: "100%",
-          minHeight: 44,
-          borderRadius: 12,
-          border: "1.5px solid rgba(255,255,255,.7)",
-          background: "rgba(255,255,255,.16)",
-          color: "#fff",
-          fontWeight: 700,
-          fontSize: 15,
-          cursor: "pointer",
-        }}
-      >
-        Поделиться в сторис
-      </button>
-    </div>
-  );
-}
-
 // Доступность: крупные кнопки и текст. Состояние — на <body data-large>,
 // сохраняется в localStorage и применяется при старте (main.tsx).
-// Цель заработка + кольцо прогресса (психология незавершённого действия —
-// люди возвращаются «дозакрыть кольцо», как в Apple Watch). Цель — локально.
-const GOAL_PRESETS = [20000, 30000, 50000, 100000];
-
-function GoalCard({ earned }: { earned: number }) {
-  const [goal, setGoal] = useState(
-    () => Number(localStorage.getItem("ss_goal")) || 30000,
-  );
-  const [editing, setEditing] = useState(false);
-  const pct = Math.max(0, Math.min(1, goal > 0 ? earned / goal : 0));
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const left = Math.max(0, goal - earned);
-
-  function pick(g: number) {
-    setGoal(g);
-    localStorage.setItem("ss_goal", String(g));
-    setEditing(false);
-    haptic("select");
-  }
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="row" style={{ gap: 16, alignItems: "center" }}>
-        <svg width="124" height="124" viewBox="0 0 124 124" style={{ flex: "none" }}>
-          <circle cx="62" cy="62" r={R} fill="none" stroke="var(--border)" strokeWidth="11" />
-          <circle
-            cx="62" cy="62" r={R} fill="none"
-            stroke="var(--gold)" strokeWidth="11" strokeLinecap="round"
-            strokeDasharray={C}
-            strokeDashoffset={C * (1 - pct)}
-            transform="rotate(-90 62 62)"
-            style={{ transition: "stroke-dashoffset 1s ease" }}
-          />
-          <text x="62" y="58" textAnchor="middle" fontSize="22" fontWeight="800" fill="var(--text)">
-            {Math.round(pct * 100)}%
-          </text>
-          <text x="62" y="80" textAnchor="middle" fontSize="12" fill="var(--muted)">
-            цель
-          </text>
-        </svg>
-        <span style={{ flex: 1 }}>
-          <b>Цель на месяц: {goal.toLocaleString("ru-RU")} ₽</b>
-          <div className="muted" style={{ marginTop: 4 }}>
-            {left > 0
-              ? `Осталось ${left.toLocaleString("ru-RU")} ₽ — лови ещё смены`
-              : "Цель достигнута! 🔥 Поставь новую"}
-          </div>
-          <button
-            onClick={() => setEditing((v) => !v)}
-            style={{ marginTop: 8, background: "none", border: "none", color: "var(--gold)", fontWeight: 700, cursor: "pointer", padding: 0 }}
-          >
-            Изменить цель
-          </button>
-        </span>
-      </div>
-      {editing && (
-        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-          {GOAL_PRESETS.map((g) => (
-            <button
-              key={g}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: goal === g ? "var(--gold)" : "transparent",
-                color: goal === g ? "#fff" : "var(--text)",
-                borderColor: goal === g ? "var(--gold)" : "var(--border)",
-              }}
-              onClick={() => pick(g)}
-            >
-              {g.toLocaleString("ru-RU")} ₽
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Заполненность анкеты. С фото и опытом зовут заметно чаще — показываем
 // прогресс и мягко подталкиваем дополнить недостающее.
 function ProfileMeter({ pct }: { pct: number }) {
@@ -416,7 +333,7 @@ function ProfileMeter({ pct }: { pct: number }) {
         <b>Профиль готов на {pct}%</b>
         <span className="spacer" />
         <span className="muted" style={{ fontSize: 13 }}>
-          {pct >= 80 ? "почти всё" : "заполни до конца"}
+          {pct >= 80 ? "почти всё" : "заполните до конца"}
         </span>
       </div>
       <div
@@ -453,10 +370,6 @@ export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
-  const { data: ent } = useQuery({
-    queryKey: ["entitlements"],
-    queryFn: fetchEntitlements,
-  });
   const { data: ref } = useQuery({
     queryKey: ["referral"],
     queryFn: fetchReferral,
@@ -483,26 +396,43 @@ export function ProfilePage() {
       </div>
 
       <div className="card row" style={{ gap: 14, marginBottom: 16 }}>
+        {/* Фото из Telegram, если оно есть; иначе первая буква имени.
+            Раньше вместо лица стояла иконка-портфель — та самая, которой на
+            экране выбора роли подписано «Я ищу подработку». В своём профиле
+            она читается как «вакансия», а не «это я». */}
         <span style={{
           width: 56, height: 56, borderRadius: 16, flex: "none",
           background: "var(--grad-brand)", color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", fontWeight: 800, fontSize: 24,
         }}>
-          {role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
+          {me?.photoUrl ? (
+            <img
+              src={me.photoUrl}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : me?.name ? (
+            me.name.trim().charAt(0).toUpperCase()
+          ) : role === "employer" ? (
+            <IconStore size={30} />
+          ) : (
+            <IconBriefcase size={30} />
+          )}
         </span>
-        <span style={{ flex: 1 }}>
-          <div style={{ fontWeight: 800, fontSize: 20 }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 20, overflowWrap: "anywhere" }}>
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
           </div>
           <div className="muted">
             {me ? (me.rating > 0 ? `★ ${me.rating.toFixed(1)}` : "Новичок") : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
-            {me?.shiftsDone ? ` · ${me.shiftsDone} смен` : ""}
+            {me?.shiftsDone
+              ? ` · ${me.shiftsDone} ${plural(me.shiftsDone, "смена", "смены", "смен")}`
+              : ""}
           </div>
         </span>
       </div>
-
-      {role === "seeker" && me && !PILOT_MODE && <EarningsCard me={me} />}
 
       {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -512,7 +442,8 @@ export function ProfilePage() {
             <b style={{ color: "var(--gold)", fontSize: 20 }}>{me.shiftsDone}</b>
           </div>
           <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-            Закрытые смены формируют рейтинг и знак «Платит вовремя».
+            Закрытые смены формируют ваш рейтинг: его видят работники в ленте
+            до того, как откликнуться.
           </div>
         </div>
       )}
@@ -521,19 +452,24 @@ export function ProfilePage() {
         <ProfileMeter pct={me.profileCompletion ?? 100} />
       )}
 
-      {role === "seeker" && me && !PILOT_MODE && <GoalCard earned={me.earnedRub ?? 0} />}
-
       {role === "seeker" && (
         <AvailabilityCard initial={me?.availableToday ?? false} />
       )}
 
       {!!me?.incomingLikes && me.incomingLikes > 0 && (
-        <div
+        // Кнопка, а не div с onClick: это единственный вход на самый ценный
+        // экран, и клавиатурой в него было не попасть, а озвучка читала его
+        // как обычный текст. Заливка — из токенов заливки: в тёмной теме
+        // прежний градиент давал под белым текстом 3.2:1.
+        <button
           className="card"
-          onClick={() => nav(role === "seeker" ? "/invites" : "/feed")}
+          onClick={() => nav(role === "seeker" ? "/invites" : "/applicants")}
           style={{
+            width: "100%",
+            textAlign: "left",
             marginBottom: 16,
-            background: "linear-gradient(135deg, var(--gold-soft), var(--gold))",
+            background:
+              "linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill))",
             color: "#fff",
             border: "none",
             cursor: "pointer",
@@ -543,42 +479,14 @@ export function ProfilePage() {
             <IconBolt size={18} />
             {role === "employer"
               ? `Новых откликов: ${me.incomingLikes}`
-              : `Тебя зовут на смены: ${me.incomingLikes}`}
+              : `Вас зовут на смены: ${me.incomingLikes}`}
           </b>
-          <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2 }}>
+          <div style={{ fontSize: 14, marginTop: 2 }}>
             {role === "employer"
-              ? "столько откликов на твои вакансии — открой ленту"
-              : "нажми, чтобы увидеть кто зовёт, и ответить в один тап"}
+              ? "нажмите, чтобы увидеть, кто именно, и ответить"
+              : "нажмите, чтобы увидеть, кто зовёт, и ответить в один тап"}
           </div>
-        </div>
-      )}
-
-      {role === "employer" && !PILOT_MODE && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="row">
-            <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <IconFire size={18} /> Поднятий в топ: {ent?.boostBalance ?? 0}
-            </b>
-            <span className="spacer" />
-            <button className="btn ghost" style={{ width: "auto", padding: "8px 14px" }} onClick={() => nav("/pricing")}>
-              Поднять в топ
-            </button>
-          </div>
-          <div className="muted" style={{ marginTop: 8, fontSize: 14 }}>
-            Поднимает вакансию в топ ленты, когда человек нужен срочно.
-          </div>
-        </div>
-      )}
-
-      {role === "seeker" && !!ent?.superlikeBalance && ent.superlikeBalance > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <b style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <IconBolt size={18} /> Супер-лайки «Срочно»: {ent.superlikeBalance}
-          </b>
-          <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
-            Покажут тебя заведению первым. Дарим за приглашённых друзей.
-          </div>
-        </div>
+        </button>
       )}
 
       {role === "employer" && <CommissionCard />}
@@ -589,9 +497,9 @@ export function ProfilePage() {
         <b>{role === "employer" ? "Пригласить коллег-рестораторов" : "Пригласить друзей"}</b>
         <div className="muted" style={{ margin: "6px 0 12px" }}>
           {role === "employer"
-            ? "За каждого пришедшего по вашей ссылке — поднятие вакансии в топ в подарок."
-            : `За каждого по вашей ссылке — ${ref?.bonusSuperlikes ?? 3} супер-лайка «Срочно».`}
-          {" "}Уже пришло: {ref?.invited ?? 0}.
+            ? "Чем больше рядом заведений и людей, тем быстрее закрываются смены у всех."
+            : "Чем больше рядом людей, тем чаще заведения ищут именно здесь."}
+          {" "}Уже пришло по вашей ссылке: {ref?.invited ?? 0}.
         </div>
         <Button onClick={invite}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>

@@ -8,30 +8,33 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..entitlements import get_or_create, plan_of
 from ..models import (
     Commission,
     Employer,
+    Entitlement,
     Event,
     Match,
+    Message,
     Purchase,
     Report,
-    Subscription,
     Swipe,
     User,
     Vacancy,
+    WalletTxn,
 )
 from ..notify import notify_owner
+from ..roles import date_ru, role_ru, time_ru
 from ..security import current_principal
+from ..timeutil import local_today
 from .analytics import _is_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_POSITIVE = ("like", "superlike")
+_POSITIVE = ("like",)
 
 
 def require_admin(
@@ -49,7 +52,10 @@ class Overview(BaseModel):
     likes: int
     matches: int
     openReports: int
-    activeSubscriptions: int
+    # Закрытые смены — главная цифра сервиса: только с них берётся комиссия.
+    # Раньше на её месте было число активных подписок, которое всегда равно
+    # нулю: подписок в продукте нет.
+    completedShifts: int
 
 
 @router.get("/overview", response_model=Overview)
@@ -69,8 +75,8 @@ def overview(db: Session = Depends(get_db), _admin: dict = Depends(require_admin
         .filter(Report.status == "open")
         .scalar()
         or 0,
-        activeSubscriptions=db.query(func.count(Subscription.id))
-        .filter(Subscription.active.is_(True))
+        completedShifts=db.query(func.count(Match.id))
+        .filter(Match.status == "completed")
         .scalar()
         or 0,
     )
@@ -82,8 +88,11 @@ class RevenueOut(BaseModel):
     commissionAccruedRub: int   # начислено за всё время
     commissionPaidRub: int      # из них оплачено
     commissionPendingRub: int   # к оплате сейчас
+    commissionWrittenOffRub: int  # списано: прощено по спорам и безнадёжный долг
     shiftsBilled: int           # смен, за которые начислена комиссия
-    topupsRub: int              # пополнений баланса (аванс, НЕ выручка)
+    topupsRub: int              # пополнений баланса всего (аванс, НЕ выручка)
+    topupsCardRub: int          # из них картой (ЮKassa)
+    topupsManualRub: int        # из них зачислил оператор (перевод/СБП)
 
 
 @router.get("/revenue", response_model=RevenueOut)
@@ -94,19 +103,57 @@ def revenue(db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
             q = q.filter(Commission.status == status)
         return int(q.scalar() or 0)
 
+    # Пополнения считаем по движениям баланса, а не по платежам ЮKassa.
+    # Раньше здесь были только карточные платежи, а на пилоте картой не платит
+    # никто: деньги приходят переводом, и оператор зачисляет их руками. Владелец
+    # видел «Пополнено 0 ₽» при живых деньгах на счёте и не мог понять,
+    # доходят платежи или нет.
+    topups_all = int(
+        db.query(func.coalesce(func.sum(WalletTxn.amount), 0))
+        .filter(WalletTxn.kind == "topup")
+        .scalar()
+        or 0
+    )
+    topups_card = int(
+        db.query(func.coalesce(func.sum(Purchase.amount), 0))
+        .filter(Purchase.status == "paid", Purchase.sku == "wallet_topup")
+        .scalar()
+        or 0
+    )
+
     return RevenueOut(
         commissionAccruedRub=_commission(),
         commissionPaidRub=_commission("paid"),
         commissionPendingRub=_commission("pending"),
+        commissionWrittenOffRub=_commission("written_off"),
         shiftsBilled=int(db.query(func.count(Commission.id)).scalar() or 0),
         # Аванс — это обязательство перед заведением, а не заработок сервиса.
-        topupsRub=int(
-            db.query(func.coalesce(func.sum(Purchase.amount), 0))
-            .filter(Purchase.status == "paid", Purchase.sku == "wallet_topup")
-            .scalar()
-            or 0
-        ),
+        topupsRub=topups_all,
+        topupsCardRub=topups_card,
+        topupsManualRub=max(0, topups_all - topups_card),
     )
+
+
+class DisputeFacts(BaseModel):
+    """Всё, по чему оператор решает спор, — в одном месте.
+
+    Раньше в карточке жалобы было ровно два слова: «переписка по мэтчу». Ни
+    имён, ни даты смены, ни главного — называл ли работник код прихода. А
+    выбирать оператору предлагалось между «засчитать смену» и «зафиксировать
+    неявку», то есть вслепую. Код знает только заведение: если работник его
+    назвал — он был на месте и говорил с людьми, и это решает спор почти
+    всегда.
+    """
+
+    worker: str = ""
+    venue: str = ""
+    shiftWhen: str = ""          # «16 августа, 10:00–18:00»
+    checkedInByCode: bool = False  # работник назвал код — доказательство прихода
+    venueMarkedAttended: bool = False
+    notHeldBy: str = ""          # кто заявил «смена не состоялась»
+    payRub: int = 0
+    commission: str = ""         # не начислена / к оплате / оплачена / списана
+    status: str = ""
 
 
 class ReportOut(BaseModel):
@@ -118,6 +165,14 @@ class ReportOut(BaseModel):
     text: str
     status: str
     createdAt: str
+    # Заполняется только для спора по смене.
+    dispute: DisputeFacts | None = None
+
+
+# Должности в админке — по-русски (общий словарь, см. app/roles.py). Здесь
+# лежала своя копия, и в ней два ключа были выдуманы — `runner` и `manager`
+# вместо настоящих `waiter_assistant` и `administrator`: оператор видел в
+# жалобах «waiter_assistant · 300₽».
 
 
 def _describe_target(db: Session, target_type: str, target_id: str) -> str:
@@ -127,11 +182,55 @@ def _describe_target(db: Session, target_type: str, target_id: str) -> str:
         if v is None:
             return "вакансия удалена"
         emp = db.get(Employer, v.employer_id)
-        return f"{v.role} · {emp.company_name if emp else '—'} · {v.rate}₽"
+        # Неразрывный пробел перед знаком рубля: «300₽» слипалось в одно
+        # слово, а с обычным пробелом сумма переносилась на новую строку
+        # отдельно от знака.
+        return (
+            f"{role_ru(v.role)} · {emp.company_name if emp else '—'} · "
+            f"{v.rate} ₽"
+        )
     if target_type == "user":
         u = db.get(User, target_id) or db.get(Employer, target_id)
         return getattr(u, "name", None) or getattr(u, "company_name", None) or "—"
     return "переписка по мэтчу"
+
+
+_COMMISSION_RU = {
+    "pending": "к оплате",
+    "paid": "оплачена",
+    "written_off": "списана оператором",
+}
+
+
+def _dispute_facts(db: Session, match_id: str) -> DisputeFacts | None:
+    """Собрать факты по спорной смене одним заходом."""
+    m = db.get(Match, match_id)
+    if m is None:
+        return None
+    u = db.get(User, m.user_id)
+    e = db.get(Employer, m.employer_id)
+    v = db.get(Vacancy, m.vacancy_id)
+    when = ""
+    if v is not None:
+        when = f"{date_ru(v.date)}, {time_ru(v.start_time)}–{time_ru(v.end_time)}"
+        if v.role:
+            when = f"{role_ru(v.role)} · {when}"
+    c = db.query(Commission).filter(Commission.match_id == match_id).first()
+    # Оплата — та же, что видят стороны: по факту, если часы уточняли.
+    from .matches import _shift_pay
+
+    pay = _shift_pay(v, m.actual_minutes) if v is not None else 0
+    return DisputeFacts(
+        worker=(u.name if u else "") or "работник без имени",
+        venue=(e.company_name if e else "") or "заведение без названия",
+        shiftWhen=when,
+        checkedInByCode=bool(m.checkin_by_code),
+        venueMarkedAttended=bool(m.employer_checked_in),
+        notHeldBy=m.not_held_by or "",
+        payRub=int(pay),
+        commission=_COMMISSION_RU.get(c.status, c.status) if c else "не начислена",
+        status=m.status,
+    )
 
 
 @router.get("/reports", response_model=list[ReportOut])
@@ -154,6 +253,10 @@ def list_reports(
             text=r.text,
             status=r.status,
             createdAt=r.created_at.isoformat(),
+            dispute=(
+                _dispute_facts(db, r.target_id)
+                if r.target_type == "match" else None
+            ),
         )
         for r in rows
     ]
@@ -174,6 +277,25 @@ def resolve_report(
     if rep is None:
         raise HTTPException(status_code=404, detail="Жалоба не найдена")
     rep.status = "reviewed"
+    # Жалоба по СМЕНЕ — это спор, и спорную смену расчёт не трогает вообще.
+    # Раньше «Закрыть жалобу» помечало жалобу разобранной, а признак спора со
+    # смены не снимало: смена зависала навсегда — не закрывалась, комиссия по
+    # ней не начислялась никогда, и обе стороны видели вечный «спор». Один
+    # неверный тап в админке стоил денег без единого следа.
+    #
+    # «Закрыть жалобу» без вердикта = «оснований нет, пусть идёт своим
+    # чередом». Явные вердикты — отдельные кнопки «Засчитать смену» и
+    # «Зафиксировать неявку» (POST /matches/{id}/resolve), они снимают спор
+    # сами и ставят исход.
+    if rep.target_type == "match":
+        m = db.get(Match, rep.target_id)
+        if m is not None and m.disputed:
+            m.disputed = False
+            db.add(Message(
+                match_id=m.id, sender_id="system", is_system=True,
+                text="Оператор разобрал спор: оснований не нашлось, "
+                     "смена идёт своим чередом.",
+            ))
     db.commit()
     # Если админ написал ответ — доставляем заявителю (чтобы человек видел, что
     # его услышали). Без bot-токена notify_owner — no-op.
@@ -235,6 +357,43 @@ def _resolve_reports_for(db: Session, target_id: str) -> None:
         r.status = "reviewed"
 
 
+class VerifyEmployerIn(BaseModel):
+    verified: bool = True
+
+
+@router.post("/employers/{employer_id}/verify")
+def set_employer_verified(
+    employer_id: str,
+    body: VerifyEmployerIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Поставить или снять заведению бейдж «Проверено».
+
+    Бейдж виден работнику в ленте ДО отклика и означает ровно одно: оператор
+    сервиса лично убедился, что заведение существует и работает. Автоматически
+    его выдать нельзя — ИНН публичен, и «нашёлся в справочнике» доказывает
+    только умение гуглить. Раньше поставить бейдж не мог никто вообще: во всём
+    коде не было ни одной строки, где он выдаётся, а интерфейс при этом обещал
+    его «после оплаты верификации» — то есть продавал несуществующую услугу.
+
+    При ручной правке названия или ИНН бейдж слетает сам (см. social.py) —
+    иначе проверенным оказывалось бы любое новое название.
+    """
+    emp = db.get(Employer, employer_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Заведение не найдено")
+    emp.verified = bool(body.verified)
+    db.commit()
+    if emp.verified:
+        notify_owner(
+            db, emp.id,
+            "Ваше заведение проверено оператором StaffSwipe ✓ "
+            "Теперь работники видят бейдж «Проверено» в ленте смен.",
+        )
+    return {"ok": True, "verified": emp.verified}
+
+
 @router.post("/users/{user_id}/block")
 def block_user(
     user_id: str,
@@ -282,8 +441,24 @@ def unblock_user(
     if target is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     target.blocked = False
+    # Возвращаем и смены. Блокировка заведения снимала все его смены с
+    # публикации, а разблокировка их не возвращала: заведение снова входило,
+    # видело свои смены у себя в списке, а в ленте их не было и откликов не
+    # приходило — понять причину изнутри приложения невозможно.
+    # Только не прошедшие: воскрешать вчерашние смены смысла нет.
+    restored = 0
+    if isinstance(target, Employer):
+        restored = (
+            db.query(Vacancy)
+            .filter(
+                Vacancy.employer_id == user_id,
+                Vacancy.status == "blocked",
+                Vacancy.date >= local_today(),
+            )
+            .update({Vacancy.status: "active"}, synchronize_session=False)
+        )
     db.commit()
-    return {"ok": True, "blocked": False}
+    return {"ok": True, "blocked": False, "restoredVacancies": int(restored)}
 
 
 @router.post("/vacancies/{vacancy_id}/unblock")
@@ -320,37 +495,8 @@ def list_blocked(
             BlockedOut(type="user", id=e.id, info=e.company_name or "Заведение")
         )
     for v in db.query(Vacancy).filter(Vacancy.status == "blocked").limit(100).all():
-        out.append(BlockedOut(type="vacancy", id=v.id, info=f"{v.role} · {v.rate}₽"))
-    return out
-
-
-class SubscriptionOut(BaseModel):
-    ownerId: str
-    company: str
-    plan: str
-    renewsAt: str | None = None
-
-
-@router.get("/subscriptions", response_model=list[SubscriptionOut])
-def list_subscriptions(
-    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
-):
-    rows = (
-        db.query(Subscription)
-        .filter(Subscription.active.is_(True))
-        .order_by(Subscription.created_at.desc())
-        .limit(200)
-        .all()
-    )
-    out: list[SubscriptionOut] = []
-    for s in rows:
-        emp = db.get(Employer, s.owner_id)
-        out.append(SubscriptionOut(
-            ownerId=s.owner_id,
-            company=emp.company_name if emp else "—",
-            plan=s.plan,
-            renewsAt=s.renews_at,
-        ))
+        out.append(BlockedOut(
+            type="vacancy", id=v.id, info=f"{role_ru(v.role)} · {v.rate} ₽"))
     return out
 
 
@@ -396,23 +542,29 @@ class AdminUserOut(BaseModel):
     username: str | None = None
     blocked: bool
     warnings: int
-    plan: str
-    boostBalance: int
-    superlikeBalance: int
     balanceRub: int = 0  # денежный баланс (аванс) заведения
+    verified: bool = False  # бейдж «Проверено» (только у заведений)
 
 
-def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
-    ent = get_or_create(db, obj.id)
+def _admin_user_out(obj, role: str, balance: int) -> AdminUserOut:
     name = getattr(obj, "name", "") or getattr(obj, "company_name", "") or "—"
     return AdminUserOut(
         id=obj.id, role=role, name=name, username=obj.tg_username,
         blocked=obj.blocked, warnings=obj.warnings,
-        plan=plan_of(db, obj.id),
-        boostBalance=ent.boost_balance,
-        superlikeBalance=ent.superlike_balance,
-        balanceRub=ent.balance_rub,
+        balanceRub=balance,
+        verified=bool(getattr(obj, "verified", False)),
     )
+
+
+_SEARCH_LIMIT = 30
+
+
+def _like(col, needle: str):
+    """Поиск подстроки без учёта регистра — одинаково на SQLite и Postgres."""
+    # Служебные символы LIKE экранируем: иначе запрос «%» находил бы всех, а
+    # «_» — кого попало.
+    safe = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return func.lower(func.coalesce(col, "")).like(f"%{safe}%", escape="\\")
 
 
 @router.get("/users", response_model=list[AdminUserOut])
@@ -421,50 +573,46 @@ def search_users(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Быстрый поиск людей и заведений по имени/@нику/телефону. Фильтруем в
-    Python — корректно для кириллицы и на SQLite, и на Postgres."""
+    """Быстрый поиск людей и заведений по имени/@нику/телефону.
+
+    Раньше поиск вытягивал по 300 свежих записей людей и заведений и отсеивал
+    лишнее уже в Python: человек, зарегистрировавшийся раньше этих трёхсот, не
+    находился вообще — а именно старые аккаунты и ищет поддержка. Хуже другое:
+    на КАЖДУЮ из шестисот строк создавалась (и сохранялась!) запись кошелька —
+    обычный поиск писал в базу шестьсот раз. Теперь отбор делает сама база, а
+    балансы дочитываются одним запросом и ничего не создают.
+    """
     ql = q.strip().lower()
-
-    def _match(*vals: str | None) -> bool:
-        return not ql or any(ql in (v or "").lower() for v in vals)
-
     res: list[AdminUserOut] = []
-    for u in db.query(User).order_by(User.created_at.desc()).limit(300).all():
-        if _match(u.name, u.tg_username, u.phone):
-            res.append(_admin_user_out(db, u, "seeker"))
-    for e in db.query(Employer).order_by(Employer.created_at.desc()).limit(300).all():
-        if _match(e.company_name, e.tg_username, e.phone):
-            res.append(_admin_user_out(db, e, "employer"))
-    return res[:30]
 
+    users = db.query(User)
+    emps = db.query(Employer)
+    if ql:
+        users = users.filter(
+            or_(_like(User.name, ql), _like(User.tg_username, ql),
+                _like(User.phone, ql))
+        )
+        emps = emps.filter(
+            or_(_like(Employer.company_name, ql), _like(Employer.tg_username, ql),
+                _like(Employer.phone, ql))
+        )
+    found_u = users.order_by(User.created_at.desc()).limit(_SEARCH_LIMIT).all()
+    found_e = emps.order_by(Employer.created_at.desc()).limit(_SEARCH_LIMIT).all()
 
-class GrantIn(BaseModel):
-    owner_id: str
-    # Сколько выдать. Раньше выдавали «пакетами» из каталога товаров, но
-    # каталога больше нет: платный рельс один — пополнение баланса. Оператор
-    # компенсирует напрямую, без выдуманных SKU.
-    boost: Annotated[int, Field(ge=0, le=100)] = 0
-    superlikes: Annotated[int, Field(ge=0, le=100)] = 0
-
-
-@router.post("/grant")
-def grant_entitlement(
-    body: GrantIn,
-    db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
-):
-    """Компенсация от оператора: выдать буст и/или супер-лайки бесплатно."""
-    if body.boost == 0 and body.superlikes == 0:
-        raise HTTPException(status_code=400, detail="Нечего выдавать")
-    ent = get_or_create(db, body.owner_id)
-    ent.boost_balance += body.boost
-    ent.superlike_balance += body.superlikes
-    db.commit()
-    return {
-        "ok": True,
-        "boostBalance": ent.boost_balance,
-        "superlikeBalance": ent.superlike_balance,
+    # Балансы — одним запросом на всех. Нет записи кошелька = ноль на счету:
+    # заводить её ради показа в поиске незачем.
+    ids = [o.id for o in [*found_u, *found_e]]
+    balances = {
+        owner: bal
+        for owner, bal in db.query(
+            Entitlement.owner_id, Entitlement.balance_rub
+        ).filter(Entitlement.owner_id.in_(ids or ["__none__"]))
     }
+    for u in found_u:
+        res.append(_admin_user_out(u, "seeker", balances.get(u.id, 0)))
+    for e in found_e:
+        res.append(_admin_user_out(e, "employer", balances.get(e.id, 0)))
+    return res[:_SEARCH_LIMIT]
 
 
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----
@@ -486,20 +634,50 @@ def send_shift_reminders(
     return {"sent": send_reminders(db)}
 
 
-@router.post("/shifts/auto-close")
-def auto_close_hanging_shifts(
+@router.post("/shifts/close-abandoned")
+def ask_after_shift(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Закрыть смены, где работник отметился кодом, а заведение промолчало.
+    """Спросить обе стороны про вчерашние смены: всё прошло как договаривались?
 
-    Раньше такие смены висели, работник открывал спор, и оператор звонил
-    обеим сторонам — хотя правило разбора однозначное: код знало только
-    заведение. Теперь правило исполняет код.
+    Это единственное предупреждение перед тем, как за смену спишется
+    комиссия. Планировщик шлёт его сам утром; кнопка — чтобы догнать вручную.
     """
-    from ..digest import auto_close_shifts
+    from ..digest import send_aftershift_asks
 
-    return {"closed": auto_close_shifts(db)}
+    return {"closed": send_aftershift_asks(db)}
+
+
+@router.post("/shifts/unfilled-alerts")
+def unfilled_alerts(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Предупредить заведения о завтрашних сменах без людей.
+
+    Раньше заведение узнавало об этом утром в день смены, когда искать уже
+    поздно. Запускать вечером, вместе с напоминаниями работникам.
+    """
+    from ..digest import send_unfilled_alerts
+
+    return {"sent": send_unfilled_alerts(db)}
+
+
+@router.post("/shifts/auto-close")
+def settle_finished_shifts(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Закрыть состоявшиеся смены и начислить комиссию.
+
+    Смена считается состоявшейся, если после её окончания никто не нажал
+    «Смена не состоялась». Планировщик делает это сам днём; кнопка — чтобы
+    догнать вручную, не дожидаясь расписания.
+    """
+    from ..digest import settle_shifts
+
+    return {"closed": settle_shifts(db)}
 
 
 class RepeatPairOut(BaseModel):
@@ -508,6 +686,94 @@ class RepeatPairOut(BaseModel):
     employer: str
     worker: str
     shifts: int
+
+
+class CancelStatRow(BaseModel):
+    ownerId: str
+    name: str
+    role: str            # employer|seeker
+    cancels: int         # всего отмен
+    lateCancels: int     # из них поздних
+    noShows: int         # неявок (для работника)
+    # Сколько раз сторона заявила «смена не состоялась». Единственный способ
+    # не платить за договорённую смену — значит он и должен быть на виду.
+    # Раньше такое заявление не оставляло вообще НИКАКОГО следа: ни жалобы, ни
+    # счётчика. Самый дешёвый обход правила «молчание = смена состоялась» —
+    # попросить работника нажать эту кнопку.
+    notHeld: int
+
+
+@router.get("/cancel-stats", response_model=list[CancelStatRow])
+def cancel_stats(
+    days: int = 60,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Кто систематически отменяет смены.
+
+    Одна отмена — жизнь. Пять поздних отмен за месяц — это уже поведение,
+    из-за которого страдает вторая сторона: заведение остаётся без людей, а
+    люди приезжают зря. Раньше такой паттерн можно было заметить только
+    случайно, разбирая жалобы поштучно.
+
+    Отдельно считаем поздние отмены: ранние — нормальная часть работы и сами
+    по себе ни о чём не говорят.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    since = datetime.now(UTC) - timedelta(days=max(1, min(days, 365)))
+    rows = (
+        db.query(Match)
+        .filter(
+            Match.created_at >= since,
+            or_(
+                Match.status == "cancelled",
+                Match.no_show.is_(True),
+                Match.not_held_by != "",
+            ),
+        )
+        .all()
+    )
+    blank = {"cancels": 0, "late": 0, "no_shows": 0, "not_held": 0}
+    agg: dict[tuple[str, str], dict] = {}
+    for m in rows:
+        if m.status == "cancelled" and m.cancelled_by:
+            key = (
+                m.user_id if m.cancelled_by == "seeker" else m.employer_id,
+                m.cancelled_by,
+            )
+            st = agg.setdefault(key, dict(blank))
+            st["cancels"] += 1
+            st["late"] += 1 if m.cancelled_late else 0
+        if m.no_show:
+            key = (m.user_id, "seeker")
+            st = agg.setdefault(key, dict(blank))
+            st["no_shows"] += 1
+        if m.not_held_by:
+            key = (
+                m.user_id if m.not_held_by == "seeker" else m.employer_id,
+                m.not_held_by,
+            )
+            st = agg.setdefault(key, dict(blank))
+            st["not_held"] += 1
+
+    out: list[CancelStatRow] = []
+    for (owner_id, role), st in agg.items():
+        obj = (db.get(User, owner_id) if role == "seeker"
+               else db.get(Employer, owner_id))
+        name = (getattr(obj, "name", None)
+                or getattr(obj, "company_name", None) or "—")
+        out.append(CancelStatRow(
+            ownerId=owner_id, name=name, role=role,
+            cancels=st["cancels"], lateCancels=st["late"],
+            noShows=st["no_shows"], notHeld=st["not_held"],
+        ))
+    # Сначала те, кто подводит чаще: поздние отмены, неявки и заявления
+    # «смены не было» весомее ранних отмен.
+    out.sort(key=lambda r: -(
+        r.lateCancels * 2 + r.noShows * 2 + r.notHeld * 2 + r.cancels
+    ))
+    return out[:50]
 
 
 @router.get("/repeat-pairs", response_model=list[RepeatPairOut])
@@ -595,6 +861,10 @@ def relink_account(
     target.tg_id = body.new_tg_id
     if target.phone == f"tg:{old_tg}":
         target.phone = f"tg:{body.new_tg_id}"
+    # Перенос делают, когда доступ к прежнему Telegram потерян — в том числе
+    # когда телефон украли. Ранее выданные токены продолжали работать до конца
+    # срока, то есть у прежнего владельца оставался вход. Обрываем все сессии.
+    target.token_version = (target.token_version or 0) + 1
     db.commit()
     notify_owner(db, target.id,
                  "Аккаунт перенесён на этот Telegram ✓ Рейтинг, история смен "
@@ -629,6 +899,62 @@ def wallet_credit(
     notify_owner(db, owner_id,
                  f"Баланс пополнен на {body.amount_rub} ₽. "
                  f"Теперь на счету {balance} ₽ — комиссия списывается сама.")
+    return {"ok": True, "balanceRub": balance}
+
+
+class WalletRefundIn(BaseModel):
+    amount_rub: Annotated[int, Field(ge=1, le=500_000)]
+    note: str = ""
+
+
+@router.post("/wallet/{owner_id}/refund")
+def wallet_refund(
+    owner_id: str,
+    body: WalletRefundIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Вернуть деньги с баланса (возврат заведению или исправление ошибки).
+
+    До этого механизма возврата не было НИКАКОГО: ошиблись при зачислении —
+    единственный путь правки лежал через прямой доступ к базе, где движение
+    денег не оставляет следа в журнале. Теперь и списание тоже строка в
+    wallet_txns: журнал остаётся полным.
+
+    В минус не уходим: нельзя вернуть больше, чем на балансе. Списание —
+    атомарным UPDATE с условием, как и все деньги в проекте.
+    """
+    from ..entitlements import ensure
+
+    if db.get(Employer, owner_id) is None and db.get(User, owner_id) is None:
+        raise HTTPException(status_code=404, detail="Аккаунт не найден")
+    ensure(db, owner_id)
+    taken = (
+        db.query(Entitlement)
+        .filter(
+            Entitlement.owner_id == owner_id,
+            Entitlement.balance_rub >= body.amount_rub,
+        )
+        .update(
+            {Entitlement.balance_rub: Entitlement.balance_rub - body.amount_rub},
+            synchronize_session=False,
+        )
+    )
+    if not taken:
+        current = int(db.get(Entitlement, owner_id).balance_rub)
+        raise HTTPException(
+            status_code=409,
+            detail=f"На балансе только {current} ₽ — вернуть больше нельзя.",
+        )
+    db.add(WalletTxn(
+        owner_id=owner_id, amount=-body.amount_rub, kind="refund",
+        note=(body.note or "Возврат оператором")[:200],
+    ))
+    db.commit()
+    balance = int(db.get(Entitlement, owner_id).balance_rub)
+    notify_owner(db, owner_id,
+                 f"С баланса возвращено {body.amount_rub} ₽. "
+                 f"Остаток — {balance} ₽.")
     return {"ok": True, "balanceRub": balance}
 
 
@@ -699,6 +1025,45 @@ def commissions(
     return out
 
 
+@router.post("/payments/reconcile")
+def reconcile_payments(
+    hours: int = 48,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Сверить платежи с ЮKassa и дозачислить те, по которым не дошёл вебхук.
+
+    Запускать раз в сутки кроном. Без сверки непришедший вебхук означает:
+    у ЮKassa деньги есть, у нас их нет, и никто об этом не узнает.
+    """
+    from ..reconcile import reconcile
+
+    return reconcile(db, hours=max(1, min(hours, 24 * 30)))
+
+
+@router.post("/users/{owner_id}/logout-all")
+def logout_all(
+    owner_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Завершить все сессии аккаунта («потерял телефон»).
+
+    До этого отозвать токен было нечем: срок жизни — дни, и всё это время
+    нашедший телефон работал бы от лица человека. Блокировка аккаунта тоже
+    обрывает доступ, но она наказание, а тут человек ни в чём не виноват.
+    """
+    target = db.get(User, owner_id) or db.get(Employer, owner_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Аккаунт не найден")
+    target.token_version = (target.token_version or 0) + 1
+    db.commit()
+    notify_owner(db, owner_id,
+                 "Все сессии завершены. Откройте приложение заново — "
+                 "вход произойдёт сам.")
+    return {"ok": True}
+
+
 class EraseOut(BaseModel):
     ok: bool
     kind: str          # user|employer
@@ -734,7 +1099,6 @@ def erase_account(
         Referral,
         Review,
         SavedSearch,
-        Streak,
     )
 
     target = db.get(User, owner_id)
@@ -767,10 +1131,28 @@ def erase_account(
                                           SavedSearch.owner_id == owner_id)
     removed["события аналитики"] = _drop(Event, Event.owner_id == owner_id)
     removed["жалобы"] = _drop(Report, Report.reporter_id == owner_id)
-    removed["серии заходов"] = _drop(Streak, Streak.owner_id == owner_id)
     removed["рефералы"] = _drop(Referral, Referral.referrer_id == owner_id,
                                 Referral.referred_id == owner_id)
-    removed["права/баланс"] = _drop(Entitlement, Entitlement.owner_id == owner_id)
+    # Баланс обнуляем ПРОВОДКОЙ, а не удалением строки. Раньше строка прав
+    # удалялась целиком: в журнале оставалось пополнение «+5000», а остатка и
+    # списания не было — журнал переставал сходиться, и на просьбу вернуть
+    # аванс доказать было нечем. Персональных данных здесь нет, под 152-ФЗ
+    # удалять её и не требуется.
+    ent = db.get(Entitlement, owner_id)
+    left = int(ent.balance_rub) if ent is not None else 0
+    if left:
+        db.query(Entitlement).filter(
+            Entitlement.owner_id == owner_id,
+            Entitlement.balance_rub >= left,
+        ).update(
+            {Entitlement.balance_rub: Entitlement.balance_rub - left},
+            synchronize_session=False,
+        )
+        db.add(WalletTxn(
+            owner_id=owner_id, amount=-left, kind="erase",
+            note="Обнуление баланса при удалении данных по заявлению",
+        ))
+    removed["обнулено с баланса, ₽"] = left
     # Текст отзыва — свободный, там может быть что угодно про человека.
     # Оценку оставляем: она уже вошла в рейтинг второй стороны.
     removed["тексты отзывов"] = (
@@ -793,13 +1175,12 @@ def erase_account(
     target.tg_username = None
     target.phone = f"erased:{owner_id[:12]}"
     target.blocked = True
+    target.token_version = (target.token_version or 0) + 1  # токены не работают
     if kind == "user":
         target.name = "Профиль удалён"
         target.birth_date = ""
         target.city = ""
         target.district = ""
-        target.lat = 0.0
-        target.lng = 0.0
         target.roles = ""
         target.med_book = "no"
         target.self_employed = False
@@ -847,3 +1228,45 @@ def settle_commission(
         notify_owner(db, employer_id,
                      "Оплата комиссии получена, спасибо! Счёт закрыт ✓")
     return {"ok": True, "settled": n}
+
+
+class WriteOffIn(BaseModel):
+    reason: Annotated[str, Field(min_length=3, max_length=200)]
+    match_id: str = ""   # пусто — списать весь долг заведения
+
+
+@router.post("/commissions/{employer_id}/write-off")
+def write_off_commission(
+    employer_id: str,
+    body: WriteOffIn,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Списать комиссию: простить спорную или признать долг безнадёжным.
+
+    Раньше у оператора была одна кнопка — «Оплачено». И ею закрывали всё
+    подряд: и реальную оплату, и прощённую после спора комиссию, и долг, за
+    которым никто не пойдёт в суд из-за трёх тысяч. В отчёте всё это
+    выглядело выручкой, которой не было.
+
+    Списание — отдельный статус с обязательной причиной. В деньги сервиса
+    оно не попадает, но остаётся в истории: видно, сколько и почему потеряли.
+    """
+    q = db.query(Commission).filter(
+        Commission.employer_id == employer_id,
+        Commission.status == "pending",
+    )
+    if body.match_id:
+        q = q.filter(Commission.match_id == body.match_id)
+    rows = q.all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Нет неоплаченных начислений")
+    total = sum(c.amount for c in rows)
+    for c in rows:
+        c.status = "written_off"
+        c.note = body.reason[:200]
+    db.commit()
+    notify_owner(db, employer_id,
+                 f"Комиссия {total} ₽ списана оператором. Причина: "
+                 f"{body.reason[:120]}")
+    return {"ok": True, "written_off": len(rows), "amount_rub": total}

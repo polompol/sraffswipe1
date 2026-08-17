@@ -14,6 +14,25 @@ Code = Annotated[
 Short = Annotated[str, StringConstraints(max_length=120)]
 Longish = Annotated[str, StringConstraints(max_length=2000)]
 
+# Должности — закрытый список, ровно как в приложении (tma/src/types/domain.ts).
+# Раньше здесь принималась любая строка, и это была бесплатная витрина для
+# объявлений: должность выводится крупным шрифтом в ленте, а модерации у неё
+# нет. Заодно чужая должность ломала фильтр — по ней не находилось ничего.
+StaffRole = Literal[
+    "waiter", "waiter_assistant", "barista", "cook", "dishwasher", "hostess",
+    "bartender", "hookah", "florist", "administrator", "courier", "cleaner",
+]
+# Отметки об опыте — тоже закрытый список (галочки в анкете, не свободный текст).
+ExperienceTag = Literal[
+    "medBook", "experienced", "english", "cashRegister", "selfEmployed",
+]
+# Адрес картинки: только http(s). Пусто — «фото нет». Без этой проверки в поле
+# можно было записать что угодно (javascript:, data:, ссылку-счётчик) — а оно
+# подставляется в src картинки на чужом экране.
+PhotoUrl = Annotated[
+    str, StringConstraints(max_length=500, pattern=r"^(https?://\S+)?$")
+]
+
 
 # ---- auth ----
 class RequestCodeIn(BaseModel):
@@ -40,13 +59,22 @@ class TokenOut(BaseModel):
 
 
 # ---- vacancies ----
+# Нижняя граница оплаты смены. Не про «справедливую зарплату» (её определяет
+# рынок), а про то, что смена — настоящая: см. пояснение в _check_duration.
+MIN_RATE_PER_HOUR = 100
+MIN_RATE_PER_SHIFT = 500
+
+
 class VacancyIn(BaseModel):
-    role: Short
+    role: StaffRole
     date: Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
     start_time: int = Field(ge=0, le=1440)
     end_time: int = Field(ge=0, le=1440)
     rate: int = Field(ge=0, le=1_000_000)
     rate_type: Literal["perHour", "perShift"] = "perHour"
+    # Сколько человек нужно. Потолок 20 — дальше это уже не подработка
+    # через приложение, а отдельный разговор с заведением.
+    headcount: int = Field(default=1, ge=1, le=20)
     pay_method: Literal["cash", "card", "transfer"] = "cash"
     tips: Literal["none", "individual", "shared"] = "none"
     description: Longish = ""
@@ -56,7 +84,7 @@ class VacancyIn(BaseModel):
     lng: float = Field(default=0.0, ge=-180, le=180)
     address: Short = ""
     city: Short = ""
-    interior_photo_url: Annotated[str, StringConstraints(max_length=500)] = ""
+    interior_photo_url: PhotoUrl = ""
 
     @model_validator(mode="after")
     def _check_duration(self) -> "VacancyIn":
@@ -64,6 +92,35 @@ class VacancyIn(BaseModel):
         # бы как «ночная через полночь» = 24 часа → завышенная оплата/комиссия.
         if self.rate_type == "perHour" and self.start_time == self.end_time:
             raise ValueError("Время начала и конца смены не должно совпадать")
+        # Смена за 0 ₽ — не предложение работы, а бесплатный инструмент
+        # накрутки: пара сговорившихся аккаунтов закрывала такие «смены»
+        # десятками, получая работнику ★5,0 и «вышел на 12 из 12», а сервису —
+        # ноль комиссии (10% от нуля). Именно по этим цифрам заведение решает,
+        # пускать ли незнакомого человека к кассе. С нижней границей каждая
+        # фиктивная смена стоит настоящих денег, и накрутка перестаёт окупаться.
+        # Пороги заведомо ниже рынка Москвы (250–500 ₽/час) — честному
+        # заведению они не мешают.
+        if self.rate_type == "perHour" and self.rate < MIN_RATE_PER_HOUR:
+            raise ValueError(
+                f"Ставка не может быть ниже {MIN_RATE_PER_HOUR} ₽ в час"
+            )
+        if self.rate_type == "perShift" and self.rate < MIN_RATE_PER_SHIFT:
+            raise ValueError(
+                f"Оплата за смену не может быть ниже {MIN_RATE_PER_SHIFT} ₽"
+            )
+        # Смена во вчерашнем дне принималась молча — и тут же пропадала из
+        # ленты, потому что прошедшие смены в неё не попадают. Заведение
+        # опубликовало смену, увидело её у себя в списке и ждало откликов,
+        # которых физически не могло быть. Ошибиться легко: в календаре
+        # телефона соседние числа стоят вплотную.
+        from .timeutil import local_today
+
+        # Именно по времени ГОРОДА смены. С одним поясом на сервис заведение
+        # во Владивостоке не могло опубликовать смену на сегодня уже с двух
+        # часов дня по местному: для московского сервера этот день ещё не
+        # наступил.
+        if self.date < local_today(self.city):
+            raise ValueError("Смена не может быть в прошлом")
         return self
 
 
@@ -84,6 +141,8 @@ class VacancyOut(BaseModel):
     description: str
     require_med_book: bool
     require_experience: bool
+    headcount: int = 1
+    slots_left: int = 1   # сколько мест ещё свободно
     lat: float
     lng: float
     address: str
@@ -91,7 +150,6 @@ class VacancyOut(BaseModel):
     interior_photo_url: str
     status: str
     distance_km: float | None = None
-    boosted: bool = False
     # Доверие к заведению (видно ДО отклика): рейтинг от соискателей,
     # сколько смен уже закрыто и признак «платит вовремя».
     employer_rating: float = 0.0
@@ -103,7 +161,7 @@ class VacancyOut(BaseModel):
 class SwipeIn(BaseModel):
     target_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     target_type: Literal["vacancy", "user"]
-    direction: Literal["like", "superlike", "dislike"]
+    direction: Literal["like", "dislike"]
 
 
 class SwipeOut(BaseModel):
@@ -127,6 +185,21 @@ class MatchOut(BaseModel):
     employer_checked_in: bool = False
     disputed: bool = False
     shift_pay: int = 0  # оплата смены, ₽ (для празднования дохода в UI)
+    # Когда смена. Без этих полей приложение не знало о смене ничего, кроме
+    # названия заведения: человек открывал чат и не видел, на какой день и час
+    # он вообще договорился. Плюс по ним видно, какие действия ещё уместны —
+    # отменить и перенести можно только НЕ начавшуюся смену, а сказать «не
+    # состоялась» — только после её окончания.
+    shift_date: str = ""      # ГГГГ-ММ-ДД
+    shift_start: int = 0      # минуты от полуночи
+    shift_end: int = 0
+    # Предложенный перенос. Полей не было в ответе вовсе, а приложение рисует
+    # кнопки «Согласен / Не смогу» именно по ним — то есть работник получал
+    # уведомление «откройте чат, чтобы согласиться», открывал и не находил,
+    # на что нажать. Фича была мертва со стороны интерфейса.
+    reschedule_date: str = ""
+    reschedule_start: int | None = None
+    reschedule_end: int | None = None
 
 
 # ---- chat ----

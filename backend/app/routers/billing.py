@@ -6,52 +6,104 @@
 в пилоте выдаёт оператор (буст) и реферальная программа (супер-лайки).
 """
 import base64
-import hmac
 import json
+import re
 import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..entitlements import get_or_create
-from ..models import Commission, Entitlement, Purchase, Subscription, WalletTxn
-from ..security import current_principal
+from ..entitlements import ensure, get_or_create
+from ..models import Commission, Entitlement, Purchase, WalletTxn
+from ..ratelimit import rate_limit_ip
+from ..security import (
+    current_principal,
+    decode_token,
+    ensure_token_usable,
+    secure_equals,
+)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
-class EntitlementsOut(BaseModel):
-    plan: str
-    planRenewsAt: str | None = None
-    superlikeBalance: int
-    boostBalance: int
-    seekerPremium: bool
-    employerVerified: bool
+
+def _document_response(
+    kind: str, db: Session, employer_id: str, period: str = ""
+) -> Response:
+    """Счёт или акт в PDF. Общая обработка отказов для обеих ручек."""
+    from ..documents import RequisitesMissing, act_pdf, invoice_pdf
+
+    try:
+        data, filename = (
+            invoice_pdf(db, employer_id) if kind == "invoice"
+            else act_pdf(db, employer_id, period)
+        )
+    except RequisitesMissing:
+        raise HTTPException(
+            status_code=503,
+            detail="Реквизиты получателя платежа не заполнены — "
+                   "документы для юрлица пока не выставляются.",
+        ) from None
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
-@router.get("/entitlements", response_model=EntitlementsOut)
-def get_entitlements(
-    principal: dict = Depends(current_principal), db: Session = Depends(get_db)
+@router.get(
+    "/invoice.pdf",
+    dependencies=[Depends(rate_limit_ip("doc", 20, 60))],
+)
+def commission_invoice(
+    token: str = "",
+    db: Session = Depends(get_db),
 ):
-    ent = get_or_create(db, principal["id"])
-    sub = (
-        db.query(Subscription)
-        .filter(Subscription.owner_id == principal["id"])
-        .first()
-    )
-    return EntitlementsOut(
-        plan=sub.plan if sub and sub.active else "free",
-        planRenewsAt=sub.renews_at if sub else None,
-        superlikeBalance=ent.superlike_balance,
-        boostBalance=ent.boost_balance,
-        seekerPremium=ent.seeker_premium,
-        employerVerified=ent.employer_verified,
-    )
+    """Счёт на оплату комиссии — для бухгалтерии заведения.
+
+    Токен в адресе: PDF открывает браузер по прямой ссылке, заголовки он не
+    шлёт. Проверяем теми же правилами, что и обычные ручки.
+    """
+    principal = decode_token(token)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Нужен токен")
+    ensure_token_usable(db, principal)
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    return _document_response("invoice", db, principal["id"])
+
+
+@router.get(
+    "/act.pdf",
+    dependencies=[Depends(rate_limit_ip("doc", 20, 60))],
+)
+def commission_act(
+    token: str = "",
+    period: str = "",
+    db: Session = Depends(get_db),
+):
+    """Акт оказанных услуг за месяц — чтобы заведение поставило расход.
+
+    period — «ГГГГ-ММ»; по умолчанию текущий месяц.
+    """
+    principal = decode_token(token)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Нужен токен")
+    ensure_token_usable(db, principal)
+    if principal["role"] != "employer":
+        raise HTTPException(status_code=403, detail="Только для работодателя")
+    # Месяц именно 01–12: под прежний шаблон подходило и «2026-13», и
+    # «2026-00» — из них строилась дата «2026-13-01», и запрос падал 500-й.
+    if period and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", period):
+        raise HTTPException(status_code=400, detail="Период в формате ГГГГ-ММ")
+    return _document_response("act", db, principal["id"], period)
 
 
 def commission_overdue(db: Session, employer_id: str) -> bool:
@@ -71,6 +123,25 @@ def commission_overdue(db: Session, employer_id: str) -> bool:
     return row is not None
 
 
+def overdue_employer_ids(db: Session) -> set[str]:
+    """Заведения с просроченной комиссией — одним запросом.
+
+    Нужно ленте: смены должника из неё убираются. Иначе соискатель тратил
+    отклики на смены, по которым мэтч всё равно не создастся, и не понимал,
+    почему «отклик отправлен», а чата нет.
+    """
+    if settings.commission_due_days <= 0:
+        return set()
+    deadline = datetime.now(UTC) - timedelta(days=settings.commission_due_days)
+    rows = (
+        db.query(Commission.employer_id)
+        .filter(Commission.status == "pending", Commission.created_at < deadline)
+        .distinct()
+        .all()
+    )
+    return {r[0] for r in rows}
+
+
 class CommissionInfoOut(BaseModel):
     pendingRub: int
     pendingShifts: int
@@ -79,6 +150,12 @@ class CommissionInfoOut(BaseModel):
     pct: int
     balanceRub: int  # денежный баланс (аванс) — комиссия списывается сама
     topupAvailable: bool  # оплата картой доступна (ЮKassa подключена / dev)
+    # Выдаются ли счёт и акт. Без реквизитов получателя (ORG_*) документы не
+    # формируются: бумага с прочерками вместо ИНН и расчётного счёта
+    # бесполезна, бухгалтерия вернёт её. Приложение при этом рисовало обе
+    # кнопки, и заведение упиралось в отказ ровно в тот момент, когда собралось
+    # платить, — худший момент из возможных.
+    docsAvailable: bool
 
 
 @router.get("/commission", response_model=CommissionInfoOut)
@@ -110,6 +187,7 @@ def commission_info(
         pct=settings.commission_pct,
         balanceRub=ent.balance_rub,
         topupAvailable=settings.yookassa_ready or settings.dev_mode,
+        docsAvailable=settings.org_ready,
     )
 
 
@@ -211,21 +289,31 @@ def wallet_topup(
     return PaymentOut(url=f"{base}?sku=wallet_topup&owner={principal['id']}")
 
 
-def credit_wallet(db: Session, owner_id: str, amount: int, note: str) -> int:
+def credit_wallet(
+    db: Session, owner_id: str, amount: int, note: str,
+    kind: str = "topup", commit: bool = True,
+) -> int:
     """Зачислить деньги на баланс + записать движение. Возвращает новый баланс.
+
     Инкремент — атомарным UPDATE (balance = balance + amount), а НЕ
     read-modify-write: иначе гонка с автосписанием комиссии затёрла бы списание
     (заведение получило бы смену бесплатно). Правило проекта: деньги — только
-    атомарными UPDATE с условием."""
-    get_or_create(db, owner_id)  # гарантируем строку прав
+    атомарными UPDATE с условием.
+
+    commit=False — когда зачисление часть большей транзакции (вебхук оплаты):
+    фиксировать её должен вызывающий, одним коммитом на всё.
+    """
+    ensure(db, owner_id)  # строка прав без коммита
     db.query(Entitlement).filter(Entitlement.owner_id == owner_id).update(
         {Entitlement.balance_rub: Entitlement.balance_rub + amount},
         synchronize_session=False,
     )
-    db.add(WalletTxn(owner_id=owner_id, amount=amount, kind="topup", note=note))
-    db.commit()
-    ent = get_or_create(db, owner_id)
-    return ent.balance_rub
+    db.add(WalletTxn(owner_id=owner_id, amount=amount, kind=kind, note=note))
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return int(db.get(Entitlement, owner_id).balance_rub)
 
 
 @router.post("/yookassa/webhook")
@@ -238,7 +326,7 @@ def yookassa_webhook(
     поэтому защищаемся секретом в query `?secret=`. Если задан отдельный
     yookassa_webhook_secret — используем его (отдельный секрет для вебхука)."""
     expected = settings.yookassa_webhook_secret or settings.internal_api_secret
-    if not expected or not hmac.compare_digest(secret or "", expected):
+    if not expected or not secure_equals(secret, expected):
         raise HTTPException(status_code=401, detail="Требуется внутренний токен")
     if payload.get("event") != "payment.succeeded":
         return {"ok": True, "ignored": True}
@@ -252,9 +340,6 @@ def yookassa_webhook(
             rub = int(meta.get("amount_rub") or 0)
         except ValueError:
             rub = 0
-        # Потолок: сверка value↔metadata самореферентна (оба поля контролирует
-        # тот, кто знает секрет вебхука), поэтому единственная реальная защита от
-        # неограниченной эмиссии при утечке секрета — жёсткий лимит суммы.
         if not 100 <= rub <= 100_000:
             raise HTTPException(status_code=400, detail="Сумма вне лимита")
         amount = obj.get("amount", {})
@@ -264,17 +349,69 @@ def yookassa_webhook(
             or amount.get("currency") != "RUB"
         ):
             raise HTTPException(status_code=400, detail="Сумма платежа не совпадает")
+        # Без id платежа защита от повтора не работает: столбец уникален, но
+        # NULL не конфликтует с NULL, и один и тот же вебхук зачислялся бы
+        # снова и снова. Настоящая ЮKassa id присылает всегда.
         charge_id = obj.get("id")
-        if charge_id and db.query(Purchase).filter(
+        if not charge_id:
+            raise HTTPException(status_code=400, detail="Нет id платежа")
+
+        # ГЛАВНАЯ ПРОВЕРКА: спрашиваем у ЮKassa напрямую, был ли такой платёж.
+        #
+        # Вебхук не подписан, и защищён он секретом в адресе — а этот адрес
+        # живёт в чужом кабинете. Если секрет утечёт, кто угодно пришлёт
+        # «платёж прошёл, зачислите 100 000 ₽»: денег не будет, а баланс
+        # вырастет. Сверять сумму внутри самого письма бессмысленно — все его
+        # поля пишет отправитель, и прежняя проверка «value совпадает с
+        # metadata» была самореферентной, о чём тут и было написано.
+        #
+        # Спрашиваем по API нашими ключами, которых у отправителя письма нет,
+        # и берём сумму ОТТУДА. Подделать платёж становится невозможно.
+        if settings.yookassa_ready:
+            from ..reconcile import fetch_payment
+
+            real = fetch_payment(str(charge_id))
+            if real is None:
+                # ЮKassa недоступна — не зачисляем и не подтверждаем приём:
+                # она повторит вебхук, а ночная сверка подберёт платёж сама.
+                raise HTTPException(
+                    status_code=503,
+                    detail="Не удалось проверить платёж — повторите позже",
+                )
+            if real.get("status") != "succeeded":
+                raise HTTPException(status_code=400, detail="Платёж не проведён")
+            real_amount = (real.get("amount") or {})
+            if (
+                str(real_amount.get("value")) != f"{rub}.00"
+                or real_amount.get("currency") != "RUB"
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Сумма не совпадает с платежом в ЮKassa",
+                )
+            real_meta = real.get("metadata") or {}
+            if real_meta.get("owner_id") != owner_id:
+                raise HTTPException(
+                    status_code=400, detail="Платёж принадлежит другому аккаунту"
+                )
+        if db.query(Purchase).filter(
             Purchase.provider_charge_id == charge_id
         ).first():
             return {"ok": True, "duplicate": True}
+        # ОДНА транзакция на запись платежа и зачисление денег. Раньше между
+        # ними случался коммит (строка прав создавалась отдельно), и при сбое
+        # в этом окне платёж оставался помеченным «оплачено», а деньги на
+        # баланс не попадали. Повтор вебхука видел дубль по charge_id и молча
+        # уходил — деньги терялись навсегда. Теперь при сбое откатывается всё,
+        # и повторный вебхук проводит платёж заново.
         db.add(Purchase(
             owner_id=owner_id, sku="wallet_topup", provider="yookassa",
             amount=rub, currency="RUB", status="paid",
             provider_charge_id=charge_id,
         ))
-        credit_wallet(db, owner_id, rub, "Пополнение картой (ЮKassa)")
+        credit_wallet(db, owner_id, rub, "Пополнение картой (ЮKassa)",
+                      commit=False)
+        db.commit()
         return {"ok": True}
 
     # Других сценариев оплаты нет: пополнение баланса — единственный товар.

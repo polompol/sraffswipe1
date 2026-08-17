@@ -2,12 +2,12 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { PAY_METHOD_SHORT, STAFF_ROLE_LABELS } from "@/types/domain";
-import { fmtTime, isUrgentShift, rateLabel, shiftDayLabel } from "@/lib/format";
+import { fmtTime, isUrgentShift, plural, rateLabel, shiftDayLabel } from "@/lib/format";
 import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { ReportSheet } from "@/components/ReportSheet";
-import { IconFire, IconShare, IconCheck, IconWarning, IconBookmark } from "@/components/Icons";
+import { IconFire, IconShare, IconWarning, IconBookmark } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
 
 /** Миниатюра 64×64 с фолбэком: бренд-градиент+инициал, поверх — фото (если
@@ -114,35 +114,34 @@ export function VacancyList({
                 {isUrgentShift(v.date) && (
                   <span className="tag pulse" style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}><IconFire size={12} /> Сегодня</span>
                 )}
-                {v.boosted && (
-                  <span className="tag pulse" style={{ flex: "none", color: "var(--super-text)", borderColor: "var(--super)" }}><IconFire size={12} /> ТОП</span>
-                )}
               </div>
               <div className="muted" style={{ marginTop: 2 }}>
                 {STAFF_ROLE_LABELS[v.role]} · {rateLabel(v.rate, v.rateType)}
+                {(v.headcount ?? 1) > 1 &&
+                  ` · набрано ${(v.headcount ?? 1) - (v.slotsLeft ?? 0)} из ${v.headcount}`}
               </div>
               <div className="muted">
                 {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
                 {typeof v.distanceKm === "number" ? ` · ${v.distanceKm.toFixed(1)} км` : ""}
               </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                {v.payMethod && (
-                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
-                    {PAY_METHOD_SHORT[v.payMethod]}
-                  </span>
-                )}
-                {v.employerPaysOnTime && (
-                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
-                    <IconCheck size={12} /> Платит вовремя
-                  </span>
-                )}
-                {!!v.employerShiftsDone && (
-                  <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 13 }}>
-                    {v.employerShiftsDone} смен закрыто
-                  </span>
-                )}
-              </div>
             </div>
+          </div>
+          {/* Чипы — на всю ширину карточки, а не в узкой колонке справа от
+              фото. Там на них оставалось 276px, и каждый вставал на свою
+              строку: три чипа съедали три строки и карточка выглядела
+              сломанной. Подписи заодно короче — теперь помещаются в одну. */}
+          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            {v.payMethod && (
+              <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
+                {PAY_METHOD_SHORT[v.payMethod]}
+              </span>
+            )}
+            {!!v.employerShiftsDone && (
+              <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 13 }}>
+                {v.employerShiftsDone}{" "}
+                {plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто
+              </span>
+            )}
           </div>
           <div className="row" style={{ gap: 8, marginTop: 12 }}>
             {!hideSkip && (
@@ -184,7 +183,8 @@ export function VacancyList({
             </button>
             <span className="spacer" />
             <button
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, padding: "10px 4px", display: "inline-flex", alignItems: "center", gap: 5 }}
+              // Кнопка была ~39px высотой — ниже минимальных 44px для пальца.
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, minHeight: 44, padding: "0 8px", display: "inline-flex", alignItems: "center", gap: 5 }}
               onClick={() => setReportId(v.id)}
             >
               <IconWarning size={13} /> Пожаловаться

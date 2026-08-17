@@ -4,13 +4,19 @@
 через notify_owner (тихий no-op без токена). В проде вызывается планировщиком
 (cron): `build_*` собирает, `send_*` рассылает.
 """
+import logging
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .models import Match, Swipe, User, Vacancy
+from .cities import normalize
+from .models import Employer, Match, Swipe, User, Vacancy
 from .notify import notify_owner
+from .roles import date_ru, role_ru, time_ru
 from .timeutil import local_today, shift_end_utc
+
+_log = logging.getLogger("staffswipe")
 
 
 def _today() -> str:
@@ -20,37 +26,65 @@ def _today() -> str:
 
 
 def _fmt_time(minutes: int) -> str:
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+    return time_ru(minutes)
 
 
 def build_digest(db: Session, limit: int = 3) -> dict[str, list[str]]:
     """Для каждого соискателя — до `limit` свежих активных смен в его городе,
     которые он ещё не свайпал. Возвращает {user_id: [тексты строк смен]}."""
     out: dict[str, list[str]] = {}
-    users = db.query(User).filter(User.blocked.is_(False)).all()
-    for u in users:
+
+    # Смены читаем ОДИН раз на всю рассылку и раскладываем по городам.
+    # Раньше на каждого человека делалось два отдельных запроса: все его
+    # свайпы и ВСЕ активные смены страны, которые тут же отсеивались в Python.
+    # При тысяче человек это две тысячи запросов и тысяча полных выгрузок
+    # ленты — ночная рассылка занимала бы базу целиком.
+    blocked_emps = {
+        e[0] for e in db.query(Employer.id).filter(Employer.blocked.is_(True))
+    }
+    by_city: dict[str, list[Vacancy]] = {}
+    for v in (
+        db.query(Vacancy)
+        .filter(Vacancy.status == "active")
+        .order_by(Vacancy.created_at.desc())
+        .all()
+    ):
+        if v.employer_id in blocked_emps:
+            continue
+        # Смену, которая уже прошла, звать смотреть незачем: в ленте её нет, а
+        # в письме она была — человек открывал приложение и не находил ничего.
+        if v.date < local_today(v.city):
+            continue
+        # Через справочник, а не строкой: у человека в анкете может лежать
+        # «Питер», а у смены — «Санкт-Петербург». Буква в букву они не
+        # совпадут никогда, и дайджест этому человеку не придёт вовсе.
+        by_city.setdefault(normalize(v.city or "").lower(), []).append(v)
+    if not by_city:
+        return out
+
+    # Свайпы — тоже одним запросом и только по этим сменам: свайпы по старым
+    # сменам на рассылку не влияют, тянуть их незачем.
+    live_ids = [v.id for city in by_city.values() for v in city]
+    swiped: dict[str, set[str]] = {}
+    for swiper_id, target_id in db.query(
+        Swipe.swiper_id, Swipe.target_id
+    ).filter(Swipe.target_type == "vacancy", Swipe.target_id.in_(live_ids)):
+        swiped.setdefault(swiper_id, set()).add(target_id)
+
+    for u in db.query(User).filter(User.blocked.is_(False)).all():
         if not u.city:
             continue
-        city = u.city.strip().lower()
-        swiped = {
-            s.target_id
-            for s in db.query(Swipe.target_id)
-            .filter(Swipe.swiper_id == u.id, Swipe.target_type == "vacancy")
-            .all()
-        }
-        vacs = (
-            db.query(Vacancy)
-            .filter(Vacancy.status == "active")
-            .order_by(Vacancy.created_at.desc())
-            .all()
-        )
+        vacs = by_city.get(normalize(u.city).lower())
+        if not vacs:
+            continue
+        seen = swiped.get(u.id, ())
         picked: list[str] = []
         for v in vacs:
-            if (v.city or "").strip().lower() != city:
+            if v.id in seen:
                 continue
-            if v.id in swiped:
-                continue
-            picked.append(f"{v.role} · {v.rate}₽ · {v.date}")
+            # Должность по-русски и дата по-человечески: в базе лежит
+            # «barista» и «2026-08-12», а в дайджест это уходило как есть.
+            picked.append(f"{role_ru(v.role)} · {v.rate}₽ · {date_ru(v.date)}")
             if len(picked) >= limit:
                 break
         if picked:
@@ -73,26 +107,40 @@ def build_reminders(db: Session) -> list[tuple[str, str, str]]:
     Берём только смены, по которым работник ЕЩЁ НЕ отметился, и по которым
     сегодня ещё не напоминали."""
     today = _today()
+    # В базе берём с запасом в сутки в обе стороны, а «сегодня» сверяем по
+    # городу каждой смены: во Владивостоке новый день наступает на семь часов
+    # раньше московского, и напоминание «сегодня смена» приходило либо на день
+    # раньше, либо ночью.
+    from datetime import date as _date
+    from datetime import timedelta as _td
+
+    span = [
+        (_date.fromisoformat(today) + _td(days=d)).isoformat()
+        for d in (-1, 0, 1)
+    ]
     rows = (
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
             Match.status == "confirmed",
             Match.seeker_checked_in.is_(False),
-            Match.reminded_on != today,
-            Vacancy.date == today,
+            Vacancy.date.in_(span),
         )
         .all()
     )
     result: list[tuple[str, str, str]] = []
     for m, v in rows:
+        if v.date != local_today(v.city):
+            continue
+        if m.reminded_on == v.date:
+            continue
         where = v.address or v.city or ""
         text = (
             f"Сегодня смена в {_fmt_time(v.start_time)}"
             + (f", {where}" if where else "")
-            + ".\n\nКогда придёте — отметьтесь: кнопка ниже, «Я на смене». "
-            "Гео определится само, либо введите код, который назовёт "
-            "заведение. Без отметки смена не закроется."
+            + ".\n\nКогда придёте — попросите у администратора код и введите "
+            "его в приложении. Это не обязательно, смена закроется и так, но "
+            "код — ваше доказательство, что вы были на месте."
         )
         result.append((m.id, m.user_id, text))
     return result
@@ -104,75 +152,270 @@ def send_reminders(db: Session) -> int:
     Повторный запуск в тот же день ничего не дублирует: у мэтча проставляется
     дата напоминания. Поэтому вызывать можно и вручную из админки, и по крону.
     """
-    today = _today()
     reminders = build_reminders(db)
     for match_id, user_id, text in reminders:
-        notify_owner(db, user_id, text, open_app="Я на смене — отметиться")
+        notify_owner(db, user_id, text,
+                     open_app="Я на смене — отметиться", screen="shifts")
         m = db.get(Match, match_id)
         if m is not None:
-            m.reminded_on = today
+            v = db.get(Vacancy, m.vacancy_id)
+            # Помечаем ДАТОЙ СМЕНЫ, а не датой сервера: в восточном городе
+            # день смены и день сервера расходятся, и напоминание уходило
+            # человеку дважды.
+            m.reminded_on = v.date if v is not None else _today()
     db.commit()
     return len(reminders)
 
 
+def build_unfilled_alerts(db: Session) -> list[tuple[str, str, str]]:
+    """Заведениям: «смена завтра, а людей нет». (vacancy_id, employer_id, текст).
+
+    Заведение публикует смену и забывает про неё. Если откликов не было, оно
+    узнаёт об этом утром в день смены — когда искать уже поздно. Никто об
+    этом не предупреждал: напоминания были только работникам.
+
+    Предупреждаем накануне — за день ещё можно поднять ставку, нажать
+    «Срочно» или позвать знакомого.
+    """
+    from datetime import date
+    from datetime import timedelta as _td
+
+    # «Завтра» у каждого города своё. Берём в базе с запасом в сутки в обе
+    # стороны, а точное «завтра» сверяем по городу смены: во Владивостоке
+    # московское «завтра» — это уже сегодня, и предупреждение «людей нет»
+    # приходило туда, когда искать замену поздно.
+    try:
+        base = date.fromisoformat(local_today())
+    except ValueError:
+        return []
+    span = [(base + _td(days=d)).isoformat() for d in (0, 1, 2)]
+
+    rows = [
+        v
+        for v in db.query(Vacancy)
+        .filter(Vacancy.status == "active", Vacancy.date.in_(span))
+        .all()
+        if v.date == (
+            date.fromisoformat(local_today(v.city)) + _td(days=1)
+        ).isoformat()
+    ]
+    if not rows:
+        return []
+    # Считаем ЗАКРЫТЫМИ только подтверждённые места. Мэтч без подтверждения
+    # («договариваемся») тоже занимает место в ленте — и это правильно, иначе
+    # на одно место набежит десять человек. Но для предупреждения он ничего не
+    # значит: заведение видело «мест не осталось», успокаивалось, а утром на
+    # смену не приходил никто. Такие места считаем отдельно и говорим про них
+    # прямо — это единственный момент, когда ещё можно успеть.
+    def _count(*statuses: str) -> dict[str, int]:
+        return {
+            vid: int(n)
+            for vid, n in db.query(Match.vacancy_id, func.count(Match.id))
+            .filter(
+                Match.vacancy_id.in_([v.id for v in rows]),
+                Match.status.in_(statuses),
+                Match.no_show.is_(False),
+            )
+            .group_by(Match.vacancy_id)
+            .all()
+        }
+
+    confirmed = _count("confirmed", "completed")
+    pending = _count("matched")
+
+    out: list[tuple[str, str, str]] = []
+    for v in rows:
+        need = v.headcount or 1
+        got = confirmed.get(v.id, 0)
+        waiting = pending.get(v.id, 0)
+        if got >= need:
+            continue
+        left = need - got
+        who = "человека" if left == 1 else "человек"
+        text = (
+            f"Завтра смена в {_fmt_time(v.start_time)}"
+            + (f", {v.address}" if v.address else "")
+            + f" — не хватает {left} {who}.\n\n"
+        )
+        if waiting:
+            ppl = "человек" if waiting == 1 else "человека"
+            text += (
+                f"С {waiting} {ppl} вы уже договорились, но смена ещё не "
+                "подтверждена с обеих сторон — напомните им в чате и нажмите "
+                "«Подтвердить смену». Без этого место считается занятым, а "
+                "выйти человек не обязан.\n\n"
+            )
+        text += (
+            "Что помогает за день до смены: поднять ставку, нажать «Срочно» "
+            "(разошлём тем, кто готов выйти) или позвать своих через "
+            "«Мои работники»."
+        )
+        out.append((v.id, v.employer_id, text))
+    return out
+
+
+def send_unfilled_alerts(db: Session) -> int:
+    """Разослать предупреждения о незакрытых сменах на завтра."""
+    alerts = build_unfilled_alerts(db)
+    for _vid, employer_id, text in alerts:
+        notify_owner(db, employer_id, text,
+                     open_app="Открыть смену", screen="vacancies")
+    return len(alerts)
+
+
 def _shift_end(v: Vacancy) -> datetime:
     """Момент окончания смены в UTC (время смены — местное, см. timeutil)."""
-    return shift_end_utc(v.date, v.start_time, v.end_time)
+    return shift_end_utc(v.date, v.start_time, v.end_time, v.city)
 
 
-# Сколько ждём подтверждения заведения, прежде чем закрыть смену самим.
-AUTO_CLOSE_AFTER_HOURS = 12
+# Через сколько часов после конца смены она считается состоявшейся, если
+# никто не сказал обратного. Смена вечером — расчёт на следующий день днём.
+SETTLE_AFTER_HOURS = 12
+
+# Насколько старую смену расчёт ещё готов закрыть. Дальше — молча оставляем
+# оператору. Две причины. Первая: при включении новой механики в базе могут
+# лежать подтверждённые смены за прошлые месяцы, и без этой границы первый же
+# запуск выставил бы заведениям счёт сразу за всё. Вторая: спорить о смене
+# двухнедельной давности бессмысленно — никто уже не помнит, как было.
+SETTLE_MAX_AGE_DAYS = 14
+
+# Через сколько часов после конца смены спрашиваем обе стороны «всё прошло как
+# договаривались?». Раньше расчёта — чтобы возразить успели без спешки.
+ASK_AFTER_HOURS = 2
 
 
-def auto_close_shifts(db: Session) -> int:
-    """Закрыть смены, где работник отметился КОДОМ, а заведение молчит.
+def build_aftershift_asks(db: Session) -> list[tuple[str, str]]:
+    """Пары (match_id, текст) — «вчера была смена, всё в порядке?».
 
-    Оператор в споре всё равно решает по правилу «код знал только
-    работодатель → раз код введён, работник был на месте → засчитать».
-    Правило однозначное, значит его должен исполнять код, а не человек:
-    это снимает самый частый класс споров и разгружает оператора.
-
-    Гео-отметка сюда НЕ попадает: рядом с кафе можно оказаться и не работая.
-    Спорные смены тоже не трогаем — их разбирает оператор.
+    Единственное предупреждение перед тем, как за смену спишется комиссия.
+    Без него авто-расчёт был бы неприятным сюрпризом: заведение узнавало бы о
+    списании постфактум.
     """
-    from .routers.matches import _accrue_commission, _sys
-
-    deadline = datetime.now(UTC) - timedelta(hours=AUTO_CLOSE_AFTER_HOURS)
+    today = _today()
+    deadline = datetime.now(UTC) - timedelta(hours=ASK_AFTER_HOURS)
     rows = (
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
             Match.status == "confirmed",
-            Match.seeker_checked_in.is_(True),
-            Match.checkin_by_code.is_(True),
-            Match.employer_checked_in.is_(False),
             Match.disputed.is_(False),
+            Match.settle_notified_on != today,
+        )
+        .all()
+    )
+    out: list[tuple[str, str]] = []
+    for m, v in rows:
+        try:
+            if _shift_end(v) > deadline:
+                continue
+        except ValueError:
+            continue
+        out.append((
+            m.id,
+            f"Смена {date_ru(v.date)} в {_fmt_time(v.start_time)} завершилась.\n\n"
+            "Если всё прошло как договаривались — делать ничего не нужно, "
+            "смена закроется сама.\n"
+            "Если смена не состоялась — откройте её и нажмите "
+            "«Смена не состоялась», иначе она будет засчитана.",
+        ))
+    return out
+
+
+def send_aftershift_asks(db: Session) -> int:
+    """Разослать вопрос обеим сторонам. Повторов за день не будет."""
+    today = _today()
+    asks = build_aftershift_asks(db)
+    for match_id, text in asks:
+        m = db.get(Match, match_id)
+        if m is None:
+            continue
+        for owner_id in (m.user_id, m.employer_id):
+            # Сразу в нужную смену: в письме сказано «откройте её и нажмите»,
+            # а кнопка вела в общий список — человек искал смену сам, и это
+            # единственный шанс возразить до начисления комиссии.
+            notify_owner(db, owner_id, text,
+                         open_app="Открыть смену", screen="chat",
+                         ident=match_id)
+        m.settle_notified_on = today
+    db.commit()
+    return len(asks)
+
+
+def settle_shifts(db: Session) -> int:
+    """Закрыть состоявшиеся смены и начислить комиссию.
+
+    Главное правило сервиса, и оно намеренно перевёрнуто по сравнению с тем,
+    как было. Раньше смена закрывалась ТОЛЬКО когда обе стороны нажимали
+    кнопку — значит, чтобы не платить 10%, заведению достаточно было ничего
+    не нажимать и не называть работнику код прихода. Сторона, которая должна
+    деньги, выигрывала от бездействия, и никакая отметка (ни код, ни
+    геолокация) этого не лечила: код тоже давало заведение.
+
+    Теперь: договорились о смене — смена считается состоявшейся, пока кто-то
+    явно не сказал обратного кнопкой «Смена не состоялась». Молчание больше
+    не бесплатно.
+
+    Не трогаем: спорные смены (их решает оператор) и те, по которым уже
+    заявили, что смены не было.
+    """
+    from .routers.matches import _accrue_commission, _sys
+
+    now = datetime.now(UTC)
+    deadline = now - timedelta(hours=SETTLE_AFTER_HOURS)
+    too_old = now - timedelta(days=SETTLE_MAX_AGE_DAYS)
+    rows = (
+        db.query(Match, Vacancy)
+        .join(Vacancy, Match.vacancy_id == Vacancy.id)
+        .filter(
+            Match.status == "confirmed",
+            Match.disputed.is_(False),
+            Match.not_held_by == "",
         )
         .all()
     )
     closed = 0
     for m, v in rows:
         try:
-            if _shift_end(v) > deadline:
-                continue
+            ends = _shift_end(v)
         except ValueError:  # некорректная дата в вакансии — пропускаем
+            continue
+        if ends > deadline:
+            continue
+        if ends < too_old:
+            # Слишком старая: счёт задним числом за то, чего никто уже не
+            # помнит, — верный способ поссориться с заведением. Закрываем без
+            # комиссии, чтобы смена не висела вечно и не держала место.
+            m.status = "expired"
+            _sys(db, m.id,
+                 "Смена закрыта без комиссии: с её окончания прошло слишком "
+                 "много времени, чтобы разбираться автоматически.")
             continue
         m.status = "completed"
         m.no_show = False
-        m.employer_checked_in = True
         _accrue_commission(db, m)
-        _sys(
-            db, m.id,
-            "Смена закрыта автоматически: работник отметился кодом заведения, "
-            f"подтверждения не было {AUTO_CLOSE_AFTER_HOURS} часов. "
-            "Если это ошибка — напишите в поддержку.",
+        _sys(db, m.id, "Смена закрыта ✓ Возражений не поступило.")
+        # Коммит на КАЖДУЮ смену, и только потом уведомления. Раньше был один
+        # коммит на весь прогон, а сообщения улетали сразу: любой конфликт при
+        # записи (например гонка с отметкой кодом, где на комиссию стоит
+        # уникальный индекс) откатывал всю пачку — люди уже получили «смена
+        # закрыта, комиссия начислена», а в базе не закрылось ничего, и назавтра
+        # приходило второе такое же сообщение.
+        try:
+            db.commit()
+        except Exception:  # noqa: BLE001 — одна смена не должна ронять прогон
+            db.rollback()
+            _log.exception("Не удалось закрыть смену %s", m.id)
+            continue
+        notify_owner(
+            db, m.employer_id,
+            "Смена закрыта — возражений не было. Комиссия начислена.",
         )
-        notify_owner(db, m.employer_id,
-                     "Смена закрыта автоматически: работник отметился вашим "
-                     "кодом, а подтверждения не поступило. Комиссия начислена.")
-        notify_owner(db, m.user_id,
-                     "Ваша смена закрыта ✓ Заведение не подтвердило вовремя, "
-                     "но код прихода это подтверждает.")
+        notify_owner(
+            db, m.user_id,
+            "Смена закрыта ✓ В разделе «Мои смены» можно скачать акт "
+            "и оценить заведение.",
+            open_app="Открыть смены", screen="shifts",
+        )
         closed += 1
     db.commit()
     return closed

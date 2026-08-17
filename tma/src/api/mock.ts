@@ -3,7 +3,6 @@
 
 import type {
   AppRole,
-  Entitlements,
   MatchModel,
   Message,
   Seeker,
@@ -50,7 +49,6 @@ const VACANCIES: Vacancy[] = [
     interiorPhotoUrl: photo("photo-1559925393-8be0ec4767c8"),
     employerVerified: true,
     status: "active",
-    boosted: true,
     distanceKm: 1.6,
     employerRating: 4.7,
     employerShiftsDone: 24,
@@ -91,6 +89,8 @@ const VACANCIES: Vacancy[] = [
     companyName: "Ресторан «Грядка»",
     companyPhotoUrl: photo("photo-1517248135467-4c7edcad34c4"),
     role: "waiter",
+    headcount: 4,
+    slotsLeft: 2,
     date: new Date().toISOString().slice(0, 10),
     startTime: 11 * 60,
     endTime: 23 * 60,
@@ -119,7 +119,7 @@ const SEEKERS: Seeker[] = [
   {
     id: "s2",
     name: "Мария",
-    birthDate: "1998-09-03",
+    age: 27,
     city: "Москва",
     district: "Басманный",
     lat: 55.765,
@@ -136,11 +136,12 @@ const SEEKERS: Seeker[] = [
     availableToday: true,
     shiftsTotal: 12,
     shiftsAttended: 12,
+    employersTotal: 5,
   },
   {
     id: "s3",
     name: "Иван",
-    birthDate: "2002-01-20",
+    age: 24,
     city: "Москва",
     district: "Тверской",
     lat: 55.768,
@@ -155,18 +156,99 @@ const SEEKERS: Seeker[] = [
     about: "Холодный и горячий цех, опыт 2 года.",
     shiftsTotal: 4,
     shiftsAttended: 3,
+    employersTotal: 2,
   },
 ];
 
-const matches: MatchModel[] = [];
-const messagesByMatch: Record<string, Message[]> = {};
-const entitlements: Entitlements = {
-  plan: "free",
-  superlikeBalance: 1,
-  boostBalance: 0,
-  seekerPremium: false,
-  employerVerified: false,
+// Одна готовая смена в демо-режиме. Без неё «Мэтчи», «Смены» и чат были
+// пустыми до первого свайпа — то есть при показе приложения заведению
+// половина продукта просто не показывалась.
+const DEMO_MATCH_ID = "demo-match";
+const matches: MatchModel[] = [
+  {
+    id: DEMO_MATCH_ID,
+    seekerId: "me",
+    employerId: "emp1",
+    vacancyId: "vac1",
+    status: "confirmed",
+    confirmedBySeeker: true,
+    confirmedByEmployer: true,
+    companyName: "Кофейня «Дрова»",
+    companyPhotoUrl: photo("photo-1554118811-1e0d58224f24"),
+    role: "barista",
+    checkinCode: "482915",
+    seekerCheckedIn: false,
+    employerCheckedIn: false,
+    shiftPay: 2800,
+    shiftDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    shiftStart: 8 * 60,
+    shiftEnd: 16 * 60,
+  },
+  // Вчерашняя закрытая смена: без неё в демо-режиме не увидеть ни акта, ни
+  // кнопки «Мне не заплатили» — то есть половины экрана «Мои смены».
+  {
+    id: "demo-match-done",
+    seekerId: "me",
+    employerId: "emp2",
+    vacancyId: "vac2",
+    status: "completed",
+    confirmedBySeeker: true,
+    confirmedByEmployer: true,
+    companyName: "Бар «Полночь»",
+    companyPhotoUrl: photo("photo-1514933651103-005eec06c04b"),
+    role: "bartender",
+    checkinCode: null,
+    seekerCheckedIn: true,
+    employerCheckedIn: true,
+    checkedIn: true,
+    shiftPay: 4500,
+    shiftDate: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+    shiftStart: 20 * 60,
+    shiftEnd: 4 * 60,
+  },
+];
+const messagesByMatch: Record<string, Message[]> = {
+  [DEMO_MATCH_ID]: [
+    {
+      id: "demo-m1",
+      chatId: DEMO_MATCH_ID,
+      senderId: "system",
+      text: "Это мэтч! Смена: Кофейня «Дрова». Договоритесь о деталях.",
+      isSystem: true,
+      timestamp: new Date(Date.now() - 7200000).toISOString(),
+    },
+    {
+      id: "demo-m2",
+      chatId: DEMO_MATCH_ID,
+      senderId: "emp1",
+      text: "Здравствуйте! Готовы выйти завтра к 8:00?",
+      isSystem: false,
+      timestamp: new Date(Date.now() - 7000000).toISOString(),
+    },
+    {
+      id: "demo-m3",
+      chatId: DEMO_MATCH_ID,
+      senderId: "me",
+      text: "Да, буду. Что взять с собой?",
+      isSystem: false,
+      timestamp: new Date(Date.now() - 6800000).toISOString(),
+    },
+    {
+      id: "demo-m4",
+      chatId: DEMO_MATCH_ID,
+      senderId: "system",
+      text:
+        "Смена подтверждена ✓ Дальше ничего нажимать не нужно: через 12 часов " +
+        "после окончания она закроется сама. Если смена не состоится — нажмите " +
+        "«Смена не состоялась», и комиссии не будет.",
+      isSystem: true,
+      timestamp: new Date(Date.now() - 6600000).toISOString(),
+    },
+  ],
 };
+// Верификация компании по ИНН в моке всегда «не подтверждено»: бейдж
+// «Проверен» ставит DaData на живом сервере.
+const employerVerified = false;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -239,7 +321,7 @@ export function sendSwipe(
       id: uid(),
       chatId: match.id,
       senderId: "system",
-      text: `Это мэтч! Смена «${vac.companyName}». Договоритесь о деталях.`,
+      text: `Это мэтч! Смена: ${vac.companyName}. Договоритесь о деталях.`,
       isSystem: true,
       timestamp: new Date().toISOString(),
     },
@@ -297,6 +379,83 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
   return Promise.resolve({ ...m });
 }
 
+/** Служебное сообщение в чат демо-мэтча. */
+function sysMessage(matchId: string, text: string): void {
+  (messagesByMatch[matchId] ??= []).push({
+    id: uid(),
+    chatId: matchId,
+    senderId: "system",
+    text,
+    isSystem: true,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/* Отмена, часы и перенос смены в демо-режиме.
+ *
+ * Все четыре действия раньше вызывали confirmShift: нажимаешь «Не смогу
+ * выйти», получаешь тост «Смена отменена» — и тут же в переписке появляется
+ * «Смена подтверждена ✅», а кнопка гаснет в «Смена подтверждена ✓». Показать
+ * такое заведению нельзя. */
+export function cancelShift(matchId: string, reason = ""): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  m.status = "cancelled";
+  sysMessage(matchId, `Смена отменена${reason ? `. Причина: ${reason}` : ""}.`);
+  return Promise.resolve({ ...m });
+}
+
+export function setActualHours(
+  matchId: string,
+  minutes: number,
+  note = "",
+): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  const hours = (minutes / 60).toFixed(1);
+  sysMessage(
+    matchId,
+    `Заведение указало фактическую длительность: ${hours} ч.` +
+      (note ? ` Комментарий: ${note}` : ""),
+  );
+  return Promise.resolve({ ...m });
+}
+
+export function proposeReschedule(
+  matchId: string,
+  date: string,
+): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  sysMessage(matchId, `Заведение предлагает перенести смену на ${date}.`);
+  return Promise.resolve({ ...m });
+}
+
+export function answerReschedule(
+  matchId: string,
+  accept: boolean,
+): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  sysMessage(
+    matchId,
+    accept ? "Работник согласился на перенос." : "Работник отказался от переноса.",
+  );
+  return Promise.resolve({ ...m });
+}
+
+export function markNotHeld(matchId: string, reason = ""): Promise<MatchModel> {
+  const m = matches.find((x) => x.id === matchId);
+  if (!m) return Promise.reject(new Error("not found"));
+  m.status = "expired";
+  sysMessage(
+    matchId,
+    `Смена отмечена как несостоявшаяся${reason ? `. Причина: ${reason}` : ""}. ` +
+      "Комиссия не начислена.",
+  );
+  return Promise.resolve({ ...m });
+}
+
 export function markAttendance(matchId: string, attended: boolean): Promise<void> {
   const m = matches.find((x) => x.id === matchId);
   if (m) {
@@ -314,13 +473,12 @@ export function markAttendance(matchId: string, attended: boolean): Promise<void
 }
 export function checkinShift(
   matchId: string,
-  body: { code?: string; lat?: number; lng?: number },
+  body: { code: string },
 ): Promise<MatchModel> {
   const m = matches.find((x) => x.id === matchId);
   if (!m) return Promise.reject(new Error("not found"));
   const byCode = !!body.code && body.code.trim() === (m.checkinCode ?? "123456");
-  const byGeo = body.lat != null && body.lng != null; // в демо гео всегда «на месте»
-  if (!byCode && !byGeo) return Promise.reject(new Error("bad checkin"));
+  if (!byCode) return Promise.reject(new Error("bad checkin"));
   m.seekerCheckedIn = true;
   if (m.employerCheckedIn) {
     m.status = "completed";
@@ -336,10 +494,6 @@ export function disputeShift(matchId: string, _note: string): Promise<MatchModel
   return Promise.resolve(m);
 }
 
-export function fetchEntitlements(): Promise<Entitlements> {
-  return Promise.resolve({ ...entitlements });
-}
-
 const invited = 2;
 
 const meProfile: Me = {
@@ -348,7 +502,6 @@ const meProfile: Me = {
   name: "Алексей",
   rating: 4.8,
   tgUsername: "alexey",
-  streak: 3,
   city: "Москва",
   incomingLikes: 4,
   earnedRub: 18400,
@@ -435,6 +588,14 @@ export function updateMe(patch: {
   name?: string;
   birth_date?: string;
   city?: string;
+  district?: string;
+  roles?: string[];
+  about?: string;
+  experience_tags?: string[];
+  photo_url?: string;
+  self_employed?: boolean;
+  inn?: string;
+  company_name?: string;
 }): Promise<Me> {
   // Серверный 18+ имитируем и в mock, чтобы UI-поток совпадал с backend.
   if (patch.birth_date) {
@@ -443,8 +604,24 @@ export function updateMe(patch: {
       return Promise.reject(new Error("Сервис доступен только с 18 лет"));
     }
   }
-  if (patch.name) meProfile.name = patch.name;
-  if (patch.city) meProfile.city = patch.city;
+  // Применяем ВСЕ поля. Раньше сохранялись только имя и город: в демо можно
+  // было заполнить анкету целиком, нажать «Сохранить» и вернуться к пустым
+  // должностям, пустому району и той же полоске «Профиль готов на 70%».
+  if (patch.name !== undefined) meProfile.name = patch.name;
+  if (patch.company_name !== undefined) meProfile.name = patch.company_name;
+  if (patch.birth_date !== undefined) meProfile.birthDate = patch.birth_date;
+  if (patch.city !== undefined) meProfile.city = patch.city;
+  if (patch.district !== undefined) meProfile.district = patch.district;
+  if (patch.roles !== undefined) meProfile.roles = patch.roles;
+  if (patch.about !== undefined) meProfile.about = patch.about;
+  if (patch.experience_tags !== undefined) {
+    meProfile.experienceTags = patch.experience_tags;
+  }
+  if (patch.photo_url !== undefined) meProfile.photoUrl = patch.photo_url;
+  if (patch.self_employed !== undefined) {
+    meProfile.selfEmployed = patch.self_employed;
+  }
+  if (patch.inn !== undefined) meProfile.inn = patch.inn;
   return Promise.resolve({ ...meProfile });
 }
 
@@ -453,7 +630,6 @@ export function fetchReferral(): Promise<ReferralInfo> {
     code: "ref_me",
     link: "https://t.me/staffswipe_bot?startapp=ref_me",
     invited,
-    bonusSuperlikes: 3,
   });
 }
 
@@ -470,7 +646,7 @@ const adminReports = [
     id: "rep1",
     targetType: "vacancy",
     targetId: "vac3",
-    targetInfo: "waiter · Ресторан «Грядка» · 300₽",
+    targetInfo: "Официант · Ресторан «Грядка» · 300 ₽",
     reason: "fake",
     text: "Похоже на обман — просят предоплату",
     status: "open",
@@ -486,6 +662,27 @@ const adminReports = [
     status: "reviewed",
     createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
   },
+  {
+    id: "rep3",
+    targetType: "match",
+    targetId: "m13",
+    targetInfo: "переписка по мэтчу",
+    reason: "other",
+    text: "Спор по смене (работник): Не заплатили за смену",
+    status: "open",
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    dispute: {
+      worker: "Мария",
+      venue: "Кофейня «Дрова»",
+      shiftWhen: "Бариста · 15 августа, 08:00–16:00",
+      checkedInByCode: true,
+      venueMarkedAttended: false,
+      notHeldBy: "",
+      payRub: 2800,
+      commission: "к оплате",
+      status: "completed",
+    },
+  },
 ];
 
 const adminBlocked = [
@@ -499,7 +696,7 @@ export function fetchAdminOverview() {
     likes: 940,
     matches: 410,
     openReports: adminReports.filter((r) => r.status === "open").length,
-    activeSubscriptions: 12,
+    completedShifts: 121,
   });
 }
 export function fetchAdminReports(status = "open") {
@@ -512,8 +709,11 @@ export function fetchRevenue() {
     commissionAccruedRub: 12400,
     commissionPaidRub: 9100,
     commissionPendingRub: 3300,
+    commissionWrittenOffRub: 0,
     shiftsBilled: 31,
     topupsRub: 18000,
+    topupsCardRub: 12000,
+    topupsManualRub: 6000,
   });
 }
 export function resolveReport(id: string): Promise<void> {
@@ -534,13 +734,11 @@ export function adminSearchUsers(q: string) {
   const all = [
     {
       id: "emp1", role: "employer" as const, name: "Кофейня «Дрова»",
-      username: "drova", blocked: false, warnings: 0, plan: "pro",
-      boostBalance: 4, superlikeBalance: 0, balanceRub: 1500,
+      username: "drova", blocked: false, warnings: 0, balanceRub: 1500,
     },
     {
       id: "seek1", role: "seeker" as const, name: "Мария", username: null,
-      blocked: false, warnings: 1, plan: "free", boostBalance: 0,
-      superlikeBalance: 2, balanceRub: 0,
+      blocked: false, warnings: 1, balanceRub: 0,
     },
   ];
   const ql = q.trim().toLowerCase();
@@ -555,7 +753,7 @@ export function fetchRepeatPairs() {
   ]);
 }
 
-export function autoCloseShifts(): Promise<number> {
+export function settleShifts(): Promise<number> {
   return Promise.resolve(1);
 }
 
@@ -563,13 +761,49 @@ export function sendShiftReminders(): Promise<number> {
   return Promise.resolve(3);
 }
 
-export function adminGrant(
-  _ownerId: string,
-  _boost: number,
-  _superlikes: number,
-): Promise<void> {
-  return Promise.resolve();
+export function askAfterShift(): Promise<number> {
+  return Promise.resolve(2);
 }
+
+export function sendUnfilledAlerts(): Promise<number> {
+  return Promise.resolve(1);
+}
+
+export function reconcilePayments(): Promise<number> {
+  return Promise.resolve(0);
+}
+
+export function fetchCancelStats() {
+  return Promise.resolve([
+    {
+      ownerId: "seek1", name: "Мария", role: "seeker" as const,
+      cancels: 4, lateCancels: 3, noShows: 1, notHeld: 2,
+    },
+    {
+      ownerId: "emp1", name: "Кофейня «Дрова»", role: "employer" as const,
+      cancels: 2, lateCancels: 0, noShows: 0,
+    },
+  ]);
+}
+
+export function writeOffCommission(): Promise<number> {
+  return Promise.resolve(1960);
+}
+
+export function adminRefundWallet(): Promise<number> {
+  return Promise.resolve(500);
+}
+
+export function fetchPayments() {
+  return Promise.resolve([
+    {
+      id: "p1", ownerId: "emp1", sku: "wallet_topup", provider: "yookassa",
+      amount: 5000, currency: "RUB", status: "paid",
+      createdAt: "2026-08-06T10:15:00Z",
+    },
+  ]);
+}
+
 export function fetchCommissions() {
   return Promise.resolve([
     { employerId: "emp1", company: "Кофейня «Дрова»", shifts: 7, amountRub: 1960 },
@@ -591,6 +825,7 @@ export function fetchMyCommission() {
   return Promise.resolve({
     pendingRub: 560, pendingShifts: 2, overdue: false, dueDays: 7, pct: 10,
     balanceRub: 1500, topupAvailable: true,
+    docsAvailable: true,
   });
 }
 export function adminRelink(
@@ -599,6 +834,10 @@ export function adminRelink(
 ): Promise<void> {
   void _ownerId;
   void _newTgId;
+  return Promise.resolve();
+}
+export function adminLogoutAll(_ownerId: string): Promise<void> {
+  void _ownerId;
   return Promise.resolve();
 }
 export function adminEraseAccount(
@@ -620,48 +859,62 @@ export function resolveMatch(_matchId: string, _outcome: string): Promise<void> 
   void _outcome;
   return Promise.resolve();
 }
-export function fetchAdminSubscriptions() {
-  return Promise.resolve([
-    { ownerId: "emp1", company: "Кофейня «Дрова»", plan: "pro", renewsAt: "2026-07-20" },
-    { ownerId: "emp2", company: "Бар «Полночь»", plan: "business", renewsAt: "2026-07-12" },
-  ]);
-}
 export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);
 }
-export function boostVacancy(vacancyId: string): Promise<void> {
-  const vac = VACANCIES.find((v) => v.id === vacancyId);
-  if (vac) vac.boosted = true;
-  return Promise.resolve();
-}
-
 export function urgentPing(_vacancyId: string): Promise<number> {
   return Promise.resolve(7); // демо: «пингнули 7 доступных рядом»
 }
 
 export function fetchMyWorkers() {
   return Promise.resolve([
-    { id: "s2", name: "Мария", rating: 4.9, availableToday: true, shiftsTotal: 12, shiftsAttended: 12 },
-    { id: "s3", name: "Иван", rating: 4.4, availableToday: false, shiftsTotal: 4, shiftsAttended: 3 },
+    { id: "s2", name: "Мария", rating: 4.9, availableToday: true, shiftsTotal: 12, shiftsAttended: 12, employersTotal: 5 },
+    { id: "s3", name: "Иван", rating: 4.4, availableToday: false, shiftsTotal: 4, shiftsAttended: 3, employersTotal: 2 },
   ]);
 }
 
-export function inviteWorker(_userId: string): Promise<void> {
-  return Promise.resolve();
+export function inviteWorker(_userId: string): Promise<boolean> {
+  return Promise.resolve(true);
+}
+
+export function fetchApplicants() {
+  const v = VACANCIES[0];
+  return Promise.resolve(
+    SEEKERS.map((s) => ({
+      id: s.id,
+      name: s.name,
+      age: s.age ?? null,
+      district: s.district,
+      roles: s.roles as string[],
+      medBook: s.medBook as string,
+      rating: s.rating,
+      photoUrls: s.photoUrls ?? [],
+      about: s.about ?? "",
+      availableToday: !!s.availableToday,
+      shiftsTotal: s.shiftsTotal ?? 0,
+      shiftsAttended: s.shiftsAttended ?? 0,
+      employersTotal: s.employersTotal ?? 0,
+      vacancyId: v.id,
+      vacancyRole: v.role as string,
+      vacancyDate: v.date,
+      vacancyStart: v.startTime,
+      vacancyEnd: v.endTime,
+    })),
+  );
 }
 
 export function verifyEmployer(inn: string): Promise<VerifyResult> {
   const ok = /^\d{10,12}$/.test(inn);
   return Promise.resolve({
     found: ok,
-    verified: ok && entitlements.employerVerified,
+    verified: ok && employerVerified,
     name: ok ? "ООО «Кофейня Дрова»" : "",
     ogrn: ok ? "1167746000000" : "",
     address: ok ? "Москва, ул. Льва Толстого, 16" : "",
     hint: ok
-      ? entitlements.employerVerified
+      ? employerVerified
         ? ""
-        : "Данные подтянуты. Бейдж «Проверен» — после оплаты верификации."
+        : "Данные подтянуты. Бейдж «Проверен» появится после сверки."
       : "Введите корректный ИНН (10–12 цифр).",
   });
 }
@@ -708,5 +961,23 @@ export function suggestAddress(q: string): Promise<AddressSuggestion[]> {
     { value: `Москва, ${q}, 1`, lat: 55.75, lng: 37.61 },
     { value: `Москва, ${q}, 10`, lat: 55.76, lng: 37.62 },
     { value: `Санкт-Петербург, ${q}, 5`, lat: 59.93, lng: 30.34 },
+  ]);
+}
+
+export function adminVerifyEmployer(
+  _employerId: string,
+  verified: boolean,
+): Promise<boolean> {
+  return Promise.resolve(verified);
+}
+
+export function fetchCities(): Promise<{ name: string; tz: string }[]> {
+  return Promise.resolve([
+    { name: "Москва", tz: "Europe/Moscow" },
+    { name: "Санкт-Петербург", tz: "Europe/Moscow" },
+    { name: "Казань", tz: "Europe/Moscow" },
+    { name: "Екатеринбург", tz: "Asia/Yekaterinburg" },
+    { name: "Новосибирск", tz: "Asia/Novosibirsk" },
+    { name: "Владивосток", tz: "Asia/Vladivostok" },
   ]);
 }

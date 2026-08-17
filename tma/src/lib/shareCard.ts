@@ -1,6 +1,7 @@
 // Рендер брендовой шеринг-карточки успеха на canvas → PNG dataURL.
 // Формат сторис 9:16, фирменная гамма кримсон→золото. Без внешних шрифтов/
 // картинок — всё рисуется, чтобы работало офлайн и в Telegram WebView.
+import { plural } from "./format";
 
 export interface ShareCardData {
   name: string;
@@ -89,7 +90,7 @@ export function renderShareCard(d: ShareCardData): string {
 
   ctx.fillStyle = "rgba(250,238,230,.95)";
   ctx.font = `400 50px ${fam}`;
-  const shifts = d.shiftsDone === 1 ? "1 смена" : `${d.shiftsDone} смен`;
+  const shifts = `${d.shiftsDone} ${plural(d.shiftsDone, "смена", "смены", "смен")}`;
   ctx.fillText(`за месяц · ${shifts} закрыто`, 95, 960);
 
   // факты-пилюли

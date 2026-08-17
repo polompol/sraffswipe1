@@ -24,12 +24,6 @@ export const IconLike = ({ size = 24, className }: P) => (
   </svg>
 );
 
-export const IconSuper = ({ size = 24, className }: P) => (
-  <svg {...base(size)} className={className}>
-    <path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" fill="currentColor" />
-  </svg>
-);
-
 export const IconBack = ({ size = 24, className }: P) => (
   <svg {...base(size)} className={className}>
     <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />

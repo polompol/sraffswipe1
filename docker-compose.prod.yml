@@ -19,6 +19,8 @@ services:
       - "443:443"
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      # Хранилище фото в правилах CSP (пусто = загрузка не подключена).
+      UPLOAD_ORIGIN: ${UPLOAD_ORIGIN:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -38,16 +40,49 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U staffswipe"]
+      # Именно по TCP (-h 127.0.0.1), а не по сокету. При САМОМ первом запуске
+      # образ postgis поднимает временный сервер только на сокете, чтобы
+      # создать расширения: `pg_isready` в этот момент уже отвечает «готов», а
+      # порт 5432 ещё закрыт. API стартовал, спотыкался на миграциях и
+      # перезапускался — а инструкция называет перезапуск api признаком
+      # поломки. Владелец решал, что всё сломано, хотя через полминуты
+      # чинилось само.
+      test: ["CMD-SHELL", "pg_isready -U staffswipe -d staffswipe -h 127.0.0.1"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 15s
+
+  # Общее состояние процессов приложения: счётчики частоты и раздача чата.
+  # Наружу не выставлен — только внутренняя сеть compose.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Данные не переживают перезапуск намеренно: там только счётчики частоты
+    # и транзитные сообщения чата. Переписка хранится в PostgreSQL.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   # FastAPI. При старте прогоняет миграции и проверяет безопасность конфига
   # (DEV_MODE=false → требует заданные секреты, иначе не поднимется).
   api:
     build: ./backend
     restart: unless-stopped
+    # Проверка живости — по /health/ready, а не по /health: первый спрашивает
+    # ещё и базу. Без этого контейнер с умершей базой считался здоровым:
+    # docker молчит, сторож молчит, а люди видят ошибку на каждом экране.
+    # Своими силами, без curl: в slim-образе его нет.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     environment:
       DATABASE_URL: postgresql+psycopg://staffswipe:${POSTGRES_PASSWORD}@db:5432/staffswipe
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
@@ -62,15 +97,96 @@ services:
       # Опциональное (можно оставить пустым на пилоте).
       ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
       DADATA_TOKEN: ${DADATA_TOKEN:-}
-      DADATA_SECRET: ${DADATA_SECRET:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_BUCKET: ${S3_BUCKET:-}
       S3_KEY: ${S3_KEY:-}
       S3_SECRET: ${S3_SECRET:-}
       S3_PUBLIC_BASE: ${S3_PUBLIC_BASE:-}
+      S3_REGION: ${S3_REGION:-ru-central1}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # Общее состояние процессов. Без него WEB_CONCURRENCY обязан быть 1.
+      REDIS_URL: redis://redis:6379/0
+      # Число рабочих процессов. Больше 1 безопасно только с Redis выше.
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       # Часовой пояс смен: сервер в UTC, а «10:00–18:00» — местное время.
       BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
+      # --- Деньги. Этих строк здесь не было ВООБЩЕ, и заполнить их в .env было
+      # бесполезно: до приложения они не доходили. Последствия ровно денежные —
+      # кнопка «Оплатить картой» отвечала «оплата картой скоро» даже с
+      # подключённой кассой, а вебхук об успешном платеже сверялся не с тем
+      # секретом и отвергался: деньги у ЮKassa есть, баланс не пополнен.
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_WEBHOOK_SECRET: ${YOOKASSA_WEBHOOK_SECRET:-}
+      YOOKASSA_SEND_RECEIPT: ${YOOKASSA_SEND_RECEIPT:-false}
+      YOOKASSA_VAT_CODE: ${YOOKASSA_VAT_CODE:-1}
+      # Куда вернётся человек после оплаты. По умолчанию — в чат с ботом,
+      # оттуда одна кнопка до приложения.
+      PAYMENT_RETURN_URL: ${PAYMENT_RETURN_URL:-https://t.me/${BOT_USERNAME}}
+      # Комиссия и сроки (значения по умолчанию — как в коде).
+      COMMISSION_PCT: ${COMMISSION_PCT:-10}
+      COMMISSION_MIN_RUB: ${COMMISSION_MIN_RUB:-0}
+      COMMISSION_DUE_DAYS: ${COMMISSION_DUE_DAYS:-7}
+      LATE_CANCEL_HOURS: ${LATE_CANCEL_HOURS:-6}
+      # Реквизиты получателя платежа: без них счёт и акт юрлицу не выдаются
+      # (ручка честно отвечает 503). Раньше их тоже некуда было передать.
+      ORG_NAME: ${ORG_NAME:-}
+      ORG_INN: ${ORG_INN:-}
+      ORG_KPP: ${ORG_KPP:-}
+      ORG_OGRN: ${ORG_OGRN:-}
+      ORG_ADDRESS: ${ORG_ADDRESS:-}
+      ORG_BANK_NAME: ${ORG_BANK_NAME:-}
+      ORG_BANK_BIC: ${ORG_BANK_BIC:-}
+      ORG_BANK_ACCOUNT: ${ORG_BANK_ACCOUNT:-}
+      ORG_CORR_ACCOUNT: ${ORG_CORR_ACCOUNT:-}
+      ORG_SIGNER: ${ORG_SIGNER:-}
+      ORG_VAT: ${ORG_VAT:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Ежедневные задачи: напоминания о сменах, предупреждения о завтрашних
+  # сменах без людей, закрытие зависших и брошенных, сверка платежей.
+  # Раньше всё это оператор нажимал руками в админке — уехал на выходные,
+  # и сервис на два дня замирал. Кнопки в админке остались: ими удобно
+  # догнать что-то сразу, не дожидаясь расписания.
+  scheduler:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.scheduler"]
+    # Проверку живости отключаем: она встроена в образ и стучится в веб-сервер
+    # на порту 8000, а здесь его нет — планировщик просто выполняет задачи по
+    # расписанию. С ней контейнер ВСЕГДА показывался «нездоровым»: владелец
+    # привыкает не смотреть на это поле и пропускает настоящую поломку.
+    healthcheck:
+      disable: true
+    environment:
+      DATABASE_URL: postgresql+psycopg://staffswipe:${POSTGRES_PASSWORD}@db:5432/staffswipe
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
+      BOT_USERNAME: ${BOT_USERNAME:?set BOT_USERNAME in .env}
+      DEV_MODE: "false"
+      ALLOW_INSECURE_TELEGRAM_AUTH: "false"
+      MINI_APP_URL: https://${DOMAIN}
+      BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
+      # Кому писать, если ночная задача захочет позвать оператора. Сегодня
+      # она молчит, но пустая строка здесь означала бы, что первое же такое
+      # сообщение уйдёт в никуда и никто этого не заметит.
+      ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
+      # Ошибки ночных задач иначе видит только тот, кто откроет logs scheduler.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # Сверка платежей ходит в ЮKassa читать список успешных.
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      # Авто-закрытие смен начисляет комиссию — проценты и сроки здесь обязаны
+      # совпадать с API, иначе одна и та же смена считалась бы по-разному.
+      COMMISSION_PCT: ${COMMISSION_PCT:-10}
+      COMMISSION_MIN_RUB: ${COMMISSION_MIN_RUB:-0}
+      COMMISSION_DUE_DAYS: ${COMMISSION_DUE_DAYS:-7}
+      LATE_CANCEL_HOURS: ${LATE_CANCEL_HOURS:-6}
     depends_on:
       db:
         condition: service_healthy
@@ -85,20 +201,27 @@ services:
       # уведомления шлёт сам API.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
       MINI_APP_URL: https://${DOMAIN}
-      # Эффект «печатает…» + плавное раскрытие текста бота (0 — выключить).
-      BOT_TYPEWRITER: ${BOT_TYPEWRITER:-1}
+      # Эффект «печатает…» + плавное раскрытие текста бота (1 — включить).
+      BOT_TYPEWRITER: ${BOT_TYPEWRITER:-0}
 
   # Собранная статика Mini App. VITE_*-переменные «запекаются» в бандл на этапе
   # сборки образа (build args), поэтому важен пересбор при смене домена.
   tma:
     build:
-      context: ./tma
+      # Контекст — корень репозитория: страницы оферты и политики собираются
+      # из docs/legal/, а он лежит выше каталога tma. С контекстом ./tma
+      # сборка падала и образ не создавался вовсе.
+      context: .
+      dockerfile: tma/Dockerfile
       args:
         VITE_USE_BACKEND: "true"
         VITE_API_BASE_URL: https://${DOMAIN}/api
         VITE_OFFER_URL: ${VITE_OFFER_URL:-}
         VITE_PRIVACY_URL: ${VITE_PRIVACY_URL:-}
         VITE_SUPPORT_URL: ${VITE_SUPPORT_URL:-}
+        # Без имени бота ссылки «поделиться» и рекламные вели на чужого бота.
+        VITE_BOT_USERNAME: ${BOT_USERNAME:?set BOT_USERNAME in .env}
+        VITE_SENTRY_DSN: ${SENTRY_DSN:-}
     restart: unless-stopped
 
 volumes:

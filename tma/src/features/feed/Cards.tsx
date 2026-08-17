@@ -1,10 +1,10 @@
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
   EXPERIENCE_TAG_LABELS,
   MED_BOOK_LABELS,
-  PAY_METHOD_LABELS,
+  PAY_METHOD_SHORT,
   STAFF_ROLE_LABELS,
   TIPS_BADGE,
 } from "@/types/domain";
@@ -12,6 +12,7 @@ import {
   estimatedPay,
   fmtTime,
   isUrgentShift,
+  plural,
   rateLabel,
   shiftDayLabel,
 } from "@/lib/format";
@@ -31,6 +32,7 @@ import {
 } from "@/components/Icons";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { reliabilityText } from "@/lib/reliability";
 import { haptic } from "@/telegram/sdk";
 
 const PAY_ICON: Record<PayMethod, typeof IconCash> = {
@@ -39,14 +41,41 @@ const PAY_ICON: Record<PayMethod, typeof IconCash> = {
   transfer: IconBank,
 };
 
-/** Фото карточки: всегда есть бренд-градиент + инициал как фолбэк; поверх —
- *  картинка, которая плавно проявляется при загрузке и НЕ ломает вид, если
- *  ссылка битая (onError) или фото нет. */
-function SwipePhoto({ src, initial }: { src?: string; initial: string }) {
+/** Фото карточки: всегда есть бренд-градиент как фолбэк; поверх — картинка,
+ *  которая плавно проявляется при загрузке и НЕ ломает вид, если ссылка битая
+ *  (onError) или фото нет.
+ *
+ *  Когда фото нет — а на старте его не будет почти ни у кого — вместо
+ *  огромной пустой буквы показываем главное: сколько платят и за что. Раньше
+ *  верхняя половина карточки была пустым полем с инициалом, и лента без фото
+ *  выглядела так, будто в сервисе ничего нет. */
+function SwipePhoto({ src, initial, hero, onHero }: {
+  src?: string;
+  initial: string;
+  hero?: ReactNode;
+  /** Показывается ли крупная плашка вместо фото — чтобы карточка не повторяла
+   *  ту же сумму ещё раз ниже. */
+  onHero?: (shown: boolean) => void;
+}) {
   const [state, setState] = useState<"load" | "ok" | "err">(src ? "load" : "err");
+  // Битая ссылка на фото — тот же случай, что и «фото нет»: показываем
+  // главное, а не пустую букву.
+  const showHero = !!hero && (!src || state === "err");
+  useEffect(() => onHero?.(showHero), [showHero, onHero]);
   return (
     <div className="swipe-photo swipe-photo-fallback">
-      <span className="swipe-initial">{initial}</span>
+      {showHero ? (
+        <>
+          <div className="swipe-hero">{hero}</div>
+          {/* Буква — под плашкой, а не вместо неё. Без фото середина карточки
+              оставалась большим пустым пятном: главное было прижато к верху,
+              подробности к низу, а между ними полкарточки багрового ничего.
+              Буква заполняет провал и даёт карточке лицо. */}
+          <span className="swipe-initial swipe-initial-ghost">{initial}</span>
+        </>
+      ) : (
+        <span className="swipe-initial">{initial}</span>
+      )}
       {src && state === "load" && <div className="photo-shimmer" />}
       {src && state !== "err" && (
         <img
@@ -105,17 +134,23 @@ function CardFavButton({ id }: { id: string }) {
   );
 }
 
-/** Золотой бейдж-галочка «проверено» — единый знак доверия (бренд-цвет). */
+/** Золотой бейдж-галочка «проверено» — единый знак доверия (бренд-цвет).
+ *
+ *  Галочка ТЁМНАЯ: белая на золоте давала 2.6:1 в светлой теме и 1.9:1 в
+ *  тёмной — знак доверия превращался в жёлтый кружок без содержимого.
+ *  Название читается вслух: `title` на телефоне не показывается вовсе. */
 function VerifiedDot({ size = 20, title }: { size?: number; title: string }) {
   return (
     <span
+      role="img"
+      aria-label={title}
       title={title}
       style={{
         width: size,
         height: size,
         borderRadius: "50%",
         background: "var(--super)",
-        color: "#fff",
+        color: "#2a1f1a",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -131,9 +166,27 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
   const urgent = isUrgentShift(v.date);
   const hasPhoto = !!v.interiorPhotoUrl;
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
+  // Когда фото нет, сумма уже написана крупно поверх карточки — и повторялась
+  // строкой «≈ 2 800 ₽ за смену» на три сантиметра ниже. Два одинаковых числа
+  // на одном экране заставляют сверять, не разные ли они.
+  const [heroShown, setHeroShown] = useState(!hasPhoto);
   return (
     <>
-      <SwipePhoto src={hasPhoto ? v.interiorPhotoUrl : undefined} initial={(v.companyName || "С").charAt(0)} />
+      <SwipePhoto
+        src={hasPhoto ? v.interiorPhotoUrl : undefined}
+        initial={(v.companyName || "С").charAt(0)}
+        onHero={setHeroShown}
+        hero={
+          <>
+            <div className="swipe-hero-sum">
+              {estimatedPay(v).toLocaleString("ru-RU")} ₽
+            </div>
+            <div className="swipe-hero-cap">
+              за смену · {shiftDayLabel(v.date)}
+            </div>
+          </>
+        }
+      />
       <div className="swipe-shade" />
 
       {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
@@ -158,12 +211,8 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         )}
         <span className="spacer" />
         {urgent ? (
-          <span className="glass pulse" style={{ background: "var(--gold)" }}>
+          <span className="glass pulse" style={{ background: "var(--gold-fill)" }}>
             <IconFire size={13} /> Сегодня
-          </span>
-        ) : v.boosted ? (
-          <span className="glass pulse" style={{ background: "var(--super)" }}>
-            <IconFire size={13} /> ТОП
           </span>
         ) : null}
         {typeof v.distanceKm === "number" && (
@@ -175,14 +224,9 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
 
       <div className="swipe-body">
         <div className="row" style={{ marginBottom: 8, gap: 6, flexWrap: "wrap" }}>
-          <span className="tag" style={{ background: "var(--gold)", color: "#fff", borderColor: "var(--gold)" }}>
+          <span className="tag" style={{ background: "var(--gold-fill)", color: "#fff", borderColor: "var(--gold-fill)" }}>
             {STAFF_ROLE_LABELS[v.role]}
           </span>
-          {v.employerPaysOnTime && (
-            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
-              <IconCheck size={13} /> Платит вовремя
-            </span>
-          )}
         </div>
 
         <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -201,7 +245,9 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           {(v.employerShiftsDone || v.employerRating) ? (
             <div>
               ★ {v.employerRating ? v.employerRating.toFixed(1) : "—"}
-              {v.employerShiftsDone ? ` · ${v.employerShiftsDone} смен закрыто` : ""}
+              {v.employerShiftsDone
+                ? ` · ${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто`
+                : ""}
             </div>
           ) : null}
         </div>
@@ -212,10 +258,23 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           </div>
         )}
 
-        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        {/* Две ровные колонки вместо ряда с переносом. Раньше плашки были
+            разной ширины и вставали по-разному на каждой карточке: у одной
+            смены «медкнижка» уезжала на вторую строку, у соседней — нет,
+            и лента выглядела дёрганой при листании. */}
+        <div
+          style={{
+            marginTop: 10,
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+            columnGap: 10,
+            rowGap: 6,
+            alignItems: "center",
+          }}
+        >
           {PayGlyph && v.payMethod && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
-              <PayGlyph size={16} /> {PAY_METHOD_LABELS[v.payMethod]}
+              <PayGlyph size={16} /> {PAY_METHOD_SHORT[v.payMethod]}
             </span>
           )}
           {v.tips && v.tips !== "none" && (
@@ -228,69 +287,125 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
               <IconMedBook size={15} /> Медкнижка
             </span>
           )}
+          {/* Набор на несколько человек: без этой строки соискатель думает,
+              что место одно, и не откликается «наверняка уже заняли». */}
+          {(v.headcount ?? 1) > 1 && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700 }}>
+              Нужно {v.headcount} чел.
+              {v.slotsLeft != null && v.slotsLeft < (v.headcount ?? 1)
+                ? ` · свободно ${v.slotsLeft}`
+                : ""}
+            </span>
+          )}
         </div>
 
-        <div style={{ marginTop: 8, fontWeight: 800, fontSize: 16 }}>
-          ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
-        </div>
+        {!heroShown && (
+          <div style={{ marginTop: 8, fontWeight: 800, fontSize: 16 }}>
+            ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
+          </div>
+        )}
       </div>
     </>
   );
 }
 
 export function SeekerCardContent({ s }: { s: Seeker }) {
-  const year = s.birthDate ? new Date(s.birthDate).getFullYear() : NaN;
-  const age = Number.isFinite(year) ? new Date().getFullYear() - year : null;
+  const age = s.age ?? null;
   const roles = s.roles ?? [];
-  const tags = s.experienceTags ?? [];
   const photos = s.photoUrls ?? [];
   const hasPhoto = !!photos[0];
+  const allTags = s.experienceTags ?? [];
   // «Опытный» — по указанному опыту работника (мы не проверяем документы).
-  const experienced = tags.includes("experienced");
+  const experienced = allTags.includes("experienced");
+  // Из общего списка убираем то, что УЖЕ показано отдельно: опыт вынесен в
+  // чип «Опытный», медкнижка — в свою строку, самозанятость — в свой чип.
+  // Без этой чистки карточка писала одно и то же по два раза: «Опытный» и
+  // «Опыт > 2 лет», «Медкнижка: Есть» и «Медкнижка» в перечислении.
+  const tags = allTags.filter(
+    (t) => t !== "experienced" && t !== "medBook" && t !== "selfEmployed",
+  );
+  const [heroShown, setHeroShown] = useState(!hasPhoto);
   return (
     <>
-      <SwipePhoto src={hasPhoto ? photos[0] : undefined} initial={(s.name || "?").charAt(0)} />
+      <SwipePhoto
+        src={hasPhoto ? photos[0] : undefined}
+        initial={(s.name || "?").charAt(0)}
+        onHero={setHeroShown}
+        hero={
+          <>
+            <div className="swipe-hero-sum" style={{ fontSize: 34 }}>
+              {roles.length > 0 ? STAFF_ROLE_LABELS[roles[0]] : "Готов выйти"}
+            </div>
+            {/* Главный вопрос заведения — можно ли на человека положиться.
+                Раньше подпись под должностью была пустой у всех, кто уже
+                работал, а надёжность лежала в самом низу карточки мелким
+                текстом. Теперь она прямо под должностью. */}
+            <div className="swipe-hero-cap">
+              {s.shiftsTotal
+                ? reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)
+                : "новичок в сервисе"}
+            </div>
+          </>
+        }
+      />
       <div className="swipe-shade" />
-      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
-        <span className="glass">{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
+      {/* Ряд бейджей НЕ переносится на вторую строку: перенесённый район
+          налезал прямо на крупную должность под ним — она стоит на
+          фиксированной высоте. Сам район теперь в теле карточки, где для
+          длинных названий («Северное Медведково») есть место. */}
+      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "nowrap" }}>
+        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
         {s.availableToday && (
-          <span className="glass pulse" style={{ background: "var(--super)" }}>
+          // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
+          // самая заметная плашка карточки читалась хуже всего остального.
+          <span className="glass pulse" style={{ background: "var(--super)", color: "#2a1f1a", flex: "none", whiteSpace: "nowrap" }}>
             <IconBolt size={13} /> Готов сегодня
           </span>
         )}
         <span className="spacer" />
-        <span className="glass">{s.district}</span>
       </div>
       <div className="swipe-body">
         <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span>{s.name}{age !== null ? `, ${age}` : ""}</span>
+          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+            {s.name}{age !== null ? `, ${age}` : ""}
+          </span>
           {experienced && (
             <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
               Опытный
             </span>
           )}
           {s.selfEmployed && (
-            <span className="tag" style={{ color: "#fff", borderColor: "rgba(255,255,255,.5)" }}>
-              самозанятый
+            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
+              Самозанятый
             </span>
           )}
         </div>
-        <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
-          {roles.map((r) => (
-            <span key={r} className="tag" style={{ background: "var(--gold)", color: "#fff", borderColor: "var(--gold)" }}>
-              {STAFF_ROLE_LABELS[r]}
-            </span>
-          ))}
-        </div>
+        {/* Должность из заголовка карточки не повторяем — только остальные,
+            которыми человек тоже готов выйти. */}
+        {(heroShown ? roles.slice(1) : roles).length > 0 && (
+          <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
+            {(heroShown ? roles.slice(1) : roles).map((r) => (
+              <span key={r} className="tag" style={{ background: "var(--gold-fill)", color: "#fff", borderColor: "var(--gold-fill)" }}>
+                {STAFF_ROLE_LABELS[r]}
+              </span>
+            ))}
+          </div>
+        )}
         {s.about && (
           <div style={{ marginTop: 8, opacity: 0.95, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {s.about}
           </div>
         )}
         <div className="card-meta" style={{ marginTop: 10 }}>
-          {!!s.shiftsTotal && s.shiftsTotal > 0 && (
+          {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
-              <IconCheck size={15} /> Вышел на {s.shiftsAttended ?? 0} из {s.shiftsTotal} смен
+              <IconCheck size={15} />{" "}
+              {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
+            </div>
+          )}
+          {s.district && (
+            <div>
+              <IconPin size={15} /> {s.district}
             </div>
           )}
           <div>

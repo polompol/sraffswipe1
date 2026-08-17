@@ -5,8 +5,11 @@ import { fetchMyWorkers, inviteWorker } from "@/api/endpoints";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/Button";
 import { IconCheck, IconBolt } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { reliabilityText } from "@/lib/reliability";
+import { apiError } from "@/lib/errors";
 
 /** «Мои работники» — кто уже выходил, чтобы позвать снова (постоянство). */
 export function WorkersPage() {
@@ -21,11 +24,18 @@ export function WorkersPage() {
   async function invite(id: string) {
     haptic("success");
     try {
-      await inviteWorker(id);
+      const notified = await inviteWorker(id);
       setInvited((s) => new Set(s).add(id));
-      toast("Приглашение отправлено", "success");
-    } catch {
-      toast("Не удалось пригласить", "error");
+      toast(
+        notified
+          ? "Приглашение отправлено"
+          : "Этого человека вы уже звали — он видит вашу смену",
+        "success",
+      );
+    } catch (e) {
+      haptic("error");
+      // 409 — нет опубликованной смены: звать некуда, и сервер это объясняет.
+      toast(apiError(e, "Не удалось пригласить"), "error");
     }
   }
 
@@ -37,9 +47,11 @@ export function WorkersPage() {
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
+            fill
             icon={<IconCheck size={34} />}
             title="Пока никого"
             text="Здесь появятся те, кто уже выходил на ваши смены — чтобы позвать их снова в один тап."
+            action={<Button onClick={() => nav("/feed")}>Открыть ленту кандидатов</Button>}
           />
         )}
         <div className="stagger" style={{ display: "grid", gap: 12 }}>
@@ -55,7 +67,9 @@ export function WorkersPage() {
               </div>
               <div className="muted" style={{ marginTop: 4 }}>
                 ★ {w.rating.toFixed(1)}
-                {w.shiftsTotal > 0 ? ` · вышел на ${w.shiftsAttended} из ${w.shiftsTotal} смен` : ""}
+                {w.shiftsTotal > 0
+                  ? ` · ${reliabilityText(w.shiftsTotal, w.shiftsAttended, w.employersTotal)}`
+                  : ""}
               </div>
               <button
                 className="btn secondary"

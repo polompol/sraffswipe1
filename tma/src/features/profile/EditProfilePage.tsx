@@ -12,8 +12,10 @@ import {
 import { Button } from "@/components/Button";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
-import { showBackButton, haptic } from "@/telegram/sdk";
+import { CityPicker } from "@/components/CityPicker";
+import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
+import { apiError } from "@/lib/errors";
 
 // Навыки для выбора (медкнижка/самозанятость задаются отдельными полями).
 const SKILLS: ExperienceTag[] = ["experienced", "english", "cashRegister"];
@@ -41,6 +43,19 @@ export function EditProfilePage() {
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
+  // Пока анкета отличается от сохранённой, Telegram спрашивает подтверждение
+  // при закрытии: иначе случайный тап по крестику стирал всё заполненное.
+  const dirty =
+    !!me
+    && (name !== (me.name ?? "")
+      || about !== (me.about ?? "")
+      || district !== (me.district ?? "")
+      || roles.length !== (me.roles ?? []).length);
+  useEffect(() => {
+    guardClosing(dirty);
+    return () => guardClosing(false);
+  }, [dirty]);
+
   // Предзаполняем форму РОВНО ОДИН раз. Иначе повторная загрузка профиля
   // (рефетч при возврате на вкладку) затирала бы уже введённый текст.
   const prefilled = useRef(false);
@@ -56,7 +71,14 @@ export function EditProfilePage() {
     setDistrict(me.district ?? "");
     setInn(me.inn ?? "");
     setSelfEmployed(me.selfEmployed ?? false);
-    setRoles((me.roles ?? []) as StaffRole[]);
+    // Только известные должности — как и у отметок об опыте ниже. В старых
+    // анкетах могло сохраниться что угодно: сервер теперь такое не принимает,
+    // и человек не смог бы сохранить профиль вообще, не понимая почему.
+    setRoles(
+      (me.roles ?? []).filter(
+        (r) => r in STAFF_ROLE_LABELS,
+      ) as StaffRole[],
+    );
     setAbout(me.about ?? "");
     setSkills((me.experienceTags ?? []).filter((t) =>
       SKILLS.includes(t as ExperienceTag)) as ExperienceTag[]);
@@ -79,15 +101,25 @@ export function EditProfilePage() {
     try {
       await updateMe(
         isEmployer
-          ? { company_name: name, inn: inn || undefined }
+          ? {
+              company_name: name,
+              city,
+              inn: inn || undefined,
+              photo_url: photo || undefined,
+            }
           : {
               name,
-              birth_date: birthDate,
+              // Пустые строки не шлём: сервер ждёт либо дату в формате
+              // ГГГГ-ММ-ДД, либо ничего. Пустая строка не проходила проверку,
+              // и человек, зарегистрировавшийся через экран знакомства (там
+              // даты рождения нет вовсе), не мог сохранить анкету вообще —
+              // ни район, ни «о себе», ничего. То же с ИНН.
+              birth_date: birthDate || undefined,
               city,
               district,
               roles,
               self_employed: selfEmployed,
-              inn: selfEmployed ? inn : undefined,
+              inn: selfEmployed && inn ? inn : undefined,
               about,
               experience_tags: skills,
               photo_url: photo || undefined,
@@ -98,10 +130,7 @@ export function EditProfilePage() {
       nav(-1);
     } catch (e) {
       haptic("error");
-      const msg =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? (e as Error)?.message ?? "Не удалось сохранить";
-      setError(msg);
+      setError(apiError(e, "Не удалось сохранить"));
     } finally {
       setSaving(false);
     }
@@ -116,6 +145,13 @@ export function EditProfilePage() {
 
         {isEmployer ? (
           <>
+            {/* Фото заведения. Его нельзя было поставить ничем: поле в базе
+                есть, лента и список мэтчей его показывают — а у каждого
+                живого заведения оставалась буква на цветном квадрате.
+                В приложении, где выбирают свайпом за секунду, карточка без
+                фото — это карточка, которую пролистывают. */}
+            <PhotoUpload label="Фото заведения" value={photo} onChange={setPhoto} />
+
             <label className="form-label" htmlFor="name">Название заведения</label>
             <input
               id="name"
@@ -126,15 +162,22 @@ export function EditProfilePage() {
               onChange={(e) => setName(e.target.value)}
             />
 
+            <CityPicker
+              value={city}
+              onChange={setCity}
+              hint="По нему вам показывают людей, которые рядом."
+            />
+
             <label className="form-label" htmlFor="inn">ИНН (необязательно)</label>
             <input
               id="inn"
               className="input"
               style={{ marginBottom: 12 }}
               inputMode="numeric"
+              maxLength={12}
               placeholder="Нужен для актов и бейджа «Проверено»"
               value={inn}
-              onChange={(e) => setInn(e.target.value)}
+              onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
             />
             <p className="muted" style={{ marginTop: 0 }}>
               Название видят работники в ленте. Если поменять название или ИНН,
@@ -151,8 +194,7 @@ export function EditProfilePage() {
         <label className="form-label" htmlFor="bdate">Дата рождения (только 18+)</label>
         <input id="bdate" className="input" type="date" style={{ marginBottom: 12 }} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
 
-        <label className="form-label" htmlFor="city">Город</label>
-        <input id="city" className="input" style={{ marginBottom: 12 }} value={city} onChange={(e) => setCity(e.target.value)} />
+        <CityPicker value={city} onChange={setCity} />
 
         <label className="form-label" htmlFor="district">Район (чтобы звали на смены рядом)</label>
         <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
@@ -174,9 +216,9 @@ export function EditProfilePage() {
                     className="tag"
                     style={{
                       cursor: "pointer",
-                      background: roles.includes(r) ? "var(--gold)" : "transparent",
+                      background: roles.includes(r) ? "var(--gold-fill)" : "transparent",
                       color: roles.includes(r) ? "#fff" : "var(--text)",
-                      borderColor: roles.includes(r) ? "var(--gold)" : "var(--border-strong)",
+                      borderColor: roles.includes(r) ? "var(--gold-fill)" : "var(--border-strong)",
                     }}
                     onClick={() => toggle(r)}
                   >
@@ -196,9 +238,9 @@ export function EditProfilePage() {
               className="tag"
               style={{
                 cursor: "pointer",
-                background: skills.includes(s) ? "var(--gold)" : "transparent",
+                background: skills.includes(s) ? "var(--gold-fill)" : "transparent",
                 color: skills.includes(s) ? "#fff" : "var(--text)",
-                borderColor: skills.includes(s) ? "var(--gold)" : "var(--border-strong)",
+                borderColor: skills.includes(s) ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => toggleSkill(s)}
             >
@@ -227,13 +269,28 @@ export function EditProfilePage() {
             <span>Я самозанятый (плательщик НПД)</span>
           </label>
           {selfEmployed && (
-            <input
-              className="input"
-              style={{ marginTop: 12 }}
-              placeholder="ИНН"
-              value={inn}
-              onChange={(e) => setInn(e.target.value)}
-            />
+            <>
+              {/* Поле было безымянным, с клавиатурой букв и без единой
+                  подсказки, где этот номер взять. Человек либо пропускал его,
+                  либо вписывал что-то не то — и получал отказ сервера. */}
+              <label className="form-label" htmlFor="seeker-inn" style={{ marginTop: 12 }}>
+                Ваш ИНН
+              </label>
+              <input
+                id="seeker-inn"
+                className="input"
+                inputMode="numeric"
+                maxLength={12}
+                placeholder="12 цифр"
+                value={inn}
+                onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              />
+              <p className="muted" style={{ margin: "6px 0 0", fontSize: 13 }}>
+                Номер есть в приложении «Мой налог» и в личном кабинете
+                налоговой. Нужен только для акта по смене — заведениям в ленте
+                он не виден.
+              </p>
+            </>
           )}
         </div>
           </>

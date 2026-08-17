@@ -32,14 +32,14 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
         <span
           className="tag"
           style={{
-            color: "var(--super)", borderColor: "var(--super)",
+            color: "var(--super-text)", borderColor: "var(--super-text)",
             fontWeight: 700, padding: "8px 14px", gap: 6,
           }}
         >
-          <IconBolt size={15} /> Оплата в день смены · без опыта берут
+          <IconBolt size={15} /> Оплата напрямую · без опыта берут
         </span>
         <p className="muted" style={{ fontSize: 12.5 }}>
-          Москва · новые смены появляются каждый день
+          Новые смены появляются каждый день
         </p>
         <button
           className="btn"
@@ -59,8 +59,11 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
 const SLIDES = [
   {
     Icon: null,
-    title: "Подработка рядом — от 3 000 ₽ за смену",
-    text: "Свайпай смены в кафе и ресторанах у дома. Вправо — «хочу», влево — мимо. Первую найдёшь за пару минут.",
+    // Никаких «от N ₽»: конкретную сумму мы обещать не можем — ставку
+    // назначает заведение, и человек, зашедший на цифру и увидевший в ленте
+    // меньше, перестаёт верить всему остальному.
+    title: "Смены рядом с домом — на один день",
+    text: "Кафе и рестораны у дома ищут людей на конкретную смену. Вправо — «хочу», влево — мимо. Платит заведение напрямую — способ и срок написаны в каждой карточке.",
   },
   {
     Icon: IconChat,
@@ -136,19 +139,19 @@ export function Onboarding() {
             <span
               className="tag"
               style={{
-                color: "var(--super)",
-                borderColor: "var(--super)",
+                color: "var(--super-text)",
+                borderColor: "var(--super-text)",
                 fontWeight: 700,
                 padding: "8px 14px",
                 gap: 6,
               }}
             >
-              <IconMoney size={15} /> Оплата в день смены · без посредников
+              <IconMoney size={15} /> Оплата напрямую · без посредников
             </span>
           )}
         </div>
         <p className="muted" style={{ textAlign: "center", fontSize: 12.5, marginBottom: 12 }}>
-          Москва · новые смены появляются каждый день
+          Новые смены появляются каждый день
         </p>
         <div className="row" style={{ justifyContent: "center", marginBottom: 20 }}>
           {SLIDES.map((_, idx) => (
@@ -158,7 +161,7 @@ export function Onboarding() {
                 width: idx === i ? 22 : 8,
                 height: 8,
                 borderRadius: 99,
-                background: idx === i ? "var(--gold)" : "var(--border)",
+                background: idx === i ? "var(--gold-fill)" : "var(--border-strong)",
                 transition: "width .2s",
               }}
             />

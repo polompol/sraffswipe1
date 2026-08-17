@@ -1,29 +1,41 @@
 """Лента вакансий и их создание."""
-from datetime import UTC, datetime, timedelta
+import math
+from datetime import date, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
+from ..cities import normalize
 from ..config import settings
 from ..db import get_db
-from ..entitlements import (
-    PLAN_VACANCY_LIMIT,
-    active_boost_vacancy_ids,
-    active_vacancy_count,
-    get_or_create,
-    plan_of,
-)
 from ..geo import distance_km
-from ..models import Boost, Employer, Entitlement, Match, Swipe, User, Vacancy
+from ..models import Commission, Employer, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
+from ..photos import is_allowed_photo_url
 from ..ratelimit import rate_limit
+from ..roles import role_ru
 from ..schemas import VacancyIn, VacancyOut
 from ..security import current_principal, optional_principal
 from ..timeutil import local_today
-from .billing import commission_overdue
+from .billing import commission_overdue, overdue_employer_ids
 
 router = APIRouter(prefix="/vacancies", tags=["vacancies"])
+
+# Потолок получателей рассылки «Срочно». У рассылки по сохранённым поискам он
+# есть, а здесь не было: заведение с тремя вызовами в час поднимало столько
+# потоков отправки, сколько в городе людей с отметкой «готов сегодня».
+_URGENT_MAX = 200
+
+
+def _check_photo(url: str) -> None:
+    """Фото интерьера — только своё загруженное (см. app/photos.py)."""
+    if not is_allowed_photo_url(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Фото нужно загрузить в приложении — "
+                   "ссылка на чужой сайт не подойдёт.",
+        )
 
 
 def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
@@ -46,17 +58,72 @@ def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
     return {emp_id: cnt for emp_id, cnt in rows}
 
 
+def _paid_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
+    """Сколько комиссий заведение УЖЕ ОПЛАТИЛО — по каждому заведению.
+
+    На этом держится знак «платит вовремя», который соискатель видит до
+    отклика. Раньше он выводился из рейтинга и числа закрытых смен, то есть
+    об оплате не говорил ничего: заведение с долгом в просрочке носило знак
+    «платит вовремя», а накрутить его можно было тремя фиктивными сменами и
+    тремя отзывами со второй учётки. Теперь знак означает ровно то, что
+    написано, — деньги за смены сервису дошли.
+    """
+    if not emp_ids:
+        return {}
+    rows = (
+        db.query(Commission.employer_id, func.count(Commission.id))
+        .filter(
+            Commission.employer_id.in_(emp_ids),
+            Commission.status == "paid",
+        )
+        .group_by(Commission.employer_id)
+        .all()
+    )
+    return {emp_id: int(cnt) for emp_id, cnt in rows}
+
+
+def taken_counts(db: Session, vacancy_ids: list[str]) -> dict[str, int]:
+    """Сколько мест уже занято по каждой смене.
+
+    Занятым считаем мэтч в любом «живом» состоянии: договорились, подтвердили,
+    отработали. Неявка место не занимает — заведению снова нужен человек.
+    """
+    if not vacancy_ids:
+        return {}
+    rows = (
+        db.query(Match.vacancy_id, func.count(Match.id))
+        .filter(
+            Match.vacancy_id.in_(vacancy_ids),
+            Match.status.in_(("matched", "confirmed", "completed")),
+            Match.no_show.is_(False),
+        )
+        .group_by(Match.vacancy_id)
+        .all()
+    )
+    return {vid: int(n) for vid, n in rows}
+
+
+# Сколько оплаченных смен подряд считаем поводом для знака «платит вовремя».
+# Одна — случайность, две — уже поведение.
+_PAID_FOR_BADGE = 2
+
+
 def _to_out(
     v: Vacancy,
     emp: Employer | None,
     dist: float | None,
-    boosted: bool = False,
     shifts_done: int = 0,
+    taken: int = 0,
+    paid_commissions: int = 0,
+    overdue: bool = False,
 ) -> VacancyOut:
     rating = emp.rating if emp else 0.0
-    # «Платит вовремя» — заслуженный знак доверия: высокий рейтинг от
-    # соискателей И уже несколько закрытых смен (не выдаётся «авансом»).
-    pays_on_time = bool(emp) and rating >= 4.5 and shifts_done >= 3
+    # «Платит вовремя» — про деньги, а не про рейтинг: комиссия за смены
+    # реально оплачена И сейчас нет просроченного счёта. Человек читает этот
+    # знак как «здесь не обманут с оплатой» и едет на смену через полгорода.
+    pays_on_time = (
+        bool(emp) and paid_commissions >= _PAID_FOR_BADGE and not overdue
+    )
     return VacancyOut(
         id=v.id,
         employer_id=v.employer_id,
@@ -74,6 +141,8 @@ def _to_out(
         description=v.description,
         require_med_book=v.require_med_book,
         require_experience=v.require_experience,
+        headcount=v.headcount or 1,
+        slots_left=max(0, (v.headcount or 1) - taken),
         lat=v.lat,
         lng=v.lng,
         address=v.address,
@@ -81,7 +150,6 @@ def _to_out(
         interior_photo_url=v.interior_photo_url,
         status=v.status,
         distance_km=round(dist, 1) if dist is not None else None,
-        boosted=boosted,
         employer_rating=round(rating, 1),
         employer_shifts_done=shifts_done,
         employer_pays_on_time=pays_on_time,
@@ -108,11 +176,9 @@ def list_vacancies(
     db: Session = Depends(get_db),
     principal: dict | None = Depends(optional_principal),
 ):
-    """Активные вакансии с фильтрами. Boost-вакансии всегда наверху.
+    """Активные вакансии с фильтрами.
 
     `mine=1` — вернуть собственные вакансии работодателя (любой статус)."""
-    boosted_ids = active_boost_vacancy_ids(db)
-
     # Раздел «Мои вакансии» — только свои, для текущего работодателя.
     if mine:
         if not principal or principal["role"] != "employer":
@@ -125,26 +191,48 @@ def list_vacancies(
             .all()
         )
         done = _shifts_done_by_employer(db, {principal["id"]})
+        paid = _paid_by_employer(db, {principal["id"]})
+        late = commission_overdue(db, principal["id"])
+        taken = taken_counts(db, [v.id for v in rows])
         return [
             _to_out(
                 v, emp, None,
-                boosted=v.id in boosted_ids,
                 shifts_done=done.get(v.employer_id, 0),
+                taken=taken.get(v.id, 0),
+                paid_commissions=paid.get(v.employer_id, 0),
+                overdue=late,
             )
             for v in rows
         ]
     query = db.query(Vacancy).filter(Vacancy.status == "active")
+    # Смены должников в ленте не показываем: мэтч по ним всё равно не
+    # создастся (см. _ensure_match), и отклик уходил бы в никуда.
+    # Заблокированные заведения — всегда мимо ленты. Бан переводит их смены в
+    # blocked, но оператор может разблокировать смену отдельно, и она оживёт у
+    # заблокированного владельца. Проверяем самого владельца, а не только смену.
+    blocked_emp = {
+        e_id for (e_id,) in db.query(Employer.id)
+        .filter(Employer.blocked.is_(True)).all()
+    }
+    if blocked_emp:
+        query = query.filter(Vacancy.employer_id.notin_(blocked_emp))
+    debtors = overdue_employer_ids(db)
+    if debtors:
+        query = query.filter(Vacancy.employer_id.notin_(debtors))
     # Не показываем смены, которые соискатель уже свайпнул, — иначе колода
     # зацикливается и после «просмотрел все» те же карточки лезут снова.
     if principal and principal["role"] == "seeker":
-        swiped = [
-            s[0] for s in db.query(Swipe.target_id).filter(
-                Swipe.swiper_id == principal["id"],
-                Swipe.target_type == "vacancy",
-            ).all()
-        ]
-        if swiped:
-            query = query.filter(Vacancy.id.notin_(swiped))
+        # Подзапрос, а не список в Python: у активного человека тысячи свайпов,
+        # и раньше все их id тянулись из базы в приложение на КАЖДОЕ открытие
+        # ленты, а потом уезжали обратно одним гигантским «NOT IN (…)».
+        query = query.filter(
+            Vacancy.id.notin_(
+                db.query(Swipe.target_id).filter(
+                    Swipe.swiper_id == principal["id"],
+                    Swipe.target_type == "vacancy",
+                ).scalar_subquery()
+            )
+        )
     if role:
         query = query.filter(Vacancy.role == role)
     if min_rate is not None:
@@ -162,19 +250,61 @@ def list_vacancies(
     # ленте вечно — на них откликались, а они давно прошли.
     # Дата смены — местная (см. timeutil): по часам сервера вчерашние
     # смены висели бы в ленте ещё три часа после полуночи в Москве.
-    query = query.filter(Vacancy.date >= local_today())
+    # Отсечка прошедших смен — по местному времени ГОРОДА смены, а не сервера.
+    # В базе фильтруем с запасом в сутки (город может быть и западнее Москвы,
+    # и восточнее), а точную отсечку делаем ниже по каждой смене отдельно.
+    _edge = (
+        date.fromisoformat(local_today(city or "")) - timedelta(days=1)
+    ).isoformat()
+    query = query.filter(Vacancy.date >= _edge)
     if date_from:
         query = query.filter(Vacancy.date >= date_from)
     if date_to:
         query = query.filter(Vacancy.date <= date_to)
 
-    # Город: на PostgreSQL фильтруем в SQL (lower() корректен и для кириллицы),
-    # на SQLite — в Python, т.к. его lower() не сворачивает кириллицу. Так лента
-    # не тянет в память все смены страны и пользователь видит только свой город.
-    city_norm = city.strip().lower() if city else None
+    # Город. Если приложение его не прислало — берём из профиля самого
+    # человека. Это делается ИМЕННО НА СЕРВЕРЕ: у заведения так и было, а у
+    # соискателя город жил только в приложении, и стоило нажать «Сбросить» в
+    # фильтрах (или открыть ленту до загрузки профиля) — в колоде оказывались
+    # смены всей страны вперемешку. Человек лайкал смену в другом городе,
+    # доходило до мэтча и подтверждения, а на смену никто не приезжал.
+    if not city and principal and principal.get("role") == "seeker":
+        _me = db.get(User, principal["id"])
+        city = getattr(_me, "city", "") or None
+    # Приводим к каноническому написанию: в базе города уже нормализованы,
+    # и сравнение «Питер» с «Санкт-Петербург» иначе не сойдётся никогда —
+    # лента окажется пустой без единой ошибки.
+    city_norm = normalize(city).lower() if city else None
     is_sqlite = settings.database_url.startswith("sqlite")
     if city_norm and not is_sqlite:
         query = query.filter(func.lower(Vacancy.city) == city_norm)
+
+    # Отсекаем далёкие смены ДО ограничения выборки.
+    #
+    # Раньше порядок был обратный: база отдавала 300 самых свежих смен, и уже
+    # среди них искались близкие. Пока смен десятки, разницы нет. Но стоит
+    # ленте вырасти до нескольких сотен, и человек с окраины видел бы только
+    # центр — просто потому, что там публикуют чаще. Лента переставала быть
+    # лентой «рядом», и заметить это по жалобам почти невозможно.
+    #
+    # Рамка грубая (прямоугольник вокруг точки), точное расстояние считается
+    # ниже: задача рамки — не пустить в выборку заведомо далёкое.
+    if lat is not None and lng is not None:
+        d_lat = radius_km / 111.0
+        # Меридианы сходятся к полюсам: на широте Москвы градус долготы вдвое
+        # короче градуса широты. cos у полюса → 0, поэтому нижняя граница.
+        d_lng = radius_km / max(1.0, 111.0 * math.cos(math.radians(lat)))
+        query = query.filter(
+            or_(
+                and_(
+                    Vacancy.lat.between(lat - d_lat, lat + d_lat),
+                    Vacancy.lng.between(lng - d_lng, lng + d_lng),
+                ),
+                # Смена заведена только по городу, без точки на карте, —
+                # её по расстоянию не судим и из ленты не выбрасываем.
+                and_(Vacancy.lat == 0, Vacancy.lng == 0),
+            )
+        )
 
     # Кап на размер выборки — защита от перегрузки на больших объёмах.
     rows = query.order_by(Vacancy.created_at.desc()).limit(300).all()
@@ -187,6 +317,8 @@ def list_vacancies(
         else {}
     )
     done = _shifts_done_by_employer(db, emp_ids)
+    paid = _paid_by_employer(db, emp_ids)
+    taken = taken_counts(db, [v.id for v in rows])
 
     result: list[VacancyOut] = []
     for v in rows:
@@ -202,19 +334,33 @@ def list_vacancies(
             dist = distance_km(lat, lng, v.lat, v.lng)
             if dist > radius_km:
                 continue
+        # Набранную смену в ленте не показываем: людей уже нашли, а отклик
+        # на неё — потерянное время обеих сторон. Раньше поля «сколько нужно»
+        # не было вовсе, и смена висела, пока заведение не снимет её руками.
+        if taken.get(v.id, 0) >= (v.headcount or 1):
+            continue
+        # Точная отсечка по городу смены: в Калининграде ещё вчерашний вечер,
+        # когда в Москве уже новый день, и наоборот.
+        if v.date < local_today(v.city):
+            continue
         result.append(_to_out(
             v, emp, dist,
-            boosted=v.id in boosted_ids,
             shifts_done=done.get(v.employer_id, 0),
+            taken=taken.get(v.id, 0),
+            paid_commissions=paid.get(v.employer_id, 0),
+            # Должников в ленте нет вовсе (см. debtors выше) — значит, у всех
+            # оставшихся просрочки нет.
+            overdue=False,
         ))
 
-    # Boost всегда наверху; внутри группы — по выбранной сортировке.
+    # Порядок ленты определяет только выбранная сортировка. Платного
+    # поднятия в топ нет: место в ленте не продаётся.
     def _key(x: VacancyOut):
         if sort == "rate":
-            return (not x.boosted, -x.rate)
+            return -x.rate
         if sort == "date":
-            return (not x.boosted, x.date)
-        return (not x.boosted, x.distance_km if x.distance_km is not None else 1e9)
+            return x.date
+        return x.distance_km if x.distance_km is not None else 1e9
 
     result.sort(key=_key)
     return result
@@ -230,38 +376,34 @@ def invites(
     if principal["role"] != "seeker":
         raise HTTPException(status_code=403, detail="Только для соискателя")
     me = principal["id"]
-    emp_ids = [
-        s[0] for s in db.query(Swipe.swiper_id).filter(
-            Swipe.target_id == me,
-            Swipe.target_type == "user",
-            Swipe.direction.in_(("like", "superlike")),
-        ).distinct().all()
-    ]
-    if not emp_ids:
-        return []
+    liked_me = db.query(Swipe.swiper_id).filter(
+        Swipe.target_id == me,
+        Swipe.target_type == "user",
+        Swipe.direction == "like",
+    ).scalar_subquery()
     # Смены, которые соискатель уже свайпнул, повторно не показываем.
-    swiped = [
-        s[0] for s in db.query(Swipe.target_id).filter(
-            Swipe.swiper_id == me, Swipe.target_type == "vacancy",
-        ).all()
-    ]
+    swiped = db.query(Swipe.target_id).filter(
+        Swipe.swiper_id == me, Swipe.target_type == "vacancy",
+    ).scalar_subquery()
     q = db.query(Vacancy).filter(
-        Vacancy.employer_id.in_(emp_ids), Vacancy.status == "active",
+        Vacancy.employer_id.in_(liked_me),
+        Vacancy.status == "active",
+        Vacancy.id.notin_(swiped),
     )
-    if swiped:
-        q = q.filter(Vacancy.id.notin_(swiped))
     rows = q.order_by(Vacancy.created_at.desc()).limit(100).all()
     if not rows:
         return []
     ids = {v.employer_id for v in rows}
     emps = {e.id: e for e in db.query(Employer).filter(Employer.id.in_(ids)).all()}
-    boosted = active_boost_vacancy_ids(db)
     done = _shifts_done_by_employer(db, ids)
+    paid = _paid_by_employer(db, ids)
+    overdue = overdue_employer_ids(db)
     return [
         _to_out(
             v, emps.get(v.employer_id), None,
-            boosted=v.id in boosted,
             shifts_done=done.get(v.employer_id, 0),
+            paid_commissions=paid.get(v.employer_id, 0),
+            overdue=v.employer_id in overdue,
         )
         for v in rows
     ]
@@ -271,7 +413,12 @@ def invites(
     "",
     response_model=VacancyOut,
     status_code=201,
-    dependencies=[Depends(rate_limit("vacancy", 20, 60))],
+    # Каждая публикация в фоне рассылает до 200 уведомлений в Telegram.
+    # При 20 публикациях в минуту это до 4000 сообщений в минуту от одного
+    # аккаунта — и заодно flood-limit у самого бота, после которого перестают
+    # доходить и настоящие уведомления (мэтчи, напоминания о сменах).
+    # Живому заведению 10 смен в час хватает с запасом.
+    dependencies=[Depends(rate_limit("vacancy", 10, 3600))],
 )
 def create_vacancy(
     body: VacancyIn,
@@ -293,15 +440,13 @@ def create_vacancy(
                    "оплатите счёт, чтобы публиковать новые вакансии.",
         )
 
-    # Лимит тарифа Free на число активных вакансий.
-    limit = PLAN_VACANCY_LIMIT.get(plan_of(db, emp.id))
-    if limit is not None and active_vacancy_count(db, emp.id) >= limit:
-        raise HTTPException(
-            status_code=402,
-            detail="Лимит тарифа Free. Оформите Pro для большего числа вакансий.",
-        )
-
-    v = Vacancy(employer_id=emp.id, **body.model_dump())
+    _check_photo(body.interior_photo_url)
+    data = body.model_dump()
+    # Приводим город к каноническому названию: со свободным вводом
+    # «Санкт-Петербург», «СПб» и «Питер» становятся тремя разными городами, и
+    # лента у людей из одного города оказывается пустой — без единой ошибки.
+    data["city"] = normalize(data.get("city", ""))
+    v = Vacancy(employer_id=emp.id, **data)
     db.add(v)
     db.commit()
     db.refresh(v)
@@ -344,13 +489,36 @@ def update_vacancy(
     """Исправить свою смену (опечатка в ставке, времени, адресе).
     Доступно, пока по ней нет откликов."""
     v = _own_vacancy_or_404(db, vacancy_id, principal)
-    if _blocked_by_matches(db, vacancy_id):
+    _check_photo(body.interior_photo_url)
+    taken = taken_counts(db, [v.id]).get(v.id, 0)
+    fields = body.model_dump()
+    fields["city"] = normalize(fields.get("city", ""))
+
+    # Нельзя объявить, что нужно меньше людей, чем уже набрано, — иначе
+    # человек, с которым договорились, остаётся «лишним».
+    if fields["headcount"] < taken:
         raise HTTPException(
             status_code=409,
-            detail="По смене уже есть отклик — условия менять нельзя. "
-                   "Договоритесь в чате или снимите смену после её закрытия.",
+            detail=f"На смену уже взято {taken} чел. — меньше поставить нельзя.",
         )
-    for field, value in body.model_dump().items():
+
+    if _blocked_by_matches(db, vacancy_id):
+        # Исключение из заморозки условий: увеличить число людей можно всегда.
+        # «Нужен ещё один официант» никого не ущемляет — у тех, кто уже
+        # согласился, ставка, время и адрес остаются прежними. Всё остальное
+        # по-прежнему заморожено.
+        others_changed = any(
+            getattr(v, f) != val for f, val in fields.items() if f != "headcount"
+        )
+        if others_changed or fields["headcount"] <= (v.headcount or 1):
+            raise HTTPException(
+                status_code=409,
+                detail="По смене уже есть отклик — условия менять нельзя. "
+                       "Можно только увеличить число нужных людей. "
+                       "Остальное — договоритесь в чате.",
+            )
+
+    for field, value in fields.items():
         setattr(v, field, value)
     db.commit()
     db.refresh(v)
@@ -359,7 +527,7 @@ def update_vacancy(
 
     auto_flag(db, "vacancy", v.id, body.description, body.role)
     emp = db.get(Employer, v.employer_id)
-    return _to_out(v, emp, None)
+    return _to_out(v, emp, None, taken=taken)
 
 
 @router.delete("/{vacancy_id}", status_code=204)
@@ -387,46 +555,6 @@ def delete_vacancy(
     return None
 
 
-@router.post("/{vacancy_id}/boost")
-def boost_vacancy(
-    vacancy_id: str,
-    db: Session = Depends(get_db),
-    principal: dict = Depends(current_principal),
-):
-    """Поднять вакансию в топ ленты на 24 часа, списав 1 boost с баланса."""
-    if principal["role"] != "employer":
-        raise HTTPException(status_code=403, detail="Только для работодателя")
-    if commission_overdue(db, principal["id"]):
-        raise HTTPException(
-            status_code=402,
-            detail="Есть просроченная комиссия — оплатите счёт, "
-                   "чтобы продвигать вакансии.",
-        )
-    v = db.get(Vacancy, vacancy_id)
-    if v is None or v.employer_id != principal["id"]:
-        raise HTTPException(status_code=404, detail="Вакансия не найдена")
-    # Атомарное списание буста (защита от double-spend при параллельных запросах).
-    get_or_create(db, principal["id"])
-    spent = (
-        db.query(Entitlement)
-        .filter(
-            Entitlement.owner_id == principal["id"],
-            Entitlement.boost_balance >= 1,
-        )
-        .update(
-            {Entitlement.boost_balance: Entitlement.boost_balance - 1},
-            synchronize_session=False,
-        )
-    )
-    if not spent:
-        raise HTTPException(status_code=402, detail="Нет boost на балансе")
-    expires = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
-    db.add(Boost(vacancy_id=vacancy_id, expires_at=expires))
-    db.commit()
-    ent = get_or_create(db, principal["id"])
-    return {"ok": True, "boostBalance": ent.boost_balance, "expiresAt": expires}
-
-
 @router.post(
     "/{vacancy_id}/urgent",
     # Анти-спам: рассылка «Срочно» всем доступным сегодня — не чаще 3/час.
@@ -450,6 +578,16 @@ def urgent_ping(
     v = db.get(Vacancy, vacancy_id)
     if v is None or v.employer_id != principal["id"]:
         raise HTTPException(status_code=404, detail="Вакансия не найдена")
+    # Прошедшую смену звать людей нельзя. Проверки на дату не было вовсе:
+    # смена остаётся «активной», пока её не сняли руками, и «Срочно» на
+    # вчерашнюю смену рассылало приглашение всем, кто готов выйти сегодня.
+    # Люди откликались на то, чего уже не существует.
+    if v.date < local_today(v.city):
+        raise HTTPException(
+            status_code=409,
+            detail="Эта смена уже прошла — позвать на неё нельзя. "
+                   "Нажмите «Повторить», чтобы создать такую же на другой день.",
+        )
     city = (v.city or "").strip().lower()
     seekers = (
         db.query(User)
@@ -457,8 +595,15 @@ def urgent_ping(
         .all()
     )
     sent = 0
-    text = f"Срочно нужен человек: {v.role} · {v.rate}₽ · {v.address or v.city}"
+    # По-русски: сообщение читает живой человек в Telegram, а в базе должность
+    # лежит латиницей — уходило «Срочно нужен человек: waiter».
+    text = (
+        f"Срочно нужен человек: {role_ru(v.role)} · "
+        f"{v.rate}₽ · {v.address or v.city}"
+    )
     for u in seekers:
+        if sent >= _URGENT_MAX:
+            break
         if city and (u.city or "").strip().lower() != city:
             continue
         notify_owner(db, u.id, text)

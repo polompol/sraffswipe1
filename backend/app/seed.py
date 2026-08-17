@@ -1,6 +1,21 @@
 """Наполнение БД демо-данными. Запуск: python -m app.seed"""
+from datetime import date, timedelta
+
 from .db import SessionLocal, init_db
 from .models import Employer, User, Vacancy
+from .timeutil import local_today
+
+
+def _in_days(n: int) -> str:
+    """Дата через n дней по местному времени.
+
+    Раньше даты были вписаны числами и давно прошли: команда из инструкции
+    отрабатывала «Демо-данные добавлены», а лента оставалась ПУСТОЙ —
+    прошедшие смены в неё не попадают. Выглядело как сломанное приложение.
+    """
+    return (
+        date.fromisoformat(local_today()) + timedelta(days=n)
+    ).isoformat()
 
 
 def run() -> None:
@@ -30,7 +45,7 @@ def run() -> None:
                 Vacancy(
                     employer_id=emp.id,
                     role="barista",
-                    date="2026-06-16",
+                    date=_in_days(1),
                     start_time=8 * 60,
                     end_time=16 * 60,
                     rate=350,
@@ -47,7 +62,7 @@ def run() -> None:
                 Vacancy(
                     employer_id=emp.id,
                     role="dishwasher",
-                    date="2026-06-18",
+                    date=_in_days(3),
                     start_time=10 * 60,
                     end_time=18 * 60,
                     rate=2800,
@@ -69,8 +84,6 @@ def run() -> None:
                     birth_date="1998-09-03",
                     city="Москва",
                     district="Басманный",
-                    lat=55.7650,
-                    lng=37.6700,
                     roles="waiter,hostess",
                     med_book="yes",
                     self_employed=True,
@@ -87,8 +100,6 @@ def run() -> None:
                     birth_date="2002-01-20",
                     city="Москва",
                     district="Тверской",
-                    lat=55.7680,
-                    lng=37.6010,
                     roles="cook,dishwasher",
                     med_book="expired",
                     self_employed=False,

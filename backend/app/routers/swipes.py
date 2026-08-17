@@ -1,20 +1,21 @@
 """Свайпы и детект мэтча."""
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..entitlements import get_or_create
-from ..models import Employer, Entitlement, Match, Message, Swipe, User, Vacancy
+from ..models import Employer, Match, Message, Swipe, User, Vacancy
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
 from ..security import current_principal
+from ..timeutil import local_today
 from .billing import commission_overdue
 
 router = APIRouter(prefix="/swipes", tags=["swipes"])
 
-_POSITIVE = {"like", "superlike"}
+_POSITIVE = {"like"}
 
 
 def _same_person(db: Session, user_id: str, employer_id: str) -> bool:
@@ -29,6 +30,43 @@ def _same_person(db: Session, user_id: str, employer_id: str) -> bool:
     return bool(u.tg_id and e.tg_id and u.tg_id == e.tg_id)
 
 
+class SlotsFull(Exception):
+    """Мест на смене больше нет."""
+
+
+def _claim_slot(db: Session, vacancy_id: str) -> None:
+    """Занять место на смене или отказать, если все разобрали.
+
+    Свободные места при создании мэтча не проверялись ВООБЩЕ. Смена на одного
+    уходила из ленты, когда место занимали, — но два человека могли успеть
+    откликнуться до этого, и заведение, лайкнув обоих, получало два мэтча на
+    одно место. Оба уверены, что смена их; один приезжает зря, а комиссия
+    начисляется за каждого закрытого.
+
+    Строку смены берём под блокировку (FOR UPDATE), потом считаем занятые
+    места. Без блокировки два параллельных запроса оба увидели бы «место
+    свободно» и оба создали бы мэтч. На SQLite блокировка строки не
+    поддерживается, но там запись и так идёт по одному writer'у.
+    """
+    q = db.query(Vacancy).filter(Vacancy.id == vacancy_id)
+    if db.bind is not None and db.bind.dialect.name != "sqlite":
+        q = q.with_for_update()
+    vac = q.first()
+    if vac is None:
+        raise SlotsFull
+    taken = (
+        db.query(func.count(Match.id))
+        .filter(
+            Match.vacancy_id == vacancy_id,
+            Match.status.in_(("matched", "confirmed", "completed")),
+            Match.no_show.is_(False),
+        )
+        .scalar()
+    ) or 0
+    if taken >= (vac.headcount or 1):
+        raise SlotsFull
+
+
 def _ensure_match(
     db: Session, user_id: str, employer_id: str, vacancy_id: str
 ) -> tuple[Match, bool]:
@@ -39,6 +77,13 @@ def _ensure_match(
     )
     if existing:
         return existing, False
+    # Должник не набирает новых людей — проверяем ЗДЕСЬ, на создании мэтча, а
+    # не только на позитивном свайпе заведения. Иначе блок обходился сам
+    # собой: соискатель лайкал смену должника (она оставалась в ленте), мэтч
+    # создавался, и заведение неделями продолжало набирать людей с долгом.
+    if commission_overdue(db, employer_id):
+        raise SlotsFull
+    _claim_slot(db, vacancy_id)
     match = Match(
         user_id=user_id, employer_id=employer_id, vacancy_id=vacancy_id
     )
@@ -72,8 +117,19 @@ def _ensure_match(
 def _on_match(db: Session, match: Match, created: bool) -> None:
     if not created:
         return
-    notify_owner(db, match.user_id, "🔥 У вас новый мэтч в StaffSwipe!")
-    notify_owner(db, match.employer_id, "🔥 Новый отклик-мэтч в StaffSwipe!")
+    # С кнопкой. Раньше соискатель — самая мотивированная сторона — получал
+    # голый текст: чтобы попасть в чат, надо было промотать переписку с ботом
+    # вверх до /start, найти кнопку, открыть ленту и искать нужный мэтч.
+    notify_owner(
+        db, match.user_id,
+        "🔥 Заведение ответило взаимно! Откройте чат и договоритесь о смене.",
+        open_app="Открыть чат", screen="chat", ident=match.id,
+    )
+    notify_owner(
+        db, match.employer_id,
+        "Новый мэтч в StaffSwipe — договоритесь о деталях смены.",
+        open_app="Открыть мэтчи", screen="matches",
+    )
 
 
 @router.post(
@@ -108,12 +164,32 @@ def swipe(
                    "чтобы приглашать новых людей.",
         )
 
-    # Сначала валидируем цель — чтобы при 404 не «сжечь» супер-лайк/не писать свайп.
+    # Сначала валидируем цель — чтобы при 404 не писать свайп в никуда.
+    #
+    # Из ленты плохие цели и так исчезают, но свайп можно прислать напрямую с
+    # любым id: карточка, открытая час назад, ссылка, скрипт. Поэтому всё, что
+    # решает лента, проверяется ещё раз здесь — иначе доходило до мэтча, чата
+    # и договорённости о смене, которой нет.
     if body.target_type == "vacancy":
-        if db.get(Vacancy, body.target_id) is None:
-            raise HTTPException(status_code=404, detail="Вакансия не найдена")
+        vac_target = db.get(Vacancy, body.target_id)
+        if vac_target is None or vac_target.status != "active":
+            raise HTTPException(status_code=404, detail="Смена не найдена")
+        # Прошедшая смена. Она остаётся «активной», пока её не снимут руками,
+        # и отклик на вчерашний день доходил до мэтча: заведение получало
+        # человека на смену, которой уже не было.
+        if vac_target.date < local_today(vac_target.city):
+            raise HTTPException(status_code=409, detail="Эта смена уже прошла")
+        # Заблокированное заведение. Бан переводит его смены в blocked, но
+        # оператор может разблокировать смену отдельно — и она оживёт у
+        # заблокированного владельца.
+        owner = db.get(Employer, vac_target.employer_id)
+        if owner is None or owner.blocked:
+            raise HTTPException(status_code=404, detail="Смена не найдена")
     elif body.target_type == "user":
-        if db.get(User, body.target_id) is None:
+        target_user = db.get(User, body.target_id)
+        # Заблокированного человека звать нельзя: он не пройдёт вход, а
+        # заведение будет ждать его на смене.
+        if target_user is None or target_user.blocked:
             raise HTTPException(status_code=404, detail="Кандидат не найден")
 
     # Идемпотентность: повторный свайп по той же цели не списывает баланс
@@ -129,29 +205,6 @@ def swipe(
     )
 
     if existing is None:
-        # Супер-лайк «Срочно» — платная фича: списываем с баланса атомарно
-        # (UPDATE ... WHERE balance >= 1), иначе параллельные запросы на разные
-        # цели уводят баланс в минус (double-spend).
-        if body.direction == "superlike":
-            get_or_create(db, me)  # гарантируем строку прав
-            spent = (
-                db.query(Entitlement)
-                .filter(
-                    Entitlement.owner_id == me,
-                    Entitlement.superlike_balance >= 1,
-                )
-                .update(
-                    {Entitlement.superlike_balance: Entitlement.superlike_balance - 1},
-                    synchronize_session=False,
-                )
-            )
-            if not spent:
-                raise HTTPException(
-                    status_code=402,
-                    detail="Супер-лайки «Срочно» закончились. Их дарят за "
-                           "приглашённых друзей.",
-                )
-
         db.add(
             Swipe(
                 swiper_id=me,
@@ -166,6 +219,14 @@ def swipe(
             # Гонка: параллельный запрос уже записал этот свайп — откатываем
             # списание баланса и считаем операцию идемпотентной.
             db.rollback()
+    elif body.direction in _POSITIVE and existing.direction not in _POSITIVE:
+        # Передумали. Отказ был вечным приговором: человек исчезал и из ленты,
+        # и из списка откликнувшихся, и вернуть его было нельзя ничем — даже
+        # если смахнули влево случайно, а таких свайпов в приложении с
+        # карточками много. Обратный путь (лайк → отказ) намеренно не
+        # разрешаем: он ломал бы уже созданный мэтч и договорённость.
+        existing.direction = body.direction
+        db.commit()
 
     if body.direction not in _POSITIVE:
         return SwipeOut(recorded=True, matched=False)
@@ -174,7 +235,7 @@ def swipe(
     if principal["role"] == "seeker" and body.target_type == "vacancy":
         vac = db.get(Vacancy, body.target_id)
         if vac is None:
-            raise HTTPException(status_code=404, detail="Вакансия не найдена")
+            raise HTTPException(status_code=404, detail="Смена не найдена")
         reciprocal = (
             db.query(Swipe)
             .filter(
@@ -186,16 +247,22 @@ def swipe(
             .first()
         )
         if reciprocal and not _same_person(db, me, vac.employer_id):
-            match, created = _ensure_match(db, me, vac.employer_id, vac.id)
+            try:
+                match, created = _ensure_match(db, me, vac.employer_id, vac.id)
+            except SlotsFull:
+                # Отклик записан — человек не виноват, что опоздал на секунды.
+                # Но мэтча нет: мест не осталось.
+                return SwipeOut(recorded=True, matched=False)
             _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
 
     # Работодатель лайкнул кандидата → ищем его лайк на любую нашу вакансию.
     if principal["role"] == "employer" and body.target_type == "user":
+        # Только действующие смены: по заблокированной мэтч создавать нельзя.
         my_vacs = [
             v.id
             for v in db.query(Vacancy)
-            .filter(Vacancy.employer_id == me)
+            .filter(Vacancy.employer_id == me, Vacancy.status == "active")
             .all()
         ]
         seeker_like = (
@@ -209,9 +276,18 @@ def swipe(
             .first()
         )
         if seeker_like and not _same_person(db, body.target_id, me):
-            match, created = _ensure_match(
-                db, body.target_id, me, seeker_like.target_id
-            )
+            try:
+                match, created = _ensure_match(
+                    db, body.target_id, me, seeker_like.target_id
+                )
+            except SlotsFull:
+                # Заведение уже набрало всех на эту смену. Отказ понятный:
+                # иначе оно бы думало, что позвало человека, а мэтча нет.
+                raise HTTPException(
+                    status_code=409,
+                    detail="На эту смену уже набраны все люди. "
+                           "Увеличьте число мест или опубликуйте новую смену.",
+                ) from None
             _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
 

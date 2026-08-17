@@ -4,12 +4,22 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>StaffSwipe</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#9e1b32" />
+    <!-- iPhone не читает иконки из манифеста: для «На экран «Домой»» нужен
+         именно apple-touch-icon, иначе на экране появится скриншот страницы. -->
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <meta name="apple-mobile-web-app-title" content="StaffSwipe" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="description"
+      content="Смены в кафе и ресторанах рядом с домом. Оплата напрямую от заведения."
+    />
   </head>
   <body>
     <div id="root"></div>

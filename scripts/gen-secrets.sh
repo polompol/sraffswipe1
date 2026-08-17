@@ -14,3 +14,7 @@ echo "# Вставьте в .env (значения одноразовые, хр�
 echo "POSTGRES_PASSWORD=$(gen)"
 echo "JWT_SECRET=$(gen)"
 echo "INTERNAL_API_SECRET=$(gen)"
+# Секрет вебхука ЮKassa: он попадает в адрес уведомления, который живёт в
+# чужом личном кабинете. Отдельная строка, чтобы её утечка не открывала
+# внутренние вызовы.
+echo "YOOKASSA_WEBHOOK_SECRET=$(gen)"

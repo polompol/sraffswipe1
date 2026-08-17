@@ -12,8 +12,10 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
+    BotCommand,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    MenuButtonWebApp,
     Message,
     WebAppInfo,
 )
@@ -21,8 +23,11 @@ from aiogram.types import (
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://example.com")
 # «Печатающий» эффект: индикатор «печатает…» + плавное раскрытие текста.
-# Выключается BOT_TYPEWRITER=0 (тогда сообщения приходят сразу).
-TYPEWRITER = os.environ.get("BOT_TYPEWRITER", "1") != "0"
+# ВЫКЛЮЧЕН по умолчанию: ради анимации бот правит одно сообщение десять раз
+# подряд. Человек ждёт несколько секунд, чтобы прочитать /start, а при росте
+# числа пользователей это ещё и лишний риск упереться в ограничение частоты
+# запросов у Telegram. Включается BOT_TYPEWRITER=1.
+TYPEWRITER = os.environ.get("BOT_TYPEWRITER", "0") == "1"
 
 dp = Dispatcher()
 
@@ -65,9 +70,8 @@ async def send_typed(message, text, reply_markup=None, steps=10, delay=0.4):
     return sent
 
 
-@dp.message(CommandStart())
-async def start(message: Message) -> None:
-    kb = InlineKeyboardMarkup(
+def _open_app_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
@@ -77,11 +81,15 @@ async def start(message: Message) -> None:
             ]
         ]
     )
+
+
+@dp.message(CommandStart())
+async def start(message: Message) -> None:
     await send_typed(
         message,
         "StaffSwipe — смены в общепите за один свайп.\n"
         "Нажмите кнопку ниже, чтобы начать.",
-        reply_markup=kb,
+        reply_markup=_open_app_kb(),
     )
 
 
@@ -93,7 +101,8 @@ async def help_cmd(message: Message) -> None:
         "1. Открой приложение кнопкой в /start.\n"
         "2. Свайпай смены (вправо — хочу), лови мэтч, договаривайся в чате.\n"
         "3. В день смены отметься «Я на смене» — код скажет заведение.\n"
-        "4. Оплата — напрямую от заведения в день смены.\n\n"
+        "4. Оплата — напрямую от заведения. Способ и срок заведение\n"
+        "   указывает в карточке смены.\n\n"
         "Сюда будут приходить уведомления о мэтчах и сменах.\n"
         "Проблема или спор — /support.",
     )
@@ -104,18 +113,62 @@ async def support_cmd(message: Message) -> None:
     await send_typed(
         message,
         "Поддержка StaffSwipe.\n"
-        "Опиши проблему одним сообщением в кнопку «Поддержка» внутри "
-        "приложения (профиль → Поддержка) — так оператор увидит твой "
-        "аккаунт и историю смены.\n"
+        # Раньше здесь было обещание, что оператор «увидит твой аккаунт и
+        # историю смены»: тикетов с привязкой к смене в сервисе нет, оператор
+        # читает обычное сообщение. Просим сразу то, что ему понадобится.
+        "Опиши проблему одним сообщением: что случилось, название заведения "
+        "и день смены.\n"
         "Потерял доступ к старому Telegram? Напиши в поддержку с нового — "
         "оператор перенесёт аккаунт с рейтингом и историей.",
     )
+
+
+# Любое другое сообщение. Люди пишут боту — «здравствуйте», «есть работа?»,
+# «когда смена» — и до сих пор получали тишину: обработчиков не было вовсе.
+# Молчащий бот читается как «сервис не работает».
+#
+# Без фильтра по типу: раньше стоял F.text, и на голосовое, стикер, фото или
+# пересланное сообщение бот по-прежнему молчал — а именно ими чаще всего и
+# отвечают («ок 👍», голосовое «когда смена?»).
+@dp.message()
+async def anything_else(message: Message) -> None:
+    await message.answer(
+        "Я бот-уведомлялка: сюда приходят мэтчи, подтверждения смен и "
+        "напоминания. Смены живут в приложении — откройте его кнопкой ниже.\n"
+        "Как всё устроено — /help, проблема — /support.",
+        reply_markup=_open_app_kb(),
+    )
+
+
+async def setup(bot: Bot) -> None:
+    """Разовая настройка бота при запуске.
+
+    Обе вещи раньше приходилось делать руками в BotFather (и легко забыть):
+    список команд в меню и постоянная кнопка «Открыть» слева от поля ввода.
+    Кнопка важнее команд: это единственный способ вернуться в приложение,
+    если человек закрыл его и пролистал переписку.
+    """
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Открыть приложение"),
+            BotCommand(command="help", description="Как это работает"),
+            BotCommand(command="support", description="Поддержка и споры"),
+        ])
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="Смены",
+                web_app=WebAppInfo(url=MINI_APP_URL),
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — настройка не должна ронять бота
+        print(f"Не удалось настроить меню бота: {exc}")
 
 
 async def main() -> None:
     if not BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN не задан")
     bot = Bot(BOT_TOKEN)
+    await setup(bot)
     await dp.start_polling(bot)
 
 

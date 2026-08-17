@@ -1,3 +1,11 @@
+// Нижняя граница оплаты смены. Держится в паре с backend/app/schemas.py —
+// там она обязательна к соблюдению, здесь нужна, чтобы человек узнал об
+// ошибке до того, как заполнит форму до конца. Смысл границы: смена за
+// бесценок — не предложение работы, а способ бесплатно накрутить репутацию
+// парой сговорившихся аккаунтов (за неё не берётся комиссия).
+export const MIN_RATE_PER_HOUR = 100;
+export const MIN_RATE_PER_SHIFT = 500;
+
 // Доменные типы — зеркало backend (app/schemas.py) и Flutter (lib/data/models).
 
 export type AppRole = "seeker" | "employer";
@@ -58,7 +66,7 @@ export const MED_BOOK_LABELS: Record<MedBookStatus, string> = {
   expired: "Просрочена",
 };
 
-export type SwipeDirection = "like" | "superlike" | "dislike";
+export type SwipeDirection = "like" | "dislike";
 
 export type RateType = "perHour" | "perShift";
 
@@ -76,10 +84,13 @@ export const PAY_METHOD_LABELS: Record<PayMethod, string> = {
   transfer: "Перевод после смены",
 };
 
+// Короткие подписи для чипов в списке. Слово «смены» убрано — оно и так
+// понятно из контекста, а вот КОГДА платят («в день» / «после») — главное
+// отличие способов, его сокращать нельзя.
 export const PAY_METHOD_SHORT: Record<PayMethod, string> = {
-  cash: "Нал в день смены",
+  cash: "Наличными в день",
   card: "На карту в день",
-  transfer: "Перевод после",
+  transfer: "Переводом после",
 };
 
 // Чаевые: их платят гости, не заведение. Поле информационное — но цепляет.
@@ -98,12 +109,14 @@ export const TIPS_BADGE: Record<TipsMode, string> = {
   shared: "Чаевые — поровну",
 };
 
-export type MatchStatus = "matched" | "confirmed" | "completed";
+export type MatchStatus = "matched" | "confirmed" | "completed" | "cancelled" | "expired";
 
 export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
   matched: "Мэтч",
   confirmed: "Смена подтверждена",
-  completed: "Завершено",
+  completed: "Смена закрыта",
+  cancelled: "Отменена",
+  expired: "Не состоялась",
 };
 
 export type ExperienceTag =
@@ -130,7 +143,9 @@ export interface AvailabilitySlot {
 export interface Seeker {
   id: string;
   name: string;
-  birthDate: string; // ISO yyyy-mm-dd
+  // Возраст числом приходит с сервера. Дату рождения в публичную ленту не
+  // отдаём вовсе: она о человеке говорит больше, чем нужно заведению.
+  age?: number | null;
   city: string;
   district: string;
   lat: number;
@@ -147,6 +162,7 @@ export interface Seeker {
   availableToday?: boolean;
   shiftsTotal?: number; // надёжность: всего подтверждённых смен
   shiftsAttended?: number; // из них вышел
+  employersTotal?: number; // со сколькими РАЗНЫМИ заведениями работал
 }
 
 export interface Vacancy {
@@ -163,6 +179,10 @@ export interface Vacancy {
   payMethod?: PayMethod;
   tips?: TipsMode;
   description: string;
+  /** Сколько человек нужно на смену (по умолчанию 1). */
+  headcount?: number;
+  /** Сколько мест ещё свободно. */
+  slotsLeft?: number;
   requireMedBook: boolean;
   requireExperience: boolean;
   lat: number;
@@ -172,7 +192,6 @@ export interface Vacancy {
   interiorPhotoUrl: string;
   employerVerified: boolean;
   status: string;
-  boosted?: boolean;
   distanceKm?: number;
   // Доверие к заведению (видно ДО отклика).
   employerRating?: number;
@@ -193,10 +212,22 @@ export interface MatchModel {
   role?: StaffRole;
   checkinCode?: string | null; // виден только заведению (помощник)
   checkedIn?: boolean; // смена закрыта (обе стороны подтвердили)
+  /** Предложенный перенос: дата и время, если заведение его предложило. */
+  rescheduleDate?: string;
+  rescheduleStart?: number | null;
+  rescheduleEnd?: number | null;
+  /** Фактическая длительность смены в минутах, если она отличалась. */
+  actualMinutes?: number | null;
   seekerCheckedIn?: boolean;
   employerCheckedIn?: boolean;
   disputed?: boolean;
   shiftPay?: number; // оплата смены, ₽ — для празднования дохода при закрытии
+  /** Когда смена. Раньше приложение не знало о ней ничего, кроме названия
+   *  заведения: человек открывал чат и не видел, на какой день и час он
+   *  вообще договорился. По этим же полям видно, какие действия ещё уместны. */
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
 }
 
 export interface Message {
@@ -210,22 +241,11 @@ export interface Message {
 
 // --- Монетизация / entitlements ---
 
-export type Plan = "free" | "pro" | "business";
-
-export interface Entitlements {
-  plan: Plan;
-  planRenewsAt?: string | null;
-  superlikeBalance: number;
-  boostBalance: number;
-  seekerPremium: boolean;
-  employerVerified: boolean;
-}
 
 export interface PriceItem {
   id: string;
   title: string;
   subtitle: string;
-  priceStars?: number; // XTR
   priceRub?: number; // ₽ (ЮKassa)
   badge?: string;
 }

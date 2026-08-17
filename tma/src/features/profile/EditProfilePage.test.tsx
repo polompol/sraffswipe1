@@ -12,10 +12,14 @@ let currentRole: "seeker" | "employer" = "seeker";
 vi.mock("@/api/endpoints", () => ({
   fetchMe: async () => meFixture,
   updateMe: (payload: Payload) => updateMe(payload),
+  // Город теперь выбирается из списка, а список приходит с сервера.
+  fetchCities: async () => [{ name: "Москва", tz: "Europe/Moscow" }],
 }));
 vi.mock("@/telegram/sdk", () => ({
   showBackButton: () => () => {},
   haptic: () => {},
+  // Защита от случайного закрытия: в тесте — заглушка.
+  guardClosing: () => {},
 }));
 vi.mock("@/store/session", () => ({
   useSession: (sel: (s: { role: string }) => unknown) => sel({ role: currentRole }),
@@ -52,7 +56,10 @@ describe("Редактирование профиля: форма зависит
     await screen.findByText("Название заведения");
     expect(screen.queryByText("Дата рождения (только 18+)")).toBeNull();
     expect(screen.queryByText("Должности")).toBeNull();
-    expect(screen.queryByTestId("photo-upload")).toBeNull();
+    // А вот фото заведению как раз НУЖНО: его поле есть в базе, лента и список
+    // мэтчей его показывают — а поставить было нельзя ничем, и у каждого
+    // живого заведения оставалась буква на цветном квадрате.
+    expect(screen.queryByTestId("photo-upload")).not.toBeNull();
   });
 
   it("заведение отправляет company_name, а не name", async () => {

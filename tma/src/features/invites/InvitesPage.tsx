@@ -61,7 +61,7 @@ export function InvitesPage() {
     <div className="page">
       <h1 className="h1">Кто меня зовёт</h1>
       <p className="muted" style={{ marginTop: -6 }}>
-        Заведения, которые уже лайкнули тебя. Откликнись — и сразу мэтч.
+        Эти заведения уже позвали вас. Ответьте — и сразу откроется чат.
       </p>
 
       {/* Единый стиль состояний со всеми остальными экранами: раньше здесь
@@ -71,9 +71,10 @@ export function InvitesPage() {
 
       {!isLoading && !isError && data && data.length === 0 && (
         <EmptyState
+          fill
           icon={<IconBolt size={34} />}
           title="Пока никто не позвал"
-          text="Листай ленту и откликайся — заведения начнут звать в ответ."
+          text="Листайте ленту и откликайтесь — заведения начнут звать в ответ."
           action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
         />
       )}

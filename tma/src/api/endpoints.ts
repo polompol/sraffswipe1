@@ -1,9 +1,8 @@
 import axios from "axios";
-import { api } from "./client";
+import { api, baseURL, getToken } from "./client";
 import * as mock from "./mock";
 import type {
   AppRole,
-  Entitlements,
   MatchModel,
   Message,
   Seeker,
@@ -96,9 +95,22 @@ export async function fetchMatches(): Promise<MatchModel[]> {
   return data;
 }
 
-export async function fetchMessages(matchId: string): Promise<Message[]> {
+/** Сколько сообщений сервер отдаёт за раз (столько же, сколько в backend). */
+export const MESSAGES_PAGE = 100;
+
+/**
+ * Переписка по смене: последние сообщения, снизу — самые свежие.
+ * `before` — id сообщения, до которого нужна предыдущая порция
+ * (кнопка «Показать более ранние»).
+ */
+export async function fetchMessages(
+  matchId: string,
+  before = "",
+): Promise<Message[]> {
   if (!USE_BACKEND) return mock.fetchMessages(matchId);
-  const { data } = await api.get<Message[]>(`/matches/${matchId}/messages`);
+  const { data } = await api.get<Message[]>(`/matches/${matchId}/messages`, {
+    params: before ? { before } : undefined,
+  });
   return data;
 }
 
@@ -113,10 +125,37 @@ export async function sendMessage(
   return data;
 }
 
-export async function confirmShift(matchId: string): Promise<MatchModel> {
+/** Смена, которая пересекается по времени с подтверждаемой. */
+export class ShiftConflict extends Error {
+  constructor(public readonly detail: string) {
+    super(detail);
+    this.name = "ShiftConflict";
+  }
+}
+
+/**
+ * Подтвердить смену. `force` — согласие взять её, несмотря на пересечение с
+ * другой сменой этого же человека: сервер предупреждает, но не запрещает.
+ */
+export async function confirmShift(
+  matchId: string,
+  force = false,
+): Promise<MatchModel> {
   if (!USE_BACKEND) return mock.confirmShift(matchId);
-  const { data } = await api.post<MatchModel>(`/matches/${matchId}/confirm`, {});
-  return data;
+  try {
+    const { data } = await api.post<MatchModel>(
+      `/matches/${matchId}/confirm`,
+      {},
+      { params: force ? { force: true } : undefined },
+    );
+    return data;
+  } catch (e: any) {
+    const d = e?.response?.data?.detail;
+    if (e?.response?.status === 409 && d?.code === "shift_conflict") {
+      throw new ShiftConflict(d.message);
+    }
+    throw e;
+  }
 }
 
 /** Работодатель отмечает после смены: работник вышел или нет (надёжность). */
@@ -128,15 +167,106 @@ export async function markAttendance(
   await api.post(`/matches/${matchId}/attendance`, { attended });
 }
 
-/** Сторона работника во взаимном подтверждении: «я на смене» (код ИЛИ гео). */
+/** Отметка работника «я на смене» — только кодом заведения.
+ *
+ *  Геолокацию убрали: она просила разрешение на местоположение, не работала
+ *  в подвалах и на кухнях и ничего не доказывала — рядом с кафе можно
+ *  оказаться и не работая. Отметка больше не обязательна для закрытия смены:
+ *  код нужен как доказательство в споре. */
 export async function checkinShift(
   matchId: string,
-  body: { code?: string; lat?: number; lng?: number },
+  body: { code: string },
 ): Promise<MatchModel> {
   if (!USE_BACKEND) return mock.checkinShift(matchId, body);
   const { data } = await api.post<MatchModel>(
     `/matches/${matchId}/checkin`,
     body,
+  );
+  return data;
+}
+
+/**
+ * «Смена не состоялась» — единственный способ не платить за договорённую смену.
+ *
+ * Раньше платить было не нужно по умолчанию: смена закрывалась только когда
+ * обе стороны нажимали кнопку, и комиссия начислялась только при закрытии.
+ * Значит, чтобы не платить 10%, заведению достаточно было ничего не нажимать
+ * и не называть работнику код. Сторона, которая должна деньги, выигрывала от
+ * бездействия. Теперь наоборот: договорились — смена считается состоявшейся,
+ * пока кто-то явно не заявил обратное.
+ */
+export async function markNotHeld(
+  matchId: string,
+  reason = "",
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.markNotHeld(matchId, reason);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/not-held`,
+    { reason },
+  );
+  return data;
+}
+
+/**
+ * Отменить смену, о которой договорились.
+ *
+ * Заболел, передумал, планы поменялись — самое частое событие в подработке.
+ * Раньше выхода не было: оставалось просто не прийти, и человек получал
+ * отметку «неявка» наравне с теми, кто пропал молча.
+ */
+export async function cancelShift(
+  matchId: string,
+  reason = "",
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.cancelShift(matchId, reason);
+  const { data } = await api.post<MatchModel>(`/matches/${matchId}/cancel`, {
+    reason,
+  });
+  return data;
+}
+
+/**
+ * Заведение указывает фактическую длительность смены.
+ *
+ * Опоздал, ушёл раньше, задержался — оплата и комиссия считаются по факту.
+ * Работник видит изменение в чате и может открыть спор.
+ */
+export async function setActualHours(
+  matchId: string,
+  minutes: number,
+  note = "",
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.setActualHours(matchId, minutes, note);
+  const { data } = await api.post<MatchModel>(`/matches/${matchId}/hours`, {
+    minutes,
+    note,
+  });
+  return data;
+}
+
+/** Заведение предлагает перенести смену. Работник соглашается или нет. */
+export async function proposeReschedule(
+  matchId: string,
+  date: string,
+  startTime: number,
+  endTime: number,
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.proposeReschedule(matchId, date);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/reschedule`,
+    { date, start_time: startTime, end_time: endTime },
+  );
+  return data;
+}
+
+export async function answerReschedule(
+  matchId: string,
+  accept: boolean,
+): Promise<MatchModel> {
+  if (!USE_BACKEND) return mock.answerReschedule(matchId, accept);
+  const { data } = await api.post<MatchModel>(
+    `/matches/${matchId}/reschedule/${accept ? "accept" : "decline"}`,
+    {},
   );
   return data;
 }
@@ -154,12 +284,6 @@ export async function disputeShift(
   return data;
 }
 
-export async function fetchEntitlements(): Promise<Entitlements> {
-  if (!USE_BACKEND) return mock.fetchEntitlements();
-  const { data } = await api.get<Entitlements>("/billing/entitlements");
-  return data;
-}
-
 export interface InvoiceLink {
   link: string;
 }
@@ -171,7 +295,6 @@ export interface Me {
   name: string;
   rating: number;
   tgUsername?: string | null;
-  streak?: number;
   city?: string;
   district?: string;
   incomingLikes?: number;
@@ -229,7 +352,6 @@ export interface ReferralInfo {
   code: string;
   link: string;
   invited: number;
-  bonusSuperlikes: number;
 }
 
 export async function fetchReferral(): Promise<ReferralInfo> {
@@ -247,11 +369,6 @@ export async function leaveReview(
   await api.post(`/matches/${matchId}/review`, { stars, text });
 }
 
-export async function boostVacancy(vacancyId: string): Promise<void> {
-  if (!USE_BACKEND) return mock.boostVacancy(vacancyId);
-  await api.post(`/vacancies/${vacancyId}/boost`, {});
-}
-
 /** «Срочно»: пинг доступным соискателям в городе смены. Возвращает число. */
 export async function urgentPing(vacancyId: string): Promise<number> {
   if (!USE_BACKEND) return mock.urgentPing(vacancyId);
@@ -266,23 +383,61 @@ export interface Worker {
   availableToday: boolean;
   shiftsTotal: number;
   shiftsAttended: number;
+  employersTotal?: number;
 }
 
 /** Работники, уже выходившие на смены заведения — чтобы позвать снова. */
 export async function fetchMyWorkers(): Promise<Worker[]> {
   if (!USE_BACKEND) return mock.fetchMyWorkers();
-  const { data } = await api.get<
-    { id: string; name: string; rating: number; available_today: boolean; shifts_total: number; shifts_attended: number }[]
-  >("/employer/workers");
-  return data.map((w) => ({
-    id: w.id, name: w.name, rating: w.rating, availableToday: w.available_today,
-    shiftsTotal: w.shifts_total, shiftsAttended: w.shifts_attended,
-  }));
+  // Имена полей — уже camelCase: ответы переименовывает перехватчик в
+  // client.ts. Здесь читались серверные имена со знаком подчёркивания, то
+  // есть всегда undefined: на экране «Мои работники» пропадали и надёжность
+  // («вышел на N из M»), и отметка «готов сегодня». В mock-режиме всё
+  // выглядело правильно — потому и не замечалось.
+  const { data } = await api.get<Worker[]>("/employer/workers");
+  return data;
 }
 
-export async function inviteWorker(userId: string): Promise<void> {
+/**
+ * Позвать работника снова. Возвращает, ушло ли ему сообщение: второй раз
+ * подряд мы намеренно молчим, чтобы не спамить, и кнопка должна честно
+ * сказать «уже звали», а не показывать успех повторно.
+ */
+export async function inviteWorker(userId: string): Promise<boolean> {
   if (!USE_BACKEND) return mock.inviteWorker(userId);
-  await api.post(`/employer/invite/${userId}`, {});
+  const { data } = await api.post<{ notified: boolean }>(
+    `/employer/invite/${userId}`, {});
+  return data.notified !== false;
+}
+
+export interface Applicant {
+  id: string;
+  name: string;
+  age?: number | null;
+  district: string;
+  roles: string[];
+  medBook: string;
+  rating: number;
+  photoUrls: string[];
+  about: string;
+  availableToday: boolean;
+  shiftsTotal: number;
+  shiftsAttended: number;
+  employersTotal?: number;
+  /** Заведение уже отказало — но человек остаётся в списке: передумать можно. */
+  declined?: boolean;
+  vacancyId: string;
+  vacancyRole: string;
+  vacancyDate: string;
+  vacancyStart: number;
+  vacancyEnd: number;
+}
+
+/** Кто откликнулся на мои смены и ждёт ответа. */
+export async function fetchApplicants(): Promise<Applicant[]> {
+  if (!USE_BACKEND) return mock.fetchApplicants();
+  const { data } = await api.get<Applicant[]>("/employer/applicants");
+  return data;
 }
 
 export interface VacancyInput {
@@ -296,10 +451,12 @@ export interface VacancyInput {
   tips?: string;
   description?: string;
   require_med_book?: boolean;
+  headcount?: number;
   address?: string;
   city?: string;
   lat?: number;
   lng?: number;
+  interior_photo_url?: string;
 }
 
 /** Публикация вакансии работодателем. */
@@ -365,7 +522,7 @@ export type Funnel = Record<string, number>;
 
 export async function fetchFunnel(): Promise<Funnel> {
   if (!USE_BACKEND) {
-    return { open: 1200, swipe: 940, match: 410, confirm: 180, purchase: 64 };
+    return { open: 1200, swipe: 940, match: 410, confirm: 180, done: 121 };
   }
   const { data } = await api.get<{ counts: Funnel }>("/analytics/funnel");
   return data.counts;
@@ -379,7 +536,7 @@ export interface AdminOverview {
   likes: number;
   matches: number;
   openReports: number;
-  activeSubscriptions: number;
+  completedShifts: number;
 }
 
 export interface AdminReport {
@@ -391,6 +548,19 @@ export interface AdminReport {
   text: string;
   status: string;
   createdAt: string;
+  /** Факты по спорной смене — только для жалоб на смену. Без них оператору
+   *  предлагалось выбрать между «засчитать смену» и «неявкой» вслепую. */
+  dispute?: {
+    worker: string;
+    venue: string;
+    shiftWhen: string;
+    checkedInByCode: boolean;
+    venueMarkedAttended: boolean;
+    notHeldBy: string;
+    payRub: number;
+    commission: string;
+    status: string;
+  } | null;
 }
 
 export interface AdminBlocked {
@@ -403,15 +573,13 @@ export interface AdminRevenue {
   commissionAccruedRub: number;
   commissionPaidRub: number;
   commissionPendingRub: number;
+  /** Прощено по спорам и признано безнадёжным — в выручку не входит. */
+  commissionWrittenOffRub: number;
   shiftsBilled: number;
+  /** Пополнений баланса всего: и картой, и зачисленных оператором. */
   topupsRub: number;
-}
-
-export interface AdminSubscription {
-  ownerId: string;
-  company: string;
-  plan: string;
-  renewsAt?: string | null;
+  topupsCardRub: number;
+  topupsManualRub: number;
 }
 
 export async function fetchAdminOverview(): Promise<AdminOverview> {
@@ -449,6 +617,22 @@ export async function warnReport(id: string, note = ""): Promise<number> {
   return data.warnings;
 }
 
+export interface City {
+  name: string;
+  tz: string;
+}
+
+/** Города, в которых работает сервис.
+ *
+ *  Список берём с сервера, а не держим копию здесь: две копии неизбежно
+ *  разъезжаются, а разъехавшийся город — это пустая лента, причину которой
+ *  невозможно объяснить человеку. */
+export async function fetchCities(): Promise<City[]> {
+  if (!USE_BACKEND) return mock.fetchCities();
+  const { data } = await api.get<City[]>("/cities");
+  return data;
+}
+
 export interface AdminUser {
   id: string;
   role: "seeker" | "employer";
@@ -456,10 +640,25 @@ export interface AdminUser {
   username?: string | null;
   blocked: boolean;
   warnings: number;
-  plan: string;
-  boostBalance: number;
-  superlikeBalance: number;
   balanceRub: number;
+  /** Бейдж «Проверено» — только для заведений. */
+  verified?: boolean;
+}
+
+/** Поставить или снять заведению бейдж «Проверено».
+ *
+ *  Автоматически его выдать нельзя: ИНН — публичные данные, и «нашёлся в
+ *  справочнике» доказывает только умение гуглить. Ставит оператор, поговорив
+ *  с заведением. */
+export async function adminVerifyEmployer(
+  employerId: string,
+  verified: boolean,
+): Promise<boolean> {
+  if (!USE_BACKEND) return mock.adminVerifyEmployer(employerId, verified);
+  const { data } = await api.post<{ verified: boolean }>(
+    `/admin/employers/${employerId}/verify`, { verified },
+  );
+  return data.verified;
 }
 
 /** Поиск людей/заведений в админке (по имени, @нику, телефону). */
@@ -469,7 +668,6 @@ export async function adminSearchUsers(q: string): Promise<AdminUser[]> {
   return data;
 }
 
-/** Бесплатно выдать буст/подписку/супер-лайки (комп, поддержка). */
 export interface RepeatPair {
   employer: string;
   worker: string;
@@ -483,9 +681,13 @@ export async function fetchRepeatPairs(): Promise<RepeatPair[]> {
   return data;
 }
 
-/** Закрыть смены, где работник отметился кодом, а заведение промолчало. */
-export async function autoCloseShifts(): Promise<number> {
-  if (!USE_BACKEND) return mock.autoCloseShifts();
+/** Закрыть состоявшиеся смены и начислить комиссию.
+ *
+ *  Смена состоялась, если после её окончания никто не сказал обратного —
+ *  название `autoCloseShifts` осталось от старого правила, когда смену
+ *  закрывали только две нажатые кнопки. */
+export async function settleShifts(): Promise<number> {
+  if (!USE_BACKEND) return mock.settleShifts();
   const { data } = await api.post<{ closed: number }>("/admin/shifts/auto-close", {});
   return data.closed;
 }
@@ -497,17 +699,92 @@ export async function sendShiftReminders(): Promise<number> {
   return data.sent;
 }
 
-export async function adminGrant(
-  ownerId: string,
-  boost: number,
-  superlikes: number,
-): Promise<void> {
-  if (!USE_BACKEND) return mock.adminGrant(ownerId, boost, superlikes);
-  await api.post("/admin/grant", {
-    owner_id: ownerId,
-    boost,
-    superlikes,
+/** Спросить обе стороны про вчерашние смены — единственное предупреждение
+ *  перед списанием комиссии. Ничего не закрывает. */
+export async function askAfterShift(): Promise<number> {
+  if (!USE_BACKEND) return mock.askAfterShift();
+  const { data } = await api.post<{ closed: number }>(
+    "/admin/shifts/close-abandoned", {});
+  return data.closed;
+}
+
+/** Предупредить заведения о завтрашних сменах, на которые никто не откликнулся. */
+export async function sendUnfilledAlerts(): Promise<number> {
+  if (!USE_BACKEND) return mock.sendUnfilledAlerts();
+  const { data } = await api.post<{ sent: number }>(
+    "/admin/shifts/unfilled-alerts", {});
+  return data.sent;
+}
+
+/** Сверить платежи с ЮKassa и дозачислить те, по которым не дошёл вебхук. */
+export async function reconcilePayments(): Promise<number> {
+  if (!USE_BACKEND) return mock.reconcilePayments();
+  const { data } = await api.post<{ credited: number }>(
+    "/admin/payments/reconcile", {});
+  return data.credited ?? 0;
+}
+
+export interface CancelStatRow {
+  ownerId: string;
+  name: string;
+  role: "employer" | "seeker";
+  cancels: number;
+  lateCancels: number;
+  noShows: number;
+  /** Сколько раз сторона заявила «смена не состоялась» — единственный способ
+   *  не платить за договорённую смену, а значит самый дешёвый обход правила
+   *  «молчание = смена состоялась». Сервер это считал, а экран не показывал. */
+  notHeld?: number;
+}
+
+/** Кто систематически отменяет смены и не выходит. */
+export async function fetchCancelStats(days = 60): Promise<CancelStatRow[]> {
+  if (!USE_BACKEND) return mock.fetchCancelStats();
+  const { data } = await api.get<CancelStatRow[]>("/admin/cancel-stats", {
+    params: { days },
   });
+  return data;
+}
+
+/** Списать неоплаченную комиссию: прощена по спору или долг безнадёжен. */
+export async function writeOffCommission(
+  employerId: string,
+  reason: string,
+): Promise<number> {
+  if (!USE_BACKEND) return mock.writeOffCommission();
+  const { data } = await api.post<{ amountRub: number }>(
+    `/admin/commissions/${employerId}/write-off`, { reason });
+  return data.amountRub;
+}
+
+/** Вернуть деньги с баланса заведения (возврат или исправление ошибки). */
+export async function adminRefundWallet(
+  ownerId: string,
+  amountRub: number,
+  note = "",
+): Promise<number> {
+  if (!USE_BACKEND) return mock.adminRefundWallet();
+  const { data } = await api.post<{ balanceRub: number }>(
+    `/admin/wallet/${ownerId}/refund`, { amount_rub: amountRub, note });
+  return data.balanceRub;
+}
+
+export interface PaymentRow {
+  id: string;
+  ownerId: string;
+  sku: string;
+  provider: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+}
+
+/** Журнал платежей: что и кому приходило. */
+export async function fetchPayments(): Promise<PaymentRow[]> {
+  if (!USE_BACKEND) return mock.fetchPayments();
+  const { data } = await api.get<PaymentRow[]>("/admin/purchases");
+  return data;
 }
 
 export interface CommissionRow {
@@ -551,6 +828,9 @@ export interface CommissionInfo {
   pct: number;
   balanceRub: number;
   topupAvailable: boolean;
+  /** Выдаются ли счёт и акт: без реквизитов получателя документы не
+   *  формируются, и кнопки показывать нельзя. */
+  docsAvailable?: boolean;
 }
 
 /** Мой счёт по комиссии (для заведения): сколько накопилось и не просрочен ли. */
@@ -561,6 +841,10 @@ export async function fetchMyCommission(): Promise<CommissionInfo> {
 }
 
 /** Пополнение денежного баланса картой (ЮKassa) — вернёт ссылку на оплату. */
+export interface PaymentUrl {
+  url: string;
+}
+
 export async function walletTopup(amountRub: number): Promise<PaymentUrl> {
   if (!USE_BACKEND) return { url: "https://example.com/pay/wallet_topup" };
   const { data } = await api.post<PaymentUrl>("/billing/wallet/topup", {
@@ -579,6 +863,15 @@ export async function adminRelink(
 }
 
 /**
+ * Завершить все сессии аккаунта («потерял телефон»). Человек просто откроет
+ * приложение заново — вход в Telegram произойдёт сам. Это не блокировка.
+ */
+export async function adminLogoutAll(ownerId: string): Promise<void> {
+  if (!USE_BACKEND) return mock.adminLogoutAll(ownerId);
+  await api.post(`/admin/users/${ownerId}/logout-all`, {});
+}
+
+/**
  * Удаление персональных данных по заявлению (152-ФЗ). Необратимо: профиль
  * обезличивается, привязка к Telegram снимается. Смены и начисленная
  * комиссия остаются — это бухгалтерия.
@@ -592,6 +885,18 @@ export async function adminEraseAccount(
     {},
   );
   return data.removed;
+}
+
+/**
+ * Ссылка на счёт или акт от сервиса заведению (PDF).
+ *
+ * Ресторану-юрлицу без этих двух документов не оплатить по безналу и не
+ * поставить расход. Токен идёт в адресе: PDF открывает браузер по прямой
+ * ссылке, заголовки он не передаёт.
+ */
+export function billingDocUrl(kind: "invoice" | "act"): string {
+  const token = getToken() ?? "";
+  return `${baseURL}/billing/${kind}.pdf?token=${encodeURIComponent(token)}`;
 }
 
 /** Оператор зачисляет аванс на баланс заведения (принял СБП/счёт). */
@@ -640,12 +945,6 @@ export async function fetchBlocked(): Promise<AdminBlocked[]> {
   return data;
 }
 
-
-export async function fetchAdminSubscriptions(): Promise<AdminSubscription[]> {
-  if (!USE_BACKEND) return mock.fetchAdminSubscriptions();
-  const { data } = await api.get<AdminSubscription[]>("/admin/subscriptions");
-  return data;
-}
 
 export interface AddressSuggestion {
   value: string;
@@ -732,35 +1031,53 @@ export async function verifyEmployer(inn: string): Promise<VerifyResult> {
   return data;
 }
 
-/** Загрузка фото: presigned URL → прямой PUT в S3 → публичный URL. */
+/**
+ * Загрузка фото: подписанная форма → прямая отправка в хранилище → публичный URL.
+ *
+ * Форма (а не PUT) нужна ради ограничения размера: подписанный PUT принимает
+ * файл ЛЮБОГО объёма, и одним запросом можно было забить хранилище. Условие
+ * на размер проверяет само хранилище, обойти его нельзя.
+ */
 export async function uploadPhoto(file: File): Promise<string> {
   if (!USE_BACKEND) {
     throw new Error("Загрузка фото доступна только с backend");
   }
-  const { data } = await api.post<{ upload_url: string; public_url: string }>(
+  // Первые 16 байт файла — проба, по которой сервер проверяет НАСТОЯЩИЙ тип.
+  // Заявленному типу верить нельзя: назвать что угодно «image/jpeg» может кто
+  // угодно, а хранилище содержимое не проверяет.
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const headHex = Array.from(head)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  const { data } = await api.post<{
+    upload_url: string;
+    fields: Record<string, string>;
+    public_url: string;
+    max_bytes: number;
+  }>(
     "/uploads/photo-url",
-    { content_type: file.type },
+    { content_type: file.type, head_hex: headHex },
+    // raw: поля формы подписаны хранилищем, переименование ломает подпись.
+    // Заодно это чинило бы саму загрузку: без него адрес хранилища приезжал
+    // как undefined, и файл уходил «в никуда» — на пилоте с подключённым
+    // S3 фото не сохранялось бы вообще.
+    { raw: true },
   );
-  // Прямой PUT в S3 — без наших интерсепторов/JWT.
-  await axios.put(data.upload_url, file, {
-    headers: { "Content-Type": file.type },
-  });
+
+  if (file.size > data.max_bytes) {
+    throw new Error(
+      `Фото больше ${Math.round(data.max_bytes / 1024 / 1024)} МБ — выберите поменьше`,
+    );
+  }
+
+  const form = new FormData();
+  // Поля от хранилища идут ПЕРЕД файлом — иначе подпись не проверится.
+  Object.entries(data.fields).forEach(([k, v]) => form.append(k, v));
+  form.append("file", file);
+  // Прямая отправка в хранилище — без наших интерсепторов и JWT.
+  await axios.post(data.upload_url, form);
   return data.public_url;
 }
 
-export interface PaymentUrl {
-  url: string;
-}
 
-/** Запрос ссылки на оплату ЮKassa (рубли). email — для фискального чека (54-ФЗ). */
-export async function createYookassaPayment(
-  sku: string,
-  email?: string,
-): Promise<PaymentUrl> {
-  if (!USE_BACKEND) return { url: `https://example.com/pay/${sku}` };
-  const { data } = await api.post<PaymentUrl>("/billing/yookassa/payment", {
-    sku,
-    email: email || null,
-  });
-  return data;
-}

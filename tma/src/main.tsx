@@ -6,7 +6,7 @@ import { HashRouter } from "react-router-dom";
 import "./theme/theme.css";
 import "./index.css";
 import { initTelegram } from "./telegram/sdk";
-import { initTheme } from "./lib/theme";
+import { initTheme, syncTelegramTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
 import { reportError } from "./lib/report";
 import { initSentry } from "./lib/sentry";
@@ -25,12 +25,53 @@ window.addEventListener("unhandledrejection", (e) =>
 );
 
 void initSentry();
-void initTelegram();
+// Тему ставим сразу, до первого кадра (иначе вспышка светлого экрана у тех, у
+// кого тёмная), а после подъёма SDK уточняем её по самому Telegram.
 initTheme();
+void initTelegram().then(syncTelegramTheme);
+
+// Установка на домашний экран (вне Telegram). Внутри Mini App приложение уже
+// живёт в оболочке Telegram, и лишний слой там не нужен — поэтому регистрируем
+// service worker, только если запуск обычный, браузерный.
+if ("serviceWorker" in navigator && !window.location.hash.includes("tgWebApp")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* не поддержано или заблокировано — приложение работает как обычно */
+    });
+  });
+}
 // Крупный режим (доступность) — применяем до первого рендера, если включён.
 if (localStorage.getItem("ss_large") === "1") {
   document.body.dataset.large = "1";
 }
+// Кнопка из уведомления бота открывает приложение с ?go=<экран>. Без этого
+// человек получал «отметьтесь на смене», жал кнопку и попадал в ленту
+// вакансий — искать нужный экран самому. Хэш для этого не годится: Telegram
+// кладёт туда initData и наш собственный #/путь затирается.
+const GO_SCREENS: Record<string, string> = {
+  shifts: "/shifts",
+  matches: "/matches",
+  vacancies: "/vacancy/my",
+  applicants: "/applicants",
+  profile: "/profile",
+};
+try {
+  const q = new URLSearchParams(window.location.search);
+  const go = q.get("go") ?? "";
+  // id — какую именно запись открыть. Уведомление «Новое сообщение» ведёт
+  // сразу в нужный разговор, а не в общий список: искать чат заново на каждое
+  // сообщение — ровно та причина, по которой переписку уводят в личку.
+  // Пропускаем только безопасные идентификаторы, чтобы из ссылки нельзя было
+  // подставить произвольный путь в адресе.
+  const id = (q.get("id") ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  const path = go === "chat" && id ? `/chat/${id}` : GO_SCREENS[go];
+  if (path && localStorage.getItem("ss_jwt")) {
+    window.location.hash = `#${path}`;
+  }
+} catch {
+  /* нет query — обычный запуск */
+}
+
 // «open» — один раз за сессию, чтобы не раздувать вершину воронки на перезапусках.
 if (!sessionStorage.getItem("ss_open")) {
   sessionStorage.setItem("ss_open", "1");

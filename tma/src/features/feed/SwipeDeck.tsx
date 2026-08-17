@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSprings, animated, to, type SpringValue } from "@react-spring/web";
 import { useDrag } from "@use-gesture/react";
 import type { SwipeDirection } from "@/types/domain";
@@ -8,22 +8,34 @@ interface Props<T> {
   items: T[];
   keyOf: (item: T) => string;
   renderCard: (item: T) => React.ReactNode;
-  onSwipe: (item: T, dir: SwipeDirection) => void;
+  /** Может вернуть промис: если он отклонится, карточка вернётся в колоду. */
+  onSwipe: (item: T, dir: SwipeDirection) => void | Promise<unknown>;
   onEmpty?: () => void;
   controllerRef?: (fn: (dir: SwipeDirection) => void) => void;
 }
 
 const VISIBLE = 3;
 
-function dirFrom(mx: number, my: number, sx: number, sy: number): SwipeDirection {
-  if (sy < 0 || (my < -80 && Math.abs(my) > Math.abs(mx))) return "superlike";
+// Свайп вбок: вправо — отклик, влево — пропустить. Свайпа вверх больше нет
+// (им отправляли супер-лайк «Срочно»), поэтому вертикаль карточку не двигает.
+function dirFrom(mx: number, sx: number): SwipeDirection {
   if (sx !== 0) return sx > 0 ? "like" : "dislike";
   return mx > 0 ? "like" : "dislike";
 }
 
 export function SwipeDeck<T>(props: Props<T>) {
   const { items, renderCard, onSwipe, keyOf } = props;
+  // Улетевшие карточки помним ПО НОМЕРУ, но сбрасываем при смене набора.
+  // Раньше номера жили вечно: человек свайпал две карточки, менял город — и
+  // первые две смены нового города считались уже просмотренными. Он их не
+  // видел никогда и не мог понять почему.
   const [gone] = useState(() => new Set<number>());
+  const deckKey = items.map((it) => keyOf(it)).join("|");
+  const lastDeck = useRef(deckKey);
+  if (lastDeck.current !== deckKey) {
+    lastDeck.current = deckKey;
+    gone.clear();
+  }
 
   const [springs, apiRef] = useSprings(items.length, (i) => ({
     x: 0,
@@ -37,18 +49,30 @@ export function SwipeDeck<T>(props: Props<T>) {
     if (gone.has(index)) return;
     gone.add(index);
     haptic(dir === "dislike" ? "light" : "medium");
-    const dx = dir === "dislike" ? -1 : dir === "like" ? 1 : 0;
-    const dy = dir === "superlike" ? -1 : 0;
+    const dx = dir === "dislike" ? -1 : 1;
     apiRef.start((i) => {
       if (i !== index) return {};
       return {
         x: (200 + window.innerWidth) * dx,
-        y: dy ? -(200 + window.innerHeight) : 0,
+        y: 0,
         rot: dx * 18,
         config: { tension: 200, friction: 28 },
       };
     });
-    onSwipe(items[index], dir);
+    // Возврат карточки, если сервер отказал. Раньше она улетала сразу и
+    // насовсем: человек видел ошибку («смена уже занята», «оплатите счёт»),
+    // а смена исчезала из колоды — вернуться к ней было нельзя ничем.
+    const back = () => {
+      gone.delete(index);
+      apiRef.start((i) => (i === index
+        ? { x: 0, y: 0, rot: 0, config: { tension: 220, friction: 26 } }
+        : {}));
+      restack();
+    };
+    const res = onSwipe(items[index], dir) as unknown;
+    if (res && typeof (res as Promise<unknown>).catch === "function") {
+      (res as Promise<unknown>).catch(back);
+    }
     restack();
     if (gone.size === items.length) props.onEmpty?.();
   }
@@ -100,11 +124,11 @@ export function SwipeDeck<T>(props: Props<T>) {
   }, [apiRef, gone]);
 
   const bind = useDrag(
-    ({ args: [index], active, movement: [mx, my], swipe: [sx, sy], last }) => {
-      // Триггер: длинный свайп ИЛИ быстрый флик (swipe от use-gesture).
-      const trigger = sx !== 0 || sy !== 0 || Math.abs(mx) > 110 || my < -110;
+    ({ args: [index], active, movement: [mx, my], swipe: [sx], last }) => {
+      // Триггер: длинный свайп вбок ИЛИ быстрый флик (swipe от use-gesture).
+      const trigger = sx !== 0 || Math.abs(mx) > 110;
       if (last && trigger) {
-        fling(index as number, dirFrom(mx, my, sx, sy));
+        fling(index as number, dirFrom(mx, sx));
         return;
       }
       apiRef.start((i) => {
@@ -141,7 +165,7 @@ export function SwipeDeck<T>(props: Props<T>) {
           >
             {renderCard(item)}
             <Tint x={style.x} />
-            <Stamps x={style.x} y={style.y} />
+            <Stamps x={style.x} />
           </animated.div>
         );
       })}
@@ -171,7 +195,7 @@ function Tint({ x }: { x: SpringValue<number> }) {
   );
 }
 
-function Stamps({ x, y }: { x: SpringValue<number>; y: SpringValue<number> }) {
+function Stamps({ x }: { x: SpringValue<number> }) {
   return (
     <>
       <animated.div
@@ -195,19 +219,6 @@ function Stamps({ x, y }: { x: SpringValue<number>; y: SpringValue<number> }) {
         }}
       >
         НЕТ
-      </animated.div>
-      <animated.div
-        className="stamp"
-        style={{
-          left: "50%",
-          marginLeft: -70,
-          top: "auto",
-          bottom: 90,
-          color: "var(--super)",
-          opacity: to(y, (v) => Math.max(0, Math.min(1, -v / 80))),
-        }}
-      >
-        СРОЧНО
       </animated.div>
     </>
   );

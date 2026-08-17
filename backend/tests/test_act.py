@@ -66,8 +66,16 @@ def test_sum_in_words(amount, words):
 def test_words_reject_impossible_amounts():
     with pytest.raises(ValueError):
         rubles_in_words(-1)
-    with pytest.raises(ValueError):
-        rubles_in_words(1_000_000)
+
+
+def test_big_sums_do_not_break_the_document():
+    """Раньше от миллиона функция бросала исключение — и акт отвечал 500-й.
+
+    Миллион достижим штатно: ставка до 1 000 000 ₽ разрешена схемой, да и долг
+    заведения за месяц столько набрать может. Документ важнее красоты прописи.
+    """
+    text = rubles_in_words(1_600_000)
+    assert "1 600 000" in text and "рублей" in text
 
 
 def test_plural_forms():
@@ -99,13 +107,30 @@ def _confirmed_match(client):
     mid = sw["match_id"]
     client.post(f"/matches/{mid}/confirm", headers=sh)
     client.post(f"/matches/{mid}/confirm", headers=eh)
-    return mid, seek["access_token"]
+
+    # Доводим смену до закрытия: акт — документ о ВЫПОЛНЕННОЙ работе.
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    from .shifttime import age_shift
+
+    age_shift(mid)
+    db = SessionLocal()
+    try:
+        shift_date = db.get(Vacancy, db.get(Match, mid).vacancy_id).date
+    finally:
+        db.close()
+    code = [m for m in client.get("/matches", headers=eh).json()
+            if m["id"] == mid][0]["checkin_code"]
+    client.post(f"/matches/{mid}/checkin", headers=sh, json={"code": code})
+    client.post(f"/matches/{mid}/attendance", headers=eh, json={"attended": True})
+    return mid, seek["access_token"], shift_date
 
 
 def test_act_contains_calculation_and_signatures(client):
     """В акте видно, откуда взялась сумма, и есть где расписаться."""
     pypdf = pytest.importorskip("pypdf")
-    mid, token = _confirmed_match(client)
+    mid, token, shift_date = _confirmed_match(client)
 
     r = client.get(f"/matches/{mid}/act.pdf", params={"token": token})
     assert r.status_code == 200
@@ -121,5 +146,40 @@ def test_act_contains_calculation_and_signatures(client):
     assert "Две тысячи восемьсот рублей" in text      # прописью
     assert "Заказчик:" in text and "Исполнитель:" in text
     assert "подпись" in text
-    # Дата по-русски, а не в ISO.
-    assert date.fromisoformat(local_today()).strftime("%d.%m.%Y") in text
+    # Дата по-русски, а не в ISO — и именно дата смены, а не «вчера»
+    # по часам сервера: сервер живёт в UTC, а смена — по Москве.
+    assert date.fromisoformat(shift_date).strftime("%d.%m.%Y") in text
+
+
+def test_act_shows_the_hours_that_were_actually_worked(client):
+    """Уточнили часы — акт обязан показать их, а не план.
+
+    Акт считал по расписанию смены. Если заведение отметило, что человек ушёл
+    раньше, в приложении он видел 1 600 ₽ и комиссия бралась с 1 600 ₽, а в
+    акте — документе, который он несёт в свою бухгалтерию, — стояло 2 800 ₽ за
+    восемь часов, которых не было.
+    """
+    pypdf = pytest.importorskip("pypdf")
+    import io
+
+    from app.db import SessionLocal
+    from app.models import Match
+
+    mid, token, _shift_date = _confirmed_match(client)
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        m.actual_minutes = 240          # ушёл через 4 часа вместо 8
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.get(f"/matches/{mid}/act.pdf", params={"token": token})
+    assert r.status_code == 200, r.text
+    text = " ".join(
+        pypdf.PdfReader(io.BytesIO(r.content)).pages[0].extract_text().split()
+    )
+    assert "4 часа" in text, "часы — фактические"
+    assert "1400" in text, "350 ₽ × 4 ч = 1400 ₽"
+    assert "2800" not in text, "плановой суммы в акте быть не должно"
+    assert "по фактической длительности" in text

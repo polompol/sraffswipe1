@@ -41,8 +41,12 @@ class User(Base):
     birth_date: Mapped[str] = mapped_column(String, default="")  # ISO yyyy-mm-dd
     city: Mapped[str] = mapped_column(String, default="")
     district: Mapped[str] = mapped_column(String, default="")
-    lat: Mapped[float] = mapped_column(Float, default=0.0)
-    lng: Mapped[float] = mapped_column(Float, default=0.0)
+    # Координат жилья здесь НЕТ и быть не должно. Поля lat/lng существовали,
+    # но их никто не заполнял и не читал: расстояние до смены считается от
+    # координат телефона, которые приходят в запросе и нигде не сохраняются.
+    # Мёртвое поле с таким смыслом — ловушка: рано или поздно в него начали бы
+    # писать настоящий адрес человека. Принцип минимизации 152-ФЗ: не хранить
+    # то, что не нужно.
     roles: Mapped[str] = mapped_column(String, default="")  # csv: waiter,barista
     med_book: Mapped[str] = mapped_column(String, default="no")  # yes|no|expired
     self_employed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -56,6 +60,13 @@ class User(Base):
     available_today: Mapped[bool] = mapped_column(Boolean, default=False)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     warnings: Mapped[int] = mapped_column(Integer, default=0)  # предупреждения
+    # Поколение токенов. Номер зашит в токен; «разлогинить везде» = увеличить
+    # его, и все ранее выданные токены разом перестают подходить. Нужно при
+    # потере телефона и при переносе аккаунта на новый Telegram — иначе у
+    # прежнего владельца доступ жил бы до конца срока.
+    # Счётчик, а не отметка времени: время в токене хранится с точностью до
+    # секунды, и вход в ту же секунду, что и отзыв, различить невозможно.
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -74,6 +85,11 @@ class Employer(Base):
     inn: Mapped[str] = mapped_column(String, default="")
     ogrn: Mapped[str] = mapped_column(String, default="")
     address: Mapped[str] = mapped_column(String, default="")
+    # Город заведения. Его не было вовсе — был только адрес строкой из DaData.
+    # Пока город один, это не мешало, но с выходом в другие города именно по
+    # нему заведению показывается лента кандидатов: без него кафе в Казани
+    # листало бы москвичей.
+    city: Mapped[str] = mapped_column(String, default="", index=True)
     lat: Mapped[float] = mapped_column(Float, default=0.0)
     lng: Mapped[float] = mapped_column(Float, default=0.0)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -82,6 +98,13 @@ class Employer(Base):
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     warnings: Mapped[int] = mapped_column(Integer, default=0)  # предупреждения
+    # Поколение токенов. Номер зашит в токен; «разлогинить везде» = увеличить
+    # его, и все ранее выданные токены разом перестают подходить. Нужно при
+    # потере телефона и при переносе аккаунта на новый Telegram — иначе у
+    # прежнего владельца доступ жил бы до конца срока.
+    # Счётчик, а не отметка времени: время в токене хранится с точностью до
+    # секунды, и вход в ту же секунду, что и отзыв, различить невозможно.
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     vacancies: Mapped[list["Vacancy"]] = relationship(back_populates="employer")
@@ -114,6 +137,10 @@ class Vacancy(Base):
     # none|individual|shared (нет / себе / поровну между сменой).
     tips: Mapped[str] = mapped_column(String, default="none")
     description: Mapped[str] = mapped_column(Text, default="")
+    # Сколько человек нужно на смену. Банкет, выходные, инвентаризация — там
+    # почти всегда нужен не один. Раньше поля не было: заведение публиковало
+    # пять одинаковых объявлений, а соискатель не понимал, сколько мест.
+    headcount: Mapped[int] = mapped_column(Integer, default=1)
     require_med_book: Mapped[bool] = mapped_column(Boolean, default=False)
     require_experience: Mapped[bool] = mapped_column(Boolean, default=False)
     lat: Mapped[float] = mapped_column(Float, default=0.0)
@@ -141,7 +168,7 @@ class Swipe(Base):
     swiper_id: Mapped[str] = mapped_column(String, index=True)
     target_id: Mapped[str] = mapped_column(String, index=True)
     target_type: Mapped[str] = mapped_column(String)  # vacancy|user
-    direction: Mapped[str] = mapped_column(String)  # like|superlike|dislike
+    direction: Mapped[str] = mapped_column(String)  # like|dislike
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -154,9 +181,16 @@ class Match(Base):
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(String, index=True)
-    employer_id: Mapped[str] = mapped_column(String, index=True)
-    vacancy_id: Mapped[str] = mapped_column(String, index=True)
+    # Связи с людьми, заведением и сменой — настоящие (внешние ключи). Без них
+    # база разрешала мэтч на несуществующую смену: строка есть, смены нет, и
+    # экран у человека молча пустой, а найти причину не по чему.
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    employer_id: Mapped[str] = mapped_column(
+        ForeignKey("employers.id"), index=True
+    )
+    vacancy_id: Mapped[str] = mapped_column(
+        ForeignKey("vacancies.id"), index=True
+    )
     status: Mapped[str] = mapped_column(String, default="matched")
     confirmed_by_seeker: Mapped[bool] = mapped_column(Boolean, default=False)
     confirmed_by_employer: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -167,14 +201,38 @@ class Match(Base):
     # Взаимное подтверждение выхода: закрываем смену, только когда ОБЕ стороны
     # подтвердили (противоположные стимулы → сами полицейские друг другу).
     seeker_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Отметился ли работник ИМЕННО КОДОМ. Код знает только заведение, поэтому
-    # введённый код — доказательство выхода, и по нему смену можно закрыть
-    # автоматически, если заведение молчит. Гео — доказательство слабее
-    # (рядом можно оказаться и не работая), по нему авто-закрытия нет.
+    # Отметился ли работник кодом заведения. Код знает только заведение,
+    # поэтому названный код — доказательство того, что человек был на месте и
+    # говорил с заведением. Это НЕ триггер денег (смена закрывается сама, см.
+    # settle_shifts), а доказательство в споре: заведение не может тихо
+    # списать такую смену в неявку — она уходит к оператору.
     checkin_by_code: Mapped[bool] = mapped_column(Boolean, default=False)
+    # День, когда обеим сторонам напомнили «вчера была смена — если что-то
+    # пошло не так, скажите сейчас». Чтобы не слать это повторно.
+    settle_notified_on: Mapped[str] = mapped_column(String, default="")
+    # Кто заявил, что смены не было: seeker|employer. Пусто — никто.
+    # Заявление одной стороны при молчании другой закрывает смену без
+    # комиссии; при возражении второй — уходит в спор.
+    not_held_by: Mapped[str] = mapped_column(String, default="")
     employer_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
     # Спор (стороны не сошлись / работник не может отметиться) → к оператору.
     disputed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Фактическая длительность смены в минутах, если она разошлась с
+    # объявленной: человек опоздал, ушёл раньше или задержался. Пусто —
+    # смена прошла как договаривались, платим по объявлению.
+    actual_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Предложение перенести смену: заведение предлагает, работник соглашается.
+    reschedule_date: Mapped[str] = mapped_column(String, default="")
+    reschedule_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reschedule_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Кто отменил смену: seeker|employer. Пусто — не отменяли.
+    # Отмена — не то же самое, что неявка: человек, предупредивший заранее,
+    # не должен получать ту же отметку, что и пропавший без предупреждения.
+    cancelled_by: Mapped[str] = mapped_column(String, default="")
+    cancel_reason: Mapped[str] = mapped_column(String, default="")
+    # Отменил ли слишком поздно (за считаные часы). Поздняя отмена по вреду
+    # почти равна неявке: заменить человека заведение уже не успеет.
+    cancelled_late: Mapped[bool] = mapped_column(Boolean, default=False)
     # Дата последнего напоминания о смене (YYYY-MM-DD). Нужна, чтобы повторный
     # запуск рассылки (оператор нажал дважды / крон) не слал людям дубли.
     reminded_on: Mapped[str] = mapped_column(String, default="")
@@ -187,7 +245,9 @@ class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    match_id: Mapped[str] = mapped_column(String, index=True)
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.id"), index=True)
+    # Отправитель НЕ внешний ключ: у системных сообщений здесь стоит слово
+    # «system», а не чей-то id.
     sender_id: Mapped[str] = mapped_column(String)
     text: Mapped[str] = mapped_column(Text)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -207,28 +267,21 @@ class PhoneCode(Base):
 # ---- Монетизация / entitlements ----
 
 
-class Subscription(Base):
-    """Подписка работодателя (ЮKassa). Активный тариф и срок."""
-
-    __tablename__ = "subscriptions"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    owner_id: Mapped[str] = mapped_column(String, index=True)  # employer.id
-    plan: Mapped[str] = mapped_column(String, default="free")  # free|pro|business
-    active: Mapped[bool] = mapped_column(Boolean, default=False)
-    renews_at: Mapped[str | None] = mapped_column(String, nullable=True)  # ISO
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
-
-
 class Entitlement(Base):
-    """Баланс прав пользователя: супер-лайки, boost, premium, верификация."""
+    """Права пользователя: денежный баланс и верификация компании.
+
+    Подписок и премиума тут нет: единственная модель заработка — комиссия с
+    закрытой смены. Поля от прежней схемы удалены, чтобы админка не показывала
+    людям тариф «FREE», которого не существует.
+    """
 
     __tablename__ = "entitlements"
 
     owner_id: Mapped[str] = mapped_column(String, primary_key=True)
-    superlike_balance: Mapped[int] = mapped_column(Integer, default=1)
-    boost_balance: Mapped[int] = mapped_column(Integer, default=0)
-    seeker_premium: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Наследие «платной верификации», которой в сервисе нет. Бейдж «Проверено»
+    # живёт на самом заведении (Employer.verified) и ставится оператором
+    # руками. Колонку оставили, чтобы не гонять миграцию ради пустого поля;
+    # читать её не нужно ничему.
     employer_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     # Денежный баланс заведения, ₽ — аванс, с которого автоматически
     # списывается комиссия за закрытые смены. Пополнение: оператор (принял
@@ -260,23 +313,15 @@ class Purchase(Base):
     sku: Mapped[str] = mapped_column(String)
     provider: Mapped[str] = mapped_column(String)  # yookassa
     amount: Mapped[int] = mapped_column(Integer, default=0)
-    currency: Mapped[str] = mapped_column(String, default="XTR")
+    # Рубли: единственный рельс — ЮKassa. Раньше по умолчанию стояло "XTR"
+    # (Telegram Stars) — остаток от удалённой механики, который вводил в
+    # заблуждение любого, кто откроет таблицу платежей.
+    currency: Mapped[str] = mapped_column(String, default="RUB")
     # pending|paid|failed
     status: Mapped[str] = mapped_column(String, default="pending")
     provider_charge_id: Mapped[str | None] = mapped_column(
         String, unique=True, index=True, nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
-
-
-class Boost(Base):
-    """Активный boost вакансии: поднятие в ленте до момента expires_at."""
-
-    __tablename__ = "boosts"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    vacancy_id: Mapped[str] = mapped_column(String, index=True)
-    expires_at: Mapped[str] = mapped_column(String)  # ISO
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -304,14 +349,30 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
-class Streak(Base):
-    """Серия ежедневных заходов (геймификация вовлечения)."""
+class JobRun(Base):
+    """Отметка «ежедневная задача сегодня уже отработала».
 
-    __tablename__ = "streaks"
+    Раньше эта отметка лежала в таблице событий (`events`) рядом с аналитикой.
+    А в `events` пишет ПУБЛИЧНАЯ ручка `POST /events` — без авторизации, чтобы
+    считать воронку ещё до входа. Имя и содержимое события задаёт клиент, и
+    строка получалась побайтово такой же, как у планировщика: аноним пятью
+    запросами объявлял все задачи выполненными на сутки вперёд. Дальше сервис
+    молча замирал — без напоминаний о сменах, без предупреждений заведениям,
+    без авто-закрытия смен (а значит и без комиссии) и без сверки платежей.
+    В логах при этом всё выглядело нормально.
 
-    owner_id: Mapped[str] = mapped_column(String, primary_key=True)
-    count: Mapped[int] = mapped_column(Integer, default=1)
-    last_active: Mapped[str] = mapped_column(String, default="")  # ISO date
+    Поэтому отметки живут в своей таблице, куда пишет только планировщик.
+    Уникальность (job, day) заодно закрывает гонку двух процессов: второй
+    получит ошибку вставки, а не отправит людям второе сообщение.
+    """
+
+    __tablename__ = "job_runs"
+    __table_args__ = (UniqueConstraint("job", "day", name="uq_job_run_day"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    job: Mapped[str] = mapped_column(String, index=True)
+    day: Mapped[str] = mapped_column(String, index=True)  # ГГГГ-ММ-ДД, местная
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
 class SavedSearch(Base):
@@ -331,9 +392,17 @@ class Review(Base):
     """Отзыв после смены: оценка одной стороны другой (1..5)."""
 
     __tablename__ = "reviews"
+    # Один отзыв на смену от одного человека. Проверка была только в коде, а
+    # форма оценки показывается сразу в двух местах («Мэтчи» и «Смены») —
+    # два быстрых нажатия проскакивали мимо неё и дважды двигали рейтинг.
+    __table_args__ = (
+        UniqueConstraint("match_id", "rater_id", name="uq_review_match_rater"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    match_id: Mapped[str] = mapped_column(String, index=True)
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.id"), index=True)
+    # Кто кого оценил — id человека ИЛИ заведения (две разные таблицы),
+    # поэтому внешнего ключа здесь быть не может.
     rater_id: Mapped[str] = mapped_column(String, index=True)
     ratee_id: Mapped[str] = mapped_column(String, index=True)
     stars: Mapped[int] = mapped_column(Integer, default=5)
@@ -377,9 +446,17 @@ class Commission(Base):
     __tablename__ = "commissions"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    employer_id: Mapped[str] = mapped_column(String, index=True)
-    match_id: Mapped[str] = mapped_column(String, unique=True)  # 1 на смену
+    employer_id: Mapped[str] = mapped_column(
+        ForeignKey("employers.id"), index=True
+    )
+    # 1 на смену: уникальность — главная защита от двойного начисления.
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.id"), unique=True)
     shift_pay: Mapped[int] = mapped_column(Integer, default=0)  # оплата смены, ₽
     amount: Mapped[int] = mapped_column(Integer, default=0)     # комиссия, ₽
-    status: Mapped[str] = mapped_column(String, default="pending")  # pending|paid
+    # pending — к оплате, paid — деньги получены, written_off — списано
+    # оператором (прощено по спору или признано безнадёжным долгом).
+    status: Mapped[str] = mapped_column(String, default="pending")
+    # Причина списания — обязательна при write-off: через полгода никто не
+    # вспомнит, почему конкретное начисление обнулили.
+    note: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

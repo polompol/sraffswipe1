@@ -162,7 +162,7 @@ def test_profile_completion_grows_as_fields_fill(client):
     assert 0 <= start < 100
     # Дозаполняем ключевые поля — процент растёт до 100.
     client.put("/me", headers=_hdr(seeker_token), json={
-        "birth_date": "2000-01-01", "city": "Москва",
+        "name": "Анна", "birth_date": "2000-01-01", "city": "Москва",
         "roles": ["barista"], "photo_url": "https://x/p.jpg",
         "about": "Опыт 2 года",
     })
@@ -170,6 +170,16 @@ def test_profile_completion_grows_as_fields_fill(client):
         "profileCompletion"]
     assert full == 100
     assert full > start
+
+
+def test_name_counts_towards_completion(client):
+    """Имя обязано двигать шкалу: безымянная карточка — худшее, что видит
+    заведение, а раньше заполнение имени не меняло процент вообще."""
+    token, _ = _auth(client, "seeker")
+    before = client.get("/me", headers=_hdr(token)).json()["profileCompletion"]
+    client.put("/me", headers=_hdr(token), json={"name": "Анна Петрова"})
+    after = client.get("/me", headers=_hdr(token)).json()["profileCompletion"]
+    assert after > before
 
 
 def test_feed_excludes_already_swiped_vacancy(client):
@@ -222,6 +232,7 @@ def test_invites_shows_employers_who_liked_me(client):
 
 def test_mutual_checkin_closes_only_when_both_confirm(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    _age(match_id)  # закрыть смену раньше её окончания нельзя
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
     assert code and len(code) == 6
@@ -240,14 +251,18 @@ def test_mutual_checkin_closes_only_when_both_confirm(client):
     assert done["status"] == "completed" and done["checked_in"] is True
 
 
-def test_checkin_geo_and_code_helpers(client):
+def test_checkin_requires_the_venue_code(client):
+    """Отметка «я на смене» — только кодом заведения.
+
+    Геолокацию убрали: она просила разрешение на местоположение (первое, на
+    чём люди закрывают приложение), не работала в подвалах и на кухнях и
+    ничего не доказывала — рядом с кафе можно оказаться и не работая.
+    """
     _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
-    # Гео вдалеке — отказ; на месте — отметка проходит.
     assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                       json={"lat": 55.0, "lng": 38.5}).status_code == 400
-    r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                    json={"lat": 55.75, "lng": 37.61})
-    assert r.status_code == 200 and r.json()["seeker_checked_in"] is True
+                       json={"lat": 55.75, "lng": 37.61}).status_code == 400
+    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                       json={"code": "000000"}).status_code == 400
 
 
 def test_commission_accrued_on_close(client):
@@ -255,6 +270,7 @@ def test_commission_accrued_on_close(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
@@ -325,10 +341,21 @@ def test_blocked_user_cannot_pull_act(client):
     assert banned.status_code == 403
 
 
+def _age(match_id: str, days: int = 0) -> None:
+    """Перемотать смену в прошлое: закрыть её можно только после окончания."""
+    from .shifttime import age_shift
+
+    age_shift(match_id, days)
+
+
 def _close_shift(client, emp_token, seeker_token, match_id):
-    """Взаимное подтверждение: работник по коду + заведение «пришёл»."""
+    """Взаимное подтверждение: работник по коду + заведение «пришёл».
+
+    Сначала доводим смену до конца — раньше её закрыть нельзя."""
+    _age(match_id)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
@@ -408,7 +435,7 @@ def test_overdue_blocks_employer_positive_swipes(client):
     assert r2.status_code == 200
 
 
-def test_overdue_blocks_urgent_and_boost(client):
+def test_overdue_blocks_urgent(client):
     from datetime import UTC, datetime, timedelta
 
     from app.db import SessionLocal
@@ -423,10 +450,8 @@ def test_overdue_blocks_urgent_and_boost(client):
     )
     db.commit()
     db.close()
-    # Должник не может ни продвигать вакансию, ни рассылать «Срочно».
+    # Должник не может рассылать «Срочно» доступным рядом.
     assert client.post(f"/vacancies/{vac['id']}/urgent",
-                       headers=_hdr(emp_token)).status_code == 402
-    assert client.post(f"/vacancies/{vac['id']}/boost",
                        headers=_hdr(emp_token)).status_code == 402
 
 
@@ -628,6 +653,7 @@ def test_conflict_creates_dispute(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     # Работник отметился, а заведение говорит «не вышел» → спор, не закрываем.
@@ -741,20 +767,16 @@ def test_invites_forbidden_for_employer(client):
     ).status_code == 403
 
 
-def test_activity_feed_shape(client):
+def test_activity_feed_is_gone(client):
+    """«Живой ленты активности» больше нет.
+
+    Её никто не показывал: приложение этот адрес не запрашивало ни разу, а
+    сервер на каждый запрос выбирал чужие смены — лишняя работа и лишняя
+    поверхность вокруг данных других людей.
+    """
     seeker_token, _ = _auth(client, "seeker")
-    r = client.get("/activity/recent", headers=_hdr(seeker_token))
-    assert r.status_code == 200
-    body = r.json()
-    assert "items" in body and isinstance(body["items"], list)
-    # Соискатель существует → «ищут сейчас» не ноль (fallback на число юзеров).
-    assert body["searching_now"] >= 1
-
-
-def test_activity_shows_closed_shift(client):
-    _, _, seeker_token, _, _, _ = _full_shift_cycle(client)
-    body = client.get("/activity/recent", headers=_hdr(seeker_token)).json()
-    assert any(it["kind"] == "closed" for it in body["items"])
+    assert client.get("/activity/recent",
+                      headers=_hdr(seeker_token)).status_code == 404
 
 
 def test_favorites_add_list_remove(client):
@@ -789,7 +811,11 @@ def test_attendance_and_reliability(client):
     assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(seeker_token),
                        json={"attended": True}).status_code == 403
 
-    # работодатель смены отмечает «не вышел»
+    # работодатель смены отмечает «не вышел» — но только ПОСЛЕ смены: до её
+    # окончания это отправляло человека работать по уже закрытой смене.
+    assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                       json={"attended": False}).status_code == 409
+    _age(match_id)
     r = client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
                     json={"attended": False})
     assert r.status_code == 200 and r.json()["noShow"] is True
@@ -802,12 +828,20 @@ def test_attendance_and_reliability(client):
     assert me["shifts_total"] == 1
     assert me["shifts_attended"] == 0
 
-    # «Вышел» засчитывается только при ЗАКРЫТОЙ смене (взаимное подтверждение):
-    # работник отмечается кодом, заведение подтверждает «пришёл» → completed.
-    _close_shift(client, emp_token, seeker_token, match_id)
-    workers = client.get("/employer/workers", headers=_hdr(emp_token)).json()
-    me = next(c for c in workers if c["id"] == sid)
-    assert me["shifts_attended"] == 1 and me["shifts_total"] == 1
+    # Отмеченную неявку нельзя «переиграть» на той же смене: она закрыта.
+    # Раньше отметка «не вышел» оставляла смену подтверждённой, и её можно
+    # было закрыть заново — а ночной расчёт делал это сам, снимая неявку.
+    assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                       json={"attended": True}).status_code == 400
+
+    # «Вышел» засчитывается по ЗАКРЫТОЙ смене — проверяем на следующей.
+    # Аккаунт тот же (в тестах вход без подписи даёт один tg_id), поэтому в
+    # надёжности накапливаются обе смены: одна неявка и одна закрытая.
+    emp2, _, seeker2, sid2, _, match2 = _full_shift_cycle(client)
+    _close_shift(client, emp2, seeker2, match2)
+    workers = client.get("/employer/workers", headers=_hdr(emp2)).json()
+    other = next(c for c in workers if c["id"] == sid2)
+    assert other["shifts_total"] == 2 and other["shifts_attended"] == 1
 
 
 def test_my_workers_and_invite_again(client):

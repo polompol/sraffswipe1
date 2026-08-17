@@ -1,0 +1,14 @@
+# Контекст сборки образа — это backend/, и корневой .dockerignore сюда не
+# распространяется: docker читает его только из корня контекста. Без этого
+# файла в образ уезжали .pyc от другой версии Python и локальная база.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.sqlite3
+.env
+.coverage
+htmlcov/

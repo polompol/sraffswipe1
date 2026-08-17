@@ -14,9 +14,8 @@ import {
   track,
   type FeedFilters,
 } from "@/api/endpoints";
-import { todayISO, estimatedPay } from "@/lib/format";
+import { todayISO } from "@/lib/format";
 import { useGeo } from "@/lib/useGeo";
-import { CountUp } from "@/components/CountUp";
 import { pop } from "@/lib/sfx";
 import { SwipeDeck } from "./SwipeDeck";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
@@ -27,16 +26,14 @@ import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/Button";
-import { PILOT_MODE } from "@/lib/flags";
 import {
   IconSkip,
-  IconSuper,
   IconLike,
   IconFilter,
-  IconBolt,
   IconList,
   IconCards,
   IconFire,
@@ -124,7 +121,6 @@ export function FeedPage() {
       (filters.date_from ? 1 : 0) +
       (filters.rate_type ? 1 : 0) +
       (filters.no_med_book ? 1 : 0) +
-      (filters.no_experience ? 1 : 0) +
       (filters.tips_only ? 1 : 0) +
       (filters.verified_only ? 1 : 0)
     : (filters.role ? 1 : 0) +
@@ -142,13 +138,6 @@ export function FeedPage() {
     queryKey: ["feed", role, feedFilters],
     queryFn: () => fetchFeed(role, feedFilters),
   });
-
-  // «Деньги рядом сейчас» — сумма оплат всех смен в ленте. Money-магнит:
-  // человек заходит посмотреть, сколько денег лежит рядом прямо сейчас.
-  const moneyNear =
-    isSeeker && data
-      ? (data as Vacancy[]).reduce((s, v) => s + estimatedPay(v), 0)
-      : 0;
 
   const { data: searches } = useQuery({
     queryKey: ["saved-searches"],
@@ -173,38 +162,53 @@ export function FeedPage() {
     track("swipe", { dir });
     try {
       const res = await sendSwipe(item.id, targetType, dir);
-      if (res.matched && res.matchId && isSeeker) {
+      if (res.matched && res.matchId) {
         track("match");
         pop();
-        const v = item as Vacancy;
-        setMatch({
-          id: res.matchId,
-          seekerId: "me",
-          employerId: v.employerId,
-          vacancyId: v.id,
-          status: "matched",
-          confirmedBySeeker: false,
-          confirmedByEmployer: false,
-          companyName: v.companyName,
-          companyPhotoUrl: v.companyPhotoUrl,
-          role: v.role,
-        });
-        return false; // мэтч → оверлей, тост не нужен
+        if (isSeeker) {
+          const v = item as Vacancy;
+          setMatch({
+            id: res.matchId,
+            seekerId: "me",
+            employerId: v.employerId,
+            vacancyId: v.id,
+            status: "matched",
+            confirmedBySeeker: false,
+            confirmedByEmployer: false,
+            companyName: v.companyName,
+            companyPhotoUrl: v.companyPhotoUrl,
+            role: v.role,
+          });
+          return false; // мэтч → оверлей, тост не нужен
+        }
+        // Заведение о мэтче не узнавало вообще: карточка улетала, экран не
+        // менялся. Человеку уже ушло уведомление и открылся чат, а владелец
+        // кофейни находил его случайно, зайдя в «Мэтчи».
+        toast("Взаимно! Открылся чат — договоритесь о смене", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+        return false;
       }
-      return dir === "like" || dir === "superlike";
+      return dir === "like";
     } catch (e) {
-      // 402 — закончились супер-лайки (ведём в тарифы), 429 — слишком часто.
-      const status = (e as { response?: { status?: number } })?.response?.status;
-      if (status === 402) {
-        toast("Срочные закончились — откликайтесь обычным лайком", "error");
-      } else if (status === 429) {
-        toast("Слишком много действий подряд — подождите пару секунд", "error");
-      } else {
-        toast("Не удалось отправить. Попробуйте ещё раз", "error");
-      }
-      return false;
+      // Сервер объясняет отказ сам: просроченная комиссия (402), слишком
+      // часто (429), «на смену уже набраны все люди» (409). Последнее
+      // подменялось бессмысленным «Не удалось отправить».
+      toast(apiError(e, "Не удалось отправить. Попробуйте ещё раз"), "error");
+      // Ошибку пробрасываем дальше: колода вернёт карточку на место. Раньше
+      // она улетала насовсем — человек читал «оплатите счёт», а смена уже
+      // исчезла из колоды, и вернуться к ней было нельзя ничем.
+      throw e;
     }
   }
+
+  // Подпись строки фильтров: «Смены рядом · Москва · 12».
+  const locText =
+    (isSeeker ? "Смены рядом" : "Кандидаты рядом") +
+    (isSeeker && filters.city ? ` · ${filters.city}` : "") +
+    (!isSeeker && filters.role
+      ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}`
+      : "") +
+    (typeof data?.length === "number" ? ` · ${data.length}` : "");
 
   return (
     <div className="page">
@@ -224,9 +228,12 @@ export function FeedPage() {
         >
           <Logo size={24} color="#fff" />
         </span>
-        <h2 className="h2" style={{ margin: 0, flex: 1, fontSize: 26, letterSpacing: -0.3 }}>
+        {/* Именно h1: это главный экран приложения, и заголовка первого уровня
+            на нём не было вовсе — скринридер не мог назвать страницу. Класс
+            .h2 оставляем: он задаёт размер, а не уровень. */}
+        <h1 className="h2" style={{ margin: 0, flex: 1, fontSize: 26, letterSpacing: -0.3 }}>
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
-        </h2>
+        </h1>
         {isSeeker && (
           <button
             className="icon-btn"
@@ -243,7 +250,14 @@ export function FeedPage() {
         )}
         <button
           className="icon-btn"
-          aria-label="Фильтры"
+          // Число активных фильтров нарисовано бейджем поверх иконки, но
+          // aria-label перекрывал его: вслух читалось просто «Фильтры», и
+          // сколько их включено — было не узнать.
+          aria-label={
+            activeFilterCount > 0
+              ? `Фильтры, включено: ${activeFilterCount}`
+              : "Фильтры"
+          }
           style={{ color: activeFilterCount ? "var(--gold)" : undefined }}
           onClick={() => setFilterOpen(true)}
         >
@@ -252,29 +266,23 @@ export function FeedPage() {
             <span className="icon-badge">{activeFilterCount}</span>
           )}
         </button>
-        <button
-          className="icon-btn"
-          aria-label={isSeeker ? "Условия сервиса" : "Тарифы и комиссия"}
-          onClick={() => nav("/pricing")}
-        >
-          <IconBolt size={22} />
-        </button>
       </div>
 
       {/* Один ряд вместо трёх: город, «Сегодня» и сохранённые поиски раньше
           шли отдельными строками и съедали ~54px над карточкой — а карточка
           и есть продукт. */}
       <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        {/* Имя кнопки для скринридера начинается с того же текста, что виден
+            на экране. Прежний aria-label («Сменить город и фильтры») его
+            перекрывал: вслух не читались ни город, ни число найденных смен,
+            а голосовое управление не находило кнопку по надписи. */}
         <button
           className="feed-loc"
           onClick={() => setFilterOpen(true)}
-          aria-label={isSeeker ? "Сменить город и фильтры" : "Фильтры кандидатов"}
+          aria-label={`${locText} — открыть фильтры`}
         >
-          {isSeeker ? "Смены рядом" : "Кандидаты рядом"}
-          {isSeeker && filters.city ? ` · ${filters.city}` : ""}
-          {!isSeeker && filters.role ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}` : ""}
-          {typeof data?.length === "number" ? ` · ${data.length}` : ""}
-          <span style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
+          {locText}
+          <span aria-hidden style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
             <IconChevronRight size={16} />
           </span>
         </button>
@@ -287,8 +295,8 @@ export function FeedPage() {
             aria-pressed={todayOnly}
             style={{
               cursor: "pointer",
-              borderColor: todayOnly ? "var(--gold)" : "var(--border-strong)",
-              background: todayOnly ? "var(--gold)" : "transparent",
+              borderColor: todayOnly ? "var(--gold-fill)" : "var(--border-strong)",
+              background: todayOnly ? "var(--gold-fill)" : "transparent",
               color: todayOnly ? "#fff" : "var(--text)",
             }}
             onClick={toggleToday}
@@ -323,23 +331,6 @@ export function FeedPage() {
             + Разместить смену
           </Button>
         </div>
-      )}
-
-      {isSeeker && !PILOT_MODE && moneyNear > 0 && !empty && (
-        <button
-          className="money-near"
-          aria-label="Настроить фильтры ленты"
-          onClick={() => {
-            haptic("light");
-            setFilterOpen(true);
-          }}
-        >
-          <span className="money-near-cap">Рядом сейчас смен на</span>
-          <span className="money-near-sum">
-            <CountUp value={moneyNear} /> ₽
-          </span>
-          <span className="money-near-sub">настроить, что показывать</span>
-        </button>
       )}
 
       {isLoading && <SkeletonCard />}
@@ -422,12 +413,6 @@ export function FeedPage() {
                 <IconSkip size={32} />
               </button>
               <span className="act-label act-label-skip">Пропустить</span>
-            </div>
-            <div className="act-col">
-              <button className="act sm act-super" aria-label="Срочно — показать заведению первым" onClick={() => controller.current?.("superlike")}>
-                <IconSuper size={28} />
-              </button>
-              <span className="act-label act-label-super">Срочно</span>
             </div>
             <div className="act-col">
               <button className="act act-like" aria-label="Откликнуться — хочу здесь работать" onClick={() => controller.current?.("like")}>

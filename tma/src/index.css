@@ -11,7 +11,11 @@
 .page {
   flex: 1;
   padding: 16px;
-  padding-bottom: 88px;
+  /* Панель вкладок выше, чем кажется: 8 + 64 + 8 плюс «домашняя полоска»
+     iPhone (34px). Отступа в 88px не хватало, и последний элемент любого
+     списка — последняя смена, последний мэтч, кнопка «Выйти» — наполовину
+     уходил под панель, а прокрутить дальше было уже нельзя. */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
 }
 
 .h1 {
@@ -19,16 +23,23 @@
   font-weight: 800;
   letter-spacing: -0.5px;
   margin: 0 0 4px;
+  /* Заголовок разбивается на строки поровну, а не «сколько влезло».
+     Без этого «Смены рядом с домом — на / один день» оставляло тире висеть
+     на краю, а вторую строку — почти пустой. */
+  text-wrap: balance;
 }
 .h2 {
   font-size: 22px;
   font-weight: 700;
   margin: 0 0 8px;
+  text-wrap: balance;
 }
 .muted {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.5;
+  /* Для абзацев — pretty: не оставляет одно слово на последней строке. */
+  text-wrap: pretty;
 }
 .row {
   display: flex;
@@ -48,7 +59,7 @@
   min-height: 54px;
   border: none;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+  background: linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
   color: #fff;
   font-size: 16.5px;
   font-weight: 700;
@@ -88,6 +99,38 @@
 .input:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
+}
+
+/* Визуально скрытое поле, которое остаётся в порядке табуляции и доступно
+   скринридеру. display:none выкидывает элемент из табуляции целиком — так
+   поле выбора фото нельзя было открыть без мыши. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+}
+
+/* Само поле спрятано, фокус получает именно оно — подсвечиваем видимую
+   обёртку-ярлык, иначе с клавиатуры не видно, где ты находишься. Правило
+   только для label: у него своего фокуса не бывает, поэтому обводка не
+   появится от обычного тапа по чипу-кнопке. */
+label.tag:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Ползунок (радиус поиска) высотой ~20px — палец мимо. Растягиваем зону
+   нажатия до 44px, дорожка остаётся по центру. */
+input[type="range"] {
+  height: 44px;
+  cursor: pointer;
 }
 
 .card {
@@ -245,6 +288,18 @@ input:focus-visible {
   background-size: 800px 100%;
   animation: shimmer 1.3s linear infinite;
 }
+/* Блик скелетона был захардкожен белым (0.5): на тёмном фоне по экрану
+   ездила яркая белая полоса — ночью это буквально слепило. Берём тон из
+   токена рамки, он в каждой теме свой. */
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    var(--border-strong) 37%,
+    var(--border) 63%
+  );
+  background-size: 800px 100%;
+}
 
 .tag {
   display: inline-flex;
@@ -291,6 +346,9 @@ button.tag:disabled {
 .input {
   width: 100%;
   min-height: 50px;
+  /* Браузер по умолчанию рисует textarea моноширинным шрифтом: «о себе» и
+     описание смены выглядели как кусок кода. Наследуем шрифт приложения. */
+  font-family: inherit;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius-sm);
@@ -319,6 +377,9 @@ button.tag:disabled {
 }
 .tab {
   flex: 1;
+  /* Без этого длинная подпись («Вакансии») не даёт кнопке сжаться, и в
+     крупном режиме на узком экране панель вылезала за край экрана. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -382,7 +443,9 @@ button.tag:disabled {
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--gold);
+  /* Заливка, а не акцентный цвет: в тёмной теме --gold осветлён под текст,
+     и белые цифры на нём давали 4.3:1 при кегле 10px. */
+  background: var(--gold-fill);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -409,6 +472,17 @@ button.tag:disabled {
   flex-direction: column;
   background: var(--surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+/* При открытии фокус переводится на сам лист (чтобы скринридер объявил окно),
+   но обводки вокруг всей шторки быть не должно — она читается как ошибка. */
+.sheet:focus,
+.overlay:focus {
+  outline: none;
+}
+.sheet-pad {
+  /* Простая шторка без прокручиваемого тела: отступы задаём ей самой,
+     иначе текст упирается в края экрана. */
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
 }
 .sheet-grab {
   width: 40px;
@@ -442,7 +516,10 @@ button.tag:disabled {
   align-items: center;
   background: none;
   border: none;
-  padding: 2px 0 10px;
+  /* 44px — минимальная зона нажатия пальцем. Строка «Смены рядом · Москва»
+     открывает фильтры, а была высотой ~35px: мимо неё промахивались. */
+  min-height: 44px;
+  padding: 2px 0;
   margin: 0;
   color: var(--muted);
   font-size: 15.5px;
@@ -460,7 +537,13 @@ button.tag:disabled {
      кнопки действий (92px) и таббар (88px) снизу. Раньше при 68vh колода
      занимала 560px и кнопки «Пропустить/Отклик» уезжали под таббар. */
   height: clamp(300px, calc(100vh - 328px), 560px);
-  height: clamp(300px, calc(100dvh - 328px), 560px);
+  /* Плюс «домашняя полоска» iPhone: без неё кнопки «Пропустить/Отклик»
+     наезжали на панель вкладок ровно на её высоту. */
+  height: clamp(
+    300px,
+    calc(100dvh - 328px - env(safe-area-inset-bottom)),
+    560px
+  );
 }
 .swipe-card {
   position: absolute;
@@ -478,14 +561,21 @@ button.tag:disabled {
   background-size: cover;
   background-position: center;
 }
+/* Затемнение под белым текстом карточки. Фото загружает пользователь, и на
+   светлом снимке (белая стена, солнце) прежний градиент давал у верхнего
+   края текста всего ~2.6:1 — название заведения и адрес просто исчезали.
+   Держим ≥0.6 непрозрачности там, где начинается текст: на белом фото это
+   уже ~5:1, а тёмные фото не темнеют заметно — они и так тёмные. */
 .swipe-shade {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     to bottom,
-    transparent 40%,
-    rgba(30, 20, 14, 0.55) 70%,
-    rgba(20, 14, 10, 0.92) 100%
+    rgba(16, 11, 8, 0.14) 0%,
+    rgba(16, 11, 8, 0.1) 30%,
+    rgba(16, 11, 8, 0.62) 58%,
+    rgba(12, 8, 6, 0.9) 80%,
+    rgba(10, 7, 5, 0.96) 100%
   );
 }
 .swipe-body {
@@ -494,6 +584,9 @@ button.tag:disabled {
   right: 20px;
   bottom: 22px;
   color: #fff;
+  /* Подстраховка на случай очень светлого фото: тонкая тень отделяет буквы
+     от фона, не делая текст «жирным». */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 /* Чистые мета-строки карточки: иконка + текст, без рамок */
 .card-meta {
@@ -509,6 +602,13 @@ button.tag:disabled {
   gap: 6px;
 }
 /* Изящный фолбэк, когда нет фото: бренд-градиент + крупный инициал */
+/* Буква на карточке без фото, когда сверху уже стоит крупная плашка: тише и
+   не спорит с ней за внимание. */
+.swipe-initial-ghost {
+  opacity: 0.22;
+  transform: translateY(14%);
+}
+
 .swipe-photo-fallback {
   background: linear-gradient(150deg, var(--crimson-dark), var(--gold-soft) 65%, var(--super));
   display: flex;
@@ -516,42 +616,43 @@ button.tag:disabled {
   justify-content: center;
   overflow: hidden;
 }
-/* «Деньги рядом сейчас» — money-магнит наверху ленты */
-/* Это настоящая кнопка (ведёт в фильтры) — сбрасываем стили кнопки, чтобы
-   выглядела как блок, но оставалась доступной с клавиатуры. */
-.money-near {
-  position: relative;
-  overflow: hidden;
-  display: block;
-  width: 100%;
-  border: none;
-  font-family: inherit;
-  text-align: left;
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  margin-bottom: 12px;
+/* В тёмной теме смысловые цвета (кримсон, золото) переопределены на светлые:
+   они рассчитаны как акценты НА тёмном фоне. Градиент-заглушка использовала
+   их как заливку — и карточка без фото получалась светло-розовой, инородной
+   на тёмном экране, с плохо читаемым белым текстом. А это ровно тот вид,
+   который увидят все на старте: фото интерьера не будет почти ни у кого. */
+[data-theme="dark"] .swipe-photo-fallback {
+  background: linear-gradient(150deg, #5c1626, #3b2018 62%, #2c1d12);
+}
+
+/* Карточка без фото: вместо пустоты — главное крупно (сколько платят / кто). */
+.swipe-hero {
+  /* Крепим блок к верху — сразу под рядом бейджей. Доля от высоты (30%,
+     половина) не годится: тело карточки растёт от длины описания и наезжало
+     бы на сумму у одних смен и оставляло дыру у других. */
+  position: absolute;
+  top: 84px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
   color: #fff;
-  background: linear-gradient(135deg, var(--crimson-dark), var(--gold));
-  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.22);
-  cursor: pointer;
+  pointer-events: none;
 }
-.money-near-cap {
-  display: block;
-  font-size: 14px;
+.swipe-hero-sum {
+  font-size: 46px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -1px;
+  text-shadow: 0 2px 12px rgba(40, 12, 18, 0.35);
+}
+.swipe-hero-cap {
+  font-size: 15px;
+  font-weight: 600;
   opacity: 0.92;
-}
-.money-near-sum {
-  display: block;
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  line-height: 1.1;
-  margin: 2px 0;
-}
-.money-near-sub {
-  display: block;
-  font-size: 13px;
-  opacity: 0.9;
 }
 
 /* Демо-карточка свайпа на онбординге — мягко качается, подсказывая жест */
@@ -617,14 +718,18 @@ button.tag:disabled {
   color: rgba(255, 255, 255, 0.18);
   line-height: 1;
 }
+/* Плашки поверх фото карточки (ставка, расстояние, «Сегодня»). Подложка
+   0.45 над светлым фото давала белому тексту 3.36:1 — ниже порога 4.5:1.
+   0.62 даёт ~5:1 даже на белом снимке. */
 .glass {
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.62);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #fff;
   border-radius: 999px;
   padding: 6px 12px;
   font-weight: 700;
   font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .swipe-tint {
   position: absolute;
@@ -667,20 +772,11 @@ button.tag:disabled {
   justify-content: center;
   cursor: pointer;
 }
-.act.sm {
-  width: 60px;
-  height: 60px;
-}
 /* Высокий контраст: заливка + белая иконка — хорошо видно при слабом зрении */
 .act-like {
   background: var(--like);
   color: #fff;
   border-color: var(--like);
-}
-.act-super {
-  background: var(--super);
-  color: #fff;
-  border-color: var(--super);
 }
 .act-skip {
   background: var(--surface);
@@ -695,20 +791,16 @@ button.tag:disabled {
 .act-label-like {
   color: var(--like);
 }
-.act-label-super {
-  color: var(--super);
-}
 .act-label-skip {
-  color: var(--dislike);
+  /* --dislike нейтрально-серый и на кремовом фоне даёт 3.15:1 при кегле 13.
+     Это одна из двух подписей на главном экране — их читает как раз тот, кто
+     ещё не знает жестов. */
+  color: var(--muted);
 }
 /* Крупный режим (самостоятельная регулировка в профиле) — для слабого зрения */
 body[data-large="1"] .act {
   width: 88px;
   height: 88px;
-}
-body[data-large="1"] .act.sm {
-  width: 74px;
-  height: 74px;
 }
 body[data-large="1"] .act-label {
   font-size: 15px;
@@ -752,6 +844,19 @@ body[data-large="1"] .card-meta {
 body[data-large="1"] .tab {
   font-size: 16px;
 }
+/* Узкий экран + крупный режим: подписи вкладок вместе шире экрана. Уменьшаем
+   только подпись — зона нажатия и иконки остаются крупными, ради чего режим
+   и включают. */
+@media (max-width: 360px) {
+  body[data-large="1"] .tab {
+    font-size: 13px;
+  }
+  body[data-large="1"] .tab span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+}
 
 /* Чат */
 .bubble {
@@ -767,7 +872,7 @@ body[data-large="1"] .tab {
 }
 .bubble.mine {
   margin-left: auto;
-  background: var(--gold);
+  background: var(--gold-fill);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -958,9 +1063,13 @@ body[data-large="1"] .tab {
 /* Главные CTA — лёгкий глянец сверху + фирменное свечение. «Дорого» на касание. */
 .btn,
 .ui-btn--primary {
+  /* Заливка через токены заливки, а не через акцентные. В тёмной теме
+     --gold/--gold-soft нарочно осветлены (они там работают ТЕКСТОМ на тёмном
+     фоне), и главная кнопка приложения становилась светло-розовой с белой
+     надписью — ночью её было почти не прочитать. */
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0) 44%),
-    linear-gradient(135deg, var(--gold-soft), var(--gold));
+    linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
   box-shadow: 0 8px 22px rgba(165, 28, 48, 0.30),
     inset 0 1px 0 rgba(255, 255, 255, 0.34);
   letter-spacing: 0.2px;
@@ -978,14 +1087,12 @@ body[data-large="1"] .tab {
 
 /* Круглые кнопки свайпа — объём: внутренняя подсветка + цветное свечение по смыслу. */
 .act-like {
-  background-image: linear-gradient(160deg, #c0334a, #a51c30);
+  /* Через токены: захардкоженный градиент оставался светло-багровым в тёмной
+     теме, а подпись под кнопкой уходила в розовый — кнопка и её подпись были
+     разного цвета. */
+  background-image: linear-gradient(160deg, var(--gold-fill-soft), var(--gold-fill));
   box-shadow: 0 10px 24px rgba(165, 28, 48, 0.42),
     inset 0 2px 4px rgba(255, 255, 255, 0.30);
-}
-.act-super {
-  background-image: linear-gradient(160deg, #d8b85a, #c39a3a);
-  box-shadow: 0 10px 24px rgba(195, 154, 58, 0.44),
-    inset 0 2px 4px rgba(255, 255, 255, 0.36);
 }
 .act-skip {
   box-shadow: 0 6px 16px rgba(60, 40, 30, 0.10),
@@ -1007,10 +1114,6 @@ body[data-large="1"] .tab {
     box-shadow: 0 16px 32px rgba(165, 28, 48, 0.5),
       inset 0 2px 4px rgba(255, 255, 255, 0.3);
   }
-  .act-super:hover {
-    box-shadow: 0 16px 32px rgba(195, 154, 58, 0.52),
-      inset 0 2px 4px rgba(255, 255, 255, 0.36);
-  }
 }
 
 /* Карточки — мягче и «дороже» глубина. */
@@ -1027,4 +1130,26 @@ body[data-large="1"] .tab {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Горизонтальная лента подсказок в чате. Затухание у правого края —
+   единственный намёк на то, что строка продолжается за экраном: без него
+   последний чип просто обрывался на середине слова и читался как баг. */
+.quick-row {
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+}
+.quick-row::-webkit-scrollbar {
+  display: none;
 }
