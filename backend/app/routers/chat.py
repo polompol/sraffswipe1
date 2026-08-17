@@ -8,6 +8,7 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from .. import redisclient
@@ -47,20 +48,54 @@ def _to_out(m: Message) -> MessageOut:
     )
 
 
+# Сколько сообщений отдаём за раз. Раньше отдавались ВСЕ сообщения чата
+# сразу — и на каждое открытие экрана, и на каждое переподключение. У живого
+# заведения переписка по смене копится месяцами: это лишние мегабайты по
+# мобильному интернету и заметная пауза перед тем, как чат покажется.
+_PAGE = 100
+_PAGE_MAX = 200
+
+
 @router.get("/matches/{match_id}/messages", response_model=list[MessageOut])
 def history(
     match_id: str,
+    before: str = "",
+    limit: int = _PAGE,
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
+    """Последние сообщения чата (по возрастанию времени).
+
+    `before` — id сообщения, ДО которого нужна предыдущая порция: так экран
+    догружает старую переписку кнопкой «Показать более ранние».
+    """
     _require_participant(db, match_id, principal)
+    limit = max(1, min(limit, _PAGE_MAX))
+    q = db.query(Message).filter(Message.match_id == match_id)
+    if before:
+        anchor = db.get(Message, before)
+        # Чужой id молча игнорируем: это не попытка взлома, а старая вкладка.
+        if anchor is not None and anchor.match_id == match_id:
+            # Сравниваем и по id тоже: у нескольких сообщений может совпасть
+            # время до микросекунды (системные сообщения пишутся пачкой), и
+            # тогда порция зациклилась бы на одном и том же месте.
+            q = q.filter(
+                or_(
+                    Message.created_at < anchor.created_at,
+                    and_(
+                        Message.created_at == anchor.created_at,
+                        Message.id < anchor.id,
+                    ),
+                )
+            )
     rows = (
-        db.query(Message)
-        .filter(Message.match_id == match_id)
-        .order_by(Message.created_at)
+        q.order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(limit)
         .all()
     )
-    return [_to_out(m) for m in rows]
+    # В базе брали с конца (последние), а показываем по-человечески — сверху
+    # старые, снизу свежие.
+    return [_to_out(m) for m in reversed(rows)]
 
 
 @router.post(

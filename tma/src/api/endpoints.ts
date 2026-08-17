@@ -95,9 +95,22 @@ export async function fetchMatches(): Promise<MatchModel[]> {
   return data;
 }
 
-export async function fetchMessages(matchId: string): Promise<Message[]> {
+/** Сколько сообщений сервер отдаёт за раз (столько же, сколько в backend). */
+export const MESSAGES_PAGE = 100;
+
+/**
+ * Переписка по смене: последние сообщения, снизу — самые свежие.
+ * `before` — id сообщения, до которого нужна предыдущая порция
+ * (кнопка «Показать более ранние»).
+ */
+export async function fetchMessages(
+  matchId: string,
+  before = "",
+): Promise<Message[]> {
   if (!USE_BACKEND) return mock.fetchMessages(matchId);
-  const { data } = await api.get<Message[]>(`/matches/${matchId}/messages`);
+  const { data } = await api.get<Message[]>(`/matches/${matchId}/messages`, {
+    params: before ? { before } : undefined,
+  });
   return data;
 }
 

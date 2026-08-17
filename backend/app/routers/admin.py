@@ -12,7 +12,6 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..entitlements import get_or_create
 from ..models import (
     Commission,
     Employer,
@@ -547,15 +546,25 @@ class AdminUserOut(BaseModel):
     verified: bool = False  # бейдж «Проверено» (только у заведений)
 
 
-def _admin_user_out(db: Session, obj, role: str) -> AdminUserOut:
-    ent = get_or_create(db, obj.id)
+def _admin_user_out(obj, role: str, balance: int) -> AdminUserOut:
     name = getattr(obj, "name", "") or getattr(obj, "company_name", "") or "—"
     return AdminUserOut(
         id=obj.id, role=role, name=name, username=obj.tg_username,
         blocked=obj.blocked, warnings=obj.warnings,
-        balanceRub=ent.balance_rub,
+        balanceRub=balance,
         verified=bool(getattr(obj, "verified", False)),
     )
+
+
+_SEARCH_LIMIT = 30
+
+
+def _like(col, needle: str):
+    """Поиск подстроки без учёта регистра — одинаково на SQLite и Postgres."""
+    # Служебные символы LIKE экранируем: иначе запрос «%» находил бы всех, а
+    # «_» — кого попало.
+    safe = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return func.lower(func.coalesce(col, "")).like(f"%{safe}%", escape="\\")
 
 
 @router.get("/users", response_model=list[AdminUserOut])
@@ -564,21 +573,46 @@ def search_users(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Быстрый поиск людей и заведений по имени/@нику/телефону. Фильтруем в
-    Python — корректно для кириллицы и на SQLite, и на Postgres."""
+    """Быстрый поиск людей и заведений по имени/@нику/телефону.
+
+    Раньше поиск вытягивал по 300 свежих записей людей и заведений и отсеивал
+    лишнее уже в Python: человек, зарегистрировавшийся раньше этих трёхсот, не
+    находился вообще — а именно старые аккаунты и ищет поддержка. Хуже другое:
+    на КАЖДУЮ из шестисот строк создавалась (и сохранялась!) запись кошелька —
+    обычный поиск писал в базу шестьсот раз. Теперь отбор делает сама база, а
+    балансы дочитываются одним запросом и ничего не создают.
+    """
     ql = q.strip().lower()
-
-    def _match(*vals: str | None) -> bool:
-        return not ql or any(ql in (v or "").lower() for v in vals)
-
     res: list[AdminUserOut] = []
-    for u in db.query(User).order_by(User.created_at.desc()).limit(300).all():
-        if _match(u.name, u.tg_username, u.phone):
-            res.append(_admin_user_out(db, u, "seeker"))
-    for e in db.query(Employer).order_by(Employer.created_at.desc()).limit(300).all():
-        if _match(e.company_name, e.tg_username, e.phone):
-            res.append(_admin_user_out(db, e, "employer"))
-    return res[:30]
+
+    users = db.query(User)
+    emps = db.query(Employer)
+    if ql:
+        users = users.filter(
+            or_(_like(User.name, ql), _like(User.tg_username, ql),
+                _like(User.phone, ql))
+        )
+        emps = emps.filter(
+            or_(_like(Employer.company_name, ql), _like(Employer.tg_username, ql),
+                _like(Employer.phone, ql))
+        )
+    found_u = users.order_by(User.created_at.desc()).limit(_SEARCH_LIMIT).all()
+    found_e = emps.order_by(Employer.created_at.desc()).limit(_SEARCH_LIMIT).all()
+
+    # Балансы — одним запросом на всех. Нет записи кошелька = ноль на счету:
+    # заводить её ради показа в поиске незачем.
+    ids = [o.id for o in [*found_u, *found_e]]
+    balances = {
+        owner: bal
+        for owner, bal in db.query(
+            Entitlement.owner_id, Entitlement.balance_rub
+        ).filter(Entitlement.owner_id.in_(ids or ["__none__"]))
+    }
+    for u in found_u:
+        res.append(_admin_user_out(u, "seeker", balances.get(u.id, 0)))
+    for e in found_e:
+        res.append(_admin_user_out(e, "employer", balances.get(e.id, 0)))
+    return res[:_SEARCH_LIMIT]
 
 
 # ---- Комиссия за закрытые смены (для выставления счёта заведениям) ----

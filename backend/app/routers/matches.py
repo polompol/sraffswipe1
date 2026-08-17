@@ -1,4 +1,5 @@
 """Мэтчи и подтверждение смены."""
+import logging
 import secrets
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -6,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StringConstraints, model_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -27,6 +29,8 @@ from ..schemas import MatchOut
 from ..security import current_principal, secure_equals
 from ..timeutil import shift_end_utc, shift_start_utc
 from .analytics import _is_admin
+
+logger = logging.getLogger("staffswipe.matches")
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
@@ -122,27 +126,45 @@ def _accrue_commission(db: Session, m: Match) -> None:
     c = Commission(
         employer_id=m.employer_id, match_id=m.id, shift_pay=pay, amount=amount,
     )
-    # Атомарный UPDATE с условием «хватает денег» — двойное списание при
-    # гонке невозможно.
-    paid = (
-        db.query(Entitlement)
-        .filter(
-            Entitlement.owner_id == m.employer_id,
-            Entitlement.balance_rub >= amount,
-        )
-        .update(
-            {Entitlement.balance_rub: Entitlement.balance_rub - amount},
-            synchronize_session=False,
-        )
-    )
-    if paid:
-        c.status = "paid"
-        db.add(WalletTxn(
-            owner_id=m.employer_id, amount=-amount, kind="commission",
-            note=f"Комиссия за смену {m.id[:8]}",
-        ))
-        _sys(db, m.id, f"Комиссия {amount} ₽ списана с баланса заведения ✓")
-    db.add(c)
+    # Всё начисление — в отдельной «точке отката» (SAVEPOINT).
+    #
+    # Проверка выше («начисление уже есть?») не спасает от гонки: расчёт по
+    # расписанию и кнопка «Смена состоялась» могут сойтись на одной смене в
+    # одну секунду, оба увидят «начисления нет» и оба вставят запись. Вторая
+    # вставка упирается в уникальность match_id — раньше эта ошибка вылетала
+    # наверх: человеку показывалась «Внутренняя ошибка сервера», а ночной
+    # расчёт падал на этой смене целиком и не доходил до остальных.
+    #
+    # С точкой отката проигравший в гонке откатывает только свою вставку
+    # (и своё списание с баланса — двойного списания не будет), а всё, что
+    # сделано до этого, остаётся. Комиссия уже начислена соседом — работа
+    # выполнена, поэтому просто выходим.
+    try:
+        with db.begin_nested():
+            # Атомарный UPDATE с условием «хватает денег» — двойное списание
+            # при гонке невозможно.
+            paid = (
+                db.query(Entitlement)
+                .filter(
+                    Entitlement.owner_id == m.employer_id,
+                    Entitlement.balance_rub >= amount,
+                )
+                .update(
+                    {Entitlement.balance_rub: Entitlement.balance_rub - amount},
+                    synchronize_session=False,
+                )
+            )
+            if paid:
+                c.status = "paid"
+                db.add(WalletTxn(
+                    owner_id=m.employer_id, amount=-amount, kind="commission",
+                    note=f"Комиссия за смену {m.id[:8]}",
+                ))
+                _sys(db, m.id, f"Комиссия {amount} ₽ списана с баланса заведения ✓")
+            db.add(c)
+            db.flush()
+    except IntegrityError:
+        logger.info("комиссия по смене %s уже начислена параллельно", m.id)
 
 
 def _maybe_complete(db: Session, m: Match) -> None:

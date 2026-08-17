@@ -1,18 +1,104 @@
 """Уведомления пользователям через Telegram-бота (best-effort).
 
 Backend шлёт sendMessage напрямую (есть токен бота). Без токена/без tg_id —
-тихий no-op, чтобы не ломать основной поток. HTTP-вызов уходит в фоновый
-поток, поэтому медленный/недоступный Telegram не тормозит запрос пользователя
-и не блокирует event-loop в async-ручках.
+тихий no-op, чтобы не ломать основной поток. Отправка уходит в фон, поэтому
+медленный или недоступный Telegram не тормозит запрос человека и не
+блокирует event-loop в async-ручках.
+
+Фон — это ОЧЕРЕДЬ с несколькими постоянными работниками, а не поток на
+каждое сообщение. Раньше на каждое уведомление создавался новый поток. При
+обычной работе это незаметно, но рассылки идут пачками: «срочный зов» бьёт
+по сотне человек сразу, вечерние напоминания — по всей базе. Сотни потоков
+одновременно — это память, забитый процессор и почти гарантированный ответ
+Telegram «слишком часто» (429), после которого сообщения просто пропадают.
+
+Поэтому здесь три вещи:
+1. Постоянные работники (`_WORKERS`) разбирают общую очередь.
+2. Общий темп не выше `_MAX_PER_SEC` — предел Telegram около 30 сообщений в
+   секунду, идём чуть ниже.
+3. Очередь ограничена. Если она переполнена, лишнее отбрасывается с записью
+   в лог: лучше потерять часть уведомлений, чем положить сервис.
 """
 import json
+import logging
+import queue
 import threading
+import time
 import urllib.request
 
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .models import Employer, User
+
+logger = logging.getLogger("staffswipe.notify")
+
+# Сколько сообщений отправляем одновременно. Больше не нужно: узкое место —
+# не наш процессор, а лимит Telegram.
+_WORKERS = 4
+# Предел Telegram — около 30 сообщений в секунду на бота. Держимся ниже:
+# упереться в лимит значит получить 429 и потерять сообщения.
+_MAX_PER_SEC = 20.0
+# Потолок очереди. Больше — значит Telegram лежит совсем, и копить смысла нет.
+_QUEUE_LIMIT = 5000
+
+_queue: "queue.Queue[tuple]" = queue.Queue(maxsize=_QUEUE_LIMIT)
+_start_lock = threading.Lock()
+_started = False
+_pace_lock = threading.Lock()
+_last_sent = 0.0
+_dropped = 0
+
+
+def _pace() -> None:
+    """Не быстрее `_MAX_PER_SEC` сообщений в секунду на всех работников сразу."""
+    global _last_sent
+    gap = 1.0 / _MAX_PER_SEC
+    with _pace_lock:
+        wait = _last_sent + gap - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_sent = time.monotonic()
+
+
+def _worker() -> None:
+    while True:
+        job = _queue.get()
+        try:
+            _pace()
+            _send(*job)
+        except Exception:  # noqa: BLE001 — работник не должен умирать молча
+            logger.exception("не удалось отправить уведомление")
+        finally:
+            _queue.task_done()
+
+
+def _ensure_workers() -> None:
+    global _started
+    if _started:
+        return
+    with _start_lock:
+        if _started:
+            return
+        for i in range(_WORKERS):
+            threading.Thread(
+                target=_worker, name=f"notify-{i}", daemon=True
+            ).start()
+        _started = True
+
+
+def _enqueue(job: tuple) -> None:
+    global _dropped
+    _ensure_workers()
+    try:
+        _queue.put_nowait(job)
+    except queue.Full:
+        _dropped += 1
+        # Пишем не каждый раз, а редко: при завале лог сам станет проблемой.
+        if _dropped % 100 == 1:
+            logger.warning(
+                "очередь уведомлений переполнена, потеряно всего: %s", _dropped
+            )
 
 
 def _tg_id(db: Session, owner_id: str) -> int | None:
@@ -101,10 +187,7 @@ def notify_owner(
     tg = _tg_id(db, owner_id)
     if not tg:
         return
-    threading.Thread(
-        target=_send, args=(token, tg, text, open_app, screen, ident),
-        daemon=True
-    ).start()
+    _enqueue((token, tg, text, open_app, screen, ident))
 
 
 def notify_admins(text: str) -> None:
@@ -120,6 +203,4 @@ def notify_admins(text: str) -> None:
             tg = int(raw)
         except ValueError:
             continue
-        threading.Thread(
-            target=_send, args=(token, tg, text), daemon=True
-        ).start()
+        _enqueue((token, tg, text, None, "", ""))

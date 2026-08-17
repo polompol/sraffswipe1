@@ -181,9 +181,16 @@ class Match(Base):
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(String, index=True)
-    employer_id: Mapped[str] = mapped_column(String, index=True)
-    vacancy_id: Mapped[str] = mapped_column(String, index=True)
+    # Связи с людьми, заведением и сменой — настоящие (внешние ключи). Без них
+    # база разрешала мэтч на несуществующую смену: строка есть, смены нет, и
+    # экран у человека молча пустой, а найти причину не по чему.
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    employer_id: Mapped[str] = mapped_column(
+        ForeignKey("employers.id"), index=True
+    )
+    vacancy_id: Mapped[str] = mapped_column(
+        ForeignKey("vacancies.id"), index=True
+    )
     status: Mapped[str] = mapped_column(String, default="matched")
     confirmed_by_seeker: Mapped[bool] = mapped_column(Boolean, default=False)
     confirmed_by_employer: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -238,7 +245,9 @@ class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    match_id: Mapped[str] = mapped_column(String, index=True)
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.id"), index=True)
+    # Отправитель НЕ внешний ключ: у системных сообщений здесь стоит слово
+    # «system», а не чей-то id.
     sender_id: Mapped[str] = mapped_column(String)
     text: Mapped[str] = mapped_column(Text)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -391,7 +400,9 @@ class Review(Base):
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    match_id: Mapped[str] = mapped_column(String, index=True)
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.id"), index=True)
+    # Кто кого оценил — id человека ИЛИ заведения (две разные таблицы),
+    # поэтому внешнего ключа здесь быть не может.
     rater_id: Mapped[str] = mapped_column(String, index=True)
     ratee_id: Mapped[str] = mapped_column(String, index=True)
     stars: Mapped[int] = mapped_column(Integer, default=5)
@@ -435,8 +446,11 @@ class Commission(Base):
     __tablename__ = "commissions"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    employer_id: Mapped[str] = mapped_column(String, index=True)
-    match_id: Mapped[str] = mapped_column(String, unique=True)  # 1 на смену
+    employer_id: Mapped[str] = mapped_column(
+        ForeignKey("employers.id"), index=True
+    )
+    # 1 на смену: уникальность — главная защита от двойного начисления.
+    match_id: Mapped[str] = mapped_column(ForeignKey("matches.id"), unique=True)
     shift_pay: Mapped[int] = mapped_column(Integer, default=0)  # оплата смены, ₽
     amount: Mapped[int] = mapped_column(Integer, default=0)     # комиссия, ₽
     # pending — к оплате, paid — деньги получены, written_off — списано

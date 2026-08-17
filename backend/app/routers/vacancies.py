@@ -12,6 +12,7 @@ from ..db import get_db
 from ..geo import distance_km
 from ..models import Commission, Employer, Match, Swipe, User, Vacancy
 from ..notify import notify_owner
+from ..photos import is_allowed_photo_url
 from ..ratelimit import rate_limit
 from ..roles import role_ru
 from ..schemas import VacancyIn, VacancyOut
@@ -25,6 +26,16 @@ router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 # есть, а здесь не было: заведение с тремя вызовами в час поднимало столько
 # потоков отправки, сколько в городе людей с отметкой «готов сегодня».
 _URGENT_MAX = 200
+
+
+def _check_photo(url: str) -> None:
+    """Фото интерьера — только своё загруженное (см. app/photos.py)."""
+    if not is_allowed_photo_url(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Фото нужно загрузить в приложении — "
+                   "ссылка на чужой сайт не подойдёт.",
+        )
 
 
 def _shifts_done_by_employer(db: Session, emp_ids: set[str]) -> dict[str, int]:
@@ -211,14 +222,17 @@ def list_vacancies(
     # Не показываем смены, которые соискатель уже свайпнул, — иначе колода
     # зацикливается и после «просмотрел все» те же карточки лезут снова.
     if principal and principal["role"] == "seeker":
-        swiped = [
-            s[0] for s in db.query(Swipe.target_id).filter(
-                Swipe.swiper_id == principal["id"],
-                Swipe.target_type == "vacancy",
-            ).all()
-        ]
-        if swiped:
-            query = query.filter(Vacancy.id.notin_(swiped))
+        # Подзапрос, а не список в Python: у активного человека тысячи свайпов,
+        # и раньше все их id тянулись из базы в приложение на КАЖДОЕ открытие
+        # ленты, а потом уезжали обратно одним гигантским «NOT IN (…)».
+        query = query.filter(
+            Vacancy.id.notin_(
+                db.query(Swipe.target_id).filter(
+                    Swipe.swiper_id == principal["id"],
+                    Swipe.target_type == "vacancy",
+                ).scalar_subquery()
+            )
+        )
     if role:
         query = query.filter(Vacancy.role == role)
     if min_rate is not None:
@@ -362,26 +376,20 @@ def invites(
     if principal["role"] != "seeker":
         raise HTTPException(status_code=403, detail="Только для соискателя")
     me = principal["id"]
-    emp_ids = [
-        s[0] for s in db.query(Swipe.swiper_id).filter(
-            Swipe.target_id == me,
-            Swipe.target_type == "user",
-            Swipe.direction == "like",
-        ).distinct().all()
-    ]
-    if not emp_ids:
-        return []
+    liked_me = db.query(Swipe.swiper_id).filter(
+        Swipe.target_id == me,
+        Swipe.target_type == "user",
+        Swipe.direction == "like",
+    ).scalar_subquery()
     # Смены, которые соискатель уже свайпнул, повторно не показываем.
-    swiped = [
-        s[0] for s in db.query(Swipe.target_id).filter(
-            Swipe.swiper_id == me, Swipe.target_type == "vacancy",
-        ).all()
-    ]
+    swiped = db.query(Swipe.target_id).filter(
+        Swipe.swiper_id == me, Swipe.target_type == "vacancy",
+    ).scalar_subquery()
     q = db.query(Vacancy).filter(
-        Vacancy.employer_id.in_(emp_ids), Vacancy.status == "active",
+        Vacancy.employer_id.in_(liked_me),
+        Vacancy.status == "active",
+        Vacancy.id.notin_(swiped),
     )
-    if swiped:
-        q = q.filter(Vacancy.id.notin_(swiped))
     rows = q.order_by(Vacancy.created_at.desc()).limit(100).all()
     if not rows:
         return []
@@ -432,6 +440,7 @@ def create_vacancy(
                    "оплатите счёт, чтобы публиковать новые вакансии.",
         )
 
+    _check_photo(body.interior_photo_url)
     data = body.model_dump()
     # Приводим город к каноническому названию: со свободным вводом
     # «Санкт-Петербург», «СПб» и «Питер» становятся тремя разными городами, и
@@ -480,6 +489,7 @@ def update_vacancy(
     """Исправить свою смену (опечатка в ставке, времени, адресе).
     Доступно, пока по ней нет откликов."""
     v = _own_vacancy_or_404(db, vacancy_id, principal)
+    _check_photo(body.interior_photo_url)
     taken = taken_counts(db, [v.id]).get(v.id, 0)
     fields = body.model_dump()
     fields["city"] = normalize(fields.get("city", ""))

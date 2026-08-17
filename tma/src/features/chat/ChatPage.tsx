@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
+import { MESSAGES_PAGE, ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
@@ -81,9 +81,43 @@ export function ChatPage() {
   });
 
   // К последнему сообщению — при открытии чата и на каждое новое.
+  //
+  // Следим именно за ПОСЛЕДНИМ сообщением, а не за всем списком: когда
+  // догружается старая переписка, список меняется, а прокручивать вниз нельзя
+  // — человек только что нажал «показать более ранние» и смотрит наверх.
+  const lastId = messages?.length ? messages[messages.length - 1].id : "";
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+  }, [lastId]);
+
+  // Догрузка старой переписки. Сервер отдаёт последние 100 сообщений: у смены
+  // с долгой перепиской остальное лежит выше и подтягивается по кнопке.
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [noMoreOlder, setNoMoreOlder] = useState(false);
+  const hasOlder =
+    !noMoreOlder && !!messages && messages.length >= MESSAGES_PAGE;
+
+  async function loadOlder() {
+    if (!messages?.length || olderLoading) return;
+    setOlderLoading(true);
+    try {
+      const older = await fetchMessages(matchId, messages[0].id);
+      if (older.length === 0) {
+        setNoMoreOlder(true);
+      } else {
+        qc.setQueryData<Message[]>(["messages", matchId], (old) => {
+          const list = old ?? [];
+          const known = new Set(list.map((m) => m.id));
+          return [...older.filter((m) => !known.has(m.id)), ...list];
+        });
+        if (older.length < MESSAGES_PAGE) setNoMoreOlder(true);
+      }
+    } catch {
+      toast("Не удалось загрузить старые сообщения", "error");
+    } finally {
+      setOlderLoading(false);
+    }
+  }
 
   const { data: matches } = useQuery({ queryKey: ["matches"], queryFn: fetchMatches });
   const srvMatch = match ?? matches?.find((m) => m.id === matchId) ?? null;
@@ -366,6 +400,27 @@ export function ChatPage() {
                 : "Спросите про адрес, время и что взять с собой — заведение ответит здесь."
             }
           />
+        )}
+
+        {hasOlder && (
+          <button
+            onClick={loadOlder}
+            disabled={olderLoading}
+            style={{
+              display: "block",
+              margin: "0 auto 10px",
+              minHeight: 36,
+              padding: "0 14px",
+              background: "none",
+              border: "none",
+              color: "var(--muted)",
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {olderLoading ? "Загружаем…" : "Показать более ранние"}
+          </button>
         )}
 
         {messages?.map((m: Message) => {

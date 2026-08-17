@@ -144,16 +144,17 @@ def list_candidates(
     city_f = normalize(city) if city else normalize(getattr(me, "city", "") or "")
     # Не показываем кандидатов, которых работодатель уже свайпнул (иначе колода
     # зацикливается после «кандидаты закончились»).
-    swiped = [
-        s[0] for s in db.query(Swipe.target_id).filter(
-            Swipe.swiper_id == principal["id"],
-            Swipe.target_type == "user",
-        ).all()
-    ]
+    # Подзапросом, а не списком в Python: у заведения, которое работает
+    # давно, свайпов тысячи, и все их id ездили туда-обратно на каждое
+    # открытие ленты.
+    swiped = db.query(Swipe.target_id).filter(
+        Swipe.swiper_id == principal["id"],
+        Swipe.target_type == "user",
+    ).scalar_subquery()
     # «Готов выйти сегодня» — наверх: их зовут на срочные смены первыми.
-    q = db.query(User).filter(User.blocked.is_(False))
-    if swiped:
-        q = q.filter(User.id.notin_(swiped))
+    q = db.query(User).filter(
+        User.blocked.is_(False), User.id.notin_(swiped)
+    )
     if available_today:
         q = q.filter(User.available_today.is_(True))
     rows = (

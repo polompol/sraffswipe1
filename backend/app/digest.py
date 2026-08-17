@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .cities import normalize
-from .models import Match, Swipe, User, Vacancy
+from .models import Employer, Match, Swipe, User, Vacancy
 from .notify import notify_owner
 from .roles import date_ru, role_ru, time_ru
 from .timeutil import local_today, shift_end_utc
@@ -33,31 +33,54 @@ def build_digest(db: Session, limit: int = 3) -> dict[str, list[str]]:
     """Для каждого соискателя — до `limit` свежих активных смен в его городе,
     которые он ещё не свайпал. Возвращает {user_id: [тексты строк смен]}."""
     out: dict[str, list[str]] = {}
-    users = db.query(User).filter(User.blocked.is_(False)).all()
-    for u in users:
-        if not u.city:
+
+    # Смены читаем ОДИН раз на всю рассылку и раскладываем по городам.
+    # Раньше на каждого человека делалось два отдельных запроса: все его
+    # свайпы и ВСЕ активные смены страны, которые тут же отсеивались в Python.
+    # При тысяче человек это две тысячи запросов и тысяча полных выгрузок
+    # ленты — ночная рассылка занимала бы базу целиком.
+    blocked_emps = {
+        e[0] for e in db.query(Employer.id).filter(Employer.blocked.is_(True))
+    }
+    by_city: dict[str, list[Vacancy]] = {}
+    for v in (
+        db.query(Vacancy)
+        .filter(Vacancy.status == "active")
+        .order_by(Vacancy.created_at.desc())
+        .all()
+    ):
+        if v.employer_id in blocked_emps:
+            continue
+        # Смену, которая уже прошла, звать смотреть незачем: в ленте её нет, а
+        # в письме она была — человек открывал приложение и не находил ничего.
+        if v.date < local_today(v.city):
             continue
         # Через справочник, а не строкой: у человека в анкете может лежать
         # «Питер», а у смены — «Санкт-Петербург». Буква в букву они не
         # совпадут никогда, и дайджест этому человеку не придёт вовсе.
-        city = normalize(u.city).lower()
-        swiped = {
-            s.target_id
-            for s in db.query(Swipe.target_id)
-            .filter(Swipe.swiper_id == u.id, Swipe.target_type == "vacancy")
-            .all()
-        }
-        vacs = (
-            db.query(Vacancy)
-            .filter(Vacancy.status == "active")
-            .order_by(Vacancy.created_at.desc())
-            .all()
-        )
+        by_city.setdefault(normalize(v.city or "").lower(), []).append(v)
+    if not by_city:
+        return out
+
+    # Свайпы — тоже одним запросом и только по этим сменам: свайпы по старым
+    # сменам на рассылку не влияют, тянуть их незачем.
+    live_ids = [v.id for city in by_city.values() for v in city]
+    swiped: dict[str, set[str]] = {}
+    for swiper_id, target_id in db.query(
+        Swipe.swiper_id, Swipe.target_id
+    ).filter(Swipe.target_type == "vacancy", Swipe.target_id.in_(live_ids)):
+        swiped.setdefault(swiper_id, set()).add(target_id)
+
+    for u in db.query(User).filter(User.blocked.is_(False)).all():
+        if not u.city:
+            continue
+        vacs = by_city.get(normalize(u.city).lower())
+        if not vacs:
+            continue
+        seen = swiped.get(u.id, ())
         picked: list[str] = []
         for v in vacs:
-            if normalize(v.city or "").lower() != city:
-                continue
-            if v.id in swiped:
+            if v.id in seen:
                 continue
             # Должность по-русски и дата по-человечески: в базе лежит
             # «barista» и «2026-08-12», а в дайджест это уходило как есть.

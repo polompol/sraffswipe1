@@ -299,6 +299,18 @@ def _age_from_iso(iso: str) -> int | None:
     )
 
 
+def _check_photo(url: str) -> None:
+    """Фото — только своё загруженное (или аватарка из Telegram)."""
+    from ..photos import is_allowed_photo_url
+
+    if not is_allowed_photo_url(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Фото нужно загрузить в приложении — "
+                   "ссылка на чужой сайт не подойдёт.",
+        )
+
+
 class MeUpdateIn(BaseModel):
     # Лимиты длины — анти-абуз: без них можно записать мегабайтные строки в
     # имя/«о себе» и раздуть БД.
@@ -371,6 +383,7 @@ def update_me(
         # свайпом за секунду, карточка без фото — это карточка, которую
         # пролистывают.
         if body.photo_url is not None:
+            _check_photo(body.photo_url)
             e.photo_url = body.photo_url
         # Город заведения. По нему показывается лента кандидатов — без него
         # заведение в другом городе листало бы москвичей.
@@ -410,6 +423,7 @@ def update_me(
     if body.experience_tags is not None:
         u.experience_tags = ",".join(body.experience_tags)
     if body.photo_url is not None:
+        _check_photo(body.photo_url)
         u.photo_urls = body.photo_url
     db.commit()
     # «О себе» и имя видит каждое заведение в ленте — это такой же публичный
