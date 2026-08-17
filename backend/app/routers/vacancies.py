@@ -196,6 +196,15 @@ def list_vacancies(
     query = db.query(Vacancy).filter(Vacancy.status == "active")
     # Смены должников в ленте не показываем: мэтч по ним всё равно не
     # создастся (см. _ensure_match), и отклик уходил бы в никуда.
+    # Заблокированные заведения — всегда мимо ленты. Бан переводит их смены в
+    # blocked, но оператор может разблокировать смену отдельно, и она оживёт у
+    # заблокированного владельца. Проверяем самого владельца, а не только смену.
+    blocked_emp = {
+        e_id for (e_id,) in db.query(Employer.id)
+        .filter(Employer.blocked.is_(True)).all()
+    }
+    if blocked_emp:
+        query = query.filter(Vacancy.employer_id.notin_(blocked_emp))
     debtors = overdue_employer_ids(db)
     if debtors:
         query = query.filter(Vacancy.employer_id.notin_(debtors))

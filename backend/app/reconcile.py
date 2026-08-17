@@ -41,6 +41,31 @@ def _fetch_payments(created_gte: str, limit: int = 100) -> list[dict]:
         return json.loads(resp.read()).get("items", [])
 
 
+def fetch_payment(charge_id: str) -> dict | None:
+    """Спросить у ЮKassa про КОНКРЕТНЫЙ платёж. None — если не отдала.
+
+    Нужен вебхуку. Вебхук ЮKassa не подписан, и защищён он секретом в адресе:
+    если этот секрет утечёт (а он живёт в чужом кабинете), кто угодно сможет
+    прислать «платёж прошёл, зачислите 100 000 ₽» — платежа при этом не будет,
+    а деньги на балансе появятся. Сверять сумму внутри самого письма
+    бессмысленно: все его поля пишет отправитель.
+
+    Единственная настоящая проверка — спросить у ЮKassa напрямую по её же
+    API, с нашими ключами, которых у отправителя письма нет.
+    """
+    creds = f"{settings.yookassa_shop_id}:{settings.yookassa_secret_key}"
+    auth = base64.b64encode(creds.encode()).decode()
+    req = urllib.request.Request(
+        f"{API}/{urllib.parse.quote(charge_id)}",
+        headers={"Authorization": f"Basic {auth}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
+            return json.loads(resp.read())
+    except Exception:  # noqa: BLE001 — недоступность ЮKassa не должна ронять вебхук
+        return None
+
+
 def reconcile(db: Session, hours: int = 48) -> dict:
     """Сверить платежи за последние `hours` часов и дозачислить пропущенные.
 

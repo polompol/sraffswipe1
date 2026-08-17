@@ -61,7 +61,15 @@ def track(
     name = body.name[:64]
     if name in {"source", "job"}:
         raise HTTPException(status_code=400, detail="Зарезервированное имя")
-    props = json.dumps(body.props or {}, ensure_ascii=False)[:_MAX_PROPS_CHARS]
+    # Обрезаем ДО сериализации, а не после. Раньше готовый JSON рубился по
+    # длине посреди строки, и в базу ложился обломок, который потом не
+    # прочитать: аналитика по такому событию просто падала.
+    raw = {}
+    for k, v in (body.props or {}).items():
+        if len(json.dumps(raw | {k: v}, ensure_ascii=False)) > _MAX_PROPS_CHARS:
+            break
+        raw[k] = v
+    props = json.dumps(raw, ensure_ascii=False)
     db.add(Event(
         owner_id=principal["id"] if principal else None,
         name=name,

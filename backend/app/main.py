@@ -186,3 +186,30 @@ app.include_router(meta.router)
 @app.api_route("/health", methods=["GET", "HEAD"], tags=["meta"])
 def health():
     return {"status": "ok"}
+
+
+@app.api_route("/health/ready", methods=["GET", "HEAD"], tags=["meta"])
+def ready():
+    """Готовность к работе: приложение живо И база отвечает.
+
+    `/health` говорит только «процесс запущен». Если база умерла, он всё равно
+    отвечает «ok» — docker считает контейнер здоровым, сторож молчит, а люди
+    видят ошибки на каждом экране. Здесь делается самый дешёвый запрос к базе:
+    отвечает — значит сервис действительно работает.
+    """
+    from sqlalchemy import text
+
+    from .db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001 — причина в логе, наружу только статус
+        logger.exception("проверка готовности: база не отвечает")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "detail": "База не отвечает"},
+        )
+    finally:
+        db.close()
+    return {"status": "ok", "db": "ok"}

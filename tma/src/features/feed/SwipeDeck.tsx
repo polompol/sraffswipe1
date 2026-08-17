@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSprings, animated, to, type SpringValue } from "@react-spring/web";
 import { useDrag } from "@use-gesture/react";
 import type { SwipeDirection } from "@/types/domain";
@@ -8,7 +8,8 @@ interface Props<T> {
   items: T[];
   keyOf: (item: T) => string;
   renderCard: (item: T) => React.ReactNode;
-  onSwipe: (item: T, dir: SwipeDirection) => void;
+  /** Может вернуть промис: если он отклонится, карточка вернётся в колоду. */
+  onSwipe: (item: T, dir: SwipeDirection) => void | Promise<unknown>;
   onEmpty?: () => void;
   controllerRef?: (fn: (dir: SwipeDirection) => void) => void;
 }
@@ -24,7 +25,17 @@ function dirFrom(mx: number, sx: number): SwipeDirection {
 
 export function SwipeDeck<T>(props: Props<T>) {
   const { items, renderCard, onSwipe, keyOf } = props;
+  // Улетевшие карточки помним ПО НОМЕРУ, но сбрасываем при смене набора.
+  // Раньше номера жили вечно: человек свайпал две карточки, менял город — и
+  // первые две смены нового города считались уже просмотренными. Он их не
+  // видел никогда и не мог понять почему.
   const [gone] = useState(() => new Set<number>());
+  const deckKey = items.map((it) => keyOf(it)).join("|");
+  const lastDeck = useRef(deckKey);
+  if (lastDeck.current !== deckKey) {
+    lastDeck.current = deckKey;
+    gone.clear();
+  }
 
   const [springs, apiRef] = useSprings(items.length, (i) => ({
     x: 0,
@@ -48,7 +59,20 @@ export function SwipeDeck<T>(props: Props<T>) {
         config: { tension: 200, friction: 28 },
       };
     });
-    onSwipe(items[index], dir);
+    // Возврат карточки, если сервер отказал. Раньше она улетала сразу и
+    // насовсем: человек видел ошибку («смена уже занята», «оплатите счёт»),
+    // а смена исчезала из колоды — вернуться к ней было нельзя ничем.
+    const back = () => {
+      gone.delete(index);
+      apiRef.start((i) => (i === index
+        ? { x: 0, y: 0, rot: 0, config: { tension: 220, friction: 26 } }
+        : {}));
+      restack();
+    };
+    const res = onSwipe(items[index], dir) as unknown;
+    if (res && typeof (res as Promise<unknown>).catch === "function") {
+      (res as Promise<unknown>).catch(back);
+    }
     restack();
     if (gone.size === items.length) props.onEmpty?.();
   }

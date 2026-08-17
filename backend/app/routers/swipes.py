@@ -10,6 +10,7 @@ from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..schemas import SwipeIn, SwipeOut
 from ..security import current_principal
+from ..timeutil import local_today
 from .billing import commission_overdue
 
 router = APIRouter(prefix="/swipes", tags=["swipes"])
@@ -164,16 +165,31 @@ def swipe(
         )
 
     # Сначала валидируем цель — чтобы при 404 не писать свайп в никуда.
+    #
+    # Из ленты плохие цели и так исчезают, но свайп можно прислать напрямую с
+    # любым id: карточка, открытая час назад, ссылка, скрипт. Поэтому всё, что
+    # решает лента, проверяется ещё раз здесь — иначе доходило до мэтча, чата
+    # и договорённости о смене, которой нет.
     if body.target_type == "vacancy":
         vac_target = db.get(Vacancy, body.target_id)
-        # Заблокированная модератором смена не должна принимать отклики:
-        # из ленты она пропадает, но прямой запрос (или карточка, открытая
-        # раньше) по-прежнему доводил до мэтча — и схема мошенника жила
-        # дальше уже в чате.
         if vac_target is None or vac_target.status != "active":
             raise HTTPException(status_code=404, detail="Смена не найдена")
+        # Прошедшая смена. Она остаётся «активной», пока её не снимут руками,
+        # и отклик на вчерашний день доходил до мэтча: заведение получало
+        # человека на смену, которой уже не было.
+        if vac_target.date < local_today(vac_target.city):
+            raise HTTPException(status_code=409, detail="Эта смена уже прошла")
+        # Заблокированное заведение. Бан переводит его смены в blocked, но
+        # оператор может разблокировать смену отдельно — и она оживёт у
+        # заблокированного владельца.
+        owner = db.get(Employer, vac_target.employer_id)
+        if owner is None or owner.blocked:
+            raise HTTPException(status_code=404, detail="Смена не найдена")
     elif body.target_type == "user":
-        if db.get(User, body.target_id) is None:
+        target_user = db.get(User, body.target_id)
+        # Заблокированного человека звать нельзя: он не пройдёт вход, а
+        # заведение будет ждать его на смене.
+        if target_user is None or target_user.blocked:
             raise HTTPException(status_code=404, detail="Кандидат не найден")
 
     # Идемпотентность: повторный свайп по той же цели не списывает баланс

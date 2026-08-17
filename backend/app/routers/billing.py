@@ -340,9 +340,6 @@ def yookassa_webhook(
             rub = int(meta.get("amount_rub") or 0)
         except ValueError:
             rub = 0
-        # Потолок: сверка value↔metadata самореферентна (оба поля контролирует
-        # тот, кто знает секрет вебхука), поэтому единственная реальная защита от
-        # неограниченной эмиссии при утечке секрета — жёсткий лимит суммы.
         if not 100 <= rub <= 100_000:
             raise HTTPException(status_code=400, detail="Сумма вне лимита")
         amount = obj.get("amount", {})
@@ -358,6 +355,45 @@ def yookassa_webhook(
         charge_id = obj.get("id")
         if not charge_id:
             raise HTTPException(status_code=400, detail="Нет id платежа")
+
+        # ГЛАВНАЯ ПРОВЕРКА: спрашиваем у ЮKassa напрямую, был ли такой платёж.
+        #
+        # Вебхук не подписан, и защищён он секретом в адресе — а этот адрес
+        # живёт в чужом кабинете. Если секрет утечёт, кто угодно пришлёт
+        # «платёж прошёл, зачислите 100 000 ₽»: денег не будет, а баланс
+        # вырастет. Сверять сумму внутри самого письма бессмысленно — все его
+        # поля пишет отправитель, и прежняя проверка «value совпадает с
+        # metadata» была самореферентной, о чём тут и было написано.
+        #
+        # Спрашиваем по API нашими ключами, которых у отправителя письма нет,
+        # и берём сумму ОТТУДА. Подделать платёж становится невозможно.
+        if settings.yookassa_ready:
+            from ..reconcile import fetch_payment
+
+            real = fetch_payment(str(charge_id))
+            if real is None:
+                # ЮKassa недоступна — не зачисляем и не подтверждаем приём:
+                # она повторит вебхук, а ночная сверка подберёт платёж сама.
+                raise HTTPException(
+                    status_code=503,
+                    detail="Не удалось проверить платёж — повторите позже",
+                )
+            if real.get("status") != "succeeded":
+                raise HTTPException(status_code=400, detail="Платёж не проведён")
+            real_amount = (real.get("amount") or {})
+            if (
+                str(real_amount.get("value")) != f"{rub}.00"
+                or real_amount.get("currency") != "RUB"
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Сумма не совпадает с платежом в ЮKassa",
+                )
+            real_meta = real.get("metadata") or {}
+            if real_meta.get("owner_id") != owner_id:
+                raise HTTPException(
+                    status_code=400, detail="Платёж принадлежит другому аккаунту"
+                )
         if db.query(Purchase).filter(
             Purchase.provider_charge_id == charge_id
         ).first():

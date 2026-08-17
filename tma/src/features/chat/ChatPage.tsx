@@ -42,6 +42,10 @@ export function ChatPage() {
   const myId = useSession((s) => s.userId);
   const role = useSession((s) => s.role);
   const [text, setText] = useState("");
+  // Есть ли живое соединение. Нужно, чтобы честно сказать человеку «связь
+  // потеряна, восстанавливаем» вместо молчаливого чата, который выглядит
+  // рабочим, но ничего не получает.
+  const [live, setLive] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
   // Подтверждение смены берём из данных сервера, а не из локального стейта —
   // иначе при переоткрытии чата кнопка снова «Подтвердить», хотя ты уже нажал.
@@ -117,13 +121,47 @@ export function ChatPage() {
   }
 
   // Живой чат через WebSocket (только при реальном backend).
+  //
+  // С переподключением. Соединение рвётся постоянно и без всяких поломок:
+  // метро, лифт, переключение с вайфая на мобильный, свёрнутое приложение.
+  // Раньше после обрыва чат молча замолкал навсегда — человек писал в пустоту
+  // и видел ответы только если закрывал и открывал экран заново. Теперь
+  // соединение поднимается само, а на время обрыва история подтягивается
+  // обычным запросом, чтобы ничего не потерялось.
   useEffect(() => {
     if (!useBackend || !matchId) return;
-    const token = getToken();
-    const ws = new WebSocket(
-      `${wsBaseURL}/ws/chat/${matchId}?token=${token ?? ""}`,
-    );
-    ws.onmessage = (ev) => {
+    let closed = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let ws: WebSocket | null = null;
+
+    const connect = () => {
+      if (closed) return;
+      const token = getToken();
+      ws = new WebSocket(
+        `${wsBaseURL}/ws/chat/${matchId}?token=${token ?? ""}`,
+      );
+      ws.onopen = () => {
+        // Соединение восстановилось — дотягиваем то, что пришло, пока молчали.
+        if (attempt > 0) qc.invalidateQueries({ queryKey: ["messages", matchId] });
+        attempt = 0;
+        setLive(true);
+      };
+      const retry = () => {
+        setLive(false);
+        if (closed) return;
+        // Пауза растёт: 1, 2, 4… до 15 секунд. Так мы не долбим сервер,
+        // когда связи нет совсем, но возвращаемся быстро, если она мигнула.
+        const delay = Math.min(15000, 1000 * 2 ** attempt);
+        attempt += 1;
+        timer = setTimeout(connect, delay);
+      };
+      ws.onclose = retry;
+      ws.onerror = () => ws?.close();
+      ws.onmessage = onFrame;
+    };
+
+    const onFrame = (ev: MessageEvent) => {
       try {
         const raw = JSON.parse(ev.data);
         appendMessage({
@@ -148,7 +186,16 @@ export function ChatPage() {
         /* ignore malformed frame */
       }
     };
-    return () => ws.close();
+
+    connect();
+    return () => {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      if (ws) {
+        ws.onclose = null;   // иначе закрытие экрана запустит переподключение
+        ws.close();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
@@ -298,6 +345,15 @@ export function ChatPage() {
           </button>
         </div>
 
+        {!live && useBackend && (
+          <div
+            className="muted"
+            role="status"
+            style={{ textAlign: "center", fontSize: 13, padding: "6px 0" }}
+          >
+            Связь потеряна — восстанавливаем…
+          </div>
+        )}
         {isLoading && <SkeletonList rows={4} />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && messages && messages.length === 0 && (

@@ -1,4 +1,5 @@
 """Общие помощники по правам пользователя (денежный баланс, флаги)."""
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .models import Entitlement
@@ -27,7 +28,19 @@ def get_or_create(db: Session, owner_id: str) -> Entitlement:
     if ent is None:
         ent = Entitlement(owner_id=owner_id)
         db.add(ent)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Два одновременных запроса от одного человека (открыл приложение
+            # и сразу нажал что-то) оба видели «строки нет» и оба пытались её
+            # создать. Второй падал на первичном ключе — и человек получал
+            # 500 на ровном месте, при первом же входе. Значит строку уже
+            # создал сосед: откатываемся и берём её.
+            db.rollback()
+            ent = db.get(Entitlement, owner_id)
+            if ent is None:
+                raise
+            return ent
         db.refresh(ent)
     return ent
 
