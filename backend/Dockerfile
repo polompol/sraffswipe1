@@ -25,9 +25,11 @@ USER appuser
 
 EXPOSE 8000
 
-# healthcheck бьёт в /health.
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"
+# Проверка живости бьёт в /health/ready — он спрашивает ещё и базу. Прежний
+# /health отвечал «ок» и с мёртвой базой: контейнер считался здоровым, сторож
+# молчал, а люди видели ошибку на каждом экране.
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=90s \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/ready').status==200 else 1)"
 
 # Прогоняем миграции БД, затем стартуем uvicorn (число воркеров — WEB_CONCURRENCY).
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY}"]

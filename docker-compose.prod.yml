@@ -72,6 +72,17 @@ services:
   api:
     build: ./backend
     restart: unless-stopped
+    # Проверка живости — по /health/ready, а не по /health: первый спрашивает
+    # ещё и базу. Без этого контейнер с умершей базой считался здоровым:
+    # docker молчит, сторож молчит, а люди видят ошибку на каждом экране.
+    # Своими силами, без curl: в slim-образе его нет.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     environment:
       DATABASE_URL: postgresql+psycopg://staffswipe:${POSTGRES_PASSWORD}@db:5432/staffswipe
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
@@ -145,6 +156,12 @@ services:
     build: ./backend
     restart: unless-stopped
     command: ["python", "-m", "app.scheduler"]
+    # Проверку живости отключаем: она встроена в образ и стучится в веб-сервер
+    # на порту 8000, а здесь его нет — планировщик просто выполняет задачи по
+    # расписанию. С ней контейнер ВСЕГДА показывался «нездоровым»: владелец
+    # привыкает не смотреть на это поле и пропускает настоящую поломку.
+    healthcheck:
+      disable: true
     environment:
       DATABASE_URL: postgresql+psycopg://staffswipe:${POSTGRES_PASSWORD}@db:5432/staffswipe
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
