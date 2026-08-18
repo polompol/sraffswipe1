@@ -18,5 +18,30 @@ export default defineConfig({
   build: {
     target: "es2021",
     outDir: "dist",
+    rollupOptions: {
+      output: {
+        // Чужие библиотеки — отдельными файлами от нашего кода.
+        //
+        // Приложение в Telegram открывают часто и обновляют тоже часто: при
+        // одном общем файле любая наша правка заставляла телефон качать
+        // заново ВСЁ, включая React и остальные библиотеки, которые не
+        // менялись. Теперь они лежат отдельно и берутся из памяти телефона,
+        // а качается только изменившаяся часть.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("react-router")) return "vendor-router";
+          if (id.includes("@tanstack")) return "vendor-query";
+          if (id.includes("react-spring") || id.includes("use-gesture")) {
+            return "vendor-motion";
+          }
+          if (id.includes("@telegram-apps") || id.includes("valibot")) {
+            return "vendor-telegram";
+          }
+          if (id.includes("react-dom") || id.includes("/react/")) {
+            return "vendor-react";
+          }
+        },
+      },
+    },
   },
 });

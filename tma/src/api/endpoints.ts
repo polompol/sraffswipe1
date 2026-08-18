@@ -1,5 +1,4 @@
-import axios from "axios";
-import { api, baseURL, getToken } from "./client";
+import { api, baseURL, getToken, postForm } from "./client";
 import * as mock from "./mock";
 import type {
   AppRole,
@@ -25,7 +24,10 @@ export async function authTelegram(
   role: AppRole,
 ): Promise<AuthResult> {
   if (!USE_BACKEND) return mock.authTelegram(role);
-  const { data } = await api.post("/auth/telegram", { init_data: initData, role });
+  const { data } = await api.post<AuthResult>("/auth/telegram", {
+    init_data: initData,
+    role,
+  });
   return { accessToken: data.accessToken, role: data.role, userId: data.userId };
 }
 
@@ -81,7 +83,7 @@ export async function sendSwipe(
   direction: SwipeDirection,
 ): Promise<SwipeResult> {
   if (!USE_BACKEND) return mock.sendSwipe(targetId, direction);
-  const { data } = await api.post("/swipes", {
+  const { data } = await api.post<SwipeResult>("/swipes", {
     target_id: targetId,
     target_type: targetType,
     direction,
@@ -1075,8 +1077,8 @@ export async function uploadPhoto(file: File): Promise<string> {
   // Поля от хранилища идут ПЕРЕД файлом — иначе подпись не проверится.
   Object.entries(data.fields).forEach(([k, v]) => form.append(k, v));
   form.append("file", file);
-  // Прямая отправка в хранилище — без наших интерсепторов и JWT.
-  await axios.post(data.upload_url, form);
+  // Прямая отправка в хранилище — без наших заголовков и токена.
+  await postForm(data.upload_url, form);
   return data.public_url;
 }
 

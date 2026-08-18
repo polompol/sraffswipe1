@@ -22,7 +22,50 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- ЗАСТАВКА ДО ЗАГРУЗКИ ПРИЛОЖЕНИЯ.
+
+         Пока телефон качает и разбирает код (на мобильном интернете в зале
+         это секунда-полторы), экран был просто пустым — человек не понимал,
+         открылось приложение или зависло, и жал ещё раз. Здесь нарисован
+         каркас: шапка, карточка и нижняя панель. Он в самом HTML, поэтому
+         виден мгновенно, и его заменяет настоящее приложение, как только
+         оно готово. Цвет темы берётся из того же ключа, что и в приложении,
+         иначе тёмная тема моргала бы белым. -->
+    <style>
+      #boot { position: fixed; inset: 0; padding: 16px; background: #efe7d3; }
+      #boot .b-row { display: flex; align-items: center; gap: 10px; }
+      #boot .b-logo { width: 36px; height: 36px; border-radius: 10px;
+        background: linear-gradient(135deg, #c0334a, #a51c30); }
+      #boot .b-name { font: 800 22px/1.2 system-ui, sans-serif; color: #241f1b; }
+      #boot .b-card { margin-top: 18px; height: 58vh; border-radius: 24px;
+        background: linear-gradient(135deg, #a51c30, #7e1322); opacity: .18; }
+      #boot .b-bar { position: absolute; left: 0; right: 0; bottom: 0;
+        height: 64px; background: #fffdf8; border-top: 1px solid #e4d9c2; }
+      html[data-theme="dark"] #boot { background: #160d0f; }
+      html[data-theme="dark"] #boot .b-name { color: #f3e7e9; }
+      html[data-theme="dark"] #boot .b-bar { background: #201316;
+        border-top-color: #3a2329; }
+      @media (prefers-reduced-motion: no-preference) {
+        #boot .b-card { animation: bootPulse 1.4s ease-in-out infinite; }
+        @keyframes bootPulse { 50% { opacity: .1; } }
+      }
+    </style>
+    <script>
+      try {
+        var t = localStorage.getItem("ss_theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) { /* приватный режим — просто светлая тема */ }
+    </script>
+    <div id="root">
+      <div id="boot">
+        <div class="b-row">
+          <div class="b-logo"></div>
+          <div class="b-name">StaffSwipe</div>
+        </div>
+        <div class="b-card"></div>
+        <div class="b-bar"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
