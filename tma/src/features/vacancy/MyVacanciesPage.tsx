@@ -123,7 +123,7 @@ export function MyVacanciesPage() {
                   style={{
                     marginTop: 8,
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: "var(--text-sm)",
                     color: full ? "var(--success)" : "var(--gold)",
                   }}
                 >

@@ -231,7 +231,7 @@ export function FeedPage() {
         {/* Именно h1: это главный экран приложения, и заголовка первого уровня
             на нём не было вовсе — скринридер не мог назвать страницу. Класс
             .h2 оставляем: он задаёт размер, а не уровень. */}
-        <h1 className="h2" style={{ margin: 0, flex: 1, fontSize: 26, letterSpacing: -0.3 }}>
+        <h1 className="h2" style={{ margin: 0, flex: 1, fontSize: "var(--text-2xl)", letterSpacing: -0.3 }}>
           Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
         </h1>
         {isSeeker && (

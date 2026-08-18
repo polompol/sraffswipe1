@@ -75,7 +75,7 @@ export function MatchOverlay({
           выглядел тёмным пятном. */}
       <div
         id={titleId}
-        style={{ fontSize: 44, fontWeight: 900, color: "#e8c268", position: "relative" }}
+        style={{ fontSize: "var(--text-hero)", fontWeight: 900, color: "#e8c268", position: "relative" }}
       >
         Это мэтч!
       </div>

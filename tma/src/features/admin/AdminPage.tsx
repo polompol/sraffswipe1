@@ -91,7 +91,7 @@ function DisputeFacts({ d }: { d: NonNullable<AdminReport["dispute"]> }) {
       style={{ margin: "8px 0", padding: 12, background: "var(--bg)" }}
     >
       {rows.map(([label, value, strong]) => (
-        <div key={label} className="row" style={{ gap: 8, fontSize: 13.5 }}>
+        <div key={label} className="row" style={{ gap: 8, fontSize: "var(--text-xs)" }}>
           <span className="muted" style={{ minWidth: 0, flex: 1 }}>{label}</span>
           <span style={{ fontWeight: strong ? 700 : 600, color: strong ? "var(--like)" : undefined, textAlign: "right" }}>
             {value || "—"}
@@ -126,8 +126,8 @@ type TabId = (typeof TABS)[number]["id"];
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="card" style={{ textAlign: "center", padding: "14px 8px" }}>
-      <div style={{ fontSize: 22, fontWeight: 900, color: "var(--gold)" }}>{value}</div>
-      <div className="muted" style={{ fontSize: 12 }}>{label}</div>
+      <div style={{ fontSize: "var(--text-xl)", fontWeight: 900, color: "var(--gold)" }}>{value}</div>
+      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{label}</div>
     </div>
   );
 }
@@ -142,7 +142,7 @@ function Section({ title, hint, children }: {
     <section style={{ marginBottom: 22 }}>
       <h2 className="h2" style={{ margin: "0 0 6px" }}>{title}</h2>
       {hint && (
-        <p className="muted" style={{ margin: "0 0 10px", fontSize: 13 }}>{hint}</p>
+        <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-xs)" }}>{hint}</p>
       )}
       {children}
     </section>
@@ -576,7 +576,7 @@ export function AdminPage() {
                   height: 18,
                   borderRadius: 999,
                   padding: "0 5px",
-                  fontSize: 12,
+                  fontSize: "var(--text-xs)",
                   fontWeight: 800,
                   display: "inline-flex",
                   alignItems: "center",
@@ -616,7 +616,7 @@ export function AdminPage() {
               {JOBS.map((j) => (
                 <div key={j.id} className="card">
                   <b>{j.title}</b>
-                  <p className="muted" style={{ margin: "6px 0 10px", fontSize: 13 }}>
+                  <p className="muted" style={{ margin: "6px 0 10px", fontSize: "var(--text-xs)" }}>
                     {j.hint}
                   </p>
                   <Button
@@ -681,7 +681,7 @@ export function AdminPage() {
                     <span className="tag" style={{ marginLeft: 8, color: "var(--gold)", borderColor: "var(--gold)" }}>авто</span>
                   )}
                   <span className="spacer" />
-                  <span className="muted" style={{ fontSize: 12 }}>
+                  <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
                     {TARGET_LABEL[r.targetType] ?? r.targetType} · {fmtDate(r.createdAt)}
                   </span>
                 </div>
@@ -742,7 +742,7 @@ export function AdminPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>✓ Закрыта</div>
+                  <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>✓ Закрыта</div>
                 )}
               </div>
             ))}
@@ -759,19 +759,19 @@ export function AdminPage() {
               <div className="card">
                 <div className="row">
                   <span style={{ flex: 1 }}>
-                    <div className="muted" style={{ fontSize: 12 }}>Комиссия начислена</div>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: "var(--gold)" }}>
+                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>Комиссия начислена</div>
+                    <div style={{ fontSize: "var(--text-xl)", fontWeight: 900, color: "var(--gold)" }}>
                       {rev.data.commissionAccruedRub.toLocaleString("ru-RU")} ₽
                     </div>
                   </span>
                   <span style={{ textAlign: "right" }}>
-                    <div className="muted" style={{ fontSize: 12 }}>Оплачено</div>
+                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>Оплачено</div>
                     <div style={{ fontWeight: 800 }}>
                       {rev.data.commissionPaidRub.toLocaleString("ru-RU")} ₽
                     </div>
                   </span>
                 </div>
-                <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+                <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
                   К оплате сейчас:{" "}
                   <b style={{ color: "var(--text)" }}>
                     {rev.data.commissionPendingRub.toLocaleString("ru-RU")} ₽
@@ -779,13 +779,13 @@ export function AdminPage() {
                   {" · "}смен с комиссией:{" "}
                   <b style={{ color: "var(--text)" }}>{rev.data.shiftsBilled}</b>
                 </div>
-                <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
+                <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                   Списано (прощено и безнадёжное):{" "}
                   <b style={{ color: "var(--text)" }}>
                     {rev.data.commissionWrittenOffRub.toLocaleString("ru-RU")} ₽
                   </b>
                 </div>
-                <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
+                <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                   Пополнено баланса:{" "}
                   <b style={{ color: "var(--text)" }}>
                     {rev.data.topupsRub.toLocaleString("ru-RU")} ₽
@@ -815,7 +815,7 @@ export function AdminPage() {
                   <div className="row">
                     <span style={{ flex: 1 }}>
                       <b>{c.company}</b>
-                      <div className="muted" style={{ fontSize: 12 }}>
+                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                         {c.shifts} {plural(c.shifts, "закрытая смена", "закрытые смены", "закрытых смен")}
                       </div>
                     </span>
@@ -844,7 +844,7 @@ export function AdminPage() {
                   </div>
                   {writeOffFor === c.employerId && (
                     <div className="card" style={{ marginTop: 8, borderColor: "var(--danger)" }}>
-                      <p className="muted" style={{ margin: "0 0 8px", fontSize: 13 }}>
+                      <p className="muted" style={{ margin: "0 0 8px", fontSize: "var(--text-xs)" }}>
                         Списание — это не оплата: денег не будет. Причина
                         останется в истории и в отчёте, чтобы прощённое не
                         считалось выручкой.
@@ -892,7 +892,7 @@ export function AdminPage() {
                 <div key={p.id} className="card row">
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <b>{p.amount.toLocaleString("ru-RU")} ₽</b>
-                    <div className="muted" style={{ fontSize: 12 }}>
+                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                       {fmtDate(p.createdAt)} · {PROVIDER_RU[p.provider] ?? p.provider}
                       {" · "}{PAYMENT_STATUS_RU[p.status] ?? p.status}
                     </div>
@@ -931,7 +931,7 @@ export function AdminPage() {
                       {u.blocked && (
                         <span className="tag" style={{ marginLeft: 8, color: "var(--crimson-dark)", borderColor: "var(--crimson-dark)" }}>бан</span>
                       )}
-                      <div className="muted" style={{ fontSize: 12 }}>
+                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                         {u.role === "employer" ? "заведение" : "соискатель"}
                         {u.username ? ` · @${u.username}` : ""}
                         {u.role === "employer"
@@ -1073,7 +1073,7 @@ export function AdminPage() {
                   )}
                   {eraseFor === u.id && (
                     <div className="card" style={{ marginTop: 8, borderColor: "var(--danger)" }}>
-                      <p className="muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+                      <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-xs)" }}>
                         Удалить персональные данные по заявлению (152-ФЗ). Из профиля
                         исчезнет всё личное, войти в аккаунт будет нельзя.{" "}
                         <b>Отменить это нельзя.</b> Смены, отзывы и начисленная
@@ -1124,11 +1124,11 @@ export function AdminPage() {
                 <div key={`${c.ownerId}-${c.role}`} className="card row">
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <b>{c.name}</b>
-                    <div className="muted" style={{ fontSize: 12 }}>
+                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                       {c.role === "employer" ? "заведение" : "работник"}
                     </div>
                   </span>
-                  <span style={{ textAlign: "right", fontSize: 13 }}>
+                  <span style={{ textAlign: "right", fontSize: "var(--text-xs)" }}>
                     {c.lateCancels > 0 && (
                       <div style={{ color: "var(--danger)", fontWeight: 700 }}>
                         поздних отмен: {c.lateCancels}
@@ -1164,7 +1164,7 @@ export function AdminPage() {
                   <div key={`${b.type}-${b.id}`} className="card row">
                     <span style={{ flex: 1 }}>
                       <b>{b.info}</b>
-                      <div className="muted" style={{ fontSize: 12 }}>
+                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                         {b.type === "vacancy" ? "вакансия" : "пользователь"}
                       </div>
                     </span>
@@ -1198,7 +1198,7 @@ export function AdminPage() {
                 <div key={`${p.employer}-${p.worker}`} className="card row">
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <b>{p.employer}</b>
-                    <div className="muted" style={{ fontSize: 13 }}>{p.worker}</div>
+                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{p.worker}</div>
                   </span>
                   <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
                     {p.shifts} {plural(p.shifts, "смена", "смены", "смен")}
@@ -1222,7 +1222,7 @@ export function AdminPage() {
                 {sources.data.map((s) => (
                   <div key={s.source} className="row" style={{ padding: "5px 0" }}>
                     <b style={{ flex: 1 }}>{s.source}</b>
-                    <span className="muted" style={{ fontSize: 13 }}>
+                    <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
                       работники {s.seekers} · заведения {s.employers}
                     </span>
                   </div>
@@ -1268,7 +1268,7 @@ function CampaignLinkMaker() {
         />
         {link && (
           <div className="row" style={{ gap: 8, marginTop: 10 }}>
-            <code style={{ flex: 1, fontSize: 12, wordBreak: "break-all" }}>{link}</code>
+            <code style={{ flex: 1, fontSize: "var(--text-xs)", wordBreak: "break-all" }}>{link}</code>
             <button
               className="btn"
               style={{ width: "auto", padding: "0 14px", height: 44 }}

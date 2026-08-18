@@ -28,7 +28,7 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
           <span className="onb-demo-like">♥</span>
         </div>
         <h1 className="h1" style={{ maxWidth: 340 }}>{camp.title}</h1>
-        <p className="muted" style={{ fontSize: 16, maxWidth: 330 }}>{camp.sub}</p>
+        <p className="muted" style={{ fontSize: "var(--text-md)", maxWidth: 330 }}>{camp.sub}</p>
         <span
           className="tag"
           style={{
@@ -38,7 +38,7 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
         >
           <IconBolt size={15} /> Оплата напрямую · без опыта берут
         </span>
-        <p className="muted" style={{ fontSize: 12.5 }}>
+        <p className="muted" style={{ fontSize: "var(--text-xs)" }}>
           Новые смены появляются каждый день
         </p>
         <button
@@ -132,7 +132,7 @@ export function Onboarding() {
             </span>
           )}
           <h1 className="h1">{slide.title}</h1>
-          <p className="muted" style={{ fontSize: 15, maxWidth: 320 }}>
+          <p className="muted" style={{ fontSize: "var(--text-base)", maxWidth: 320 }}>
             {slide.text}
           </p>
           {i === 0 && (
@@ -150,7 +150,7 @@ export function Onboarding() {
             </span>
           )}
         </div>
-        <p className="muted" style={{ textAlign: "center", fontSize: 12.5, marginBottom: 12 }}>
+        <p className="muted" style={{ textAlign: "center", fontSize: "var(--text-xs)", marginBottom: 12 }}>
           Новые смены появляются каждый день
         </p>
         <div className="row" style={{ justifyContent: "center", marginBottom: 20 }}>

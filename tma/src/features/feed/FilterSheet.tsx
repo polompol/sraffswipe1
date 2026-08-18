@@ -170,7 +170,7 @@ export function FilterSheet({
       <div style={{ margin: "8px 0 16px" }}>
         {ROLE_FAMILY_ORDER.map((fam) => (
           <div key={fam} style={{ marginBottom: 10 }}>
-            <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
+            <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
               {ROLE_FAMILY_LABELS[fam]}
             </div>
             <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -234,7 +234,7 @@ export function FilterSheet({
           style={{ width: "100%", margin: "8px 0 18px", accentColor: "var(--gold)" }}
         />
       ) : (
-        <div className="muted" style={{ fontSize: 13, margin: "6px 0 18px" }}>
+        <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "6px 0 18px" }}>
           Разреши доступ к геолокации, чтобы фильтровать смены по расстоянию.
         </div>
       )}
@@ -259,8 +259,8 @@ export function FilterSheet({
             {searches.map((s) => (
               <div key={s.id} className="row" style={{ gap: 8 }}>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <b style={{ fontSize: 15 }}>{s.title}</b>
-                  <div className="muted" style={{ fontSize: 13 }}>
+                  <b style={{ fontSize: "var(--text-base)" }}>{s.title}</b>
+                  <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                     {s.notify ? "уведомления включены" : "уведомления выключены"}
                   </div>
                 </span>

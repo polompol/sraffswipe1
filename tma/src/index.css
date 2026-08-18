@@ -19,7 +19,7 @@
 }
 
 .h1 {
-  font-size: 28px;
+  font-size: var(--text-3xl);
   font-weight: 800;
   letter-spacing: -0.5px;
   margin: 0 0 4px;
@@ -29,14 +29,14 @@
   text-wrap: balance;
 }
 .h2 {
-  font-size: 22px;
+  font-size: var(--text-xl);
   font-weight: 700;
   margin: 0 0 8px;
   text-wrap: balance;
 }
 .muted {
   color: var(--muted);
-  font-size: 15px;
+  font-size: var(--text-base);
   line-height: 1.5;
   /* Для абзацев — pretty: не оставляет одно слово на последней строке. */
   text-wrap: pretty;
@@ -61,7 +61,7 @@
   border-radius: var(--radius-sm);
   background: linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
   color: #fff;
-  font-size: 16.5px;
+  font-size: var(--text-md);
   font-weight: 700;
   padding: 16px 20px;
   cursor: pointer;
@@ -307,7 +307,7 @@ input:focus-visible {
   justify-content: center;
   gap: 5px;
   /* Читабельность чипов-фильтров: крупнее шрифт, толще рамка, выше зона тапа. */
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 600;
   padding: 8px 14px;
   /* 44px — минимальная комфортная зона нажатия пальцем (чипы фильтров,
@@ -338,7 +338,7 @@ button.tag:disabled {
 .form-label {
   display: block;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   margin-bottom: 6px;
 }
@@ -353,7 +353,7 @@ button.tag:disabled {
   background: var(--surface);
   border-radius: var(--radius-sm);
   padding: 14px 16px;
-  font-size: 16px;
+  font-size: var(--text-md);
   color: var(--text);
   outline: none;
 }
@@ -391,7 +391,7 @@ button.tag:disabled {
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 14.5px;
+  font-size: var(--text-sm);
   font-weight: 700;
   cursor: pointer;
 }
@@ -437,19 +437,22 @@ button.tag:disabled {
 }
 .icon-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: 2px;
+  right: 2px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
   border-radius: 999px;
   /* Заливка, а не акцентный цвет: в тёмной теме --gold осветлён под текст,
      и белые цифры на нём давали 4.3:1 при кегле 10px. */
   background: var(--gold-fill);
   color: #fff;
-  font-size: 10px;
+  /* Кружок со счётчиком новых сообщений. Цифры были 10px — их видно как
+     пятнышко, а не как число: «сколько именно непрочитанных» приходилось
+     угадывать. Кружок вырос вместе с цифрой. */
+  font-size: var(--text-xs);
   font-weight: 700;
-  line-height: 16px;
+  line-height: 22px;
   text-align: center;
 }
 /* Нижний лист (фильтры, детали смены): grabber, прокручиваемое тело, футер.
@@ -522,7 +525,7 @@ button.tag:disabled {
   padding: 2px 0;
   margin: 0;
   color: var(--muted);
-  font-size: 15.5px;
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
 }
@@ -545,9 +548,31 @@ button.tag:disabled {
     560px
   );
 }
+/* В крупном режиме кнопки «Пропустить/Отклик» и подписи под ними выше (88px
+   вместо 72px), и панель вкладок тоже. Оставляем им больше места, иначе
+   подписи уезжают под панель — а это две единственные подсказки о жестах на
+   главном экране, и читает их как раз тот, кто ещё не понял, куда смахивать. */
+body[data-large="1"] .deck {
+  height: clamp(
+    280px,
+    calc(100dvh - 392px - env(safe-area-inset-bottom)),
+    520px
+  );
+}
 .swipe-card {
   position: absolute;
   inset: 0;
+  /* Содержимое карточки — обычная колонка: сверху плашки, снизу описание.
+     Раньше оба блока были приклеены к своим краям (top: 16px и bottom: 22px)
+     и просто накладывались друг на друга, когда текста становилось больше:
+     длинное название заведения, крупный режим для слабого зрения. Колонка
+     этого не допускает — блоки расталкиваются. */
+  display: flex;
+  flex-direction: column;
+  /* Плашки прижаты к верху, описание — к низу; свободное место между ними.
+     Когда места не хватает, ужимается описание (лишние строки обрезаются), а
+     плашки остаются на своём месте. */
+  justify-content: space-between;
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: #2a1d14;
@@ -579,10 +604,15 @@ button.tag:disabled {
   );
 }
 .swipe-body {
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 22px;
+  /* см. .swipe-top — иначе описание скрывается под слоем фото. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 0 20px 22px;
+  /* Обе строки обязательны: без них блок не ужимается, а вылезает за карточку
+     и накрывает кнопки «Пропустить/Отклик». */
+  min-height: 0;
+  overflow: hidden;
   color: #fff;
   /* Подстраховка на случай очень светлого фото: тонкая тень отделяет буквы
      от фона, не делая текст «жирным». */
@@ -593,7 +623,7 @@ button.tag:disabled {
   display: grid;
   gap: 4px;
   margin-top: 6px;
-  font-size: 15px;
+  font-size: var(--text-base);
   opacity: 0.92;
 }
 .card-meta > div {
@@ -625,32 +655,44 @@ button.tag:disabled {
   background: linear-gradient(150deg, #5c1626, #3b2018 62%, #2c1d12);
 }
 
-/* Карточка без фото: вместо пустоты — главное крупно (сколько платят / кто). */
+/* Верх карточки: ряд плашек, а под ним — главное крупно (сколько платят или
+   кто), если фото нет.
+
+   Раньше это были два независимых слоя с фиксированными координатами: плашки
+   на 16px от верха, сумма на 84px. Стоило плашкам перенестись на вторую
+   строку — длинное название района, крупный режим для слабого зрения — и они
+   ложились прямо поверх суммы. Лечили это запретом переноса, то есть плашки
+   вместо этого уезжали за край. Теперь оба блока лежат в одной колонке и
+   пересечься не могут в принципе. */
+.swipe-top {
+  /* relative обязателен: фото и затемнение лежат отдельными слоями поверх
+     карточки, и обычный текст рисуется ПОД ними — плашки просто исчезали. */
+  position: relative;
+  margin: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .swipe-hero {
-  /* Крепим блок к верху — сразу под рядом бейджей. Доля от высоты (30%,
-     половина) не годится: тело карточки растёт от длины описания и наезжало
-     бы на сумму у одних смен и оставляло дыру у других. */
-  position: absolute;
-  top: 84px;
-  left: 24px;
-  right: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  padding: 0 8px;
   text-align: center;
   color: #fff;
+  /* Жест свайпа не должен упираться в надпись. */
   pointer-events: none;
 }
 .swipe-hero-sum {
-  font-size: 46px;
+  font-size: var(--text-hero);
   font-weight: 900;
   line-height: 1.05;
   letter-spacing: -1px;
   text-shadow: 0 2px 12px rgba(40, 12, 18, 0.35);
 }
 .swipe-hero-cap {
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 600;
   opacity: 0.92;
 }
@@ -684,7 +726,7 @@ button.tag:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: var(--text-lg);
   color: #fff;
 }
 .onb-demo-skip { left: -56px; border: 2px solid var(--dislike); color: var(--dislike); }
@@ -728,7 +770,7 @@ button.tag:disabled {
   border-radius: 999px;
   padding: 6px 12px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--text-sm);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .swipe-tint {
@@ -743,7 +785,7 @@ button.tag:disabled {
   padding: 6px 14px;
   border: 4px solid;
   border-radius: 12px;
-  font-size: 30px;
+  font-size: var(--text-3xl);
   font-weight: 900;
   letter-spacing: 2px;
 }
@@ -784,7 +826,7 @@ button.tag:disabled {
   border-color: var(--dislike);
 }
 .act-label {
-  font-size: 13px;
+  font-size: var(--text-xs);
   font-weight: 700;
   line-height: 1;
 }
@@ -797,52 +839,30 @@ button.tag:disabled {
      ещё не знает жестов. */
   color: var(--muted);
 }
-/* Крупный режим (самостоятельная регулировка в профиле) — для слабого зрения */
+/* КРУПНЫЙ РЕЖИМ (регулировка в профиле) — для слабого зрения.
+
+   Сами размеры текста здесь больше не перечисляются: режим поднимает всю
+   типографическую шкалу разом (см. `body[data-large="1"]` в theme.css), и
+   растёт всё, что ею пользуется, — включая надписи, заданные в разметке.
+   Раньше список правил был длиннее этого файла, а половина текста на
+   карточке смены всё равно оставалась мелкой: её размеры шкале не
+   подчинялись.
+
+   Здесь остаётся только то, что размером шрифта не выражается: зоны нажатия
+   и отступы, которые должны вырасти вместе с текстом. */
+body[data-large="1"] {
+  /* Базовый размер для текста без своего размера (наследование). */
+  font-size: var(--text-lg);
+}
 body[data-large="1"] .act {
   width: 88px;
   height: 88px;
 }
-body[data-large="1"] .act-label {
-  font-size: 15px;
-}
-body[data-large="1"] .swipe-body {
-  font-size: 17px;
-}
-body[data-large="1"] .feed-loc {
-  font-size: 15px;
-}
-/* Крупный режим масштабирует и основную типографику по всему интерфейсу */
-body[data-large="1"] {
-  font-size: 19px;
-}
-body[data-large="1"] .h1 {
-  font-size: 34px;
-}
-body[data-large="1"] .h2 {
-  font-size: 26px;
-}
-body[data-large="1"] .muted {
-  font-size: 17px;
-}
 body[data-large="1"] .tag {
-  font-size: 17px;
   padding: 10px 16px;
 }
 body[data-large="1"] .btn {
-  font-size: 19px;
   min-height: 56px;
-}
-body[data-large="1"] .input {
-  font-size: 18px;
-}
-body[data-large="1"] .bubble {
-  font-size: 19px;
-}
-body[data-large="1"] .card-meta {
-  font-size: 17px;
-}
-body[data-large="1"] .tab {
-  font-size: 16px;
 }
 /* Узкий экран + крупный режим: подписи вкладок вместе шире экрана. Уменьшаем
    только подпись — зона нажатия и иконки остаются крупными, ради чего режим
@@ -864,7 +884,7 @@ body[data-large="1"] .tab {
   padding: 11px 15px;
   border-radius: 16px;
   margin: 4px 0;
-  font-size: 16px;
+  font-size: var(--text-md);
   /* Длинная ссылка/слово без пробелов иначе распирает пузырь и даёт
      горизонтальный скролл всей страницы; переводы строк сохраняем. */
   overflow-wrap: anywhere;
@@ -886,7 +906,7 @@ body[data-large="1"] .tab {
   background: var(--card);
   border: 1px solid var(--border);
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--text-xs);
   text-align: center;
 }
 
@@ -924,7 +944,7 @@ body[data-large="1"] .tab {
 .money-rain .coin {
   position: absolute;
   top: -8%;
-  font-size: 26px;
+  font-size: var(--text-2xl);
   font-weight: 900;
   color: #f4cf6a;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
@@ -1152,4 +1172,27 @@ body[data-large="1"] .tab {
 }
 .quick-row::-webkit-scrollbar {
   display: none;
+}
+
+/* Описание смены — единственный блок карточки, который отдаёт место другим.
+   Когда текста больше, чем помещается (длинное описание, крупный режим для
+   слабого зрения), ужимается оно, а не строки со способом оплаты и
+   медкнижкой: из-за этих строк человек либо едет на смену зря, либо нет. */
+.swipe-desc {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+.swipe-body > *:not(.swipe-desc) {
+  flex: none;
+}
+
+/* Крупный режим: текст больше, а карточка та же. Отыгрываем место на
+   отступах — иначе последняя строка («медкнижка», «нужно 2 чел.») остаётся
+   наполовину срезанной краем карточки, и это выглядит поломкой. */
+body[data-large="1"] .swipe-top {
+  gap: 8px;
+  margin: 12px 14px 0;
+}
+body[data-large="1"] .swipe-body {
+  margin: 0 16px 12px;
 }

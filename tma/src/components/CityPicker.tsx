@@ -48,7 +48,7 @@ export function CityPicker({
         ))}
       </datalist>
       {hint && (
-        <p className="muted" style={{ margin: "0 0 12px", fontSize: 13 }}>
+        <p className="muted" style={{ margin: "0 0 12px", fontSize: "var(--text-xs)" }}>
           {hint}
         </p>
       )}

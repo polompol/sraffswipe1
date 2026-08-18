@@ -66,7 +66,7 @@ export function Toaster() {
             padding: "10px 16px",
             borderRadius: 12,
             fontWeight: 600,
-            fontSize: 14,
+            fontSize: "var(--text-sm)",
             maxWidth: "88%",
             boxShadow: "var(--elev-3)",
           }}

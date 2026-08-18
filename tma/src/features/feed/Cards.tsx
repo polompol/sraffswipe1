@@ -1,4 +1,5 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
+import { useLargeMode } from "@/lib/large";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
@@ -49,10 +50,12 @@ const PAY_ICON: Record<PayMethod, typeof IconCash> = {
  *  огромной пустой буквы показываем главное: сколько платят и за что. Раньше
  *  верхняя половина карточки была пустым полем с инициалом, и лента без фото
  *  выглядела так, будто в сервисе ничего нет. */
-function SwipePhoto({ src, initial, hero, onHero }: {
+function SwipePhoto({ src, initial, hasHero, onHero }: {
   src?: string;
   initial: string;
-  hero?: ReactNode;
+  /** Есть ли у карточки крупная плашка на случай «фото нет». Саму плашку
+   *  рисует карточка — здесь только решается, показывать ли её. */
+  hasHero?: boolean;
   /** Показывается ли крупная плашка вместо фото — чтобы карточка не повторяла
    *  ту же сумму ещё раз ниже. */
   onHero?: (shown: boolean) => void;
@@ -60,19 +63,16 @@ function SwipePhoto({ src, initial, hero, onHero }: {
   const [state, setState] = useState<"load" | "ok" | "err">(src ? "load" : "err");
   // Битая ссылка на фото — тот же случай, что и «фото нет»: показываем
   // главное, а не пустую букву.
-  const showHero = !!hero && (!src || state === "err");
+  const showHero = !!hasHero && (!src || state === "err");
   useEffect(() => onHero?.(showHero), [showHero, onHero]);
   return (
     <div className="swipe-photo swipe-photo-fallback">
       {showHero ? (
-        <>
-          <div className="swipe-hero">{hero}</div>
-          {/* Буква — под плашкой, а не вместо неё. Без фото середина карточки
-              оставалась большим пустым пятном: главное было прижато к верху,
-              подробности к низу, а между ними полкарточки багрового ничего.
-              Буква заполняет провал и даёт карточке лицо. */}
-          <span className="swipe-initial swipe-initial-ghost">{initial}</span>
-        </>
+        /* Буква — под плашкой, а не вместо неё. Без фото середина карточки
+           оставалась большим пустым пятном: главное было прижато к верху,
+           подробности к низу, а между ними полкарточки багрового ничего.
+           Буква заполняет провал и даёт карточке лицо. */
+        <span className="swipe-initial swipe-initial-ghost">{initial}</span>
       ) : (
         <span className="swipe-initial">{initial}</span>
       )}
@@ -170,27 +170,28 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
   // строкой «≈ 2 800 ₽ за смену» на три сантиметра ниже. Два одинаковых числа
   // на одном экране заставляют сверять, не разные ли они.
   const [heroShown, setHeroShown] = useState(!hasPhoto);
+  // В крупном режиме крупной суммы поверх карточки нет: весь текст и так
+  // больше, и она перестаёт помещаться вместе с названием и условиями. Сумма
+  // при этом не пропадает — она возвращается обычной строкой в теле карточки.
+  const large = useLargeMode();
   return (
     <>
       <SwipePhoto
         src={hasPhoto ? v.interiorPhotoUrl : undefined}
         initial={(v.companyName || "С").charAt(0)}
         onHero={setHeroShown}
-        hero={
-          <>
-            <div className="swipe-hero-sum">
-              {estimatedPay(v).toLocaleString("ru-RU")} ₽
-            </div>
-            <div className="swipe-hero-cap">
-              за смену · {shiftDayLabel(v.date)}
-            </div>
-          </>
-        }
+        hasHero={!large}
       />
       <div className="swipe-shade" />
 
-      {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
-      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "wrap", rowGap: 8 }}>
+      {/* Плашки и крупная сумма — в ОДНОЙ колонке, друг под другом.
+          Раньше сумма стояла на фиксированной высоте от верха карточки, и
+          стоило ряду плашек перенестись на вторую строку (длинный район,
+          крупный режим для слабого зрения) — плашки наезжали прямо на сумму.
+          Теперь они не могут пересечься в принципе: это обычный поток. */}
+      <div className="swipe-top">
+        {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         <span className="glass">
           <IconMoney size={14} /> {rateLabel(v.rate, v.rateType)}
         </span>
@@ -220,6 +221,17 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
             <IconPin size={13} /> {v.distanceKm.toFixed(1)} км
           </span>
         )}
+        </div>
+        {heroShown && (
+          <div className="swipe-hero">
+            <div className="swipe-hero-sum">
+              {estimatedPay(v).toLocaleString("ru-RU")} ₽
+            </div>
+            <div className="swipe-hero-cap">
+              за смену · {shiftDayLabel(v.date)}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="swipe-body">
@@ -229,10 +241,20 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           </span>
         </div>
 
-        <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontSize: "var(--text-2xl)", fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{v.companyName}</span>
           {v.employerVerified && <VerifiedDot title="Проверенное заведение" />}
         </div>
+
+        {/* Сколько заплатят — сразу под названием, а не последней строкой
+            карточки. Когда текста много (длинное описание, крупный режим для
+            слабого зрения), низ карточки обрезается — и обрезалось ровно то
+            число, ради которого человек её и открыл. */}
+        {!heroShown && (
+          <div style={{ marginTop: 4, fontWeight: 800, fontSize: "var(--text-md)" }}>
+            ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
+          </div>
+        )}
 
         <div className="card-meta">
           <div>
@@ -253,7 +275,11 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         </div>
 
         {v.description && (
-          <div style={{ marginTop: 8, opacity: 0.92, fontSize: 15, lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          // Класс, а не только стиль: при нехватке места ужимается ИМЕННО
+          // описание — оно наименее важное на карточке. Иначе обрезался низ, а
+          // там способ оплаты и «медкнижка» — то, из-за чего человек зря
+          // приедет на смену.
+          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.92, fontSize: "var(--text-base)", lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {v.description}
           </div>
         )}
@@ -299,11 +325,6 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           )}
         </div>
 
-        {!heroShown && (
-          <div style={{ marginTop: 8, fontWeight: 800, fontSize: 16 }}>
-            ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
-          </div>
-        )}
       </div>
     </>
   );
@@ -325,15 +346,35 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
     (t) => t !== "experienced" && t !== "medBook" && t !== "selfEmployed",
   );
   const [heroShown, setHeroShown] = useState(!hasPhoto);
+  const large = useLargeMode();
   return (
     <>
       <SwipePhoto
         src={hasPhoto ? photos[0] : undefined}
         initial={(s.name || "?").charAt(0)}
         onHero={setHeroShown}
-        hero={
-          <>
-            <div className="swipe-hero-sum" style={{ fontSize: 34 }}>
+        hasHero={!large}
+      />
+      <div className="swipe-shade" />
+      {/* Плашки и крупная должность — в одной колонке, друг под другом: так
+          они не могут наехать друг на друга, даже если плашки перенесутся на
+          вторую строку (длинное название, крупный режим). Раньше ряду
+          запрещали переноситься именно поэтому. */}
+      <div className="swipe-top">
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", rowGap: 8 }}>
+        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
+        {s.availableToday && (
+          // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
+          // самая заметная плашка карточки читалась хуже всего остального.
+          <span className="glass pulse" style={{ background: "var(--super)", color: "#2a1f1a", flex: "none", whiteSpace: "nowrap" }}>
+            <IconBolt size={13} /> Готов сегодня
+          </span>
+        )}
+        <span className="spacer" />
+        </div>
+        {heroShown && (
+          <div className="swipe-hero">
+            <div className="swipe-hero-sum" style={{ fontSize: "var(--text-display)" }}>
               {roles.length > 0 ? STAFF_ROLE_LABELS[roles[0]] : "Готов выйти"}
             </div>
             {/* Главный вопрос заведения — можно ли на человека положиться.
@@ -345,27 +386,11 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
                 ? reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)
                 : "новичок в сервисе"}
             </div>
-          </>
-        }
-      />
-      <div className="swipe-shade" />
-      {/* Ряд бейджей НЕ переносится на вторую строку: перенесённый район
-          налезал прямо на крупную должность под ним — она стоит на
-          фиксированной высоте. Сам район теперь в теле карточки, где для
-          длинных названий («Северное Медведково») есть место. */}
-      <div className="row" style={{ position: "absolute", top: 16, left: 16, right: 16, gap: 8, flexWrap: "nowrap" }}>
-        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
-        {s.availableToday && (
-          // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
-          // самая заметная плашка карточки читалась хуже всего остального.
-          <span className="glass pulse" style={{ background: "var(--super)", color: "#2a1f1a", flex: "none", whiteSpace: "nowrap" }}>
-            <IconBolt size={13} /> Готов сегодня
-          </span>
+          </div>
         )}
-        <span className="spacer" />
       </div>
       <div className="swipe-body">
-        <div style={{ fontSize: 26, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontSize: "var(--text-2xl)", fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
             {s.name}{age !== null ? `, ${age}` : ""}
           </span>

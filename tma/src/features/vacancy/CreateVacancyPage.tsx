@@ -213,7 +213,7 @@ export function CreateVacancyPage() {
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
                 {ROLE_FAMILY_LABELS[fam]}
               </div>
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -328,10 +328,12 @@ export function CreateVacancyPage() {
             style={{
               background: "none",
               border: "none",
+              // Ссылка-кнопка была высотой около 30px: по ней промахивались.
+              minHeight: 44,
               padding: "4px 0 12px",
               color: "var(--link)",
               font: "inherit",
-              fontSize: 14,
+              fontSize: "var(--text-sm)",
               textDecoration: "underline",
               cursor: "pointer",
             }}
@@ -339,7 +341,7 @@ export function CreateVacancyPage() {
             Нужно другое число
           </button>
         )}
-        <p className="muted" style={{ margin: "-8px 0 16px", fontSize: 13 }}>
+        <p className="muted" style={{ margin: "-8px 0 16px", fontSize: "var(--text-xs)" }}>
           Одна смена на всех — не нужно публиковать несколько одинаковых.
           Когда наберётся столько людей, смена уйдёт из ленты сама.
         </p>
@@ -407,7 +409,10 @@ export function CreateVacancyPage() {
             {suggests.map((s) => (
               <button
                 key={s.value}
-                style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 10px", cursor: "pointer", color: "var(--text)" }}
+                // Подсказки адреса стояли плотным списком высотой ~35px.
+                // Промах здесь дороже прочих: смена уезжает на соседнюю улицу,
+                // а человек приходит не туда.
+                style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", minHeight: 44, padding: "0 10px", cursor: "pointer", color: "var(--text)" }}
                 onClick={() => {
                   chosenAddress.current = s.value;
                   setAddress(s.value);
