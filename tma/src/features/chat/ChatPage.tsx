@@ -392,6 +392,7 @@ export function ChatPage() {
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && messages && messages.length === 0 && (
           <EmptyState
+            fill
             icon={<IconChat size={34} />}
             title="Напишите первым"
             text={
@@ -459,7 +460,13 @@ export function ChatPage() {
             scrollPadding — чтобы первый чип не прилипал к самому краю. */}
         <div
           className="quick-row"
-          style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 2 }}
+          style={{
+            display: text.trim() ? "none" : "flex",
+            gap: 8,
+            overflowX: "auto",
+            paddingBottom: 8,
+            marginBottom: 2,
+          }}
         >
           {(role === "employer" ? QUICK_REPLIES_EMPLOYER : QUICK_REPLIES_SEEKER).map((q) => (
             <button

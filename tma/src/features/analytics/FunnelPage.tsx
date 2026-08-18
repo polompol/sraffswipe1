@@ -8,7 +8,7 @@ import { showBackButton } from "@/telegram/sdk";
 const STEPS: { key: string; label: string }[] = [
   { key: "open", label: "Открыли" },
   { key: "swipe", label: "Свайпнули" },
-  { key: "match", label: "Мэтч" },
+  { key: "match", label: "Взаимный интерес" },
   { key: "confirm", label: "Подтвердили смену" },
   { key: "done", label: "Смена закрыта" },
 ];
@@ -29,7 +29,7 @@ export function FunnelPage() {
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>Воронка</h1>
         <p className="muted" style={{ marginBottom: 16 }}>
-          Путь человека: открыл → свайпнул → мэтч → договорились о смене →
+          Путь человека: открыл → свайпнул → взаимный интерес → договорились о смене →
           смена состоялась. Последний шаг и есть заработок сервиса.
         </p>
 

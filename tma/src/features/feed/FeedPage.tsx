@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import type { MatchModel, Seeker, StaffRole, SwipeDirection, Vacancy } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
+import { TodayShift } from "./TodayShift";
 import {
   createSavedSearch,
   fetchFeed,
@@ -316,6 +317,10 @@ export function FeedPage() {
           </button>
         ))}
       </div>
+
+      {/* Своя смена — выше чужих. В день смены человеку нужно ровно одно:
+          во сколько, куда и код прихода. */}
+      <TodayShift />
 
       {employerNoVacancy && (
         <div
