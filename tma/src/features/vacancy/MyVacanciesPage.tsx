@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,10 +15,14 @@ import { IconFire, IconCalendar, IconEdit, IconWarning } from "@/components/Icon
 import { toast } from "@/components/Toast";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBox, SkeletonList } from "@/components/States";
+import { Sheet } from "@/components/Sheet";
+import type { Vacancy } from "@/types/domain";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  // Редкие действия по смене — под одной дверью «Ещё».
+  const [moreFor, setMoreFor] = useState<Vacancy | null>(null);
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["my-vacancies"],
     queryFn: fetchMyVacancies,
@@ -49,11 +54,13 @@ export function MyVacanciesPage() {
 
   return (
     <div className="page">
-      <div className="row" style={{ marginBottom: 8 }}>
-        <h1 className="h1" style={{ margin: 0 }}>Мои смены</h1>
-        <span className="spacer" />
-        <Button size="sm" block={false} onClick={() => nav("/vacancy/new")}>
-          + Смена
+      <h1 className="h1" style={{ marginBottom: 12 }}>Мои смены</h1>
+      {/* Главное действие заведения — отдельной строкой во всю ширину.
+          Раньше это была маленькая кнопка, прижатая к правому краю рядом с
+          заголовком: самое частое действие выглядело самым второстепенным. */}
+      <div style={{ marginBottom: 12 }}>
+        <Button onClick={() => nav("/vacancy/new")}>
+          + Разместить смену
         </Button>
       </div>
       <div
@@ -66,14 +73,14 @@ export function MyVacanciesPage() {
       >
         <button
           className="tag"
-          style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+          style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
           onClick={() => nav("/applicants")}
         >
           Кто откликнулся
         </button>
         <button
           className="tag"
-          style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
+          style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
           onClick={() => nav("/workers")}
         >
           Мои работники
@@ -133,54 +140,91 @@ export function MyVacanciesPage() {
                 </div>
               );
             })()}
-            {/* Сетка, а не ряд с переносом: кнопки разной ширины переносились
-                по-своему в каждой карточке, и одинаковые смены выглядели
-                по-разному. Две ровные колонки читаются как таблица. */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-                gap: 8,
-                marginTop: 10,
-              }}
-            >
+            {/* ОДНО главное действие на карточку, остальное — под «Ещё».
+                Раньше здесь стояли четыре кнопки одного веса сеткой два на
+                два: пролистывая пять смен, заведение видело двадцать кнопок и
+                не понимало, какая из них нужна сейчас. А нужна почти всегда
+                одна: пока людей не набрали — позвать, когда набрали — повторить
+                смену на другой день. */}
+            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+              {(v.slotsLeft ?? v.headcount ?? 1) > 0 ? (
+                <Button variant="secondary" onClick={() => doUrgent(v.id)}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <IconFire size={16} /> Позвать людей на эту смену
+                  </span>
+                </Button>
+              ) : (
+                <Button variant="secondary" onClick={() => nav("/vacancy/new", { state: { prefill: v } })}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <IconCalendar size={16} /> Повторить смену
+                  </span>
+                </Button>
+              )}
               <button
-                className="tag"
-                style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
-                onClick={() => nav("/vacancy/new", { state: { prefill: v } })}
+                onClick={() => setMoreFor(v)}
+                style={{
+                  minHeight: 44,
+                  padding: 0,
+                  background: "none",
+                  border: "none",
+                  color: "var(--muted)",
+                  font: "inherit",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
               >
-                <IconCalendar size={13} /> Повторить
-              </button>
-              <button
-                className="tag"
-                style={{ cursor: "pointer", borderColor: "var(--like)", color: "var(--like)" }}
-                onClick={() => doUrgent(v.id)}
-              >
-                <IconFire size={13} /> Позвать людей
-              </button>
-              {/* Исправить и снять — пока по смене нет отклика. После отклика
-                  сервер ответит 409 и объяснит: условия уже согласованы. */}
-              <button
-                className="tag"
-                style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
-                onClick={() => nav("/vacancy/new", { state: { edit: v } })}
-              >
-                <IconEdit size={13} /> Исправить
-              </button>
-              <button
-                className="tag"
-                // Тихая: снимают смену редко, а красным она звала не меньше,
-                // чем «Повторить», и стояла с ней в одном ряду. Подтверждение
-                // всё равно спрашивается отдельно.
-                style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--muted)" }}
-                onClick={() => doRemove(v.id, STAFF_ROLE_LABELS[v.role])}
-              >
-                <IconWarning size={13} /> Снять
+                Ещё
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      {moreFor && (
+        <Sheet title={STAFF_ROLE_LABELS[moreFor.role]} onClose={() => setMoreFor(null)}>
+          <div style={{ display: "grid", gap: 10 }}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const v = moreFor;
+                setMoreFor(null);
+                nav("/vacancy/new", { state: { prefill: v } });
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconCalendar size={16} /> Повторить смену на другой день
+              </span>
+            </Button>
+            {/* Исправить и снять — пока по смене нет отклика. После отклика
+                сервер ответит 409 и объяснит: условия уже согласованы. */}
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const v = moreFor;
+                setMoreFor(null);
+                nav("/vacancy/new", { state: { edit: v } });
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconEdit size={16} /> Исправить условия
+              </span>
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const v = moreFor;
+                setMoreFor(null);
+                doRemove(v.id, STAFF_ROLE_LABELS[v.role]);
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconWarning size={16} /> Снять с публикации
+              </span>
+            </Button>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }

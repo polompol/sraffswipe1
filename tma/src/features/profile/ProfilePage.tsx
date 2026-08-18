@@ -25,6 +25,7 @@ import {
   IconCheck,
   IconBookmark,
   IconChevronRight,
+  IconStar,
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
@@ -329,13 +330,12 @@ function ProfileMeter({ pct }: { pct: number }) {
   if (pct >= 100) return null;
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="row" style={{ marginBottom: 8 }}>
-        <b>Профиль готов на {pct}%</b>
-        <span className="spacer" />
-        <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
-          {pct >= 80 ? "почти всё" : "заполните до конца"}
-        </span>
-      </div>
+      {/* Подпись под заголовком, а не сбоку от него: на узком экране она
+          втискивалась в остаток строки и рвалась пополам («заполните до /
+          конца»), а заголовок при этом тоже ломался. */}
+      <b style={{ display: "block", marginBottom: 8 }}>
+        Профиль готов на {pct}%
+      </b>
       <div
         style={{
           height: 8,
@@ -425,7 +425,9 @@ export function ProfilePage() {
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
           </div>
           <div className="muted">
-            {me ? (me.rating > 0 ? `★ ${me.rating.toFixed(1)}` : "Новичок") : "—"}
+            {me ? (me.rating > 0 ? (
+              <><IconStar size={13} /> {me.rating.toFixed(1)}</>
+            ) : "Новичок") : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
             {me?.shiftsDone
               ? ` · ${me.shiftsDone} ${plural(me.shiftsDone, "смена", "смены", "смен")}`
@@ -433,28 +435,6 @@ export function ProfilePage() {
           </div>
         </span>
       </div>
-
-      {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="row">
-            <b>Смен проведено</b>
-            <span className="spacer" />
-            <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
-          </div>
-          <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
-            Закрытые смены формируют ваш рейтинг: его видят работники в ленте
-            до того, как откликнуться.
-          </div>
-        </div>
-      )}
-
-      {role === "seeker" && me && (
-        <ProfileMeter pct={me.profileCompletion ?? 100} />
-      )}
-
-      {role === "seeker" && (
-        <AvailabilityCard initial={me?.availableToday ?? false} />
-      )}
 
       {!!me?.incomingLikes && me.incomingLikes > 0 && (
         // Кнопка, а не div с onClick: это единственный вход на самый ценный
@@ -487,6 +467,53 @@ export function ProfilePage() {
               : "нажмите, чтобы увидеть, кто зовёт, и ответить в один тап"}
           </div>
         </button>
+      )}
+
+
+      {/* Фото заведения. У работника есть полоса «профиль готов на 70%», и
+          она работает; у заведения такой подсказки не было вообще — при том
+          что именно от его фото зависит, откликнутся ли на смену. Карточка
+          показывается, только пока фото нет. */}
+      {role === "employer" && me && !me.photoUrl && (
+        <button
+          className="card"
+          onClick={() => nav("/profile/edit")}
+          style={{
+            width: "100%",
+            textAlign: "left",
+            marginBottom: 16,
+            border: "1px solid var(--border-strong)",
+            cursor: "pointer",
+          }}
+        >
+          <b style={{ fontSize: "var(--text-md)" }}>Добавьте фото заведения</b>
+          <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-sm)" }}>
+            Карточку с фотографией зала листают заметно чаще, чем карточку
+            с одной буквой названия.
+          </div>
+        </button>
+      )}
+
+      {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="row">
+            <b>Смен проведено</b>
+            <span className="spacer" />
+            <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
+          </div>
+          <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
+            Закрытые смены формируют ваш рейтинг: его видят работники в ленте
+            до того, как откликнуться.
+          </div>
+        </div>
+      )}
+
+      {role === "seeker" && me && (
+        <ProfileMeter pct={me.profileCompletion ?? 100} />
+      )}
+
+      {role === "seeker" && (
+        <AvailabilityCard initial={me?.availableToday ?? false} />
       )}
 
       {role === "employer" && <CommissionCard />}

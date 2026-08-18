@@ -2,15 +2,16 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { checkinShift, disputeShift, fetchMatches, markAttendance, markNotHeld } from "@/api/endpoints";
-import { MATCH_STATUS_LABELS } from "@/types/domain";
+import type { MatchModel } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { ReviewStars } from "@/components/ReviewStars";
-import { IconTabMatches, IconCheck, IconWarning, IconChevronRight , IconDoc } from "@/components/Icons";
+import { Sheet } from "@/components/Sheet";
+import { IconTabMatches, IconCheck, IconWarning, IconChevronRight, IconDoc } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
-import { canReportNoPay, shiftEnded, shiftWhen } from "@/lib/format";
+import { canReportNoPay, shiftEnded, shiftStarted, shiftWhen } from "@/lib/format";
 import { Button } from "@/components/Button";
 import { baseURL, getToken } from "@/api/client";
 import { haptic, confirmAction, openExternal } from "@/telegram/sdk";
@@ -57,11 +58,100 @@ function MatchAvatar({ src, initial }: { src?: string; initial: string }) {
   );
 }
 
+/** Состояние смены одной заметной строкой.
+ *
+ *  Раньше состояние было написано мелким серым текстом под названием
+ *  заведения — то есть главное на экране набрано самым незаметным шрифтом.
+ *  Человек открывал список и не понимал с ходу, что происходит с какой сменой:
+ *  где ждут его, где всё закрыто, где спор. */
+function StatusLine({ m, role }: { m: MatchModel; role: string | null }) {
+  let color = "var(--muted)";
+  let icon: React.ReactNode = null;
+  let text = "Договариваетесь о смене";
+
+  if (m.disputed) {
+    color = "var(--danger)";
+    icon = <IconWarning size={17} />;
+    text = "Спор по смене — разбирает оператор";
+  } else if (m.status === "completed" || m.checkedIn) {
+    color = "var(--success)";
+    icon = <IconCheck size={17} />;
+    text = "Смена закрыта";
+  } else if (m.status === "cancelled") {
+    text = "Смена отменена";
+  } else if (m.status === "expired") {
+    text = "Смена не состоялась";
+  } else if (m.status === "confirmed") {
+    color = "var(--gold)";
+    icon = <IconCheck size={17} />;
+    text = shiftStarted(m)
+      ? (role === "employer" ? "Смена идёт — ждём человека" : "Сегодня ваша смена")
+      : "Смена подтверждена";
+  }
+
+  return (
+    <div
+      className="row"
+      style={{ gap: 8, marginTop: 12, color, fontWeight: 700, alignItems: "center" }}
+    >
+      {icon}
+      <span>{text}</span>
+    </div>
+  );
+}
+
+/** Раскрывающееся объяснение правил.
+ *
+ *  Раньше эти два абзаца лежали прямо на карточке серым текстом, и экран
+ *  читался как страница помощи. Правила нужны — но их читают один раз, а
+ *  экран открывают каждый день. */
+function HowItWorks({ role }: { role: string | null }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{
+          minHeight: 44,
+          padding: 0,
+          background: "none",
+          border: "none",
+          color: "var(--link)",
+          font: "inherit",
+          fontSize: "var(--text-sm)",
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        {open ? "Свернуть" : "Как это работает"}
+      </button>
+      {open && (
+        <div
+          className="muted"
+          style={{ fontSize: "var(--text-sm)", lineHeight: 1.5, marginTop: 4 }}
+        >
+          Смена закроется сама через 12 часов после окончания — нажимать ничего
+          не нужно.{" "}
+          {role === "employer"
+            ? "Назовите работнику код прихода: так у него останется доказательство, что он был на месте, а у вас — что смена состоялась."
+            : "Попросите у администратора код прихода: с ним заведение не сможет записать смену в неявку."}{" "}
+          Если смены не было — отметьте это в меню «Что-то пошло не так»,
+          комиссия за неё начислена не будет.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MatchesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
   const [codes, setCodes] = useState<Record<string, string>>({});
+  // Одна дверь для редких действий вместо ряда одинаковых кнопок на карточке.
+  // Открытая смена — id мэтча, по которому открыто меню.
+  const [troubleFor, setTroubleFor] = useState<MatchModel | null>(null);
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["matches"],
     queryFn: fetchMatches,
@@ -95,11 +185,6 @@ export function MatchesPage() {
     }
   }
 
-  // Смена закрыта, а денег нет. До этой кнопки в приложении не оставалось
-  // НИ ОДНОГО хода: «Проблема — позвать оператора» жила только пока смена не
-  // закрыта, а закрывается она сама через 12 часов. Человек отработал, наличные
-  // не отдали — и пожаловаться некуда. Это ровно тот случай, ради которого
-  // сервис и нужен, поэтому кнопка живёт две недели после смены.
   function downloadAct(matchId: string) {
     const token = getToken();
     openExternal(
@@ -107,6 +192,11 @@ export function MatchesPage() {
     );
   }
 
+  // Смена закрыта, а денег нет. До этой кнопки в приложении не оставалось
+  // НИ ОДНОГО хода: «Проблема — позвать оператора» жила только пока смена не
+  // закрыта, а закрывается она сама через 12 часов. Человек отработал, наличные
+  // не отдали — и пожаловаться некуда. Это ровно тот случай, ради которого
+  // сервис и нужен, поэтому кнопка живёт две недели после смены.
   async function doNotPaid(matchId: string) {
     if (!(await confirmAction(
       "Заведение не рассчиталось за смену? Оператор свяжется с обеими сторонами и разберётся.",
@@ -157,7 +247,7 @@ export function MatchesPage() {
   return (
     <div className="page">
       <h1 className="h1" style={{ marginBottom: 12 }}>
-        {role === "employer" ? "Мэтчи" : "Мои смены"}
+        {role === "employer" ? "Кто выходит" : "Мои смены"}
       </h1>
       {isLoading && <SkeletonList />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
@@ -171,250 +261,252 @@ export function MatchesPage() {
         />
       )}
       <div className="stagger" style={{ display: "grid", gap: 12 }}>
-        {data?.map((m) => (
-          <div key={m.id} className="card">
-            {/* Настоящая кнопка, а не div с onClick: переход в чат теперь
-                доступен с клавиатуры и озвучивается скринридером. Кнопки
-                действий лежат ниже, вложенности кнопок не возникает. */}
-            <button
-              className="row"
-              aria-label={`Открыть чат: ${m.companyName ?? "Заведение"}`}
-              style={{
-                gap: 12,
-                cursor: "pointer",
-                width: "100%",
-                background: "none",
-                border: "none",
-                padding: 0,
-                textAlign: "left",
-                font: "inherit",
-                color: "inherit",
-              }}
-              onClick={() => nav(`/chat/${m.id}`)}
-            >
-              {/* Фото заведения с запасным вариантом. Раньше это был
-                  CSS-фон: если ссылка битая (а у большинства заведений фото
-                  просто нет), на месте аватара оставался пустой квадрат и
-                  карточка выглядела недогруженной. Теперь — буква названия на
-                  брендовом градиенте, как в ленте и в профиле. */}
-              <MatchAvatar
-                src={m.companyPhotoUrl}
-                initial={(m.companyName || "З").charAt(0)}
-              />
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
-                  {m.companyName ?? "Заведение"}
-                </div>
-                {/* Дата и время смены. Их не было видно нигде: человек
-                    открывал список мэтчей и не понимал, на какой день он
-                    вообще договорился. */}
-                {shiftWhen(m) && <div className="muted">{shiftWhen(m)}</div>}
-                <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
-                  {MATCH_STATUS_LABELS[m.status]}
-                </div>
-              </span>
-              <span style={{ color: "var(--muted)", display: "inline-flex" }}>
-                <IconChevronRight size={20} />
-              </span>
-            </button>
-            {/* Спор — эскалация к оператору. */}
-            {m.disputed && !m.checkedIn && (
-              <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--crimson-dark)" }}>
-                <IconWarning size={16} /> <b>Спор по смене — разбирает оператор</b>
-              </div>
-            )}
-
-            {!!m.shiftPay && m.shiftPay > 0 && (
-              <div style={{ marginTop: 8, fontWeight: 800, fontSize: "var(--text-md)" }}>
-                {m.shiftPay.toLocaleString("ru-RU")} ₽
-                {m.status === "completed" ? " заработано" : " за смену"}
-              </div>
-            )}
-
-            {/* Акт — только по закрытой смене: это документ о ВЫПОЛНЕННОЙ
-                работе, и по незакрытой сервер отвечает отказом. */}
-            {role === "seeker" && m.status === "completed" && (
-              <div style={{ marginTop: 10 }}>
-                <Button variant="secondary" onClick={() => downloadAct(m.id)}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <IconDoc size={17} /> Скачать акт (PDF)
-                  </span>
-                </Button>
-              </div>
-            )}
-
-            {/* Смена закрыта: обе стороны подтвердили. Сразу просим оценку —
-                момент наивысшей эмоции, отзывов собирается больше. */}
-            {m.checkedIn && (
-              <>
-                <div className="row" style={{ gap: 8, marginTop: 12, color: "var(--success)" }}>
-                  <IconCheck size={16} /> <b>Смена закрыта — обе стороны подтвердили</b>
-                </div>
-                <ReviewStars matchId={m.id} />
-              </>
-            )}
-
-            {/* Деньги за смену платит заведение напрямую, и сервис этого не
-                видит. Единственное, что он может, — позвать оператора и
-                оставить след на заведении. Раньше и этого не было. */}
-            {role === "seeker" && canReportNoPay(m) && (
+        {data?.map((m) => {
+          const started = shiftStarted(m);
+          const live = m.status === "confirmed" && !m.disputed;
+          // Позвать оператора можно на любом этапе живой смены: беда бывает
+          // и до неё («требуют залог за форму»). А «смена не состоялась» —
+          // только после окончания, это решается внутри самой шторки.
+          const hasTrouble = live || (role === "seeker" && canReportNoPay(m));
+          return (
+            <div key={m.id} className="card">
+              {/* Настоящая кнопка, а не div с onClick: переход в чат теперь
+                  доступен с клавиатуры и озвучивается скринридером. Кнопки
+                  действий лежат ниже, вложенности кнопок не возникает. */}
               <button
-                className="btn ghost"
+                className="row"
+                aria-label={`Открыть чат: ${m.companyName ?? "Заведение"}`}
                 style={{
-                  marginTop: 12,
-                  fontSize: "var(--text-sm)",
-                  color: "var(--muted)",
-                  borderColor: "var(--border-strong)",
+                  gap: 12,
+                  cursor: "pointer",
+                  width: "100%",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  textAlign: "left",
+                  font: "inherit",
+                  color: "inherit",
                 }}
-                onClick={() => doNotPaid(m.id)}
+                onClick={() => nav(`/chat/${m.id}`)}
               >
-                Мне не заплатили за смену
+                <MatchAvatar
+                  src={m.companyPhotoUrl}
+                  initial={(m.companyName || "З").charAt(0)}
+                />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
+                    {m.companyName ?? "Заведение"}
+                  </div>
+                  {shiftWhen(m) && <div className="muted">{shiftWhen(m)}</div>}
+                </span>
+                <span style={{ color: "var(--muted)", display: "inline-flex" }}>
+                  <IconChevronRight size={20} />
+                </span>
               </button>
-            )}
 
-            {/* День смены. Главное сообщение — «делать ничего не нужно»:
-                смена закроется сама. Раньше приложение требовало действий от
-                обеих сторон, и именно поэтому заведению было выгодно молчать. */}
-            {m.status === "confirmed" && !m.disputed && (
-              <div style={{ marginTop: 12 }}>
-                <div
-                  className="muted"
-                  style={{ fontSize: "var(--text-xs)", marginBottom: 12, lineHeight: 1.5 }}
-                >
-                  Смена закроется сама через 12 часов после окончания —
-                  нажимать ничего не нужно.
+              <StatusLine m={m} role={role} />
+
+              {!!m.shiftPay && m.shiftPay > 0 && (
+                <div style={{ marginTop: 6, fontWeight: 800, fontSize: "var(--text-md)" }}>
+                  {m.shiftPay.toLocaleString("ru-RU")} ₽
+                  {/* Заведение не зарабатывает на смене, а платит за неё:
+                      «заработано» в его списке читалось как ошибка. */}
+                  {m.status === "completed"
+                    ? (role === "employer" ? " выплачено" : " заработано")
+                    : " за смену"}
                 </div>
+              )}
 
-                {/* Заведение */}
-                {role === "employer" && (
-                  <>
-                    {/* Код заведение диктует работнику вслух — поэтому цифры
-                        крупные и читаемые, а не мелкой серой строкой. */}
-                    {m.checkinCode && !m.employerCheckedIn && (
+              {/* ГЛАВНОЕ ДЕЙСТВИЕ — ровно одно на карточку, залито цветом.
+                  Раньше здесь стояли три кнопки одного веса, и глазу было не за
+                  что зацепиться: «отметиться», «смена не состоялась» и «позвать
+                  оператора» выглядели одинаково важными. */}
+
+              {/* Заведение: код и закрытие смены — только когда смена началась.
+                  До этого дня показывать код и кнопку «человек пришёл» незачем:
+                  человек ещё не пришёл, а кнопка провоцирует нажать заранее. */}
+              {live && role === "employer" && started && (
+                <>
+                  {m.checkinCode && !m.employerCheckedIn && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: "10px 14px",
+                        border: "1px solid var(--border-strong)",
+                        borderRadius: "var(--radius-sm)",
+                        textAlign: "center",
+                      }}
+                    >
+                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                        Назовите этот код работнику
+                      </div>
                       <div
                         style={{
-                          marginBottom: 12,
-                          padding: "10px 14px",
-                          border: "1px solid var(--border-strong)",
-                          borderRadius: "var(--radius-sm)",
-                          textAlign: "center",
+                          fontSize: "var(--text-2xl)",
+                          fontWeight: 800,
+                          letterSpacing: 6,
+                          color: "var(--gold)",
                         }}
                       >
-                        <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
-                          Назовите этот код работнику
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "var(--text-2xl)",
-                            fontWeight: 800,
-                            letterSpacing: 6,
-                            color: "var(--gold)",
-                          }}
-                        >
-                          {m.checkinCode}
-                        </div>
+                        {m.checkinCode}
                       </div>
-                    )}
-                    {m.employerCheckedIn ? (
-                      <div className="muted">Вы подтвердили выход ✓ Смена закрыта.</div>
-                    ) : (
-                      /* Только подтверждение. Отдельной кнопки «Не вышел»
-                         здесь больше нет: она делала ровно то же, что общая
-                         «Смена не состоялась» ниже, и две одинаковые по смыслу
-                         кнопки рядом заставляли выбирать между ними. */
+                    </div>
+                  )}
+                  {m.employerCheckedIn ? (
+                    <div className="muted" style={{ marginTop: 10 }}>
+                      Вы подтвердили выход ✓ Смена закрыта.
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 12 }}>
                       <Button onClick={() => mark(m.id, true)}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <IconCheck size={16} /> Человек пришёл — закрыть смену
                         </span>
                       </Button>
-                    )}
-                  </>
-                )}
+                    </div>
+                  )}
+                </>
+              )}
 
-                {/* Работник */}
-                {role === "seeker" && (
-                  <>
-                    {m.seekerCheckedIn ? (
-                      <div className="muted">
-                        Код принят ✓ Ваше подтверждение, что вы были на месте.
-                      </div>
-                    ) : (
-                      <>
-                        {/* Отметка больше НЕ обязательна: смена закроется сама,
-                            если никто не возразит. Код — доказательство: после
-                            него заведение не сможет тихо записать смену в
-                            неявку, спор уйдёт к оператору. */}
-                        <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
-                          На месте попросите у администратора код — так у вас
-                          останется доказательство, что вы приходили:
-                        </div>
-                        <div className="row" style={{ gap: 8 }}>
-                          <input
-                            className="input"
-                            inputMode="numeric"
-                            aria-label="6-значный код прихода от заведения"
-                            maxLength={6}
-                            placeholder="000000"
-                            style={{ width: 128, letterSpacing: 4, fontWeight: 800 }}
-                            value={codes[m.id] ?? ""}
-                            onChange={(e) =>
-                              setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
-                            }
-                          />
-                          <Button
-                            variant="secondary"
-                            block={false}
-                            style={{ flex: 1 }}
-                            disabled={(codes[m.id] ?? "").length < 6}
-                            onClick={() => doCheckin(m.id)}
-                          >
-                            Отметиться кодом
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
+              {/* Работник: поле кода — тоже только в день смены. */}
+              {live && role === "seeker" && started && (
+                m.seekerCheckedIn ? (
+                  <div className="muted" style={{ marginTop: 10 }}>
+                    Код принят ✓ Ваше подтверждение, что вы были на месте.
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 12 }}>
+                    <div className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: 6 }}>
+                      Код прихода — попросите у администратора на месте
+                    </div>
+                    <div className="row" style={{ gap: 8 }}>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        aria-label="6-значный код прихода от заведения"
+                        maxLength={6}
+                        placeholder="000000"
+                        style={{ width: 128, letterSpacing: 4, fontWeight: 800 }}
+                        value={codes[m.id] ?? ""}
+                        onChange={(e) =>
+                          setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
+                        }
+                      />
+                      <Button
+                        block={false}
+                        style={{ flex: 1 }}
+                        disabled={(codes[m.id] ?? "").length < 6}
+                        onClick={() => doCheckin(m.id)}
+                      >
+                        Отметиться
+                      </Button>
+                    </div>
+                  </div>
+                )
+              )}
 
-                {/* Смена закроется сама, если промолчать. Поэтому «не
-                    состоялась» — заметная кнопка, а не мелкая ссылка: это
-                    единственный способ не платить за смену, которой не было,
-                    и человек должен её увидеть, не разыскивая. */}
-                {/* Только после окончания смены: заявить «не состоялась»
-                    раньше — значит отправить человека работать по отменённой
-                    смене. До начала для отказа есть отмена в чате. */}
-                {shiftEnded(m) && (
-                  <button
-                    className="btn ghost"
-                    style={{ marginTop: 10, minHeight: 44, fontSize: "var(--text-sm)" }}
-                    onClick={() => doNotHeld(m.id)}
-                  >
-                    Смена не состоялась
-                  </button>
-                )}
+              {/* До дня смены делать нечего — так и говорим, вместо кнопок. */}
+              {live && !started && (
+                <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-sm)" }}>
+                  Ничего делать не нужно — приходите к началу смены.
+                </div>
+              )}
 
-                {/* Путь спора — обеим сторонам. */}
-                {/* Раньше здесь стоял класс .tab — это класс нижней навигации
-                    (колонка, min-height 64). Защитная механика должна быть
-                    читаемой кнопкой, а не мелким серым текстом. */}
+              {/* Акт — только по закрытой смене: это документ о ВЫПОЛНЕННОЙ
+                  работе, и по незакрытой сервер отвечает отказом. */}
+              {role === "seeker" && m.status === "completed" && (
+                <div style={{ marginTop: 12 }}>
+                  <Button variant="secondary" onClick={() => downloadAct(m.id)}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <IconDoc size={17} /> Скачать акт (PDF)
+                    </span>
+                  </Button>
+                </div>
+              )}
+
+              {/* Смена закрыта — сразу просим оценку: момент наивысшей эмоции,
+                  отзывов собирается больше. */}
+              {m.checkedIn && <ReviewStars matchId={m.id} />}
+
+              {live && <HowItWorks role={role} />}
+
+              {/* Одна дверь для всего редкого: «смена не состоялась», спор,
+                  «мне не заплатили». Раньше это были три отдельные кнопки на
+                  карточке, каждая шириной во весь экран. */}
+              {hasTrouble && (
                 <button
-                  className="btn ghost"
+                  onClick={() => setTroubleFor(m)}
                   style={{
-                    marginTop: 8,
+                    marginTop: 6,
                     minHeight: 44,
-                    fontSize: "var(--text-sm)",
+                    padding: 0,
+                    background: "none",
+                    border: "none",
                     color: "var(--muted)",
-                    borderColor: "var(--border-strong)",
+                    font: "inherit",
+                    fontSize: "var(--text-sm)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textAlign: "left",
                   }}
-                  onClick={() => doDispute(m.id)}
                 >
-                  Проблема — позвать оператора
+                  Что-то пошло не так
                 </button>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {troubleFor && (
+        <Sheet title="Что-то пошло не так" onClose={() => setTroubleFor(null)}>
+          <div style={{ display: "grid", gap: 10 }}>
+            {/* Только после окончания смены: заявить «не состоялась» раньше —
+                значит отправить человека работать по отменённой смене. До
+                начала для отказа есть отмена в чате. */}
+            {troubleFor.status === "confirmed" && !troubleFor.disputed && shiftEnded(troubleFor) && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const id = troubleFor.id;
+                  setTroubleFor(null);
+                  doNotHeld(id);
+                }}
+              >
+                Смена не состоялась
+              </Button>
+            )}
+            {troubleFor.status === "confirmed" && !troubleFor.disputed && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const id = troubleFor.id;
+                  setTroubleFor(null);
+                  doDispute(id);
+                }}
+              >
+                Позвать оператора
+              </Button>
+            )}
+            {role === "seeker" && canReportNoPay(troubleFor) && (
+              <Button
+                variant="danger"
+                onClick={() => {
+                  const id = troubleFor.id;
+                  setTroubleFor(null);
+                  doNotPaid(id);
+                }}
+              >
+                Мне не заплатили за смену
+              </Button>
+            )}
+            <div className="muted" style={{ fontSize: "var(--text-sm)", lineHeight: 1.5 }}>
+              Оператор разбирает спор по переписке и коду прихода. Если смены не
+              было вовсе — отметьте это, и комиссия за неё начислена не будет.
+            </div>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }

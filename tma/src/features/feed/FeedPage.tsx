@@ -415,10 +415,19 @@ export function FeedPage() {
               <span className="act-label act-label-skip">Пропустить</span>
             </div>
             <div className="act-col">
-              <button className="act act-like" aria-label="Откликнуться — хочу здесь работать" onClick={() => controller.current?.("like")}>
+              {/* Подпись зависит от роли: заведение не откликается, а зовёт.
+                  Обе стороны видели «Отклик», а незрячему заведению вслух
+                  читалось «хочу здесь работать». */}
+              <button
+                className="act act-like"
+                aria-label={isSeeker ? "Откликнуться — хочу здесь работать" : "Позвать на смену"}
+                onClick={() => controller.current?.("like")}
+              >
                 <IconLike size={34} />
               </button>
-              <span className="act-label act-label-like">Отклик</span>
+              <span className="act-label act-label-like">
+                {isSeeker ? "Отклик" : "Позвать"}
+              </span>
             </div>
           </div>
         </>

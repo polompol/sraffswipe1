@@ -7,12 +7,13 @@ import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
+import { Avatar } from "@/components/Avatar";
 import { reliabilityText } from "@/lib/reliability";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { MED_BOOK_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import type { MedBookStatus, StaffRole } from "@/types/domain";
-import { IconBolt, IconCheck, IconCalendar } from "@/components/Icons";
+import { IconBolt, IconCheck, IconCalendar, IconStar } from "@/components/Icons";
 
 /**
  * «Кто откликнулся» — зеркало экрана «Тебя зовут» у работника.
@@ -76,7 +77,11 @@ export function ApplicantsPage() {
               {/* Ряд переносится, а длинные слова рвутся: у людей бывают
                   двойные фамилии, и на узком экране имя наезжало на бейдж. */}
               <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                <span style={{ flex: "1 1 60%", minWidth: 0 }}>
+                {/* Лицо человека. В ленте заведение видит фотографию, а в
+                    списке откликов до сих пор были одни буквы — при том, что
+                    решение «беру или нет» принимают именно здесь. */}
+                <Avatar src={a.photoUrls?.[0]} name={a.name} />
+                <span style={{ flex: "1 1 50%", minWidth: 0 }}>
                   <b style={{ fontSize: "var(--text-md)", overflowWrap: "anywhere" }}>
                     {a.name}
                     {a.age ? `, ${a.age}` : ""}
@@ -92,7 +97,9 @@ export function ApplicantsPage() {
                     </span>
                   )}
                   <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2 }}>
-                    {a.rating > 0 ? `★ ${a.rating.toFixed(1)}` : "Новичок"}
+                    {a.rating > 0 ? (
+                      <><IconStar size={12} /> {a.rating.toFixed(1)}</>
+                    ) : "Новичок"}
                     {a.district ? ` · ${a.district}` : ""}
                     {a.shiftsTotal > 0
                       ? ` · ${reliabilityText(a.shiftsTotal, a.shiftsAttended, a.employersTotal)}`
@@ -111,9 +118,10 @@ export function ApplicantsPage() {
 
               {/* На какую смену откликнулись: у заведения их обычно несколько,
                   и без этой строки непонятно, кого и куда брать. */}
-              {/* Не .tag: чип рассчитан на короткую подпись в одну строку, а
-                  здесь роль, дата и время вместе не помещаются на узком
-                  экране и вылезали за карточку. */}
+              {/* Это подпись, а не кнопка: рамка-пилюля в фирменном цвете
+                  выглядела ровно как «Беру на смену» под ней, и по строке
+                  жали, ожидая перехода на смену. Теперь — просто строка с
+                  иконкой. */}
               <div
                 style={{
                   marginTop: 10,
@@ -121,11 +129,8 @@ export function ApplicantsPage() {
                   alignItems: "center",
                   gap: 6,
                   flexWrap: "wrap",
-                  padding: "8px 14px",
-                  border: "1.5px solid var(--gold)",
-                  borderRadius: 999,
                   color: "var(--gold)",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   fontSize: "var(--text-base)",
                 }}
               >
