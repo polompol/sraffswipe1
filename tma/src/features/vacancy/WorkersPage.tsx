@@ -6,7 +6,7 @@ import { showBackButton, haptic } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
-import { IconCheck, IconBolt } from "@/components/Icons";
+import { IconCheck, IconBolt, IconStar } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { reliabilityText } from "@/lib/reliability";
 import { apiError } from "@/lib/errors";
@@ -66,7 +66,7 @@ export function WorkersPage() {
                 )}
               </div>
               <div className="muted" style={{ marginTop: 4 }}>
-                ★ {w.rating.toFixed(1)}
+                <IconStar size={13} /> {w.rating.toFixed(1)}
                 {w.shiftsTotal > 0
                   ? ` · ${reliabilityText(w.shiftsTotal, w.shiftsAttended, w.employersTotal)}`
                   : ""}

@@ -30,6 +30,7 @@ import {
   IconMoney,
   IconPin,
   IconHelp,
+  IconStar,
 } from "@/components/Icons";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
@@ -266,7 +267,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           </div>
           {(v.employerShiftsDone || v.employerRating) ? (
             <div>
-              ★ {v.employerRating ? v.employerRating.toFixed(1) : "—"}
+              <IconStar size={14} /> {v.employerRating ? v.employerRating.toFixed(1) : "—"}
               {v.employerShiftsDone
                 ? ` · ${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто`
                 : ""}
@@ -362,7 +363,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           запрещали переноситься именно поэтому. */}
       <div className="swipe-top">
         <div className="row" style={{ gap: 8, flexWrap: "wrap", rowGap: 8 }}>
-        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? `★ ${s.rating.toFixed(1)}` : "Новичок"}</span>
+        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? <><IconStar size={13} /> {s.rating.toFixed(1)}</> : "Новичок"}</span>
         {s.availableToday && (
           // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
           // самая заметная плашка карточки читалась хуже всего остального.

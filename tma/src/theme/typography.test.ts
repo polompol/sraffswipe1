@@ -72,10 +72,16 @@ describe("зоны нажатия", () => {
   it("кнопки не мельче 44px", () => {
     const bad: string[] = [];
     for (const file of walk(SRC, [".tsx", ".css"])) {
+      let labelBlock = false;
       readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+        if (/span\.tag\s*\{/.test(line)) labelBlock = true;
+        else if (labelBlock && line.trim() === "}") labelBlock = false;
         const m = line.match(/min-?[Hh]eight: (\d+)/);
-        const looksLikeButton = /button|btn|tag|tab|act\b/i.test(line)
-          || /minHeight/.test(line);
+        // `span.tag` — подпись («готов сегодня», «Опытный»), а не кнопка:
+        // нажимать её не нужно, и зона нажатия ей ни к чему.
+        const isLabel = /span\.tag/.test(line) || labelBlock;
+        const looksLikeButton = !isLabel
+          && (/button|btn|tag|tab|act\b/i.test(line) || /minHeight/.test(line));
         if (m && looksLikeButton && Number(m[1]) < TOUCH_PX) {
           // Ноль — это «снять ограничение» у контейнера, не кнопка.
           if (Number(m[1]) !== 0) bad.push(`${file}:${i + 1} → ${m[1]}px`);

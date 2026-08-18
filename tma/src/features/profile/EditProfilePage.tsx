@@ -140,7 +140,7 @@ export function EditProfilePage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 16 }}>
-          {isEmployer ? "Профиль заведения" : "Редактировать профиль"}
+          {isEmployer ? "Заведение" : "Анкета"}
         </h1>
 
         {isEmployer ? (
