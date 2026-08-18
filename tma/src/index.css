@@ -19,8 +19,11 @@
 }
 
 .h1 {
+  font-family: var(--font-display);
   font-size: var(--text-3xl);
-  font-weight: 800;
+  /* У этой антиквы одно начертание: подделывать жирность нельзя — браузер
+     размажет буквы. Вес даёт сам рисунок шрифта. */
+  font-weight: 400;
   letter-spacing: -0.5px;
   margin: 0 0 4px;
   /* Заголовок разбивается на строки поровну, а не «сколько влезло».
@@ -29,8 +32,9 @@
   text-wrap: balance;
 }
 .h2 {
+  font-family: var(--font-display);
   font-size: var(--text-xl);
-  font-weight: 700;
+  font-weight: 400;
   margin: 0 0 8px;
   text-wrap: balance;
 }
@@ -685,8 +689,10 @@ body[data-large="1"] .deck {
   pointer-events: none;
 }
 .swipe-hero-sum {
+  /* Сумма за смену — то, ради чего карточку открывают. Цена в меню. */
+  font-family: var(--font-display);
   font-size: var(--text-hero);
-  font-weight: 900;
+  font-weight: 400;
   line-height: 1.05;
   letter-spacing: -1px;
   text-shadow: 0 2px 12px rgba(40, 12, 18, 0.35);
