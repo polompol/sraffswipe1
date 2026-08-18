@@ -71,24 +71,24 @@ function CommissionCard() {
           {bill.pendingRub.toLocaleString("ru-RU")} ₽
         </b>
       </div>
-      <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
+      <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-sm)" }}>
         {due
           ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса ` +
             `автоматически — пополните его картой ниже.`
           : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
       </div>
       {bill.overdue && (
-        <div style={{ marginTop: 8, fontSize: 14, color: "var(--danger)", fontWeight: 700 }}>
+        <div style={{ marginTop: 8, fontSize: "var(--text-sm)", color: "var(--danger)", fontWeight: 700 }}>
           Баланс закончился — публикация новых смен на паузе. Пополните
           картой ниже, и всё сразу возобновится.
         </div>
       )}
       <div className="row" style={{ marginTop: 10 }}>
-        <span className="muted" style={{ fontSize: 14 }}>Баланс (аванс)</span>
+        <span className="muted" style={{ fontSize: "var(--text-sm)" }}>Баланс (аванс)</span>
         <span className="spacer" />
         <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
       </div>
-      <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+      <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
         Комиссия списывается с баланса сама — пополняйте его заранее, и
         считать ничего не придётся.
       </div>
@@ -98,7 +98,7 @@ function CommissionCard() {
           есть за что платить. */}
       {due && bill.docsAvailable !== false && (
         <>
-          <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+          <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
             Документы для бухгалтерии
           </div>
           <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
@@ -124,14 +124,14 @@ function CommissionCard() {
           кнопки нельзя: заведение упирается в отказ ровно в тот момент,
           когда собралось платить. */}
       {due && bill.docsAvailable === false && (
-        <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+        <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
           Нужен счёт или акт для бухгалтерии? Напишите в поддержку — пришлём.
         </div>
       )}
 
       {bill.topupAvailable ? (
         <>
-          <div className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+          <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
             Пополнить баланс
           </div>
           {/* На чипе оставляем только сумму: «Пополнить 1 000 ₽» в трети
@@ -157,7 +157,7 @@ function CommissionCard() {
           </div>
         </>
       ) : (
-        <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+        <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
           Оплата картой внутри приложения подключается к запуску — тогда
           баланс можно будет пополнить в один тап.
         </div>
@@ -332,7 +332,7 @@ function ProfileMeter({ pct }: { pct: number }) {
       <div className="row" style={{ marginBottom: 8 }}>
         <b>Профиль готов на {pct}%</b>
         <span className="spacer" />
-        <span className="muted" style={{ fontSize: 13 }}>
+        <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
           {pct >= 80 ? "почти всё" : "заполните до конца"}
         </span>
       </div>
@@ -404,7 +404,7 @@ export function ProfilePage() {
           width: 56, height: 56, borderRadius: 16, flex: "none",
           background: "var(--grad-brand)", color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
-          overflow: "hidden", fontWeight: 800, fontSize: 24,
+          overflow: "hidden", fontWeight: 800, fontSize: "var(--text-xl)",
         }}>
           {me?.photoUrl ? (
             <img
@@ -421,7 +421,7 @@ export function ProfilePage() {
           )}
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 20, overflowWrap: "anywhere" }}>
+          <div style={{ fontWeight: 800, fontSize: "var(--text-lg)", overflowWrap: "anywhere" }}>
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
           </div>
           <div className="muted">
@@ -439,9 +439,9 @@ export function ProfilePage() {
           <div className="row">
             <b>Смен проведено</b>
             <span className="spacer" />
-            <b style={{ color: "var(--gold)", fontSize: 20 }}>{me.shiftsDone}</b>
+            <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
           </div>
-          <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+          <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
             Закрытые смены формируют ваш рейтинг: его видят работники в ленте
             до того, как откликнуться.
           </div>
@@ -475,13 +475,13 @@ export function ProfilePage() {
             cursor: "pointer",
           }}
         >
-          <b style={{ fontSize: 17, display: "flex", alignItems: "center", gap: 7 }}>
+          <b style={{ fontSize: "var(--text-md)", display: "flex", alignItems: "center", gap: 7 }}>
             <IconBolt size={18} />
             {role === "employer"
               ? `Новых откликов: ${me.incomingLikes}`
               : `Вас зовут на смены: ${me.incomingLikes}`}
           </b>
-          <div style={{ fontSize: 14, marginTop: 2 }}>
+          <div style={{ fontSize: "var(--text-sm)", marginTop: 2 }}>
             {role === "employer"
               ? "нажмите, чтобы увидеть, кто именно, и ответить"
               : "нажмите, чтобы увидеть, кто зовёт, и ответить в один тап"}
@@ -584,7 +584,7 @@ function MenuRow({
         border: "none",
         borderBottom: last ? "none" : "1px solid var(--border)",
         color: danger ? "var(--danger)" : "var(--text)",
-        fontSize: 16,
+        fontSize: "var(--text-md)",
         fontWeight: 600,
         textAlign: "left",
         cursor: "pointer",

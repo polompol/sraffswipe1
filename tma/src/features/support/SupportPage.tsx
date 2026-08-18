@@ -68,13 +68,13 @@ function FaqItem({ q, a }: { q: string; a: string }) {
           setOpen((v) => !v);
         }}
       >
-        <b style={{ flex: 1, fontSize: 14.5 }}>{q}</b>
+        <b style={{ flex: 1, fontSize: "var(--text-sm)" }}>{q}</b>
         <span style={{ color: "var(--gold)", transition: "transform .2s", transform: open ? "rotate(45deg)" : "none" }}>
           ＋
         </span>
       </button>
       {open && (
-        <div className="muted fade-up" style={{ padding: "0 16px 14px", fontSize: 14, lineHeight: 1.55 }}>
+        <div className="muted fade-up" style={{ padding: "0 16px 14px", fontSize: "var(--text-sm)", lineHeight: 1.55 }}>
           {a}
         </div>
       )}
@@ -115,7 +115,7 @@ export function SupportPage() {
             width: "100%",
             minHeight: 54,
             padding: "0 20px",
-            fontSize: 16,
+            fontSize: "var(--text-md)",
             color: "var(--text)",
             textDecoration: "none",
           }}

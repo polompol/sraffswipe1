@@ -75,7 +75,7 @@ export function PhotoUpload({
       </div>
       {error && (
         <>
-          <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>{error}</div>
+          <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>{error}</div>
           <input
             className="input"
             style={{ marginTop: 6 }}

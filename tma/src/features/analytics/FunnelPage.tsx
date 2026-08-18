@@ -63,7 +63,7 @@ export function FunnelPage() {
                     <div style={{ width, height: "100%", background: "var(--gold)" }} />
                   </div>
                   {i > 0 && (
-                    <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+                    <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                       конверсия из «{STEPS[i - 1].label}»: {conv}
                     </div>
                   )}

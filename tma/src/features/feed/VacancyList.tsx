@@ -28,7 +28,7 @@ function Thumb({ src, initial }: { src?: string; initial: string }) {
         justifyContent: "center",
         color: "rgba(255,255,255,.9)",
         fontWeight: 800,
-        fontSize: 24,
+        fontSize: "var(--text-xl)",
         background: "var(--grad-brand)",
       }}
     >
@@ -132,12 +132,12 @@ export function VacancyList({
               сломанной. Подписи заодно короче — теперь помещаются в одну. */}
           <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10 }}>
             {v.payMethod && (
-              <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
+              <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: "var(--text-xs)" }}>
                 {PAY_METHOD_SHORT[v.payMethod]}
               </span>
             )}
             {!!v.employerShiftsDone && (
-              <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 13 }}>
+              <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: "var(--text-xs)" }}>
                 {v.employerShiftsDone}{" "}
                 {plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто
               </span>
@@ -184,7 +184,7 @@ export function VacancyList({
             <span className="spacer" />
             <button
               // Кнопка была ~39px высотой — ниже минимальных 44px для пальца.
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, minHeight: 44, padding: "0 8px", display: "inline-flex", alignItems: "center", gap: 5 }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: "var(--text-xs)", minHeight: 44, padding: "0 8px", display: "inline-flex", alignItems: "center", gap: 5 }}
               onClick={() => setReportId(v.id)}
             >
               <IconWarning size={13} /> Пожаловаться

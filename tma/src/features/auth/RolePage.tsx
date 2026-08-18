@@ -111,7 +111,7 @@ export function RolePage() {
             onChange={(e) => acceptConsent(e.target.checked)}
             style={{ marginTop: 3 }}
           />
-          <span className="muted" style={{ fontSize: 13 }}>
+          <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
             Мне есть 18 лет. Принимаю{" "}
             {/* Через openLink, а не target="_blank": внутри Telegram новое
                 окно молча не открывается. Человек ставил галочку «принимаю
@@ -197,7 +197,7 @@ function RoleCard(props: {
         <Icon size={28} />
       </span>
       <span style={{ flex: 1 }}>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>{props.title}</div>
+        <div style={{ fontWeight: 700, fontSize: "var(--text-md)" }}>{props.title}</div>
         <div className="muted">{props.sub}</div>
       </span>
       <span style={{ color: "var(--muted)", display: "inline-flex" }}>

@@ -206,7 +206,7 @@ export function EditProfilePage() {
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
+              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
                 {ROLE_FAMILY_LABELS[fam]}
               </div>
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -259,7 +259,7 @@ export function EditProfilePage() {
           value={about}
           onChange={(e) => setAbout(e.target.value)}
         />
-        <div className="muted" style={{ fontSize: 13, textAlign: "right", marginBottom: 12 }}>
+        <div className="muted" style={{ fontSize: "var(--text-xs)", textAlign: "right", marginBottom: 12 }}>
           {about.length} / 1000
         </div>
 
@@ -285,7 +285,7 @@ export function EditProfilePage() {
                 value={inn}
                 onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
               />
-              <p className="muted" style={{ margin: "6px 0 0", fontSize: 13 }}>
+              <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--text-xs)" }}>
                 Номер есть в приложении «Мой налог» и в личном кабинете
                 налоговой. Нужен только для акта по смене — заведениям в ленте
                 он не виден.

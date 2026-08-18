@@ -149,7 +149,7 @@ export function SettingsPage() {
           <span className="spacer" />
           <b>{__APP_VERSION__}</b>
         </div>
-        <p className="muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
+        <p className="muted" style={{ margin: "10px 0 0", fontSize: "var(--text-xs)" }}>
           Если что-то работает не так — напишите в поддержку и назовите эту
           версию, так проблему найдут быстрее.
         </p>

@@ -364,7 +364,7 @@ export function ChatPage() {
           <span style={{ flex: 1, minWidth: 0 }}>
             <b style={{ display: "block" }}>Чат по смене</b>
             {srvMatch && shiftWhen(srvMatch) && (
-              <span className="muted" style={{ fontSize: 13 }}>
+              <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
                 {shiftWhen(srvMatch)}
               </span>
             )}
@@ -383,7 +383,7 @@ export function ChatPage() {
           <div
             className="muted"
             role="status"
-            style={{ textAlign: "center", fontSize: 13, padding: "6px 0" }}
+            style={{ textAlign: "center", fontSize: "var(--text-xs)", padding: "6px 0" }}
           >
             Связь потеряна — восстанавливаем…
           </div>
@@ -409,12 +409,13 @@ export function ChatPage() {
             style={{
               display: "block",
               margin: "0 auto 10px",
-              minHeight: 36,
+              // 44px — минимальная зона, в которую уверенно попадает палец.
+              minHeight: 44,
               padding: "0 14px",
               background: "none",
               border: "none",
               color: "var(--muted)",
-              fontSize: 14,
+              fontSize: "var(--text-sm)",
               fontWeight: 600,
               cursor: "pointer",
             }}
@@ -499,11 +500,11 @@ export function ChatPage() {
               style={{
                 marginTop: 8,
                 width: "100%",
-                minHeight: 40,
+                minHeight: 44,
                 background: "none",
                 border: "none",
                 color: "var(--muted)",
-                fontSize: 14,
+                fontSize: "var(--text-sm)",
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -522,7 +523,7 @@ export function ChatPage() {
               <div style={{ fontWeight: 700, marginBottom: 4 }}>
                 Заведение предлагает перенос
               </div>
-              <p className="muted" style={{ margin: "0 0 10px", fontSize: 14 }}>
+              <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-sm)" }}>
                 {srvMatch.rescheduleDate}
                 {srvMatch.rescheduleStart != null &&
                   ` · ${fmtTime(srvMatch.rescheduleStart)}–${fmtTime(srvMatch.rescheduleEnd ?? 0)}`}

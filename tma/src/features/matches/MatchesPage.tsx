@@ -34,7 +34,7 @@ function MatchAvatar({ src, initial }: { src?: string; initial: string }) {
         background: "var(--grad-brand)",
         color: "#fff",
         fontWeight: 800,
-        fontSize: 21,
+        fontSize: "var(--text-lg)",
       }}
     >
       {!ok && initial}
@@ -209,7 +209,7 @@ export function MatchesPage() {
                     открывал список мэтчей и не понимал, на какой день он
                     вообще договорился. */}
                 {shiftWhen(m) && <div className="muted">{shiftWhen(m)}</div>}
-                <div className="muted" style={{ fontSize: 13 }}>
+                <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                   {MATCH_STATUS_LABELS[m.status]}
                 </div>
               </span>
@@ -225,7 +225,7 @@ export function MatchesPage() {
             )}
 
             {!!m.shiftPay && m.shiftPay > 0 && (
-              <div style={{ marginTop: 8, fontWeight: 800, fontSize: 17 }}>
+              <div style={{ marginTop: 8, fontWeight: 800, fontSize: "var(--text-md)" }}>
                 {m.shiftPay.toLocaleString("ru-RU")} ₽
                 {m.status === "completed" ? " заработано" : " за смену"}
               </div>
@@ -262,7 +262,7 @@ export function MatchesPage() {
                 className="btn ghost"
                 style={{
                   marginTop: 12,
-                  fontSize: 14,
+                  fontSize: "var(--text-sm)",
                   color: "var(--muted)",
                   borderColor: "var(--border-strong)",
                 }}
@@ -279,7 +279,7 @@ export function MatchesPage() {
               <div style={{ marginTop: 12 }}>
                 <div
                   className="muted"
-                  style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}
+                  style={{ fontSize: "var(--text-xs)", marginBottom: 12, lineHeight: 1.5 }}
                 >
                   Смена закроется сама через 12 часов после окончания —
                   нажимать ничего не нужно.
@@ -300,7 +300,7 @@ export function MatchesPage() {
                           textAlign: "center",
                         }}
                       >
-                        <div className="muted" style={{ fontSize: 13 }}>
+                        <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
                           Назовите этот код работнику
                         </div>
                         <div
@@ -344,7 +344,7 @@ export function MatchesPage() {
                             если никто не возразит. Код — доказательство: после
                             него заведение не сможет тихо записать смену в
                             неявку, спор уйдёт к оператору. */}
-                        <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+                        <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
                           На месте попросите у администратора код — так у вас
                           останется доказательство, что вы приходили:
                         </div>
@@ -386,7 +386,7 @@ export function MatchesPage() {
                 {shiftEnded(m) && (
                   <button
                     className="btn ghost"
-                    style={{ marginTop: 10, minHeight: 44, fontSize: 14 }}
+                    style={{ marginTop: 10, minHeight: 44, fontSize: "var(--text-sm)" }}
                     onClick={() => doNotHeld(m.id)}
                   >
                     Смена не состоялась
@@ -402,7 +402,7 @@ export function MatchesPage() {
                   style={{
                     marginTop: 8,
                     minHeight: 44,
-                    fontSize: 14,
+                    fontSize: "var(--text-sm)",
                     color: "var(--muted)",
                     borderColor: "var(--border-strong)",
                   }}

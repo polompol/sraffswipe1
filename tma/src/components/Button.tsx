@@ -13,10 +13,16 @@ interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick">
   onClick?: () => void | Promise<void>;
 }
 
-const SIZE: Record<Size, { minHeight: number; padding: string; font: number }> = {
-  sm: { minHeight: 40, padding: "0 14px", font: 14 },
-  md: { minHeight: 48, padding: "0 18px", font: 15 },
-  lg: { minHeight: 54, padding: "0 20px", font: 16 },
+// Высота — не меньше 44px даже у самой маленькой кнопки: это общепринятая
+// минимальная зона, в которую уверенно попадает палец. Маленькая была 40px,
+// то есть «почти попадает» — а промах по кнопке в приложении, где всё
+// решается быстрым нажатием, человек читает как «не сработало» и жмёт ещё раз.
+// Размер шрифта берётся из общей шкалы (theme.css), поэтому кнопки растут
+// вместе со всем интерфейсом в крупном режиме.
+const SIZE: Record<Size, { minHeight: number; padding: string; font: string }> = {
+  sm: { minHeight: 44, padding: "0 14px", font: "var(--text-sm)" },
+  md: { minHeight: 48, padding: "0 18px", font: "var(--text-base)" },
+  lg: { minHeight: 54, padding: "0 20px", font: "var(--text-md)" },
 };
 
 /** Единая кнопка: варианты, размеры, loading-спиннер, haptic, мин. 44px тач. */

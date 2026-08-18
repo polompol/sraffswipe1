@@ -126,12 +126,12 @@ export function WelcomePage() {
             <div className="form-label" style={{ marginTop: 20 }}>
               Кем готовы выйти
             </div>
-            <p className="muted" style={{ margin: "0 0 10px", fontSize: 13 }}>
+            <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-xs)" }}>
               Можно выбрать несколько — смен будет больше
             </p>
             {ROLE_FAMILY_ORDER.map((fam) => (
               <div key={fam} style={{ marginBottom: 12 }}>
-                <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+                <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
                   {ROLE_FAMILY_LABELS[fam]}
                 </div>
                 <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -212,7 +212,7 @@ export function WelcomePage() {
             Заполню позже
           </Button>
         </div>
-        <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>
+        <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 12 }}>
           {isEmployer
             ? "Без названия смену опубликовать можно, но откликов будет меньше."
             : "Анкеты с именем и профессией зовут на смены заметно чаще."}

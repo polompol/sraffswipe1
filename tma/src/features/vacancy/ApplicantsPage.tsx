@@ -77,7 +77,7 @@ export function ApplicantsPage() {
                   двойные фамилии, и на узком экране имя наезжало на бейдж. */}
               <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
                 <span style={{ flex: "1 1 60%", minWidth: 0 }}>
-                  <b style={{ fontSize: 17, overflowWrap: "anywhere" }}>
+                  <b style={{ fontSize: "var(--text-md)", overflowWrap: "anywhere" }}>
                     {a.name}
                     {a.age ? `, ${a.age}` : ""}
                   </b>
@@ -86,12 +86,12 @@ export function ApplicantsPage() {
                   {a.declined && (
                     <span
                       className="tag"
-                      style={{ marginLeft: 8, fontSize: 12, color: "var(--muted)", borderColor: "var(--border)" }}
+                      style={{ marginLeft: 8, fontSize: "var(--text-xs)", color: "var(--muted)", borderColor: "var(--border)" }}
                     >
                       вы отказали
                     </span>
                   )}
-                  <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+                  <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2 }}>
                     {a.rating > 0 ? `★ ${a.rating.toFixed(1)}` : "Новичок"}
                     {a.district ? ` · ${a.district}` : ""}
                     {a.shiftsTotal > 0
@@ -126,7 +126,7 @@ export function ApplicantsPage() {
                   borderRadius: 999,
                   color: "var(--gold)",
                   fontWeight: 600,
-                  fontSize: 15,
+                  fontSize: "var(--text-base)",
                 }}
               >
                 <IconCalendar size={13} />
@@ -136,11 +136,11 @@ export function ApplicantsPage() {
               </div>
 
               {a.about && (
-                <p className="muted" style={{ margin: "10px 0 0", fontSize: 14 }}>
+                <p className="muted" style={{ margin: "10px 0 0", fontSize: "var(--text-sm)" }}>
                   {a.about}
                 </p>
               )}
-              <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
+              <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                 Медкнижка: {MED_BOOK_LABELS[a.medBook as MedBookStatus] ?? a.medBook}
                 {a.roles.length > 0 &&
                   ` · ${a.roles
