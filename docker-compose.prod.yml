@@ -214,6 +214,8 @@ services:
       context: .
       dockerfile: tma/Dockerfile
       args:
+        # Метка боевой сборки: приложение не соберётся на демо-данных.
+        PROD_BUILD: "1"
         VITE_USE_BACKEND: "true"
         VITE_API_BASE_URL: https://${DOMAIN}/api
         VITE_OFFER_URL: ${VITE_OFFER_URL:-}

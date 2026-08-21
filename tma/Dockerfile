@@ -17,6 +17,10 @@ COPY tma/ ./
 # Vite «запекает» VITE_*-переменные в бандл на этапе сборки. По умолчанию —
 # mock-режим (локальное превью без backend). Прод-значения (реальный API,
 # домен, ссылки на оферту/политику) передаёт docker compose через build args.
+# Метка боевой сборки: с ней vite.config.ts не даст собрать
+# приложение на демо-данных (см. assertNotDemoBuild).
+ARG PROD_BUILD=0
+ENV PROD_BUILD=$PROD_BUILD
 ARG VITE_USE_BACKEND=false
 ARG VITE_API_BASE_URL=http://localhost:8000
 ARG VITE_OFFER_URL=

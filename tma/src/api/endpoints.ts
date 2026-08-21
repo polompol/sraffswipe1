@@ -77,16 +77,26 @@ export interface SwipeResult {
   matchId?: string;
 }
 
+/**
+ * Свайп. `vacancyId` — на какую смену заведение зовёт человека.
+ *
+ * Без него сервер выбирал смену сам, из тех, что человек лайкнул. На экране
+ * «Кто откликнулся» под каждым написано, на какую именно смену он откликнулся,
+ * — и мэтч должен быть ровно по ней, а не по соседней с другим днём и другой
+ * ставкой.
+ */
 export async function sendSwipe(
   targetId: string,
   targetType: "vacancy" | "user",
   direction: SwipeDirection,
+  vacancyId?: string,
 ): Promise<SwipeResult> {
   if (!USE_BACKEND) return mock.sendSwipe(targetId, direction);
   const { data } = await api.post<SwipeResult>("/swipes", {
     target_id: targetId,
     target_type: targetType,
     direction,
+    ...(vacancyId ? { vacancy_id: vacancyId } : {}),
   });
   return { matched: Boolean(data.matched), matchId: data.matchId ?? undefined };
 }

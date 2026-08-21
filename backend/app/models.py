@@ -57,7 +57,13 @@ class User(Base):
     about: Mapped[str] = mapped_column(Text, default="")
     # «Готов выйти сегодня»: соискатель в один тап показывает доступность —
     # заведение со срочной сменой видит таких людей первыми.
-    available_today: Mapped[bool] = mapped_column(Boolean, default=False)
+    #
+    # Хранится ДАТА, а не «да/нет». С галочкой отметка жила вечно: человек
+    # нажимал её в августе, забывал выключить — и в сентябре всё ещё висел
+    # первым в ленте кандидатов и получал срочные рассылки. Функция, которая
+    # называется «сегодня», про сегодня не знала ничего. С датой она гаснет
+    # сама в полночь, и никакой уборки по расписанию не требуется.
+    available_date: Mapped[str] = mapped_column(String, default="", index=True)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # бан админом
     warnings: Mapped[int] = mapped_column(Integer, default=0)  # предупреждения
     # Поколение токенов. Номер зашит в токен; «разлогинить везде» = увеличить

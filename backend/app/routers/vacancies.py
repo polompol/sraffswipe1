@@ -591,7 +591,10 @@ def urgent_ping(
     city = (v.city or "").strip().lower()
     seekers = (
         db.query(User)
-        .filter(User.blocked.is_(False), User.available_today.is_(True))
+        .filter(
+            User.blocked.is_(False),
+            User.available_date == local_today(v.city),
+        )
         .all()
     )
     sent = 0

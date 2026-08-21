@@ -9,6 +9,7 @@ from ..models import Employer, Match, Swipe, User
 from ..notify import notify_owner
 from ..ratelimit import rate_limit
 from ..security import current_principal
+from ..timeutil import local_today
 from .billing import commission_overdue
 from .dadata import lookup_party
 
@@ -61,7 +62,7 @@ def my_workers(
     return [
         WorkerOut(
             id=u.id, name=u.name or "Соискатель", rating=u.rating,
-            available_today=u.available_today,
+            available_today=u.available_date == local_today(u.city),
             shifts_total=rel.get(u.id, (0, 0, 0))[0],
             shifts_attended=rel.get(u.id, (0, 0, 0))[1],
             employers_total=rel.get(u.id, (0, 0, 0))[2],
@@ -185,7 +186,7 @@ def applicants(
             rating=u.rating,
             photo_urls=_csv(u.photo_urls),
             about=u.about,
-            available_today=u.available_today,
+            available_today=u.available_date == local_today(u.city),
             shifts_total=rel.get(u.id, (0, 0, 0))[0],
             shifts_attended=rel.get(u.id, (0, 0, 0))[1],
             employers_total=rel.get(u.id, (0, 0, 0))[2],

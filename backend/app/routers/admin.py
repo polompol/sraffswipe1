@@ -1188,7 +1188,7 @@ def erase_account(
         target.experience_tags = ""
         target.photo_urls = ""
         target.about = ""
-        target.available_today = False
+        target.available_date = ""
     else:
         target.company_name = "Профиль удалён"
         target.inn = ""

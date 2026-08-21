@@ -162,6 +162,14 @@ class SwipeIn(BaseModel):
     target_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     target_type: Literal["vacancy", "user"]
     direction: Literal["like", "dislike"]
+    # На КАКУЮ смену заведение зовёт человека. Без этого поля сервер выбирал
+    # смену сам — первую попавшуюся из тех, что человек лайкнул. На экране
+    # «Кто откликнулся» под карточкой прямо написано «Бариста · 19 августа»,
+    # заведение жало «Беру на смену» — и мэтч мог оказаться на другую свою
+    # смену. Для свайпа по вакансии поле не нужно: там смена и есть цель.
+    vacancy_id: Annotated[
+        str, StringConstraints(min_length=1, max_length=64)
+    ] | None = None
 
 
 class SwipeOut(BaseModel):

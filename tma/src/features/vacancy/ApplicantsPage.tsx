@@ -35,7 +35,11 @@ export function ApplicantsPage() {
   async function answer(a: Applicant, take: boolean) {
     haptic(take ? "success" : "light");
     try {
-      const res = await sendSwipe(a.id, "user", take ? "like" : "dislike");
+      // Смена передаётся явно: на карточке написано, на какую именно человек
+      // откликнулся, и мэтч должен получиться ровно по ней.
+      const res = await sendSwipe(
+        a.id, "user", take ? "like" : "dislike", take ? a.vacancyId : undefined,
+      );
       qc.invalidateQueries({ queryKey: ["applicants"] });
       qc.invalidateQueries({ queryKey: ["me"] });
       if (take && res.matched) {

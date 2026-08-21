@@ -256,24 +256,45 @@ def swipe(
             _on_match(db, match, created)
             return SwipeOut(recorded=True, matched=True, match_id=match.id)
 
-    # Работодатель лайкнул кандидата → ищем его лайк на любую нашу вакансию.
+    # Работодатель лайкнул кандидата → ищем его лайк на нашу смену.
     if principal["role"] == "employer" and body.target_type == "user":
-        # Только действующие смены: по заблокированной мэтч создавать нельзя.
+        # Только действующие и ещё не прошедшие смены: мэтч на вчерашнюю
+        # означает человека, приехавшего в день, которого уже не было.
         my_vacs = [
-            v.id
+            v
             for v in db.query(Vacancy)
             .filter(Vacancy.employer_id == me, Vacancy.status == "active")
             .all()
+            if v.date >= local_today(v.city)
         ]
-        seeker_like = (
+        # Заведение назвало смену явно (экран «Кто откликнулся» — там под
+        # каждым человеком написано, на какую именно смену он откликнулся).
+        # Тогда мэтч только по ней: молча подставить другую смену нельзя,
+        # это разные день, время и деньги.
+        if body.vacancy_id:
+            my_vacs = [v for v in my_vacs if v.id == body.vacancy_id]
+            if not my_vacs:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Смена не найдена или уже неактуальна",
+                )
+        # Порядок важен: если человек лайкнул несколько наших смен и смена не
+        # названа (лента кандидатов — там её негде выбрать), берём БЛИЖАЙШУЮ.
+        # Раньше бралась «первая попавшаяся» из базы: какая именно — зависело
+        # от порядка записей, то есть по сути случайная.
+        order = {v.id: (v.date, v.start_time) for v in my_vacs}
+        likes = (
             db.query(Swipe)
             .filter(
                 Swipe.swiper_id == body.target_id,
                 Swipe.target_type == "vacancy",
-                Swipe.target_id.in_(my_vacs or ["__none__"]),
+                Swipe.target_id.in_(list(order) or ["__none__"]),
                 Swipe.direction.in_(_POSITIVE),
             )
-            .first()
+            .all()
+        )
+        seeker_like = min(
+            likes, key=lambda sw: order[sw.target_id], default=None
         )
         if seeker_like and not _same_person(db, body.target_id, me):
             try:

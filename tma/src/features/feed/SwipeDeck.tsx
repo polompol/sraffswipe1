@@ -69,12 +69,23 @@ export function SwipeDeck<T>(props: Props<T>) {
         : {}));
       restack();
     };
+    // «Смены закончились» объявляем только ПОСЛЕ ответа сервера.
+    //
+    // Раньше это делалось сразу, вместе с анимацией. На последней карточке
+    // получалось так: человек смахнул, сервер отказал («место уже заняли»,
+    // «оплатите счёт»), карточка честно вернулась в колоду — а экран уже
+    // сообщил, что смен больше нет, и показал пустое состояние поверх
+    // вернувшейся карточки.
+    const done = () => {
+      if (gone.size === items.length) props.onEmpty?.();
+    };
     const res = onSwipe(items[index], dir) as unknown;
-    if (res && typeof (res as Promise<unknown>).catch === "function") {
-      (res as Promise<unknown>).catch(back);
+    if (res && typeof (res as Promise<unknown>).then === "function") {
+      (res as Promise<unknown>).then(done, back);
+    } else {
+      done();
     }
     restack();
-    if (gone.size === items.length) props.onEmpty?.();
   }
 
   // Пересобрать стопку: оставшиеся карты подрастают к фронту (живее).
