@@ -211,8 +211,15 @@ export function FeedPage() {
       : "") +
     (typeof data?.length === "number" ? ` · ${data.length}` : "");
 
+  // Экран с колодой живёт по своим правилам: он не прокручивается, а карточка
+  // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
+  // см. `.page.feed-deck` в index.css.
+  const deckMode =
+    !isLoading && !isError && !!data && !empty && data.length > 0
+    && !(isSeeker && view === "list");
+
   return (
-    <div className="page">
+    <div className={deckMode ? "page feed-deck" : "page"}>
       <div className="row" style={{ marginBottom: 6, gap: 4 }}>
         <span
           aria-hidden
@@ -272,7 +279,9 @@ export function FeedPage() {
       {/* Один ряд вместо трёх: город, «Сегодня» и сохранённые поиски раньше
           шли отдельными строками и съедали ~54px над карточкой — а карточка
           и есть продукт. */}
-      <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+      {/* Перенос строк задан в CSS, а не здесь: на низких экранах строка
+          обязана оставаться одной, а стиль в разметке перебивал бы правило. */}
+      <div className="row feed-filters" style={{ gap: 8, marginBottom: 10 }}>
         {/* Имя кнопки для скринридера начинается с того же текста, что виден
             на экране. Прежний aria-label («Сменить город и фильтры») его
             перекрывал: вслух не читались ни город, ни число найденных смен,

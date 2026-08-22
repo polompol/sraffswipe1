@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from "react";
-import { useLargeMode } from "@/lib/large";
+import { useLargeMode, useShortScreen } from "@/lib/large";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
@@ -175,13 +175,14 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
   // больше, и она перестаёт помещаться вместе с названием и условиями. Сумма
   // при этом не пропадает — она возвращается обычной строкой в теле карточки.
   const large = useLargeMode();
+  const short = useShortScreen();
   return (
     <>
       <SwipePhoto
         src={hasPhoto ? v.interiorPhotoUrl : undefined}
         initial={(v.companyName || "С").charAt(0)}
         onHero={setHeroShown}
-        hasHero={!large}
+        hasHero={!large && !short}
       />
       <div className="swipe-shade" />
 
@@ -348,13 +349,14 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
   );
   const [heroShown, setHeroShown] = useState(!hasPhoto);
   const large = useLargeMode();
+  const short = useShortScreen();
   return (
     <>
       <SwipePhoto
         src={hasPhoto ? photos[0] : undefined}
         initial={(s.name || "?").charAt(0)}
         onHero={setHeroShown}
-        hasHero={!large}
+        hasHero={!large && !short}
       />
       <div className="swipe-shade" />
       {/* Плашки и крупная должность — в одной колонке, друг под другом: так

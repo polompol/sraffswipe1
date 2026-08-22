@@ -46,6 +46,11 @@ export function useDialog<T extends HTMLElement>(onClose: () => void) {
     const box = ref.current;
     const restoreTo = document.activeElement as HTMLElement | null;
     hideBackground();
+    // Фон под шторкой не должен прокручиваться. Иначе движение пальцем по
+    // краю листа прокручивает ленту ПОД ним: человек закрывает шторку и
+    // обнаруживает, что список уехал куда-то вниз сам собой.
+    const bodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     box?.focus();
 
     function focusables(): HTMLElement[] {
@@ -85,6 +90,7 @@ export function useDialog<T extends HTMLElement>(onClose: () => void) {
 
     document.addEventListener("keydown", onKey, true);
     return () => {
+      document.body.style.overflow = bodyOverflow;
       document.removeEventListener("keydown", onKey, true);
       showBackground();
       restoreTo?.focus?.();
