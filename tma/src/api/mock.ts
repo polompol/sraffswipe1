@@ -175,6 +175,7 @@ const matches: MatchModel[] = [
     confirmedByEmployer: true,
     companyName: "Кофейня «Дрова»",
     companyPhotoUrl: photo("photo-1554118811-1e0d58224f24"),
+    seekerName: "Мария",
     role: "barista",
     checkinCode: "482915",
     seekerCheckedIn: false,
@@ -196,6 +197,7 @@ const matches: MatchModel[] = [
     confirmedByEmployer: true,
     companyName: "Бар «Полночь»",
     companyPhotoUrl: photo("photo-1514933651103-005eec06c04b"),
+    seekerName: "Мария",
     role: "bartender",
     checkinCode: null,
     seekerCheckedIn: true,
@@ -302,7 +304,54 @@ export function sendSwipe(
 ): Promise<SwipeResult> {
   if (direction === "dislike") return Promise.resolve({ matched: false });
   const vac = VACANCIES.find((v) => v.id === targetId);
-  if (!vac) return Promise.resolve({ matched: false });
+  if (!vac) {
+    // Заведение позвало кандидата. В демо-режиме встречный лайк считаем
+    // состоявшимся: иначе экран «Взаимно!» со стороны заведения нельзя
+    // увидеть вообще, а это половина сквозного пути продукта.
+    const seeker = SEEKERS.find((x) => x.id === targetId);
+    if (!seeker) return Promise.resolve({ matched: false });
+    // Смену подбираем по должности человека — как это делает сервер. Иначе в
+    // демо получалось «Мария выйдет на смену · Бариста», хотя на её карточке
+    // написано «Официант».
+    const mine =
+      VACANCIES.find((v) => seeker.roles.includes(v.role)) ?? VACANCIES[0];
+    const m: MatchModel = {
+      id: uid(),
+      seekerId: seeker.id,
+      employerId: mine.employerId,
+      vacancyId: mine.id,
+      status: "matched",
+      confirmedBySeeker: false,
+      confirmedByEmployer: false,
+      companyName: mine.companyName,
+      companyPhotoUrl: mine.companyPhotoUrl,
+      seekerName: seeker.name,
+      role: mine.role,
+      shiftDate: mine.date,
+      shiftStart: mine.startTime,
+      shiftEnd: mine.endTime,
+    };
+    matches.unshift(m);
+    messagesByMatch[m.id] = [
+      {
+        id: uid(),
+        chatId: m.id,
+        senderId: "system",
+        text: `Это мэтч! Смена: ${mine.companyName}. Договоритесь о деталях.`,
+        isSystem: true,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+    return Promise.resolve({
+      matched: true,
+      matchId: m.id,
+      vacancyId: mine.id,
+      role: mine.role,
+      shiftDate: mine.date,
+      shiftStart: mine.startTime,
+      shiftEnd: mine.endTime,
+    });
+  }
   const match: MatchModel = {
     id: uid(),
     seekerId: "me",
@@ -313,7 +362,11 @@ export function sendSwipe(
     confirmedByEmployer: false,
     companyName: vac.companyName,
     companyPhotoUrl: vac.companyPhotoUrl,
+    seekerName: "Мария",
     role: vac.role,
+    shiftDate: vac.date,
+    shiftStart: vac.startTime,
+    shiftEnd: vac.endTime,
   };
   matches.unshift(match);
   messagesByMatch[match.id] = [
@@ -334,7 +387,15 @@ export function sendSwipe(
       timestamp: new Date().toISOString(),
     },
   ];
-  return Promise.resolve({ matched: true, matchId: match.id });
+  return Promise.resolve({
+    matched: true,
+    matchId: match.id,
+    vacancyId: vac.id,
+    role: vac.role,
+    shiftDate: vac.date,
+    shiftStart: vac.startTime,
+    shiftEnd: vac.endTime,
+  });
 }
 
 export function fetchMyVacancies(): Promise<Vacancy[]> {

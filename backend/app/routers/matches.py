@@ -15,10 +15,12 @@ from ..conflicts import overlapping_shifts
 from ..db import get_db
 from ..models import (
     Commission,
+    Employer,
     Entitlement,
     Match,
     Message,
     Report,
+    User,
     Vacancy,
     WalletTxn,
 )
@@ -391,14 +393,28 @@ def mark_attendance(
 
 
 def _to_out(
-    db: Session, m: Match, role: str = "", vac: Vacancy | None = None
+    db: Session,
+    m: Match,
+    role: str = "",
+    vac: Vacancy | None = None,
+    emp: Employer | None = None,
+    usr: User | None = None,
 ) -> MatchOut:
     # Код прихода показываем ТОЛЬКО заведению как помощник, пока смена не закрыта.
     show_code = role == "employer" and m.status == "confirmed" and bool(m.checkin_code)
-    # vac передают заранее, когда мэтчей много: иначе на каждую строку списка
-    # уходил отдельный запрос за сменой (25 мэтчей = 27 запросов).
+    # vac/emp/usr передают заранее, когда мэтчей много: иначе на каждую строку
+    # списка уходил отдельный запрос (25 мэтчей = 27 запросов).
     v = vac if vac is not None else db.get(Vacancy, m.vacancy_id)
+    e = emp if emp is not None else db.get(Employer, m.employer_id)
+    u = usr if usr is not None else db.get(User, m.user_id)
     pay = _shift_pay(v, m.actual_minutes) if v is not None else 0
+    # Фото заведения: сначала логотип, если его нет — снимок интерьера смены.
+    # Пустая строка тоже валидна: приложение рисует букву названия.
+    photo = ""
+    if e is not None and e.photo_url:
+        photo = e.photo_url
+    elif v is not None:
+        photo = v.interior_photo_url
     return MatchOut(
         id=m.id,
         user_id=m.user_id,
@@ -419,6 +435,10 @@ def _to_out(
         reschedule_date=m.reschedule_date or "",
         reschedule_start=m.reschedule_start,
         reschedule_end=m.reschedule_end,
+        role=v.role if v is not None else "",
+        company_name=e.company_name if e is not None else "",
+        company_photo_url=photo,
+        seeker_name=u.name if u is not None else "",
     )
 
 
@@ -429,15 +449,35 @@ def list_matches(
 ):
     col = Match.user_id if principal["role"] == "seeker" else Match.employer_id
     rows = db.query(Match).filter(col == principal["id"]).all()
-    # Смены подгружаем ОДНИМ запросом на весь список, а не по одному на строку.
+    # Смены, заведения и людей подгружаем ПО ОДНОМУ запросу на весь список, а не
+    # по одному на строку.
     vacs = {
         v.id: v
         for v in db.query(Vacancy).filter(
             Vacancy.id.in_([m.vacancy_id for m in rows] or ["__none__"])
         )
     }
+    emps = {
+        e.id: e
+        for e in db.query(Employer).filter(
+            Employer.id.in_([m.employer_id for m in rows] or ["__none__"])
+        )
+    }
+    usrs = {
+        u.id: u
+        for u in db.query(User).filter(
+            User.id.in_([m.user_id for m in rows] or ["__none__"])
+        )
+    }
     return [
-        _to_out(db, m, principal["role"], vac=vacs.get(m.vacancy_id))
+        _to_out(
+            db,
+            m,
+            principal["role"],
+            vac=vacs.get(m.vacancy_id),
+            emp=emps.get(m.employer_id),
+            usr=usrs.get(m.user_id),
+        )
         for m in rows
     ]
 

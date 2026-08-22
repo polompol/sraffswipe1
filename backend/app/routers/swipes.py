@@ -132,6 +132,20 @@ def _on_match(db: Session, match: Match, created: bool) -> None:
     )
 
 
+def _matched_out(match_id: str, vac: Vacancy) -> SwipeOut:
+    """Ответ о совпадении вместе со сменой, на которую оно случилось."""
+    return SwipeOut(
+        recorded=True,
+        matched=True,
+        match_id=match_id,
+        vacancy_id=vac.id,
+        role=vac.role,
+        shift_date=vac.date,
+        shift_start=vac.start_time,
+        shift_end=vac.end_time,
+    )
+
+
 @router.post(
     "",
     response_model=SwipeOut,
@@ -254,7 +268,7 @@ def swipe(
                 # Но мэтча нет: мест не осталось.
                 return SwipeOut(recorded=True, matched=False)
             _on_match(db, match, created)
-            return SwipeOut(recorded=True, matched=True, match_id=match.id)
+            return _matched_out(match.id, vac)
 
     # Работодатель лайкнул кандидата → ищем его лайк на нашу смену.
     if principal["role"] == "employer" and body.target_type == "user":
@@ -283,6 +297,7 @@ def swipe(
         # Раньше бралась «первая попавшаяся» из базы: какая именно — зависело
         # от порядка записей, то есть по сути случайная.
         order = {v.id: (v.date, v.start_time) for v in my_vacs}
+        order_vac = {v.id: v for v in my_vacs}
         likes = (
             db.query(Swipe)
             .filter(
@@ -310,6 +325,6 @@ def swipe(
                            "Увеличьте число мест или опубликуйте новую смену.",
                 ) from None
             _on_match(db, match, created)
-            return SwipeOut(recorded=True, matched=True, match_id=match.id)
+            return _matched_out(match.id, order_vac[seeker_like.target_id])
 
     return SwipeOut(recorded=True, matched=False)

@@ -5,6 +5,7 @@ import type {
   MatchModel,
   Message,
   Seeker,
+  StaffRole,
   SwipeDirection,
   Vacancy,
 } from "@/types/domain";
@@ -75,6 +76,15 @@ export async function fetchInvites(): Promise<Vacancy[]> {
 export interface SwipeResult {
   matched: boolean;
   matchId?: string;
+  /** На какую смену случилось совпадение. Соискатель это и так знает — он
+   *  смахнул конкретную карточку; заведение листает людей, и смену за него
+   *  выбирает сервер, поэтому без этих полей экран «Взаимно!» у заведения не
+   *  мог сказать, на какой день и час оно только что позвало человека. */
+  vacancyId?: string;
+  role?: StaffRole;
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
 }
 
 /**
@@ -98,7 +108,15 @@ export async function sendSwipe(
     direction,
     ...(vacancyId ? { vacancy_id: vacancyId } : {}),
   });
-  return { matched: Boolean(data.matched), matchId: data.matchId ?? undefined };
+  return {
+    matched: Boolean(data.matched),
+    matchId: data.matchId ?? undefined,
+    vacancyId: data.vacancyId ?? undefined,
+    role: data.role || undefined,
+    shiftDate: data.shiftDate || undefined,
+    shiftStart: data.shiftStart,
+    shiftEnd: data.shiftEnd,
+  };
 }
 
 export async function fetchMatches(): Promise<MatchModel[]> {

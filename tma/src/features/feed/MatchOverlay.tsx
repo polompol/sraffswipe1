@@ -1,7 +1,8 @@
 import { useId } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import type { MatchModel } from "@/types/domain";
+import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
+import { shiftWhen } from "@/lib/format";
 import { IconTabMatches, IconChat } from "@/components/Icons";
 import { useDialog } from "@/components/Sheet";
 
@@ -17,12 +18,27 @@ const COLORS = [
 export function MatchOverlay({
   match,
   onClose,
+  role,
 }: {
   match: MatchModel;
   onClose: () => void;
+  /** Чью сторону экран обслуживает. От неё зависит и текст, и чьё имя видно. */
+  role?: string | null;
 }) {
   const nav = useNavigate();
   const confetti = Array.from({ length: 36 });
+  // Заведению показываем имя работника, работнику — название заведения:
+  // каждая сторона видит того, с кем совпала, а не саму себя.
+  const isEmployer = role === "employer";
+  const who =
+    (isEmployer ? match.seekerName : match.companyName)?.trim() ||
+    (isEmployer ? "Работник" : "Заведение");
+  const shiftLine = [
+    match.role ? STAFF_ROLE_LABELS[match.role] : "",
+    shiftWhen(match),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const titleId = useId();
   // Оверлей перекрывает весь экран, поэтому ведёт себя как модальное окно:
   // фокус внутрь, Escape закрывает, фон не читается скринридером. Раньше это
@@ -90,7 +106,7 @@ export function MatchOverlay({
         Взаимно!
       </div>
       <div style={{ margin: "12px 0", position: "relative" }}>
-        {match.companyPhotoUrl ? (
+        {!isEmployer && match.companyPhotoUrl ? (
           <img
             className="match-avatar"
             src={match.companyPhotoUrl}
@@ -103,7 +119,7 @@ export function MatchOverlay({
         ) : null}
         <div
           className="match-avatar"
-          hidden={!!match.companyPhotoUrl}
+          hidden={!isEmployer && !!match.companyPhotoUrl}
           style={{ color: "#fff" }}
         >
           <IconTabMatches size={54} active />
@@ -116,9 +132,30 @@ export function MatchOverlay({
         {/* Двоеточие вместо «готово/готова»: род названия заранее неизвестен
             («Кофейня» — она, «Бар» — он), и любое согласование где-нибудь да
             прозвучит безграмотно. */}
-        {match.companyName ?? "Заведение"}: вас готовы взять на смену.
-        Договоритесь о деталях в чате.
+        {who}
+        {isEmployer
+          ? " выйдет на смену. Договоритесь о деталях в чате."
+          : ": вас готовы взять на смену. Договоритесь о деталях в чате."}
       </p>
+      {/* ЧТО ИМЕННО совпало: должность, день и часы.
+          Раньше на самом радостном экране продукта не было написано, о какой
+          смене речь. У человека их может быть несколько за неделю, а заведение
+          в ленте вообще не выбирает смену руками — её подбирает сервер, и без
+          этой строки владелец кофейни не знал, на какой день только что позвал
+          человека. */}
+      {shiftLine && (
+        <p
+          style={{
+            color: "#e8c268",
+            fontWeight: 700,
+            marginTop: 8,
+            maxWidth: 320,
+            position: "relative",
+          }}
+        >
+          {shiftLine}
+        </p>
+      )}
       <div style={{ width: "100%", maxWidth: 340, marginTop: 24, display: "grid", gap: 10 }}>
         <button
           className="btn"

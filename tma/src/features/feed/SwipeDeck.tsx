@@ -11,7 +11,12 @@ interface Props<T> {
   /** Может вернуть промис: если он отклонится, карточка вернётся в колоду. */
   onSwipe: (item: T, dir: SwipeDirection) => void | Promise<unknown>;
   onEmpty?: () => void;
-  controllerRef?: (fn: (dir: SwipeDirection) => void) => void;
+  /** Управление верхней картой снаружи (кнопки «Пропустить/Отклик», шторка
+   *  деталей). expectKey — страховка: смахнуть именно ту карточку, которую
+   *  человек видел, а не ту, что оказалась сверху, пока была открыта шторка. */
+  controllerRef?: (
+    fn: (dir: SwipeDirection, expectKey?: string) => void,
+  ) => void;
 }
 
 const VISIBLE = 3;
@@ -104,9 +109,11 @@ export function SwipeDeck<T>(props: Props<T>) {
 
   // Кнопки управляют ВЕРХНЕЙ картой (i=0 — самый высокий z-index/фронт).
   if (props.controllerRef) {
-    props.controllerRef((dir) => {
+    props.controllerRef((dir, expectKey) => {
       for (let i = 0; i < items.length; i++) {
         if (!gone.has(i)) {
+          // Ждали конкретную карточку, а сверху уже другая — не трогаем её.
+          if (expectKey !== undefined && keyOf(items[i]) !== expectKey) return;
           fling(i, dir);
           break;
         }

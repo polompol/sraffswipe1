@@ -209,6 +209,10 @@ export interface MatchModel {
   confirmedByEmployer: boolean;
   companyName?: string;
   companyPhotoUrl?: string;
+  /** Имя работника: его показывают ЗАВЕДЕНИЮ. Соискателю в этой же строке
+   *  показывается название заведения — сторона видит того, с кем договорилась,
+   *  а не саму себя. */
+  seekerName?: string;
   role?: StaffRole;
   checkinCode?: string | null; // виден только заведению (помощник)
   checkedIn?: boolean; // смена закрыта (обе стороны подтвердили)

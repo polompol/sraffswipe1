@@ -113,7 +113,9 @@ export function FeedPage() {
   const [view, setView] = useState<"swipe" | "list">(
     (localStorage.getItem("ss_view") as "swipe" | "list" | null) ?? "swipe",
   );
-  const controller = useRef<((dir: SwipeDirection) => void) | null>(null);
+  const controller = useRef<
+    ((dir: SwipeDirection, expectKey?: string) => void) | null
+  >(null);
 
   const activeFilterCount = isSeeker
     ? (filters.role ? 1 : 0) +
@@ -155,6 +157,21 @@ export function FeedPage() {
   });
   const employerNoVacancy = !isSeeker && myVacs != null && myVacs.length === 0;
 
+  /** Отклик прямо из шторки «Детали смены».
+   *
+   *  В колоде дёргаем ту же механику, что и кнопка «Отклик»: карточка улетает
+   *  так же, как от пальца — человек видит привычный ответ, а не пустоту.
+   *  Ключ карточки передаём явно: пока шторка была открыта, сверху могла
+   *  оказаться другая смена, и смахнуть надо именно ту, которую читали. */
+  async function likeFromDetails(v: Vacancy) {
+    setDetails(null);
+    if (deckMode && controller.current) {
+      controller.current("like", v.id);
+      return;
+    }
+    if (await handleSwipe(v, "like")) toast("Отклик отправлен", "success");
+  }
+
   // Возвращает true, если это был успешный отклик без мэтча — тогда список-вид
   // покажет тост «Отклик отправлен». В колоде (свайп) результат игнорируется —
   // там обратная связь — улетающая карточка.
@@ -179,13 +196,33 @@ export function FeedPage() {
             companyName: v.companyName,
             companyPhotoUrl: v.companyPhotoUrl,
             role: v.role,
+            shiftDate: v.date,
+            shiftStart: v.startTime,
+            shiftEnd: v.endTime,
           });
+          qc.invalidateQueries({ queryKey: ["matches"] });
           return false; // мэтч → оверлей, тост не нужен
         }
-        // Заведение о мэтче не узнавало вообще: карточка улетала, экран не
-        // менялся. Человеку уже ушло уведомление и открылся чат, а владелец
-        // кофейни находил его случайно, зайдя в «Мэтчи».
-        toast("Взаимно! Открылся чат — договоритесь о смене", "success");
+        // Раньше заведение о мэтче узнавало только всплывашкой: карточка
+        // улетала, экран не менялся, и попасть в чат отсюда было нельзя —
+        // приходилось искать человека руками во вкладке «Люди». Человеку при
+        // этом уже ушло уведомление и открылся чат. Теперь обе стороны видят
+        // один и тот же экран с кнопкой «Перейти в чат».
+        const s = item as Seeker;
+        setMatch({
+          id: res.matchId,
+          seekerId: s.id,
+          employerId: "me",
+          vacancyId: res.vacancyId ?? "",
+          status: "matched",
+          confirmedBySeeker: false,
+          confirmedByEmployer: false,
+          seekerName: s.name,
+          role: res.role,
+          shiftDate: res.shiftDate,
+          shiftStart: res.shiftStart,
+          shiftEnd: res.shiftEnd,
+        });
         qc.invalidateQueries({ queryKey: ["matches"] });
         return false;
       }
@@ -450,8 +487,20 @@ export function FeedPage() {
         </>
       )}
 
-      {match && <MatchOverlay match={match} onClose={() => setMatch(null)} />}
-      {details && <ShiftDetailsSheet v={details} onClose={() => setDetails(null)} />}
+      {match && (
+        <MatchOverlay
+          match={match}
+          role={isSeeker ? "seeker" : "employer"}
+          onClose={() => setMatch(null)}
+        />
+      )}
+      {details && (
+        <ShiftDetailsSheet
+          v={details}
+          onClose={() => setDetails(null)}
+          onLike={likeFromDetails}
+        />
+      )}
       {filterOpen && isSeeker && (
         <FilterSheet
           value={filters}

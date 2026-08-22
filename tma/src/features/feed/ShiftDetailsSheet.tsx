@@ -13,6 +13,7 @@ import {
   IconMedBook,
   IconCheck,
   IconSkip,
+  IconLike,
 } from "@/components/Icons";
 import { Sheet } from "@/components/Sheet";
 
@@ -32,8 +33,20 @@ function whatToBring(v: Vacancy): string[] {
 }
 
 /** «Детали смены» — глубина, которой нет у досок вакансий: разбивка оплаты,
- *  время пешком, что взять с собой. Открывается кнопкой на карточке. */
-export function ShiftDetailsSheet({ v, onClose }: { v: Vacancy; onClose: () => void }) {
+ *  время пешком, что взять с собой. Открывается кнопкой на карточке.
+ *
+ *  Откликнуться можно прямо отсюда. Раньше главного действия в шторке не было
+ *  вовсе: человек всё прочитал, решил — и должен был закрыть шторку и заново
+ *  тянуться к сердцу. Ровно в этот момент решение остывает. */
+export function ShiftDetailsSheet({
+  v,
+  onClose,
+  onLike,
+}: {
+  v: Vacancy;
+  onClose: () => void;
+  onLike?: (v: Vacancy) => void;
+}) {
   const hours = shiftHours(v);
   const walkMin = typeof v.distanceKm === "number" ? Math.max(1, Math.round(v.distanceKm * 12)) : null;
 
@@ -49,11 +62,39 @@ export function ShiftDetailsSheet({ v, onClose }: { v: Vacancy; onClose: () => v
       title={v.companyName}
       onClose={onClose}
       footer={
-        <button className="btn secondary" onClick={onClose}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconSkip size={16} /> Закрыть
-          </span>
-        </button>
+        // Главное действие — заливкой и первым; «Закрыть» рядом и тише.
+        // Порядок именно такой: большой палец дотягивается до правого края
+        // легче, чем до левого, а промах по «Закрыть» ничего не стоит.
+        onLike ? (
+          <div className="row" style={{ gap: 10 }}>
+            <button
+              className="btn secondary"
+              // width: auto обязателен: у .btn ширина 100%, и в ряду две такие
+              // кнопки просто вылезали за край шторки.
+              style={{ flex: "0 0 auto", width: "auto" }}
+              onClick={onClose}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconSkip size={16} /> Закрыть
+              </span>
+            </button>
+            <button
+              className="btn"
+              style={{ flex: "1 1 auto", width: "auto", minWidth: 0 }}
+              onClick={() => onLike(v)}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconLike size={18} /> Откликнуться
+              </span>
+            </button>
+          </div>
+        ) : (
+          <button className="btn secondary" onClick={onClose}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <IconSkip size={16} /> Закрыть
+            </span>
+          </button>
+        )
       }
     >
       <div className="muted">{STAFF_ROLE_LABELS[v.role]}</div>

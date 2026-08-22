@@ -19,11 +19,12 @@ import {
   type AddressSuggestion,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { shiftWhen } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { CityPicker } from "@/components/CityPicker";
-import { IconPin } from "@/components/Icons";
+import { IconCheck, IconPin } from "@/components/Icons";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 
 const toMinutes = (t: string): number => {
@@ -79,14 +80,24 @@ export function CreateVacancyPage() {
     !HEADCOUNT_PRESETS.includes(pre?.headcount ?? 1),
   );
   const [busy, setBusy] = useState(false);
+  // Экран «опубликовано» вместо возврата назад: после публикации у заведения
+  // должно быть куда нажать, а не только куда вернуться.
+  const [published, setPublished] = useState(false);
 
-  useEffect(() => showBackButton(() => nav(-1)), [nav]);
+  // Кнопка «назад» Telegram. После публикации она ведёт к списку смен: назад
+  // в только что отправленную форму возвращаться незачем.
+  useEffect(
+    () => showBackButton(() => (published ? nav("/vacancy/my") : nav(-1))),
+    [nav, published],
+  );
 
   // Форма длинная: дата, время, ставка, адрес с подсказками, описание — три
   // минуты работы. Задел крестик или смахнул вниз — всё пропадало без
   // единого вопроса. Пока в форме есть несохранённое, Telegram спрашивает
   // подтверждение при закрытии.
-  const dirty = !!date || !!desc || address !== (pre?.address ?? "");
+  // После публикации спрашивать «точно уйти?» уже не за что: форма сохранена.
+  const dirty =
+    !published && (!!date || !!desc || address !== (pre?.address ?? ""));
   useEffect(() => {
     guardClosing(dirty);
     return () => guardClosing(false);
@@ -139,15 +150,21 @@ export function CreateVacancyPage() {
       if (editing) {
         await updateVacancy(editing.id, payload);
         toast("Смена обновлена", "success");
-      } else {
-        await createVacancy(payload);
-        track("vacancy_publish", { role });
-        toast("Смена опубликована", "success");
+        haptic("success");
+        qc.invalidateQueries({ queryKey: ["feed"] });
+        qc.invalidateQueries({ queryKey: ["my-vacancies"] });
+        nav(-1);
+        return;
       }
+      await createVacancy(payload);
+      track("vacancy_publish", { role });
       haptic("success");
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["my-vacancies"] });
-      nav(-1);
+      // Не возвращаем назад молча. Раньше публикация заканчивалась всплывашкой
+      // и прыжком на предыдущий экран: смена опубликована — и что дальше?
+      // Заведение ждало откликов, хотя быстрее позвать людей самому.
+      setPublished(true);
     } catch (e) {
       haptic("error");
       // Сервер объясняет причину сам: и почему нельзя менять смену с
@@ -190,6 +207,55 @@ export function CreateVacancyPage() {
     }, 300);
     return () => clearTimeout(t);
   }, [address]);
+
+  if (published) {
+    return (
+      <div className="app">
+        <div className="page">
+          {/* Тот же кружок, что у пустых состояний: одна форма на весь
+              продукт, отдельный стиль тут не нужен. */}
+          <div
+            aria-hidden
+            style={{
+              width: 72,
+              height: 72,
+              margin: "8px 0 16px",
+              borderRadius: "50%",
+              background: "var(--gold-tint)",
+              color: "var(--gold)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <IconCheck size={34} />
+          </div>
+          <h1 className="h1" style={{ marginBottom: 8 }}>
+            Смена опубликована
+          </h1>
+          <p className="muted" style={{ marginBottom: 4 }}>
+            {STAFF_ROLE_LABELS[role]} ·{" "}
+            {shiftWhen({
+              shiftDate: date,
+              shiftStart: toMinutes(start),
+              shiftEnd: toMinutes(end),
+            })}
+          </p>
+          <p className="muted" style={{ marginBottom: 24 }}>
+            Она уже в ленте у соискателей поблизости. Ждать отклика не
+            обязательно: позовите тех, кто подходит, — так смена закрывается
+            быстрее.
+          </p>
+          <div style={{ display: "grid", gap: 10 }}>
+            <Button onClick={() => nav("/feed")}>Посмотреть кандидатов</Button>
+            <Button variant="secondary" onClick={() => nav("/vacancy/my")}>
+              К моим сменам
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

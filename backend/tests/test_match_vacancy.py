@@ -157,3 +157,39 @@ def test_naming_a_shift_the_person_did_not_choose_gives_no_match(client):
         "vacancy_id": b["id"],
     }).json()
     assert r["matched"] is False
+
+
+def test_the_swipe_answer_names_the_shift(client):
+    """Ответ о совпадении говорит, НА КАКУЮ смену оно случилось.
+
+    Заведение листает людей, а не смены: смену за него выбирает сервер. Без
+    этих полей экран «Взаимно!» не мог сказать владельцу кофейни, на какой
+    день и час он только что позвал человека.
+    """
+    emp_h, eid = _auth(client, "employer")
+    day = (datetime.now(UTC) + timedelta(days=2)).date().isoformat()
+    v = client.post("/vacancies", headers=emp_h, json={
+        "role": "hostess", "date": day, "start_time": 660, "end_time": 1200,
+        "rate": 400, "rate_type": "perHour", "city": "Москва",
+        "lat": 55.75, "lng": 37.61,
+    }).json()
+    _detach(eid, 940001)
+    see_h, sid = _auth(client, "seeker")
+    _detach(sid, 940002)
+
+    # Соискатель лайкнул смену — ответ уже знает, какую.
+    first = client.post("/swipes", headers=see_h, json={
+        "target_id": v["id"], "target_type": "vacancy",
+        "direction": "like"}).json()
+    assert first["matched"] is False
+
+    # Заведение отвечает встречным лайком по человеку, смену не называя.
+    out = client.post("/swipes", headers=emp_h, json={
+        "target_id": sid, "target_type": "user",
+        "direction": "like"}).json()
+    assert out["matched"] is True
+    assert out["vacancy_id"] == v["id"]
+    assert out["role"] == "hostess"
+    assert out["shift_date"] == day
+    assert out["shift_start"] == 660
+    assert out["shift_end"] == 1200

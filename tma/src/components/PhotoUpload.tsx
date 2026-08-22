@@ -3,7 +3,12 @@ import { uploadPhoto } from "@/api/endpoints";
 import { haptic } from "@/telegram/sdk";
 import { IconCamera } from "./Icons";
 
-/** Выбор и загрузка фото. При недоступном S3 — мягкая деградация к вводу URL. */
+/** Выбор и загрузка фото.
+ *
+ *  Поля «вставьте ссылку» здесь нет и не будет. Чужой адрес картинки даёт
+ *  владельцу того сервера список всех, кто открыл карточку (IP и устройство),
+ *  и возможность подменить картинку уже после модерации — сервер такие адреса
+ *  и не примет. Не загрузилось — карточка обойдётся буквой названия. */
 export function PhotoUpload({
   label = "Фото",
   value,
@@ -29,7 +34,10 @@ export function PhotoUpload({
       // Не предлагаем «вставьте ссылку»: сервер принимает только фото,
       // загруженные через приложение (чужая ссылка даёт её владельцу список
       // всех, кто открыл карточку, и возможность подменить картинку).
-      setError("Фото не загрузилось. Попробуйте выбрать его ещё раз.");
+      setError(
+        "Фото не загрузилось. Попробуйте ещё раз — или продолжайте без него: "
+        + "карточка покажет первую букву названия.",
+      );
     } finally {
       setBusy(false);
     }
@@ -77,17 +85,13 @@ export function PhotoUpload({
         />
       </div>
       {error && (
-        <>
-          <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>{error}</div>
-          <input
-            className="input"
-            style={{ marginTop: 6 }}
-            aria-label="Ссылка на фото"
-            placeholder="https://… ссылка на фото"
-            defaultValue={value}
-            onBlur={(e) => e.target.value && onChange(e.target.value)}
-          />
-        </>
+        <div
+          className="muted"
+          style={{ marginTop: 6, fontSize: "var(--text-xs)" }}
+          role="status"
+        >
+          {error}
+        </div>
       )}
     </div>
   );

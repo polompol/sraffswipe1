@@ -43,12 +43,34 @@ def test_telegram_avatar_is_allowed(monkeypatch):
     assert photos.is_allowed_photo_url("https://cdn4.telesco.pe/file/abc.jpg")
 
 
-def test_without_storage_nothing_is_forbidden(monkeypatch):
-    """Пока хранилище не настроено, загружать некуда — не мешаем ставить фото."""
+def _s3_off(monkeypatch):
     monkeypatch.setattr(settings, "s3_endpoint", "")
     monkeypatch.setattr(settings, "s3_bucket", "")
     monkeypatch.setattr(settings, "s3_key", "")
+
+
+def test_without_storage_in_development_nothing_is_forbidden(monkeypatch):
+    """В разработке хранилища обычно нет, а фото ставить надо."""
+    _s3_off(monkeypatch)
+    monkeypatch.setattr(settings, "dev_mode", True)
     assert photos.is_allowed_photo_url("https://images.unsplash.com/photo-1.jpg")
+
+
+def test_without_storage_in_production_strangers_are_still_refused(monkeypatch):
+    """Дыра была ровно здесь.
+
+    S3 необязателен, и docs/ПУСК.md прямо описывает запуск без него — то есть
+    боевой сервер принимал любой чужой адрес. Загружать при этом всё равно
+    некуда, значит любой адрес тут именно что чужой.
+    """
+    _s3_off(monkeypatch)
+    monkeypatch.setattr(settings, "dev_mode", False)
+    assert not photos.is_allowed_photo_url("https://images.unsplash.com/photo-1.jpg")
+    assert not photos.is_allowed_photo_url("https://evil.example/track.jpg")
+    # Аватарка Telegram остаётся: другого источника у неё нет, и приходит она
+    # не от пользователя, а от самого Telegram при входе.
+    assert photos.is_allowed_photo_url("https://t.me/i/userpic/320/abc.jpg")
+    assert photos.is_allowed_photo_url(""), "пусто = «фото нет»"
 
 
 def test_not_a_web_address_is_refused(monkeypatch):

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { checkinShift, disputeShift, fetchMatches, markAttendance, markNotHeld } from "@/api/endpoints";
-import type { MatchModel } from "@/types/domain";
+import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
@@ -15,6 +15,14 @@ import { canReportNoPay, shiftEnded, shiftStarted, shiftWhen } from "@/lib/forma
 import { Button } from "@/components/Button";
 import { baseURL, getToken } from "@/api/client";
 import { haptic, confirmAction, openExternal } from "@/telegram/sdk";
+
+/** С кем договорились: заведению — имя работника, работнику — название
+ *  заведения. Раньше в обеих ролях подставлялось название заведения, и у
+ *  работодателя весь список смен состоял из его собственного имени. */
+function counterpart(m: MatchModel, role: string | null): string {
+  const name = role === "employer" ? m.seekerName : m.companyName;
+  return (name || "").trim() || (role === "employer" ? "Работник" : "Заведение");
+}
 
 /** Аватар заведения 52×52: буква на градиенте, поверх — фото, если оно есть
  *  и загрузилось. Битая ссылка не оставляет пустого места. */
@@ -279,7 +287,7 @@ export function MatchesPage() {
                   действий лежат ниже, вложенности кнопок не возникает. */}
               <button
                 className="row"
-                aria-label={`Открыть чат: ${m.companyName ?? "Заведение"}`}
+                aria-label={`Открыть чат: ${counterpart(m, role)}`}
                 style={{
                   gap: 12,
                   cursor: "pointer",
@@ -294,14 +302,23 @@ export function MatchesPage() {
                 onClick={() => nav(`/chat/${m.id}`)}
               >
                 <MatchAvatar
-                  src={m.companyPhotoUrl}
-                  initial={(m.companyName || "З").charAt(0)}
+                  src={role === "employer" ? undefined : m.companyPhotoUrl}
+                  initial={counterpart(m, role).charAt(0)}
                 />
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
-                    {m.companyName ?? "Заведение"}
+                    {counterpart(m, role)}
                   </div>
-                  {shiftWhen(m) && <div className="muted">{shiftWhen(m)}</div>}
+                  {/* Должность и время — одной строкой: «Бариста · завтра,
+                      08:00–16:00». Без должности человек с двумя сменами в
+                      один день не понимал, какая из них какая. */}
+                  {(m.role || shiftWhen(m)) && (
+                    <div className="muted">
+                      {[m.role ? STAFF_ROLE_LABELS[m.role] : "", shiftWhen(m)]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
                 </span>
                 <span style={{ color: "var(--muted)", display: "inline-flex" }}>
                   <IconChevronRight size={20} />
