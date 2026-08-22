@@ -194,7 +194,10 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
       <div className="swipe-top">
         {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
         <div className="row" style={{ gap: 8, flexWrap: "wrap", rowGap: 8 }}>
-        <span className="glass">
+        {/* Ставка в час. На низком экране прячется (класс swipe-rate): ряд
+            плашек переносился на вторую строку и отнимал у карточки 43 точки,
+            а сумма за смену всё равно написана ниже — и она понятнее. */}
+        <span className="glass swipe-rate">
           <IconMoney size={14} /> {rateLabel(v.rate, v.rateType)}
         </span>
         <CardFavButton id={v.id} />
@@ -226,8 +229,9 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         </div>
         {heroShown && (
           <div className="swipe-hero">
-            <div className="swipe-hero-sum">
-              {estimatedPay(v).toLocaleString("ru-RU")} ₽
+            <div className="swipe-hero-sum is-num">
+              {estimatedPay(v).toLocaleString("ru-RU")}
+              <span className="rub">₽</span>
             </div>
             <div className="swipe-hero-cap">
               за смену · {shiftDayLabel(v.date)}
@@ -243,7 +247,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
           </span>
         </div>
 
-        <div style={{ fontSize: "var(--text-2xl)", fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="swipe-title">
           <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{v.companyName}</span>
           {v.employerVerified && <VerifiedDot title="Проверенное заведение" />}
         </div>
@@ -253,7 +257,10 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
             слабого зрения), низ карточки обрезается — и обрезалось ровно то
             число, ради которого человек её и открыл. */}
         {!heroShown && (
-          <div style={{ marginTop: 4, fontWeight: 800, fontSize: "var(--text-md)" }}>
+          <div style={{
+            marginTop: 4, fontWeight: 800, fontSize: "var(--text-md)",
+            fontVariantNumeric: "tabular-nums",
+          }}>
             ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
           </div>
         )}
@@ -290,16 +297,7 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
             разной ширины и вставали по-разному на каждой карточке: у одной
             смены «медкнижка» уезжала на вторую строку, у соседней — нет,
             и лента выглядела дёрганой при листании. */}
-        <div
-          style={{
-            marginTop: 10,
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-            columnGap: 10,
-            rowGap: 6,
-            alignItems: "center",
-          }}
-        >
+        <div className="swipe-cond">
           {PayGlyph && v.payMethod && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
               <PayGlyph size={16} /> {PAY_METHOD_SHORT[v.payMethod]}
@@ -393,7 +391,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         )}
       </div>
       <div className="swipe-body">
-        <div style={{ fontSize: "var(--text-2xl)", fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="swipe-title">
           <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
             {s.name}{age !== null ? `, ${age}` : ""}
           </span>
@@ -420,11 +418,15 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           </div>
         )}
         {s.about && (
-          <div style={{ marginTop: 8, opacity: 0.95, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          // swipe-desc — тот же класс, что и у описания смены: при нехватке
+          // места ужимается ИМЕННО рассказ о себе, а не район, медкнижка и
+          // надёжность. На узком экране (320 точек) без этого обрезался низ
+          // карточки, где как раз и написано, можно ли человеку доверять.
+          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.95, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
             {s.about}
           </div>
         )}
-        <div className="card-meta" style={{ marginTop: 10 }}>
+        <div className="card-meta">
           {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
               <IconCheck size={15} />{" "}

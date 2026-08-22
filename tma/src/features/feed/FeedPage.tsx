@@ -220,7 +220,10 @@ export function FeedPage() {
 
   return (
     <div className={deckMode ? "page feed-deck" : "page"}>
-      <div className="row" style={{ marginBottom: 6, gap: 4 }}>
+      {/* Шапка с именем сервиса. На низких экранах она ужимается (см.
+          .feed-head в index.css): место на телефоне принадлежит карточке,
+          а не логотипу — своё название человек и так знает. */}
+      <div className="row feed-head" style={{ marginBottom: 6, gap: 4 }}>
         <span
           aria-hidden
           style={{

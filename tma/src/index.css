@@ -540,6 +540,12 @@ button.tag:disabled {
 /* Колода свайпа */
 .deck {
   position: relative;
+  /* Карты внутри колоды получают свой z-index (верхняя — самый большой), и без
+     этой строки они всплывали НАД кнопками «Пропустить/Отклик»: на низком
+     экране, где кнопки лежат поверх низа карточки, нажать их было нельзя
+     вообще — палец попадал в карточку. isolation запирает нумерацию карт
+     внутри колоды. */
+  isolation: isolate;
   /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде.
      Жёсткий min-height:460px на экранах ~640px уводил кнопки «Пропустить/
      Отклик» под сгиб — теперь высота ужимается вместе с экраном. */
@@ -625,6 +631,31 @@ body[data-large="1"] .deck {
      от фона, не делая текст «жирным». */
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
+/* Условия смены: как платят, чаевые, медкнижка, сколько человек нужно.
+
+   Две ровные колонки вместо ряда с переносом: плашки разной ширины вставали
+   по-разному на каждой карточке, и лента выглядела дёрганой при листании. */
+.swipe-cond {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: center;
+}
+
+/* Название заведения (или имя кандидата) — второе по важности после суммы.
+   Стиль вынесен из разметки в CSS: на низких экранах его нужно ужимать, а
+   инлайновый размер шрифта перебивает любое медиа-правило. */
+.swipe-title {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* Чистые мета-строки карточки: иконка + текст, без рамок */
 .card-meta {
   display: grid;
@@ -692,13 +723,39 @@ body[data-large="1"] .deck {
   pointer-events: none;
 }
 .swipe-hero-sum {
-  /* Сумма за смену — то, ради чего карточку открывают. Цена в меню. */
+  /* Главное на карточке крупно: сумма за смену или должность кандидата. */
   font-family: var(--font-display);
   font-size: var(--text-hero);
   font-weight: 400;
   line-height: 1.05;
   letter-spacing: -1px;
   text-shadow: 0 2px 12px rgba(40, 12, 18, 0.35);
+}
+/* ЦИФРЫ — НЕ АНТИКВОЙ.
+
+   Антиква (шрифт с засечками) хороша для слов: «Взаимно!», названия экранов.
+   Но её цифры нарисованы под книжный текст — узкие, с разной высотой, тройка
+   и пятёрка ныряют ниже строки. На главном числе приложения это читалось как
+   старая афиша, а не как сумма, которую сегодня заплатят.
+
+   Поэтому сумма набирается системным шрифтом — тем же, каким телефон рисует
+   цены везде, — но по-нашему: очень жирно, плотно и моноширинными цифрами
+   (tabular-nums), чтобы 1 занимала столько же, сколько 8, и число не дёргалось
+   при перелистывании колоды. Знак рубля — тише и мельче: платят за смену
+   именно число. */
+.swipe-hero-sum.is-num {
+  font-family: inherit;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -2px;
+}
+.swipe-hero-sum .rub {
+  font-size: 0.52em;
+  font-weight: 700;
+  letter-spacing: 0;
+  opacity: 0.8;
+  margin-left: 6px;
 }
 .swipe-hero-cap {
   font-size: var(--text-base);
@@ -1235,6 +1292,45 @@ body[data-large="1"] .btn {
   min-height: 190px;
 }
 
+/* КАРТОЧКА — ГЛАВНОЕ, ОБВЯЗКА — НЕТ.
+
+   На экране 320×568 обвязка (шапка, фильтры, кнопки, панель вкладок)
+   занимала 268 точек из 568 — почти половину. Карточке, ради которой
+   приложение и открывают, оставалось меньше, чем всему остальному вместе.
+   Поэтому на низких экранах ужимается ОБВЯЗКА, а не карточка: логотип
+   меньше, названия сервиса нет (человек и так знает, куда зашёл), отступы
+   короче, панель вкладок ниже. */
+@media (max-height: 700px) {
+  .page.feed-deck {
+    padding-top: 8px;
+  }
+  .feed-head {
+    margin-bottom: 2px !important;
+  }
+  .feed-head > span:first-child {
+    width: 28px !important;
+    height: 28px !important;
+    margin-right: 4px !important;
+  }
+  .feed-head .h2 {
+    display: none;
+  }
+  .feed-head .spacer,
+  .feed-head > *:not(.icon-btn):not(:first-child) {
+    margin-left: auto;
+  }
+  .feed-filters {
+    margin-bottom: 6px !important;
+  }
+  .tabbar {
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .tab {
+    min-height: 52px;
+    gap: 3px;
+  }
+}
+
 /* На низких экранах кнопки чуть меньше: 60 точек вместо 72 — всё ещё заметно
    крупнее минимальных 44, но экономят место карточке. */
 @media (max-height: 700px) {
@@ -1250,6 +1346,82 @@ body[data-large="1"] .btn {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  /* Кнопки ложатся ПОВЕРХ низа карточки, а не под ней.
+
+     Иначе на телефоне 320×568 карточке доставалась половина экрана: остальное
+     съедали шапка, кнопки и панель вкладок. А карточка и есть продукт — ради
+     неё открывают приложение и по ней решают за секунду. Плавающие кнопки
+     отдают ей ещё сотню точек.
+
+     Низ карточки и так затемнён (там градиент под белым текстом), поэтому
+     кнопки на нём читаются; подписи делаем белыми с тенью. */
+  .page.feed-deck {
+    position: relative;
+  }
+  .page.feed-deck .actions {
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    right: 0;
+    bottom: calc(106px + env(safe-area-inset-bottom));
+    margin: 0;
+    gap: 22px;
+    /* Нажимаются только сами кнопки: остальная полоса остаётся карточке,
+       иначе она съедала бы свайп в самом удобном для пальца месте. */
+    pointer-events: none;
+  }
+  .page.feed-deck .act {
+    width: 60px;
+    height: 60px;
+    pointer-events: auto;
+  }
+  .page.feed-deck .act-col {
+    gap: 4px;
+  }
+  .page.feed-deck .act-label {
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  }
+  /* Место под кнопками внутри карточки: без него название заведения и условия
+     уезжают прямо под них. */
+  .page.feed-deck .swipe-body {
+    padding-bottom: 70px;
+    margin-bottom: 14px;
+  }
+  /* Название чуть меньше: на экране шириной 320 «Кофейня «Дрова»» занимало
+     две строки по 26 точек — и ровно на эти строки не помещался низ карточки,
+     где написано, как платят и нужна ли медкнижка. */
+  .swipe-title {
+    font-size: var(--text-xl);
+  }
+  .card-meta {
+    gap: 2px;
+    margin-top: 4px;
+  }
+  /* Ставка в час уходит: ряд плашек влезает в одну строку. */
+  .swipe-rate {
+    display: none;
+  }
+  /* Условия смены плотнее: три строки по 27 точек превращаются в три по 20.
+     Текст остаётся читаемым (13 точек), а карточка перестаёт обрезать
+     «Медкнижку» — строку, из-за которой человек зря едет на смену. */
+  .swipe-cond {
+    margin-top: 6px;
+    row-gap: 3px;
+    font-size: var(--text-sm);
+  }
+  .swipe-top {
+    margin: 12px 16px 0;
+    gap: 10px;
+  }
+  /* Сумма на низком экране чуть меньше: 46 точек на карточке высотой 366
+     смотрелись бы как заголовок афиши и отняли бы строку у названия. */
+  .swipe-hero-sum {
+    font-size: var(--text-display) !important;
+  }
+  .swipe-top {
+    gap: 8px;
   }
   .actions {
     margin-top: 12px;
@@ -1291,4 +1463,34 @@ span.tag {
   background: var(--gold-tint);
   min-height: 32px;
   padding: 5px 12px;
+}
+
+/* САМЫЕ НИЗКИЕ ЭКРАНЫ (320×568 — старый iPhone SE, дешёвые андроиды).
+
+   Здесь карточке не хватало 30 точек: строка «как платят / медкнижка»
+   заезжала под кнопки. Ужимаем ещё: кнопки 52 точки (минимум для пальца —
+   44), мета-строки и название на ступень мельче. */
+@media (max-height: 600px) {
+  .page.feed-deck .act {
+    width: 52px;
+    height: 52px;
+  }
+  .page.feed-deck .actions {
+    bottom: calc(102px + env(safe-area-inset-bottom));
+  }
+  .page.feed-deck .swipe-body {
+    padding-bottom: 58px;
+    margin-bottom: 8px;
+  }
+  .swipe-title {
+    font-size: var(--text-lg);
+  }
+  .card-meta {
+    font-size: var(--text-sm);
+    gap: 1px;
+  }
+  .swipe-cond {
+    margin-top: 4px;
+    row-gap: 2px;
+  }
 }
