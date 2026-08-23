@@ -195,9 +195,18 @@ function EmployerVerify() {
           value={inn}
           onChange={(e) => setInn(e.target.value)}
         />
-        <button className="btn" style={{ width: "auto", padding: "0 16px", height: 46 }} disabled={busy || inn.length < 10} onClick={run}>
-          {busy ? "…" : "Проверить"}
-        </button>
+        {/* Кнопка узкая, в один ряд с полем ИНН: block={false}, высота 46 —
+            вровень с input. Свой busy оставлен: он же гасит кнопку по длине
+            ИНН и даёт спиннер до того, как отработает внутренняя защита. */}
+        <Button
+          block={false}
+          style={{ padding: "0 16px", height: 46 }}
+          loading={busy}
+          disabled={busy || inn.length < 10}
+          onClick={run}
+        >
+          Проверить
+        </Button>
       </div>
       {res && (
         <div className="muted" style={{ marginTop: 10 }}>

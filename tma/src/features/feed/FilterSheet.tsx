@@ -16,6 +16,7 @@ import {
   type FeedFilters,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
 import { IconBell, IconCheck } from "@/components/Icons";
 import { Sheet } from "@/components/Sheet";
 import { haptic } from "@/telegram/sdk";
@@ -137,15 +138,13 @@ export function FilterSheet({
       onClose={onClose}
       footer={
         <>
-          <button
-            className="btn secondary"
+          <Button
+            variant="secondary"
             onClick={() => onApply({ sort: "distance", city: f.city })}
           >
             Сбросить
-          </button>
-          <button className="btn" onClick={() => onApply(f)}>
-            Показать
-          </button>
+          </Button>
+          <Button onClick={() => onApply(f)}>Показать</Button>
         </>
       }
     >
@@ -239,16 +238,16 @@ export function FilterSheet({
         </div>
       )}
 
-      <button
-        className="btn ghost"
+      {/* Иконка идёт через icon: компонент сам отделяет её от текста, поэтому
+          обёртка-span внутри кнопки больше не нужна. */}
+      <Button
+        variant="ghost"
         disabled={saved}
+        icon={saved ? <IconCheck size={16} /> : <IconBell size={16} />}
         onClick={saveSearch}
       >
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          {saved ? <IconCheck size={16} /> : <IconBell size={16} />}
-          {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
-        </span>
-      </button>
+        {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
+      </Button>
 
       {!!searches?.length && (
         <>

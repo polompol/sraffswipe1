@@ -1,3 +1,4 @@
+import { Button } from "@/components/Button";
 import { IconWarning } from "./Icons";
 
 export function Loading({ label = "Загрузка…" }: { label?: string }) {
@@ -55,6 +56,10 @@ export function SkeletonCard() {
   );
 }
 
+// Тип onRetry оставлен `() => void`: страницы передают сюда refetch из TanStack
+// Query, а он возвращает свой результат и в `Promise<void>` не укладывается.
+// На поведение это не влияет — <Button> дожидается того, что вернул обработчик,
+// и всё это время держит «Повторить» заблокированной со спиннером.
 export function ErrorBox({ onRetry }: { onRetry?: () => void }) {
   return (
     <div className="card" style={{ textAlign: "center" }} role="alert">
@@ -65,9 +70,9 @@ export function ErrorBox({ onRetry }: { onRetry?: () => void }) {
         Не удалось загрузить. Проверьте соединение.
       </p>
       {onRetry && (
-        <button className="btn secondary" onClick={onRetry}>
+        <Button variant="secondary" onClick={onRetry}>
           Повторить
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { reportError } from "@/lib/report";
+import { Button } from "@/components/Button";
 import { IconWarning } from "./Icons";
 
 interface Props {
@@ -38,9 +39,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="muted" style={{ margin: "8px 0 20px" }}>
             Мы уже знаем о проблеме. Попробуйте перезапустить.
           </p>
-          <button className="btn" onClick={() => location.reload()}>
-            Перезапустить
-          </button>
+          <Button onClick={() => location.reload()}>Перезапустить</Button>
         </div>
       </div>
     );

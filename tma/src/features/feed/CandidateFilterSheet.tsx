@@ -6,6 +6,7 @@ import {
   STAFF_ROLE_LABELS,
 } from "@/types/domain";
 import type { FeedFilters } from "@/api/endpoints";
+import { Button } from "@/components/Button";
 import { Sheet } from "@/components/Sheet";
 import { haptic } from "@/telegram/sdk";
 
@@ -49,12 +50,10 @@ export function CandidateFilterSheet({
       onClose={onClose}
       footer={
         <>
-          <button className="btn secondary" onClick={() => onApply({})}>
+          <Button variant="secondary" onClick={() => onApply({})}>
             Сбросить
-          </button>
-          <button className="btn" onClick={() => onApply(f)}>
-            Показать
-          </button>
+          </Button>
+          <Button onClick={() => onApply(f)}>Показать</Button>
         </>
       }
     >

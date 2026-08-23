@@ -71,14 +71,15 @@ export function WorkersPage() {
                   ? ` · ${reliabilityText(w.shiftsTotal, w.shiftsAttended, w.employersTotal)}`
                   : ""}
               </div>
-              <button
-                className="btn secondary"
+              {/* minHeight оставлен прежним: в карточке работника кнопка ниже обычной. */}
+              <Button
+                variant="secondary"
                 style={{ marginTop: 12, minHeight: 46 }}
                 disabled={invited.has(w.id)}
                 onClick={() => invite(w.id)}
               >
                 {invited.has(w.id) ? "Приглашение отправлено" : "Позвать снова"}
-              </button>
+              </Button>
             </div>
           ))}
         </div>

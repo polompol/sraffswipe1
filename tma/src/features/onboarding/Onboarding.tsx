@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 import { Logo } from "@/components/Logo";
 import { IconChat, IconDoc, IconMoney, IconBolt } from "@/components/Icons";
 import { currentCampaign } from "@/lib/campaign";
@@ -41,16 +41,10 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
         <p className="muted" style={{ fontSize: "var(--text-xs)" }}>
           Новые смены появляются каждый день
         </p>
-        <button
-          className="btn"
-          style={{ maxWidth: 360, marginTop: 8 }}
-          onClick={() => {
-            haptic("light");
-            onStart();
-          }}
-        >
+        {/* haptic здесь больше не вызываем: Button сам даёт лёгкую отдачу. */}
+        <Button style={{ maxWidth: 360, marginTop: 8 }} onClick={onStart}>
           Смотреть смены рядом
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -169,16 +163,14 @@ export function Onboarding() {
             />
           ))}
         </div>
-        <button
-          className="btn"
+        <Button
           onClick={() => {
-            haptic("light");
             if (last) nav("/role");
             else setI(i + 1);
           }}
         >
           {last ? "Начать" : "Далее"}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -418,22 +418,22 @@ export function FeedPage() {
               старте, и это единственный способ не потерять человека, который
               пришёл первым. Механика работает — незачем её скрывать. */}
           {isSeeker && (
-            <button
-              className="btn"
+            <Button
               style={{ marginTop: 14 }}
+              // Свой флаг оставляем: он держит кнопку выключенной и ПОСЛЕ
+              // подписки («Будем присылать») — этого внутренняя защита кнопки
+              // от двойного нажатия не делает, она снимается сразу после ответа.
               disabled={subscribing || subscribed}
+              icon={<IconBell size={18} />}
               onClick={notifyOnNewShifts}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <IconBell size={18} />
-                {subscribed ? "Будем присылать новые смены" : "Присылать новые смены в бота"}
-              </span>
-            </button>
+              {subscribed ? "Будем присылать новые смены" : "Присылать новые смены в бота"}
+            </Button>
           )}
           {isSeeker && (
-            <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => setFilterOpen(true)}>
+            <Button variant="ghost" style={{ marginTop: 10 }} onClick={() => setFilterOpen(true)}>
               {filters.city ? "Сменить город" : "Настроить фильтры"}
-            </button>
+            </Button>
           )}
         </div>
       )}

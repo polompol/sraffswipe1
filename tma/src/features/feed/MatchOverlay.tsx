@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
 import { shiftWhen } from "@/lib/format";
+import { Button } from "@/components/Button";
 import { IconTabMatches, IconChat } from "@/components/Icons";
 import { useDialog } from "@/components/Sheet";
 
@@ -161,22 +162,20 @@ export function MatchOverlay({
         </p>
       )}
       <div style={{ width: "100%", maxWidth: 340, marginTop: 24, display: "grid", gap: 10 }}>
-        <button
-          className="btn"
+        <Button
+          icon={<IconChat size={18} />}
           onClick={() => {
             onClose();
             nav(`/chat/${match.id}`);
           }}
         >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconChat size={18} /> Перейти в чат
-          </span>
-        </button>
+          Перейти в чат
+        </Button>
         {/* Оверлей всегда тёмный, поэтому вторая кнопка — прозрачная с белым
             текстом. Раньше она была светлой на светлом фоне (контраст ~1.3:1)
             и выглядела пустой плашкой на самом важном экране. */}
-        <button
-          className="btn secondary"
+        <Button
+          variant="secondary"
           style={{
             background: "transparent",
             color: "var(--on-dark)",
@@ -185,7 +184,7 @@ export function MatchOverlay({
           onClick={onClose}
         >
           Продолжить листать
-        </button>
+        </Button>
       </div>
     </div>,
     document.body,

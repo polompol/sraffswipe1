@@ -57,49 +57,8 @@
 /* Кнопка в разметке. Числа — общие с компонентом <Button> (см. токены
    --btn-* в theme.css): рядом на экране они обязаны быть одной высоты и
    одного скругления, иначе это читается как небрежность. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  min-height: var(--btn-h-lg);
-  border: none;
-  border-radius: var(--btn-radius);
-  background: var(--grad-brand);
-  color: #fff;
-  font-size: var(--text-md);
-  font-weight: 700;
-  padding: var(--btn-pad-lg);
-  cursor: pointer;
-  box-shadow: var(--btn-shadow);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.08s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-}
-.btn:active:not(:disabled) {
-  transform: scale(0.97);
-  box-shadow: var(--btn-shadow-active);
-}
-.btn.secondary {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  box-shadow: 0 2px 8px rgba(59, 42, 32, 0.06);
-}
-.btn.ghost {
-  background: transparent;
-  color: var(--gold);
-  border: 1.5px solid var(--gold);
-  box-shadow: none;
-}
-.btn:disabled {
-  opacity: var(--btn-disabled);
-  box-shadow: none;
-  cursor: default;
-}
 
 /* Доступность: видимый фокус при навигации с клавиатуры (не мешает тапам). */
-.btn:focus-visible,
 .tag:focus-visible,
 .tab:focus-visible,
 .icon-btn:focus-visible,
@@ -180,8 +139,9 @@ input[type="range"] {
   outline-offset: 2px;
   box-shadow: var(--focus-ring);
 }
-/* Размеры кнопки — классами, а не числами в разметке: так они общие с .btn
-   и не расходятся при правке в одном месте. */
+/* Размеры кнопки — классами, а не числами в разметке: иначе они разъезжаются
+   при правке в одном месте. Способ сделать кнопку в приложении ровно один —
+   компонент <Button>; класса .btn больше нет, и накапливать варианты негде. */
 .ui-btn--sm {
   min-height: var(--btn-h-sm);
   padding: var(--btn-pad-sm);
@@ -545,7 +505,7 @@ button.tag:disabled {
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
-.sheet-foot .btn {
+.sheet-foot .ui-btn {
   margin: 0;
 }
 /* Строка локации/фильтра под шапкой — вся кликабельна */
@@ -1002,7 +962,7 @@ body[data-large="1"] .page.feed-deck {
 body[data-large="1"] .tag {
   padding: 10px 16px;
 }
-body[data-large="1"] .btn {
+body[data-large="1"] .ui-btn {
   min-height: 56px;
 }
 /* Панель вкладок в крупном режиме выше обычной, а запас под списком считался
@@ -1132,8 +1092,7 @@ body[data-large="1"] .page {
   flex: 1 1 120px;
   min-width: 0;
 }
-.checkin-row .ui-btn,
-.checkin-row .btn {
+.checkin-row .ui-btn {
   flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
@@ -1306,10 +1265,6 @@ body[data-large="1"] .page {
 
 /* Десктоп: лёгкий подъём кнопки/карточки при наведении */
 @media (hover: hover) {
-  .btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 22px rgba(165, 28, 48, 0.3);
-  }
   .card:hover {
     box-shadow: 0 8px 20px rgba(124, 21, 38, 0.1);
   }
@@ -1347,7 +1302,6 @@ body[data-large="1"] .page {
 /* ===== Премиальная полировка «вау»: глянец, глубина, тактильность ===== */
 
 /* Главные CTA — лёгкий глянец сверху + фирменное свечение. «Дорого» на касание. */
-.btn,
 .ui-btn--primary {
   /* Заливка через токены заливки, а не через акцентные. В тёмной теме
      --gold/--gold-soft нарочно осветлены (они там работают ТЕКСТОМ на тёмном
@@ -1360,13 +1314,12 @@ body[data-large="1"] .page {
     inset 0 1px 0 rgba(255, 255, 255, 0.34);
   letter-spacing: 0.2px;
 }
-.btn:active,
 .ui-btn--primary:active:not(:disabled) {
   box-shadow: 0 3px 10px rgba(165, 28, 48, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
-.btn.secondary,
-.btn.ghost {
+.ui-btn--secondary,
+.ui-btn--ghost {
   background-image: none; /* глянец — только на главных действиях */
   letter-spacing: 0.2px;
 }

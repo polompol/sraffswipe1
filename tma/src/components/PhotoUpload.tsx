@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadPhoto } from "@/api/endpoints";
 import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 import { IconCamera } from "./Icons";
 
 /** Выбор и загрузка фото.
@@ -65,14 +66,17 @@ export function PhotoUpload({
         >
           {!value && <IconCamera size={24} />}
         </div>
-        <button
-          className="btn secondary"
-          style={{ width: "auto", padding: "0 16px", height: 46 }}
+        {/* Спиннер компонента тут не нужен: загрузка идёт уже после выбора
+            файла, а её показывает сама подпись кнопки. */}
+        <Button
+          variant="secondary"
+          block={false}
+          style={{ padding: "0 16px", height: 46 }}
           disabled={busy}
           onClick={() => inputRef.current?.click()}
         >
           {busy ? "Загрузка…" : "Выбрать фото"}
-        </button>
+        </Button>
         <input
           ref={inputRef}
           type="file"

@@ -16,6 +16,7 @@ import {
   IconLike,
 } from "@/components/Icons";
 import { Sheet } from "@/components/Sheet";
+import { Button } from "@/components/Button";
 
 function shiftHours(v: Vacancy): number {
   let m = v.endTime - v.startTime;
@@ -45,7 +46,9 @@ export function ShiftDetailsSheet({
 }: {
   v: Vacancy;
   onClose: () => void;
-  onLike?: (v: Vacancy) => void;
+  /** Может быть асинхронным: промис уходит в кнопку, и та сама держит себя
+   *  заблокированной, пока отклик не отправлен (защита от двойного тапа). */
+  onLike?: (v: Vacancy) => void | Promise<void>;
 }) {
   const hours = shiftHours(v);
   const walkMin = typeof v.distanceKm === "number" ? Math.max(1, Math.round(v.distanceKm * 12)) : null;
@@ -67,33 +70,30 @@ export function ShiftDetailsSheet({
         // легче, чем до левого, а промах по «Закрыть» ничего не стоит.
         onLike ? (
           <div className="row" style={{ gap: 10 }}>
-            <button
-              className="btn secondary"
-              // width: auto обязателен: у .btn ширина 100%, и в ряду две такие
-              // кнопки просто вылезали за край шторки.
-              style={{ flex: "0 0 auto", width: "auto" }}
+            {/* block={false} обязателен: по умолчанию кнопка во всю ширину,
+                и в ряду две такие просто вылезали за край шторки. */}
+            <Button
+              variant="secondary"
+              block={false}
+              style={{ flex: "0 0 auto" }}
+              icon={<IconSkip size={16} />}
               onClick={onClose}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <IconSkip size={16} /> Закрыть
-              </span>
-            </button>
-            <button
-              className="btn"
-              style={{ flex: "1 1 auto", width: "auto", minWidth: 0 }}
+              Закрыть
+            </Button>
+            <Button
+              block={false}
+              style={{ flex: "1 1 auto", minWidth: 0 }}
+              icon={<IconLike size={18} />}
               onClick={() => onLike(v)}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <IconLike size={18} /> Откликнуться
-              </span>
-            </button>
+              Откликнуться
+            </Button>
           </div>
         ) : (
-          <button className="btn secondary" onClick={onClose}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconSkip size={16} /> Закрыть
-            </span>
-          </button>
+          <Button variant="secondary" icon={<IconSkip size={16} />} onClick={onClose}>
+            Закрыть
+          </Button>
         )
       }
     >

@@ -1035,22 +1035,26 @@ export function AdminPage() {
                         value={creditSum}
                         onChange={(e) => setCreditSum(e.target.value.replace(/\D/g, ""))}
                       />
-                      <button
-                        className="btn"
-                        style={{ width: "auto", padding: "0 14px", height: 46 }}
-                        onClick={() => {
+                      <Button
+                        block={false}
+                        style={{ padding: "0 14px", height: 46 }}
+                        // async и await обязательны: кнопка блокируется на
+                        // время запроса, только если обработчик вернул промис.
+                        // Зачисление НЕ идемпотентно (см. комментарий выше) —
+                        // второй тап кладёт на баланс ещё раз.
+                        onClick={async () => {
                           const sum = Number(creditSum) || 0;
                           if (sum <= 0) {
                             toast("Укажите сумму", "error");
                             return;
                           }
-                          credit(u.id, sum);
+                          await credit(u.id, sum);
                           setCreditFor(null);
                           setCreditSum("");
                         }}
                       >
                         Зачислить
-                      </button>
+                      </Button>
                     </div>
                   )}
                   {refundFor === u.id && (
@@ -1062,13 +1066,13 @@ export function AdminPage() {
                         value={refundSum}
                         onChange={(e) => setRefundSum(e.target.value)}
                       />
-                      <button
-                        className="btn"
-                        style={{ width: "auto", padding: "0 14px", height: 46 }}
+                      <Button
+                        block={false}
+                        style={{ padding: "0 14px", height: 46 }}
                         onClick={() => refund(u.id)}
                       >
                         Вернуть
-                      </button>
+                      </Button>
                     </div>
                   )}
                   {eraseFor === u.id && (
@@ -1098,13 +1102,13 @@ export function AdminPage() {
                         value={relinkTgId}
                         onChange={(e) => setRelinkTgId(e.target.value)}
                       />
-                      <button
-                        className="btn"
-                        style={{ width: "auto", padding: "0 14px", height: 46 }}
+                      <Button
+                        block={false}
+                        style={{ padding: "0 14px", height: 46 }}
                         onClick={() => relink(u.id)}
                       >
                         Перенести
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -1168,13 +1172,14 @@ export function AdminPage() {
                         {b.type === "vacancy" ? "вакансия" : "пользователь"}
                       </div>
                     </span>
-                    <button
-                      className="btn ghost"
-                      style={{ width: "auto", padding: "8px 14px" }}
+                    <Button
+                      variant="ghost"
+                      block={false}
+                      style={{ padding: "8px 14px" }}
                       onClick={() => unblock(b.type, b.id)}
                     >
                       Разблокировать
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -1269,17 +1274,18 @@ function CampaignLinkMaker() {
         {link && (
           <div className="row" style={{ gap: 8, marginTop: 10 }}>
             <code style={{ flex: 1, fontSize: "var(--text-xs)", wordBreak: "break-all" }}>{link}</code>
-            <button
-              className="btn"
-              style={{ width: "auto", padding: "0 14px", height: 44 }}
+            <Button
+              block={false}
+              style={{ padding: "0 14px", height: 44 }}
+              // Вибро здесь своего нет: компонент даёт его сам на нажатие,
+              // и два подряд читаются как сбой, а не как отклик.
               onClick={() => {
                 navigator.clipboard?.writeText(link);
-                haptic("success");
                 toast("Ссылка скопирована", "success");
               }}
             >
               Копировать
-            </button>
+            </Button>
           </div>
         )}
       </div>

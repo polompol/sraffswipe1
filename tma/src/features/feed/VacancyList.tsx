@@ -6,6 +6,7 @@ import { fmtTime, isUrgentShift, plural, rateLabel, shiftDayLabel } from "@/lib/
 import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Sheet } from "@/components/Sheet";
 import { IconFire, IconShare, IconWarning, IconBookmark, IconMore } from "@/components/Icons";
@@ -146,27 +147,32 @@ export function VacancyList({
             )}
           </div>
           <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            {/* Обе кнопки остаются block (во всю ширину) — как было у класса
+                .btn: в этой строке именно ширина 100% у обеих делит её
+                поровну. Уберёшь block — «Пропустить» сожмётся по тексту, а
+                «Откликнуться» растянется на всю строку. */}
             {!hideSkip && (
               // Отклик — главное действие строки, пропуск — вспомогательное.
               // Рядом стояли две одинаково залитые кнопки, и глазу было не за
               // что зацепиться: «пропустить» спрашивало так же громко.
-              <button
-                className="btn ghost"
+              <Button
+                variant="ghost"
                 style={{ minHeight: 44, flex: "0 1 auto" }}
-                onClick={() => onAct(v, "dislike")}
+                onClick={async () => {
+                  await onAct(v, "dislike");
+                }}
               >
                 Пропустить
-              </button>
+              </Button>
             )}
-            <button
-              className="btn"
+            <Button
               style={{ minHeight: 44 }}
               onClick={async () => {
                 if (await onAct(v, "like")) toast("Отклик отправлен", "success");
               }}
             >
               Откликнуться
-            </button>
+            </Button>
           </div>
           <div className="row" style={{ marginTop: 4, gap: 4 }}>
             <button
@@ -197,29 +203,27 @@ export function VacancyList({
       {moreFor && (
         <Sheet title="Что сделать со сменой" onClose={() => setMoreFor(null)}>
           <div style={{ display: "grid", gap: 10 }}>
-            <button
-              className="btn secondary"
+            <Button
+              variant="secondary"
+              icon={<IconShare size={16} />}
               onClick={() => {
                 const v = moreFor;
                 setMoreFor(null);
                 shareVacancy(v);
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <IconShare size={16} /> Поделиться сменой
-              </span>
-            </button>
-            <button
-              className="btn ghost"
+              Поделиться сменой
+            </Button>
+            <Button
+              variant="ghost"
+              icon={<IconWarning size={16} />}
               onClick={() => {
                 setReportId(moreFor.id);
                 setMoreFor(null);
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <IconWarning size={16} /> Пожаловаться на смену
-              </span>
-            </button>
+              Пожаловаться на смену
+            </Button>
           </div>
         </Sheet>
       )}
