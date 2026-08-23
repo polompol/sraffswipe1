@@ -27,6 +27,7 @@ const PHONES = [
   { name: "Galaxy S10", w: 360, h: 740 },
   { name: "iPhone 12 mini", w: 375, h: 812 },
   { name: "iPhone 14", w: 390, h: 844 },
+  { name: "Pixel 7", w: 412, h: 915 },
   { name: "iPhone 15 Pro Max", w: 430, h: 932 },
 ];
 
@@ -194,5 +195,83 @@ test.describe("мои смены на узком экране", () => {
 
       await context.close();
     }
+  });
+});
+
+test.describe("клавиатура в чате", () => {
+  test("поле ввода не прячется под клавиатурой", async ({ browser, request }) => {
+    const emp = await login(request, "employer", 830_020, "Грядка");
+    await fillProfile(request, emp, {
+      company_name: "Ресторан «Грядка»",
+      city: "Санкт-Петербург",
+      address: "Покровка, 12",
+      contact_phone: "+79990000005",
+    });
+    const vac = await publishShift(request, emp, {
+      role: "cook",
+      city: "Санкт-Петербург",
+    });
+
+    const seeker = await login(request, "seeker", 830_021, "Ольга");
+    await fillProfile(request, seeker, {
+      name: "Ольга",
+      city: "Санкт-Петербург",
+      roles: ["cook"],
+      birth_date: "1994-03-03",
+      med_book: "yes",
+    });
+    await request.post(`${API_URL}/swipes`, {
+      headers: auth(seeker),
+      data: { target_id: vac.id, target_type: "vacancy", direction: "like" },
+    });
+    const out = await (
+      await request.post(`${API_URL}/swipes`, {
+        headers: auth(emp),
+        data: {
+          target_id: seeker.id,
+          target_type: "user",
+          direction: "like",
+          vacancy_id: vac.id,
+        },
+      })
+    ).json();
+
+    const { context, page } = await openApp(browser, seeker);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/#/chat/${out.match_id}`);
+    const input = page.getByLabel("Текст сообщения");
+    await expect(input).toBeVisible();
+
+    // Настоящую клавиатуру в браузере не поднять, но она делает ровно одно:
+    // урезает видимую часть окна снизу. Именно это и повторяем — и заодно
+    // проверяем, что панель ввода читает переменную --kb, а не игнорирует её.
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty("--kb", "336px");
+    });
+
+    const m = await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Текст сообщения"]')!;
+      // Панель ввода — ближайший предок, приклеенный к низу окна.
+      let bar: HTMLElement = el as HTMLElement;
+      while (bar.parentElement && getComputedStyle(bar).position !== "fixed") {
+        bar = bar.parentElement;
+      }
+      const r = bar.getBoundingClientRect();
+      // Низ видимой части экрана при поднятой клавиатуре.
+      const visibleBottom = window.innerHeight - 336;
+      return {
+        barBottom: Math.round(r.bottom),
+        visibleBottom,
+        inputVisible: Math.round(el.getBoundingClientRect().bottom),
+      };
+    });
+
+    expect(
+      m.barBottom,
+      "панель ввода должна подняться над клавиатурой",
+    ).toBeLessThanOrEqual(m.visibleBottom + 1);
+    expect(m.inputVisible).toBeLessThanOrEqual(m.visibleBottom + 1);
+
+    await context.close();
   });
 });

@@ -443,7 +443,10 @@ export function ChatPage() {
       <div
         style={{
           position: "fixed",
-          bottom: 0,
+          // --kb — сколько экрана закрыла клавиатура (см. lib/keyboard.ts).
+          // Без этого на айфоне поле ввода и кнопка «Отправить» оказывались
+          // ПОД клавиатурой: человек печатал вслепую.
+          bottom: "var(--kb, 0px)",
           left: 0,
           right: 0,
           maxWidth: 520,

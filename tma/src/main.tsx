@@ -13,6 +13,7 @@ import { initSentry } from "./lib/sentry";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Toaster } from "./components/Toast";
 import { App } from "./App";
+import { watchKeyboard } from "@/lib/keyboard";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -90,3 +91,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 );
+
+// Клавиатура закрывает низ экрана — панель ввода в чате должна подниматься
+// над ней, а не прятаться под неё.
+watchKeyboard();

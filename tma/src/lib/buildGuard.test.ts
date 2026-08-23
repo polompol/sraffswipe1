@@ -26,9 +26,68 @@ describe("боевая сборка на демо-данных", () => {
     ).toThrow();
   });
 
-  it("пропускает боевую сборку с настоящим бэкендом", () => {
+  it("пропускает боевую сборку с настоящим бэкендом и адресом", () => {
     expect(() =>
-      assertNotDemoBuild({ PROD_BUILD: "1", VITE_USE_BACKEND: "true" }),
+      assertNotDemoBuild({
+        PROD_BUILD: "1",
+        VITE_USE_BACKEND: "true",
+        VITE_API_BASE_URL: "https://staffswipe.ru/api",
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("боевая сборка с неверным адресом сервера", () => {
+  const prod = (url?: string) => ({
+    PROD_BUILD: "1",
+    VITE_USE_BACKEND: "true",
+    ...(url === undefined ? {} : { VITE_API_BASE_URL: url }),
+  });
+
+  it("падает без адреса", () => {
+    expect(() => assertNotDemoBuild(prod())).toThrow(/адрес не задан/);
+    expect(() => assertNotDemoBuild(prod("   "))).toThrow(/адрес не задан/);
+  });
+
+  it("падает на адресе своей машины", () => {
+    // Значение по умолчанию из tma/Dockerfile: правильное локально,
+    // катастрофическое на сервере.
+    expect(() => assertNotDemoBuild(prod("http://localhost:8000"))).toThrow();
+    expect(() => assertNotDemoBuild(prod("https://localhost:8000"))).toThrow(
+      /адрес вашей машины/,
+    );
+    expect(() => assertNotDemoBuild(prod("https://127.0.0.1/api"))).toThrow(
+      /адрес вашей машины/,
+    );
+  });
+
+  it("падает, когда не заполнен DOMAIN", () => {
+    // Ровно то, что получается из «https://${DOMAIN}/api» с пустым DOMAIN.
+    // «https://${DOMAIN}/api» с пустым DOMAIN — это НЕ ошибка разбора:
+    // получается рабочий адрес «https://api/». Тем и опасно.
+    expect(() => assertNotDemoBuild(prod("https:///api"))).toThrow(
+      /не похоже на домен/,
+    );
+    expect(() => assertNotDemoBuild(prod("https://staffswipe/api"))).toThrow(
+      /не похоже на домен/,
+    );
+  });
+
+  it("падает на http — Telegram открывает Mini App только по https", () => {
+    expect(() => assertNotDemoBuild(prod("http://staffswipe.ru/api"))).toThrow(
+      /нужен https/,
+    );
+  });
+
+  it("падает на мусоре вместо адреса", () => {
+    expect(() => assertNotDemoBuild(prod("staffswipe.ru/api"))).toThrow(
+      /это не адрес/,
+    );
+  });
+
+  it("не мешает обычной сборке — там адрес по умолчанию нормален", () => {
+    expect(() =>
+      assertNotDemoBuild({ VITE_API_BASE_URL: "http://localhost:8000" }),
     ).not.toThrow();
   });
 

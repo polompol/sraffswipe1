@@ -104,13 +104,26 @@ def _shift_pay(v: Vacancy, actual_minutes: int | None = None) -> int:
     return round(v.rate * mins / 60)
 
 
+def _already_accrued(db: Session, match_id: str) -> bool:
+    """Есть ли уже начисление по этой смене.
+
+    Отдельной функцией, а не строкой внутри: между этой проверкой и вставкой
+    есть окно, в которое успевает вторая сторона (ночной расчёт и кнопка
+    заведения могут сойтись в одну секунду). Окно закрыто уникальностью
+    match_id и перехватом ошибки ниже — а чтобы это можно было проверить
+    тестом, проверку надо уметь «ослепить».
+    """
+    row = db.query(Commission).filter(Commission.match_id == match_id).first()
+    return row is not None
+
+
 def _accrue_commission(db: Session, m: Match) -> None:
     """Начисляем комиссию за закрытую смену. Идемпотентно — по одной записи
     на смену. Если у заведения есть денежный баланс (аванс) — списываем сразу;
     иначе комиссия висит pending и попадает в недельный счёт."""
     if settings.commission_pct <= 0:
         return
-    if db.query(Commission).filter(Commission.match_id == m.id).first():
+    if _already_accrued(db, m.id):
         return
     v = db.get(Vacancy, m.vacancy_id)
     if v is None:
