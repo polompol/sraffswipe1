@@ -757,7 +757,7 @@ const adminReports = [
     dispute: {
       worker: "Мария",
       venue: "Кофейня «Дрова»",
-      shiftWhen: "Бариста · 15 августа, 08:00–16:00",
+      shiftWhen: "Бариста ·\u00a015 августа, 08:00–16:00",
       checkedInByCode: true,
       venueMarkedAttended: false,
       notHeldBy: "",

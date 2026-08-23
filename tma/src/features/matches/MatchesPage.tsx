@@ -317,7 +317,7 @@ export function MatchesPage() {
                     <div className="muted match-when">
                       {[m.role ? STAFF_ROLE_LABELS[m.role] : "", shiftWhen(m)]
                         .filter(Boolean)
-                        .join(" · ")}
+                        .join(" ·\u00a0")}
                     </div>
                   )}
                 </span>

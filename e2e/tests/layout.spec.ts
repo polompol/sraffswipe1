@@ -271,6 +271,89 @@ test.describe("клавиатура в чате", () => {
 
     await context.close();
   });
+
+  test("последнее сообщение не уезжает под нижнюю панель", async ({
+    browser,
+    request,
+  }) => {
+    // Под списком стоял отступ в 150 точек, вписанный числом. А панель внизу
+    // собирается из разного набора: быстрые ответы, «Подтвердить смену»,
+    // «Изменить смену», поле ввода — вместе за 230. На узком экране последнее
+    // сообщение наполовину уезжало под неё, и человек не видел ответа.
+    const emp = await login(request, "employer", 830_040, "Полночь");
+    await fillProfile(request, emp, {
+      company_name: "Бар «Полночь»",
+      city: "Самара",
+      address: "Ленинградская, 3",
+      contact_phone: "+79990000007",
+    });
+    const vac = await publishShift(request, emp, { city: "Самара" });
+
+    const seeker = await login(request, "seeker", 830_041, "Никита");
+    await fillProfile(request, seeker, {
+      name: "Никита",
+      city: "Самара",
+      roles: ["barista"],
+      birth_date: "1995-05-05",
+      med_book: "yes",
+    });
+    await request.post(`${API_URL}/swipes`, {
+      headers: auth(seeker),
+      data: { target_id: vac.id, target_type: "vacancy", direction: "like" },
+    });
+    const out = await (
+      await request.post(`${API_URL}/swipes`, {
+        headers: auth(emp),
+        data: {
+          target_id: seeker.id,
+          target_type: "user",
+          direction: "like",
+          vacancy_id: vac.id,
+        },
+      })
+    ).json();
+
+    for (const text of [
+      "Здравствуйте! Ждём вас к началу смены.",
+      "Здравствуйте! Во сколько подойти?",
+      "К десяти. Спросите администратора на входе.",
+    ]) {
+      await request.post(`${API_URL}/matches/${out.match_id}/messages`, {
+        headers: auth(text.includes("подойти") ? seeker : emp),
+        data: { text },
+      });
+    }
+
+    // Самый узкий и низкий из настоящих телефонов: панель занимает тут
+    // наибольшую долю экрана.
+    const { context, page } = await openApp(browser, seeker);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto(`/#/chat/${out.match_id}`);
+    await expect(page.getByLabel("Текст сообщения")).toBeVisible();
+    await page.waitForTimeout(600);
+
+    const m = await page.evaluate(() => {
+      const bubbles = [...document.querySelectorAll(".bubble")];
+      const last = bubbles[bubbles.length - 1] as HTMLElement;
+      const el = document.querySelector('[aria-label="Текст сообщения"]')!;
+      let bar: HTMLElement = el as HTMLElement;
+      while (bar.parentElement && getComputedStyle(bar).position !== "fixed") {
+        bar = bar.parentElement;
+      }
+      return {
+        lastBottom: Math.round(last.getBoundingClientRect().bottom),
+        barTop: Math.round(bar.getBoundingClientRect().top),
+        text: (last.textContent || "").slice(0, 30),
+      };
+    });
+
+    expect(
+      m.lastBottom,
+      `последнее сообщение («${m.text}») уходит под панель`,
+    ).toBeLessThanOrEqual(m.barTop + 1);
+
+    await context.close();
+  });
 });
 
 test.describe("главные фильтры на экране", () => {

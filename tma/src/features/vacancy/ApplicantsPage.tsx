@@ -13,7 +13,7 @@ import { fmtDate, fmtTime } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { MED_BOOK_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import type { MedBookStatus, StaffRole } from "@/types/domain";
-import { IconBolt, IconCheck, IconCalendar, IconStar } from "@/components/Icons";
+import { IconBell, IconBolt, IconCalendar, IconStar } from "@/components/Icons";
 
 /**
  * «Кто откликнулся» — зеркало экрана «Тебя зовут» у работника.
@@ -59,16 +59,18 @@ export function ApplicantsPage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>Кто откликнулся</h1>
-        <p className="muted" style={{ margin: "0 0 14px" }}>
-          Эти люди сами выбрали вашу смену. Ответьте — и сразу откроется чат.
-        </p>
+        {!!data?.length && (
+          <p className="muted" style={{ margin: "0 0 14px" }}>
+            Эти люди сами выбрали вашу смену. Ответьте — и сразу откроется чат.
+          </p>
+        )}
 
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
             fill
-            icon={<IconCheck size={34} />}
+            icon={<IconBell size={34} />}
             title="Откликов пока нет"
             text="Здесь появятся те, кто выбрал вашу смену. Пока тихо — поднимите ставку или позовите людей сами."
             action={<Button onClick={() => nav("/vacancy/my")}>Мои смены</Button>}

@@ -74,6 +74,15 @@ export function ChatPage() {
 
   // Прокрутка к последнему сообщению при открытии и на каждое новое.
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  // Высота нижней панели — меряем, а не вписываем числом.
+  //
+  // Раньше под списком стоял отступ в 150 точек. Панель внизу собирается из
+  // разного набора: ряд быстрых ответов, «Подтвердить смену», «Изменить
+  // смену», поле ввода — вместе за 230. На экране 320×568 последнее сообщение
+  // наполовину уезжало под неё, и человек не видел, что ему только что
+  // ответили.
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [barH, setBarH] = useState(150);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
@@ -88,9 +97,22 @@ export function ChatPage() {
   // догружается старая переписка, список меняется, а прокручивать вниз нельзя
   // — человек только что нажал «показать более ранние» и смотрит наверх.
   const lastId = messages?.length ? messages[messages.length - 1].id : "";
+  // Прокручиваем и когда меняется высота панели: кнопка «Подтвердить смену»
+  // появляется не сразу, и без этого список оставался стоять как был.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [lastId]);
+  }, [lastId, barH]);
+
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const measure = () => setBarH(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Догрузка старой переписки. Сервер отдаёт последние 100 сообщений: у смены
   // с долгой перепиской остальное лежит выше и подтягивается по кнопке.
@@ -363,7 +385,7 @@ export function ChatPage() {
 
   return (
     <div className="app">
-      <div className="page" style={{ paddingBottom: 150 }}>
+      <div className="page" style={{ paddingBottom: 0 }}>
         <div className="row" style={{ marginBottom: 12 }}>
           <button className="icon-btn" aria-label="Назад" onClick={() => nav(-1)}>
             <IconBack size={22} />
@@ -446,13 +468,21 @@ export function ChatPage() {
             </div>
           );
         })}
-        {/* Якорь для прокрутки. Без него чат открывался на самом первом
-            сообщении: свежие оставались ниже экрана, за панелью ввода. Человек
-            отправлял сообщение, не видел его и жал «отправить» ещё раз. */}
-        <div ref={bottomRef} />
+        {/* Якорь для прокрутки и одновременно распорка под нижнюю панель.
+            Без него чат открывался на самом первом сообщении: свежие
+            оставались ниже экрана, за панелью ввода. Человек отправлял
+            сообщение, не видел его и жал «отправить» ещё раз.
+
+            Высота у распорки — измеренная высота панели, а не число. Раньше
+            под списком стоял отступ в 150 точек, а панель на узком экране
+            вырастала за 230: последнее сообщение уезжало под неё наполовину.
+            Распоркой это чинится само — прокрутка ставит её низ на низ
+            экрана, и последний пузырь оказывается ровно над панелью. */}
+        <div ref={bottomRef} style={{ height: barH + 12 }} />
       </div>
 
       <div
+        ref={barRef}
         style={{
           position: "fixed",
           // --kb — сколько экрана закрыла клавиатура (см. lib/keyboard.ts).

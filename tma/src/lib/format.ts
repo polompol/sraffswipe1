@@ -140,5 +140,8 @@ export function shiftWhen(m: {
   shiftEnd?: number;
 }): string {
   if (!m.shiftDate) return "";
-  return `${shiftDayLabel(m.shiftDate)} · ${fmtTime(m.shiftStart ?? 0)}–${fmtTime(m.shiftEnd ?? 0)}`;
+  // Запятая, а не точка-разделитель: строка «Бариста · 25 августа · 10:00–18:00»
+  // на узкой карточке переносится, и «·» оставался висеть в конце строки —
+  // читалось как обрыв. Запятая в конце строки — обычная пунктуация.
+  return `${shiftDayLabel(m.shiftDate)}, ${fmtTime(m.shiftStart ?? 0)}–${fmtTime(m.shiftEnd ?? 0)}`;
 }

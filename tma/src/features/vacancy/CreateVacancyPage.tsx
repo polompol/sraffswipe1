@@ -396,10 +396,13 @@ export function CreateVacancyPage() {
               // Ссылка-кнопка была высотой около 30px: по ней промахивались.
               minHeight: 44,
               padding: "4px 0 12px",
-              color: "var(--link)",
+              // Не ссылка с подчёркиванием: багровый подчёркнутый текст в
+              // ряду кнопок читался как сообщение об ошибке, хотя это обычный
+              // способ вписать своё число.
+              color: "var(--gold)",
               font: "inherit",
               fontSize: "var(--text-sm)",
-              textDecoration: "underline",
+              fontWeight: 700,
               cursor: "pointer",
             }}
           >
@@ -430,7 +433,7 @@ export function CreateVacancyPage() {
           ))}
         </div>
 
-        <div className="form-label">Чаевые (платят гости)</div>
+        <div className="form-label">Чаевые — их платят гости</div>
         <div
           style={{
             display: "grid",
@@ -466,6 +469,7 @@ export function CreateVacancyPage() {
         <input
           id="addr"
           className="input"
+          placeholder="улица и дом — например, Баумана, 12"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />

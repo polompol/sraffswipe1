@@ -192,13 +192,22 @@ export function EditProfilePage() {
         <label className="form-label" htmlFor="name">Имя</label>
         <input id="name" className="input" style={{ marginBottom: 12 }} value={name} onChange={(e) => setName(e.target.value)} />
 
-        <label className="form-label" htmlFor="bdate">Дата рождения (только 18+)</label>
-        <input id="bdate" className="input" type="date" style={{ marginBottom: 12 }} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+        {/* Пояснения — отдельной строкой, а не в скобках внутри подписи.
+            Скобка посреди заголовка поля читается тяжелее, чем та же мысль
+            строкой ниже, — а таких скобок тут было две подряд. */}
+        <label className="form-label" htmlFor="bdate">Дата рождения</label>
+        <input id="bdate" className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+        <p className="muted" style={{ margin: "6px 0 12px", fontSize: "var(--text-xs)" }}>
+          Смены — только с 18 лет.
+        </p>
 
         <CityPicker value={city} onChange={setCity} />
 
-        <label className="form-label" htmlFor="district">Район (чтобы звали на смены рядом)</label>
-        <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
+        <label className="form-label" htmlFor="district">Район</label>
+        <input id="district" className="input" placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
+        <p className="muted" style={{ margin: "6px 0 12px", fontSize: "var(--text-xs)" }}>
+          Чтобы звали на смены поближе к дому.
+        </p>
 
         {/* Группировка «Зал/Бар/Кухня/Хозяйство» — как при создании смены.
             Раньше здесь была плоская простыня из 12 чипов, и один и тот же
@@ -288,8 +297,8 @@ export function EditProfilePage() {
               />
               <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--text-xs)" }}>
                 Номер есть в приложении «Мой налог» и в личном кабинете
-                налоговой. Нужен только для акта по смене — заведениям в ленте
-                он не виден.
+                налоговой. Нужен только для акта по смене — заведения его
+                не видят.
               </p>
             </>
           )}

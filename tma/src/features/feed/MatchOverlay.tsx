@@ -39,7 +39,7 @@ export function MatchOverlay({
     shiftWhen(match),
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(" ·\u00a0");
   const titleId = useId();
   // Оверлей перекрывает весь экран, поэтому ведёт себя как модальное окно:
   // фокус внутрь, Escape закрывает, фон не читается скринридером. Раньше это

@@ -54,7 +54,7 @@ describe("Редактирование профиля: форма зависит
     renderPage();
 
     await screen.findByText("Название заведения");
-    expect(screen.queryByText("Дата рождения (только 18+)")).toBeNull();
+    expect(screen.queryByText("Дата рождения")).toBeNull();
     expect(screen.queryByText("Кем готовы выйти")).toBeNull();
     // А вот фото заведению как раз НУЖНО: его поле есть в базе, лента и список
     // мэтчей его показывают — а поставить было нельзя ничем, и у каждого
@@ -96,7 +96,7 @@ describe("Редактирование профиля: форма зависит
     meFixture = { name: "Алексей", roles: [], experienceTags: [] };
     renderPage();
 
-    await screen.findByText("Дата рождения (только 18+)");
+    await screen.findByText("Дата рождения");
     expect(screen.getByText("Кем готовы выйти")).toBeTruthy();
     expect(screen.queryByText("Название заведения")).toBeNull();
 

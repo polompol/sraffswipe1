@@ -267,7 +267,9 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       <span style={{ flex: 1 }}>
         <b style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           {on && <span style={{ color: "var(--gold)", display: "inline-flex" }}><IconBolt size={15} /></span>}
-          {on ? "Готов выйти сегодня" : "Готов выйти сегодня?"}
+          {/* Не «Готов»: половина бариста и официантов — женщины, и мужской
+              род тут читается как чужая подпись. «Вы» рода не имеет. */}
+          {on ? "Вы готовы выйти сегодня" : "Готовы выйти сегодня?"}
         </b>
         <div className="muted">
           {on
@@ -278,7 +280,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       <button
         role="switch"
         aria-checked={on}
-        aria-label="Готов выйти сегодня"
+        aria-label="Готовы выйти сегодня"
         disabled={busy}
         onClick={toggle}
         // Дорожка визуально 52×30, высота кнопки 44px — минимальная зона тапа.
@@ -360,7 +362,7 @@ function ProfileMeter({ pct }: { pct: number }) {
         />
       </div>
       <div className="muted" style={{ margin: "10px 0 12px" }}>
-        Анкеты с фото и опытом зовут на смены заметно чаще.
+        С фото и опытом на смены зовут заметно чаще.
       </div>
       <Button variant="secondary" onClick={() => nav("/profile/edit")}>
         <span className="inline">
@@ -463,8 +465,10 @@ export function ProfilePage() {
           <b style={{ fontSize: "var(--text-md)", display: "flex", alignItems: "center", gap: 7 }}>
             <IconBolt size={18} />
             {role === "employer"
-              ? `Новых откликов: ${me.incomingLikes}`
-              : `Вас зовут на смены: ${me.incomingLikes}`}
+              // Число внутри фразы, а не счётчиком через двоеточие: «Новых
+              // откликов: 1» — строка из таблицы, а не новость для человека.
+              ? `${me.incomingLikes} ${plural(me.incomingLikes, "новый отклик", "новых отклика", "новых откликов")}`
+              : `Вас зовут на ${me.incomingLikes} ${plural(me.incomingLikes, "смену", "смены", "смен")}`}
           </b>
           {/* line-height здесь обязателен: это <button>, а браузер даёт кнопке
               своё «normal» (около 1.2) и общий межстрочный из body внутрь не

@@ -6,7 +6,7 @@ import { showBackButton, haptic } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
-import { IconCheck, IconBolt, IconStar } from "@/components/Icons";
+import { IconBriefcase, IconBolt, IconStar } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { reliabilityText } from "@/lib/reliability";
 import { apiError } from "@/lib/errors";
@@ -48,7 +48,7 @@ export function WorkersPage() {
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
             fill
-            icon={<IconCheck size={34} />}
+            icon={<IconBriefcase size={34} />}
             title="Пока никого"
             text="Здесь появятся те, кто уже выходил на ваши смены, — позвать снова можно одной кнопкой."
             action={<Button onClick={() => nav("/feed")}>Посмотреть, кто свободен</Button>}
