@@ -109,7 +109,7 @@ export function MyVacanciesPage() {
         />
       )}
 
-      <div className="stagger" style={{ display: "grid", gap: 12 }}>
+      <div className="stagger stack stack-lg">
         {data?.map((v) => (
           <div key={v.id} className="card">
             <b>{STAFF_ROLE_LABELS[v.role]}</b>
@@ -149,13 +149,13 @@ export function MyVacanciesPage() {
             <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
               {(v.slotsLeft ?? v.headcount ?? 1) > 0 ? (
                 <Button variant="secondary" onClick={() => doUrgent(v.id)}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span className="inline">
                     <IconFire size={16} /> Позвать людей на эту смену
                   </span>
                 </Button>
               ) : (
                 <Button variant="secondary" onClick={() => nav("/vacancy/new", { state: { prefill: v } })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span className="inline">
                     <IconCalendar size={16} /> Повторить смену
                   </span>
                 </Button>
@@ -183,7 +183,7 @@ export function MyVacanciesPage() {
 
       {moreFor && (
         <Sheet title={STAFF_ROLE_LABELS[moreFor.role]} onClose={() => setMoreFor(null)}>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="stack">
             <Button
               variant="secondary"
               onClick={() => {
@@ -192,7 +192,7 @@ export function MyVacanciesPage() {
                 nav("/vacancy/new", { state: { prefill: v } });
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span className="inline">
                 <IconCalendar size={16} /> Повторить смену на другой день
               </span>
             </Button>
@@ -206,7 +206,7 @@ export function MyVacanciesPage() {
                 nav("/vacancy/new", { state: { edit: v } });
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span className="inline">
                 <IconEdit size={16} /> Исправить условия
               </span>
             </Button>
@@ -218,7 +218,7 @@ export function MyVacanciesPage() {
                 doRemove(v.id, STAFF_ROLE_LABELS[v.role]);
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span className="inline">
                 <IconWarning size={16} /> Снять с публикации
               </span>
             </Button>

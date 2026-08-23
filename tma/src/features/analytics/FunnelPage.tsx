@@ -37,7 +37,7 @@ export function FunnelPage() {
         {isError && <ErrorBox onRetry={() => refetch()} />}
 
         {data && (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="stack stack-lg">
             {STEPS.map((s, i) => {
               const value = data[s.key] ?? 0;
               const width = `${Math.round((value / top) * 100)}%`;

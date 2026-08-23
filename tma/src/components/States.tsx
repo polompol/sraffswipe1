@@ -33,7 +33,7 @@ export function Skeleton({
 /** Скелетон карточки списка (мэтчи/смены). */
 export function SkeletonList({ rows = 3 }: { rows?: number }) {
   return (
-    <div style={{ display: "grid", gap: 12 }} role="status" aria-live="polite">
+    <div className="stack stack-lg" role="status" aria-live="polite">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="card row" style={{ gap: 12 }}>
           <Skeleton height={52} width={52} radius={12} />

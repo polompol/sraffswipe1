@@ -158,7 +158,7 @@ export function SettingsPage() {
           style={{ marginTop: 12 }}
           onClick={() => nav("/support")}
         >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span className="inline">
             <IconHelp size={18} /> Помощь и поддержка
           </span>
         </Button>
@@ -171,7 +171,7 @@ export function SettingsPage() {
         <div className="row" style={{ marginBottom: 8 }}>
           <b>Документы</b>
         </div>
-        <div style={{ display: "grid", gap: 10 }}>
+        <div className="stack">
           {LEGAL_LINKS.map((l) => (
             <a
               key={l.href}

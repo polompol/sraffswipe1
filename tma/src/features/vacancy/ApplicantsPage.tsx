@@ -75,7 +75,7 @@ export function ApplicantsPage() {
           />
         )}
 
-        <div className="stagger" style={{ display: "grid", gap: 12 }}>
+        <div className="stagger stack stack-lg">
           {data?.map((a) => (
             <div key={a.id} className="card">
               {/* Ряд переносится, а длинные слова рвутся: у людей бывают

@@ -127,7 +127,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="card" style={{ textAlign: "center", padding: "14px 8px" }}>
       <div style={{ fontSize: "var(--text-xl)", fontWeight: 900, color: "var(--gold)" }}>{value}</div>
-      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{label}</div>
+      <div className="muted small">{label}</div>
     </div>
   );
 }
@@ -612,7 +612,7 @@ export function AdminPage() {
             title="Каждый день"
             hint="Четыре кнопки, которые держат сервис в порядке. Позже вешаются на крон — см. docs/OPERATIONS.md."
           >
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="stack">
               {JOBS.map((j) => (
                 <div key={j.id} className="card">
                   <b>{j.title}</b>
@@ -672,7 +672,7 @@ export function AdminPage() {
               <IconCheck size={16} /> Жалоб за период нет
             </div>
           )}
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="stack">
             {visibleReports.map((r) => (
               <div key={r.id} className="card">
                 <div className="row">
@@ -681,7 +681,7 @@ export function AdminPage() {
                     <span className="tag" style={{ marginLeft: 8, color: "var(--gold)", borderColor: "var(--gold)" }}>авто</span>
                   )}
                   <span className="spacer" />
-                  <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                  <span className="muted small">
                     {TARGET_LABEL[r.targetType] ?? r.targetType} · {fmtDate(r.createdAt)}
                   </span>
                 </div>
@@ -759,13 +759,13 @@ export function AdminPage() {
               <div className="card">
                 <div className="row">
                   <span style={{ flex: 1 }}>
-                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>Комиссия начислена</div>
+                    <div className="muted small">Комиссия начислена</div>
                     <div style={{ fontSize: "var(--text-xl)", fontWeight: 900, color: "var(--gold)" }}>
                       {rev.data.commissionAccruedRub.toLocaleString("ru-RU")} ₽
                     </div>
                   </span>
                   <span style={{ textAlign: "right" }}>
-                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>Оплачено</div>
+                    <div className="muted small">Оплачено</div>
                     <div style={{ fontWeight: 800 }}>
                       {rev.data.commissionPaidRub.toLocaleString("ru-RU")} ₽
                     </div>
@@ -809,13 +809,13 @@ export function AdminPage() {
             {comms.data && comms.data.length === 0 && (
               <Empty>Пока нет закрытых смен к оплате</Empty>
             )}
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="stack">
               {(comms.data ?? []).map((c) => (
                 <div key={c.employerId} className="card">
                   <div className="row">
                     <span style={{ flex: 1 }}>
                       <b>{c.company}</b>
-                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                      <div className="muted small">
                         {c.shifts} {plural(c.shifts, "закрытая смена", "закрытые смены", "закрытых смен")}
                       </div>
                     </span>
@@ -890,9 +890,9 @@ export function AdminPage() {
             <div style={{ display: "grid", gap: 8 }}>
               {(payments.data ?? []).map((p) => (
                 <div key={p.id} className="card row">
-                  <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="grow">
                     <b>{p.amount.toLocaleString("ru-RU")} ₽</b>
-                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                    <div className="muted small">
                       {fmtDate(p.createdAt)} · {PROVIDER_RU[p.provider] ?? p.provider}
                       {" · "}{PAYMENT_STATUS_RU[p.status] ?? p.status}
                     </div>
@@ -918,7 +918,7 @@ export function AdminPage() {
               value={userQ}
               onChange={(e) => setUserQ(e.target.value)}
             />
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="stack">
               {users.data?.length === 0 && <Empty>Никого не нашли</Empty>}
               {users.data?.map((u) => (
                 <div key={u.id} className="card">
@@ -931,7 +931,7 @@ export function AdminPage() {
                       {u.blocked && (
                         <span className="tag" style={{ marginLeft: 8, color: "var(--crimson-dark)", borderColor: "var(--crimson-dark)" }}>бан</span>
                       )}
-                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                      <div className="muted small">
                         {u.role === "employer" ? "заведение" : "соискатель"}
                         {u.username ? ` · @${u.username}` : ""}
                         {u.role === "employer"
@@ -1126,9 +1126,9 @@ export function AdminPage() {
             <div style={{ display: "grid", gap: 8 }}>
               {(cancels.data ?? []).map((c) => (
                 <div key={`${c.ownerId}-${c.role}`} className="card row">
-                  <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="grow">
                     <b>{c.name}</b>
-                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                    <div className="muted small">
                       {c.role === "employer" ? "заведение" : "работник"}
                     </div>
                   </span>
@@ -1163,12 +1163,12 @@ export function AdminPage() {
 
           {blocked.data && blocked.data.length > 0 && (
             <Section title="Заблокированные">
-              <div style={{ display: "grid", gap: 10 }}>
+              <div className="stack">
                 {blocked.data.map((b) => (
                   <div key={`${b.type}-${b.id}`} className="card row">
                     <span style={{ flex: 1 }}>
                       <b>{b.info}</b>
-                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                      <div className="muted small">
                         {b.type === "vacancy" ? "вакансия" : "пользователь"}
                       </div>
                     </span>
@@ -1198,12 +1198,12 @@ export function AdminPage() {
             {pairs.data && pairs.data.length === 0 && (
               <Empty>Повторных пар пока нет</Empty>
             )}
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="stack">
               {(pairs.data ?? []).map((p) => (
                 <div key={`${p.employer}-${p.worker}`} className="card row">
-                  <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="grow">
                     <b>{p.employer}</b>
-                    <div className="muted" style={{ fontSize: "var(--text-xs)" }}>{p.worker}</div>
+                    <div className="muted small">{p.worker}</div>
                   </span>
                   <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
                     {p.shifts} {plural(p.shifts, "смена", "смены", "смен")}
@@ -1227,7 +1227,7 @@ export function AdminPage() {
                 {sources.data.map((s) => (
                   <div key={s.source} className="row" style={{ padding: "5px 0" }}>
                     <b style={{ flex: 1 }}>{s.source}</b>
-                    <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                    <span className="muted small">
                       работники {s.seekers} · заведения {s.employers}
                     </span>
                   </div>

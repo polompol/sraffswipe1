@@ -93,12 +93,12 @@ export function VacancyList({
   }
 
   return (
-    <div className="stagger" style={{ display: "grid", gap: 12 }}>
+    <div className="stagger stack stack-lg">
       {items.map((v) => (
         <div key={v.id} className="card fade-up">
           <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
             <Thumb src={v.interiorPhotoUrl} initial={(v.companyName || "С").charAt(0)} />
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="grow">
               {/* Заголовку — вся ширина строки. Иконки закладки и «поделиться»
                   перенесены вниз: в одной строке с ними название сжималось до
                   54px и рвалось по слогам на четыре строки. */}
@@ -202,7 +202,7 @@ export function VacancyList({
       ))}
       {moreFor && (
         <Sheet title="Что сделать со сменой" onClose={() => setMoreFor(null)}>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="stack">
             <Button
               variant="secondary"
               icon={<IconShare size={16} />}

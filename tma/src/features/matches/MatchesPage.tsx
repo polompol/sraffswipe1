@@ -273,7 +273,7 @@ export function MatchesPage() {
           action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
         />
       )}
-      <div className="stagger" style={{ display: "grid", gap: 12 }}>
+      <div className="stagger stack stack-lg">
         {data?.map((m) => {
           const started = shiftStarted(m);
           const live = m.status === "confirmed" && !m.disputed;
@@ -306,7 +306,7 @@ export function MatchesPage() {
                   src={role === "employer" ? undefined : m.companyPhotoUrl}
                   initial={counterpart(m, role).charAt(0)}
                 />
-                <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="grow">
                   <div className="match-name">{counterpart(m, role)}</div>
                   {/* Должность и время — одной строкой: «Бариста · завтра,
                       08:00–16:00». Без должности человек с двумя сменами в
@@ -360,7 +360,7 @@ export function MatchesPage() {
                         textAlign: "center",
                       }}
                     >
-                      <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                      <div className="muted small">
                         Назовите этот код работнику
                       </div>
                       <div
@@ -444,7 +444,7 @@ export function MatchesPage() {
               {role === "seeker" && m.status === "completed" && (
                 <div style={{ marginTop: 12 }}>
                   <Button variant="secondary" onClick={() => downloadAct(m.id)}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span className="inline">
                       <IconDoc size={17} /> Скачать акт (PDF)
                     </span>
                   </Button>
@@ -487,7 +487,7 @@ export function MatchesPage() {
 
       {troubleFor && (
         <Sheet title="Что-то пошло не так" onClose={() => setTroubleFor(null)}>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="stack">
             {/* Только после окончания смены: заявить «не состоялась» раньше —
                 значит отправить человека работать по отменённой смене. До
                 начала для отказа есть отмена в чате. */}

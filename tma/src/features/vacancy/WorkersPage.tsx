@@ -54,7 +54,7 @@ export function WorkersPage() {
             action={<Button onClick={() => nav("/feed")}>Открыть ленту кандидатов</Button>}
           />
         )}
-        <div className="stagger" style={{ display: "grid", gap: 12 }}>
+        <div className="stagger stack stack-lg">
           {data?.map((w) => (
             <div key={w.id} className="card">
               <div className="row">

@@ -38,7 +38,7 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
         >
           <IconBolt size={15} /> Оплата напрямую · есть смены без опыта
         </span>
-        <p className="muted" style={{ fontSize: "var(--text-xs)" }}>
+        <p className="muted small">
           Новые смены появляются каждый день
         </p>
         {/* haptic здесь больше не вызываем: Button сам даёт лёгкую отдачу. */}

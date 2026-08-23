@@ -361,10 +361,10 @@ export function ChatPage() {
           </button>
           {/* Когда смена — прямо в шапке. Раньше в чате не было ни даты, ни
               времени: человек договорился и потом искал их в переписке. */}
-          <span style={{ flex: 1, minWidth: 0 }}>
+          <span className="grow">
             <b style={{ display: "block" }}>Чат по смене</b>
             {srvMatch && shiftWhen(srvMatch) && (
-              <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+              <span className="muted small">
                 {shiftWhen(srvMatch)}
               </span>
             )}
@@ -490,7 +490,7 @@ export function ChatPage() {
             disabled={iConfirmed}
             onClick={() => doConfirm()}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span className="inline">
               <IconCheck size={17} />
               {/* Без второй галочки в тексте: слева уже стоит иконка, и
                   вместе получалось «✓ Смена подтверждена ✓». */}
@@ -574,7 +574,7 @@ export function ChatPage() {
               Планы меняются — это нормально. Главное, чтобы вторая сторона
               узнала об этом заранее, а не в последний момент.
             </p>
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="stack">
               {canSetHours && (
                 <Button
                   variant="secondary"
@@ -724,7 +724,7 @@ export function ChatPage() {
       {conflict && (
         <Sheet title="Смены пересекаются" onClose={() => setConflict(null)}>
             <p className="muted" style={{ marginBottom: 16 }}>{conflict}</p>
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="stack">
               <Button
                 block
                 onClick={() => {

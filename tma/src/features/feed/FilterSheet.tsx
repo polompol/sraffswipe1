@@ -257,9 +257,9 @@ export function FilterSheet({
           <div style={{ display: "grid", gap: 8 }}>
             {searches.map((s) => (
               <div key={s.id} className="row" style={{ gap: 8 }}>
-                <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="grow">
                   <b style={{ fontSize: "var(--text-base)" }}>{s.title}</b>
-                  <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                  <div className="muted small">
                     {s.notify ? "уведомления включены" : "уведомления выключены"}
                   </div>
                 </span>

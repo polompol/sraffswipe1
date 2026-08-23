@@ -111,7 +111,7 @@ export function RolePage() {
             onChange={(e) => acceptConsent(e.target.checked)}
             style={{ marginTop: 3 }}
           />
-          <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+          <span className="muted small">
             Мне есть 18 лет. Принимаю{" "}
             {/* Через openLink, а не target="_blank": внутри Telegram новое
                 окно молча не открывается. Человек ставил галочку «принимаю

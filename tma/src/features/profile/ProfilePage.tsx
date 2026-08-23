@@ -367,7 +367,7 @@ function ProfileMeter({ pct }: { pct: number }) {
         Анкеты с фото и опытом зовут на смены заметно чаще.
       </div>
       <Button variant="secondary" onClick={() => nav("/profile/edit")}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span className="inline">
           <IconEdit size={18} /> Дополнить профиль
         </span>
       </Button>
@@ -429,7 +429,7 @@ export function ProfilePage() {
             <IconBriefcase size={30} />
           )}
         </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
+        <span className="grow">
           <div style={{ fontWeight: 800, fontSize: "var(--text-lg)", overflowWrap: "anywhere" }}>
             {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
           </div>
@@ -538,7 +538,7 @@ export function ProfilePage() {
           {" "}Уже пришло по вашей ссылке: {ref?.invited ?? 0}.
         </div>
         <Button onClick={invite}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span className="inline">
             <IconGift size={18} /> Поделиться приглашением
           </span>
         </Button>

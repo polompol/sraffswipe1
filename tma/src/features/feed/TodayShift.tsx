@@ -50,7 +50,7 @@ export function TodayShift() {
       <span style={{ color: "var(--gold)", display: "inline-flex" }}>
         <IconCalendar size={18} />
       </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
+      <span className="grow">
         <b>
           {role === "employer"
             ? shifts.length > 1

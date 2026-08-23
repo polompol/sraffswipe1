@@ -246,7 +246,7 @@ export function CreateVacancyPage() {
             обязательно: позовите тех, кто подходит, — так смена закрывается
             быстрее.
           </p>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="stack">
             <Button onClick={() => nav("/feed")}>Посмотреть кандидатов</Button>
             <Button variant="secondary" onClick={() => nav("/vacancy/my")}>
               К моим сменам
@@ -488,7 +488,7 @@ export function CreateVacancyPage() {
                   setSuggests([]);
                 }}
               >
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span className="inline">
                   <IconPin size={15} /> {s.value}
                 </span>
               </button>
