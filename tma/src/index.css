@@ -1162,6 +1162,9 @@ body[data-large="1"] .page {
   text-align: center;
 }
 .confetti {
+  /* Конфетти летят через весь экран поверх кнопок — нажатия они ловить не
+     должны ни на одной точке пути. */
+  pointer-events: none;
   position: absolute;
   width: 9px;
   height: 9px;

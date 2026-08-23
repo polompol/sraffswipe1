@@ -1,0 +1,14 @@
+{
+  "name": "staffswipe-e2e",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Сквозные проверки StaffSwipe в настоящем браузере: живой бэкенд + собранное приложение",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}
