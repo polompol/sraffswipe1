@@ -54,27 +54,31 @@
   flex: 1;
 }
 
+/* Кнопка в разметке. Числа — общие с компонентом <Button> (см. токены
+   --btn-* в theme.css): рядом на экране они обязаны быть одной высоты и
+   одного скругления, иначе это читается как небрежность. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 54px;
+  min-height: var(--btn-h-lg);
   border: none;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
+  border-radius: var(--btn-radius);
+  background: var(--grad-brand);
   color: #fff;
   font-size: var(--text-md);
   font-weight: 700;
-  padding: 16px 20px;
+  padding: var(--btn-pad-lg);
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(165, 28, 48, 0.26);
+  box-shadow: var(--btn-shadow);
+  -webkit-tap-highlight-color: transparent;
   transition: transform 0.08s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
-.btn:active {
+.btn:active:not(:disabled) {
   transform: scale(0.97);
-  box-shadow: 0 3px 10px rgba(165, 28, 48, 0.22);
+  box-shadow: var(--btn-shadow-active);
 }
 .btn.secondary {
   background: var(--surface);
@@ -89,7 +93,7 @@
   box-shadow: none;
 }
 .btn:disabled {
-  opacity: 0.5;
+  opacity: var(--btn-disabled);
   box-shadow: none;
   cursor: default;
 }
@@ -152,7 +156,7 @@ input[type="range"] {
   justify-content: center;
   gap: 8px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--btn-radius);
   font-family: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -165,12 +169,33 @@ input[type="range"] {
   transform: scale(0.97);
 }
 .ui-btn:disabled {
-  opacity: 0.55;
+  opacity: var(--btn-disabled);
   cursor: default;
 }
 .ui-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(165, 28, 48, 0.28);
+  /* Кольцо, а не обводка: у кнопки с тенью обводка сливается с ней. Второй
+     контур — на случай режима принудительных цветов, где тени не рисуются
+     вовсе и фокус иначе пропадал бы совсем. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+/* Размеры кнопки — классами, а не числами в разметке: так они общие с .btn
+   и не расходятся при правке в одном месте. */
+.ui-btn--sm {
+  min-height: var(--btn-h-sm);
+  padding: var(--btn-pad-sm);
+  font-size: var(--text-sm);
+}
+.ui-btn--md {
+  min-height: var(--btn-h-md);
+  padding: var(--btn-pad-md);
+  font-size: var(--text-base);
+}
+.ui-btn--lg {
+  min-height: var(--btn-h-lg);
+  padding: var(--btn-pad-lg);
+  font-size: var(--text-md);
 }
 .ui-btn__icon {
   display: inline-flex;
@@ -178,7 +203,7 @@ input[type="range"] {
 .ui-btn--primary {
   background: var(--grad-brand);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(165, 28, 48, 0.26);
+  box-shadow: var(--btn-shadow);
 }
 .ui-btn--secondary {
   background: var(--surface);

@@ -42,7 +42,7 @@ function MatchAvatar({ src, initial }: { src?: string; initial: string }) {
         alignItems: "center",
         justifyContent: "center",
         background: "var(--grad-brand)",
-        color: "#fff",
+        color: "var(--on-brand)",
         fontWeight: 800,
         fontSize: "var(--text-lg)",
       }}

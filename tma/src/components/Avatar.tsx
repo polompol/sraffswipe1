@@ -34,7 +34,7 @@ export function Avatar({
         alignItems: "center",
         justifyContent: "center",
         background: "var(--grad-brand)",
-        color: "#fff",
+        color: "var(--on-brand)",
         fontWeight: 800,
         fontSize: size > 44 ? "var(--text-lg)" : "var(--text-md)",
       }}

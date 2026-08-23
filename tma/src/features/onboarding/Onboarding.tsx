@@ -24,7 +24,7 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
         }}
       >
         <div className="onb-demo" aria-hidden style={{ marginBottom: 4 }}>
-          <Logo size={88} color="#fff" />
+          <Logo size={88} color="var(--on-brand)" />
           <span className="onb-demo-like">♥</span>
         </div>
         <h1 className="h1" style={{ maxWidth: 340 }}>{camp.title}</h1>
@@ -113,7 +113,7 @@ export function Onboarding() {
         >
           {i === 0 || !slide.Icon ? (
             <div className="onb-demo" aria-hidden>
-              <Logo size={92} color="#fff" />
+              <Logo size={92} color="var(--on-brand)" />
               <span className="onb-demo-skip">✕</span>
               <span className="onb-demo-like">♥</span>
             </div>
@@ -124,7 +124,7 @@ export function Onboarding() {
                 height: 110,
                 borderRadius: "var(--radius-lg)",
                 background: "var(--grad-brand)",
-                color: "#fff",
+                color: "var(--on-brand)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

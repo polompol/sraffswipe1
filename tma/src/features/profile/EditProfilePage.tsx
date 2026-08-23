@@ -217,7 +217,7 @@ export function EditProfilePage() {
                     style={{
                       cursor: "pointer",
                       background: roles.includes(r) ? "var(--gold-fill)" : "transparent",
-                      color: roles.includes(r) ? "#fff" : "var(--text)",
+                      color: roles.includes(r) ? "var(--on-brand)" : "var(--text)",
                       borderColor: roles.includes(r) ? "var(--gold-fill)" : "var(--border-strong)",
                     }}
                     onClick={() => toggle(r)}
@@ -239,7 +239,7 @@ export function EditProfilePage() {
               style={{
                 cursor: "pointer",
                 background: skills.includes(s) ? "var(--gold-fill)" : "transparent",
-                color: skills.includes(s) ? "#fff" : "var(--text)",
+                color: skills.includes(s) ? "var(--on-brand)" : "var(--text)",
                 borderColor: skills.includes(s) ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => toggleSkill(s)}

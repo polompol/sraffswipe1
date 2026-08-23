@@ -144,7 +144,7 @@ export function WelcomePage() {
                         style={{
                           cursor: "pointer",
                           background: on ? "var(--gold-fill)" : "transparent",
-                          color: on ? "#fff" : "var(--text)",
+                          color: on ? "var(--on-brand)" : "var(--text)",
                           borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
                         }}
                         onClick={() => toggleRole(r)}

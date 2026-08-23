@@ -122,7 +122,7 @@ function CardFavButton({ id }: { id: string }) {
         borderRadius: "50%",
         border: "1px solid rgba(255,255,255,.18)",
         background: "rgba(0,0,0,0.45)",
-        color: saved ? "var(--super)" : "#fff",
+        color: saved ? "var(--super)" : "var(--on-dark)",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -150,7 +150,7 @@ function VerifiedDot({ size = 20, title }: { size?: number; title: string }) {
         height: size,
         borderRadius: "50%",
         background: "var(--super)",
-        color: "#2a1f1a",
+        color: "var(--on-gold)",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -231,7 +231,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
 
       <div className="swipe-body">
         <div className="row" style={{ marginBottom: 8, gap: 6, flexWrap: "wrap" }}>
-          <span className="tag" style={{ background: "var(--gold-fill)", color: "#fff", borderColor: "var(--gold-fill)" }}>
+          <span className="tag" style={{ background: "var(--gold-fill)", color: "var(--on-brand)", borderColor: "var(--gold-fill)" }}>
             {STAFF_ROLE_LABELS[v.role]}
           </span>
         </div>
@@ -362,7 +362,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         {s.availableToday && (
           // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
           // самая заметная плашка карточки читалась хуже всего остального.
-          <span className="glass pulse" style={{ background: "var(--super)", color: "#2a1f1a", flex: "none", whiteSpace: "nowrap" }}>
+          <span className="glass pulse" style={{ background: "var(--super)", color: "var(--on-gold)", flex: "none", whiteSpace: "nowrap" }}>
             <IconBolt size={13} /> Готов сегодня
           </span>
         )}
@@ -416,7 +416,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         {(heroShown ? roles.slice(1) : roles).length > 0 && (
           <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
             {(heroShown ? roles.slice(1) : roles).map((r) => (
-              <span key={r} className="tag" style={{ background: "var(--gold-fill)", color: "#fff", borderColor: "var(--gold-fill)" }}>
+              <span key={r} className="tag" style={{ background: "var(--gold-fill)", color: "var(--on-brand)", borderColor: "var(--gold-fill)" }}>
                 {STAFF_ROLE_LABELS[r]}
               </span>
             ))}

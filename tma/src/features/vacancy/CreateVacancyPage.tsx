@@ -290,7 +290,7 @@ export function CreateVacancyPage() {
                     style={{
                       cursor: "pointer",
                       background: role === r ? "var(--gold-fill)" : "transparent",
-                      color: role === r ? "#fff" : "var(--text)",
+                      color: role === r ? "var(--on-brand)" : "var(--text)",
                       borderColor: role === r ? "var(--gold-fill)" : "var(--border-strong)",
                     }}
                     onClick={() => setRole(r)}
@@ -354,7 +354,7 @@ export function CreateVacancyPage() {
                 minWidth: 52,
                 justifyContent: "center",
                 background: headcount === n ? "var(--gold-fill)" : "transparent",
-                color: headcount === n ? "#fff" : "var(--text)",
+                color: headcount === n ? "var(--on-brand)" : "var(--text)",
                 borderColor: headcount === n ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => setHeadcount(n)}
@@ -421,7 +421,7 @@ export function CreateVacancyPage() {
               style={{
                 cursor: "pointer",
                 background: payMethod === p ? "var(--gold-fill)" : "transparent",
-                color: payMethod === p ? "#fff" : "var(--text)",
+                color: payMethod === p ? "var(--on-brand)" : "var(--text)",
                 borderColor: payMethod === p ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => setPayMethod(p)}
@@ -447,7 +447,7 @@ export function CreateVacancyPage() {
               style={{
                 cursor: "pointer",
                 background: tips === t ? "var(--gold-fill)" : "transparent",
-                color: tips === t ? "#fff" : "var(--text)",
+                color: tips === t ? "var(--on-brand)" : "var(--text)",
                 borderColor: tips === t ? "var(--gold-fill)" : "var(--border-strong)",
               }}
               onClick={() => setTips(t)}

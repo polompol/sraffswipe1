@@ -187,7 +187,7 @@ function RoleCard(props: {
           height: 56,
           borderRadius: 16,
           background: props.grad,
-          color: "#fff",
+          color: "var(--on-brand)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

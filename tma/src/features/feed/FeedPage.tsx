@@ -274,7 +274,7 @@ export function FeedPage() {
             justifyContent: "center",
           }}
         >
-          <Logo size={24} color="#fff" />
+          <Logo size={24} color="var(--on-brand)" />
         </span>
         {/* Именно h1: это главный экран приложения, и заголовка первого уровня
             на нём не было вовсе — скринридер не мог назвать страницу. Класс
@@ -350,7 +350,7 @@ export function FeedPage() {
               cursor: "pointer",
               borderColor: todayOnly ? "var(--gold-fill)" : "var(--border-strong)",
               background: todayOnly ? "var(--gold-fill)" : "transparent",
-              color: todayOnly ? "#fff" : "var(--text)",
+              color: todayOnly ? "var(--on-brand)" : "var(--text)",
             }}
             onClick={toggleToday}
           >
@@ -397,7 +397,7 @@ export function FeedPage() {
         <div className="card" style={{ textAlign: "center", padding: 40 }}>
           <div style={{
             width: 64, height: 64, borderRadius: "50%", margin: "0 auto",
-            background: "var(--grad-brand)", color: "#fff",
+            background: "var(--grad-brand)", color: "var(--on-brand)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             {isSeeker ? <IconFilter size={34} /> : <IconBell size={34} />}

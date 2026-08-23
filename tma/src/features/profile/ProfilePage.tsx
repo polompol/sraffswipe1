@@ -402,7 +402,7 @@ export function ProfilePage() {
             она читается как «вакансия», а не «это я». */}
         <span style={{
           width: 56, height: 56, borderRadius: 16, flex: "none",
-          background: "var(--grad-brand)", color: "#fff",
+          background: "var(--grad-brand)", color: "var(--on-brand)",
           display: "flex", alignItems: "center", justifyContent: "center",
           overflow: "hidden", fontWeight: 800, fontSize: "var(--text-xl)",
         }}>
@@ -450,7 +450,7 @@ export function ProfilePage() {
             marginBottom: 16,
             background:
               "linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill))",
-            color: "#fff",
+            color: "var(--on-brand)",
             border: "none",
             cursor: "pointer",
           }}

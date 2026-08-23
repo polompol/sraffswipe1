@@ -561,7 +561,7 @@ export function AdminPage() {
               flex: "1 0 auto",
               cursor: "pointer",
               background: tab === t.id ? "var(--gold-fill)" : "transparent",
-              color: tab === t.id ? "#fff" : "var(--text)",
+              color: tab === t.id ? "var(--on-brand)" : "var(--text)",
               borderColor: tab === t.id ? "var(--gold-fill)" : "var(--border-strong)",
             }}
             aria-current={tab === t.id ? "page" : undefined}
@@ -581,8 +581,8 @@ export function AdminPage() {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: tab === t.id ? "#fff" : "var(--gold-fill)",
-                  color: tab === t.id ? "var(--gold-fill)" : "#fff",
+                  background: tab === t.id ? "var(--on-brand)" : "var(--gold-fill)",
+                  color: tab === t.id ? "var(--gold-fill)" : "var(--on-brand)",
                 }}
               >
                 {openCount}
@@ -657,7 +657,7 @@ export function AdminPage() {
                 style={{
                   cursor: "pointer",
                   background: period === p.id ? "var(--gold-fill)" : "transparent",
-                  color: period === p.id ? "#fff" : "var(--text)",
+                  color: period === p.id ? "var(--on-brand)" : "var(--text)",
                   borderColor: period === p.id ? "var(--gold-fill)" : "var(--border-strong)",
                 }}
                 onClick={() => setPeriod(p.id)}

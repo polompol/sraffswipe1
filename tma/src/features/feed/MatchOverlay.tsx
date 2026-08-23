@@ -103,7 +103,7 @@ export function MatchOverlay({
           fontFamily: "var(--font-display)",
           fontSize: "var(--text-hero)",
           fontWeight: 400,
-          color: "#e8c268",
+          color: "var(--on-dark-gold)",
           position: "relative",
         }}
       >
@@ -124,7 +124,7 @@ export function MatchOverlay({
         <div
           className="match-avatar"
           hidden={!isEmployer && !!match.companyPhotoUrl}
-          style={{ color: "#fff" }}
+          style={{ color: "var(--on-dark)" }}
         >
           <IconTabMatches size={54} active />
         </div>
@@ -132,7 +132,7 @@ export function MatchOverlay({
       {/* Название заведения уже приходит с кавычками — «Кофейня «Дрова»»
           выглядело опечаткой. И говорим не «понравились друг другу», а что
           именно случилось: место готово вас взять. */}
-      <p style={{ color: "#e6dccd", maxWidth: 300 }}>
+      <p style={{ color: "var(--on-dark-muted)", maxWidth: 300 }}>
         {/* Двоеточие вместо «готово/готова»: род названия заранее неизвестен
             («Кофейня» — она, «Бар» — он), и любое согласование где-нибудь да
             прозвучит безграмотно. */}
@@ -150,7 +150,7 @@ export function MatchOverlay({
       {shiftLine && (
         <p
           style={{
-            color: "#e8c268",
+            color: "var(--on-dark-gold)",
             fontWeight: 700,
             marginTop: 8,
             maxWidth: 320,
@@ -179,7 +179,7 @@ export function MatchOverlay({
           className="btn secondary"
           style={{
             background: "transparent",
-            color: "#fff",
+            color: "var(--on-dark)",
             borderColor: "rgba(255,255,255,.45)",
           }}
           onClick={onClose}
