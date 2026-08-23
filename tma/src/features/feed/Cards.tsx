@@ -274,7 +274,10 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
             <span style={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.address}</span>
           </div>
           {(v.employerShiftsDone || v.employerRating) ? (
-            <div>
+            // Отдельный класс: на самом маленьком экране в крупном режиме эта
+            // строка уходит первой. Рейтинг заведения полезен, но адрес, часы
+            // и медкнижка решают, ехать ли вообще, — они важнее.
+            <div className="card-meta-trust">
               <IconStar size={14} /> {v.employerRating ? v.employerRating.toFixed(1) : "—"}
               {v.employerShiftsDone
                 ? ` · ${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто`
@@ -304,7 +307,10 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
             </span>
           )}
           {v.tips && v.tips !== "none" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
+            // Отдельный класс: на 320×568 с крупным текстом строка уходит.
+            // Чаевые платят гости, а не заведение, — это приятная подробность,
+            // а не то, из-за чего человек решает ехать.
+            <span className="cond-tips" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
               <IconMoney size={16} /> {TIPS_BADGE[v.tips]}
             </span>
           )}

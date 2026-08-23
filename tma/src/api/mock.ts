@@ -505,10 +505,29 @@ export function answerReschedule(
   return Promise.resolve({ ...m });
 }
 
+/** Заменить мэтч в списке НОВЫМ объектом.
+ *
+ *  Демо-данные раньше правились на месте: `m.status = ...`. TanStack Query
+ *  сравнивает пришедший ответ со своим кэшем вглубь, а это был один и тот же
+ *  объект — то есть «ничего не изменилось», и экран не перерисовывался.
+ *  Заведение жало «Подтвердить выход», карточка не менялась, и было непонятно,
+ *  сработало или нет. На живом сервере такого нет: там каждый ответ новый.
+ */
+function patchMatch(
+  matchId: string,
+  change: (m: MatchModel) => void,
+): MatchModel | null {
+  const i = matches.findIndex((x) => x.id === matchId);
+  if (i < 0) return null;
+  const next = { ...matches[i] };
+  change(next);
+  matches[i] = next;
+  return next;
+}
+
 export function markNotHeld(matchId: string, reason = ""): Promise<MatchModel> {
-  const m = matches.find((x) => x.id === matchId);
+  const m = patchMatch(matchId, (x) => { x.status = "expired"; });
   if (!m) return Promise.reject(new Error("not found"));
-  m.status = "expired";
   sysMessage(
     matchId,
     `Смена отмечена как несостоявшаяся${reason ? `. Причина: ${reason}` : ""}. ` +
@@ -518,40 +537,43 @@ export function markNotHeld(matchId: string, reason = ""): Promise<MatchModel> {
 }
 
 export function markAttendance(matchId: string, attended: boolean): Promise<void> {
-  const m = matches.find((x) => x.id === matchId);
-  if (m) {
+  patchMatch(matchId, (m) => {
     if (attended) {
       m.employerCheckedIn = true;
       if (m.seekerCheckedIn) {
         m.status = "completed";
         m.checkedIn = true;
       }
+      // Молчание = смена состоялась, а явное подтверждение её закрывает:
+      // код прихода после этого не нужен и с карточки уходит.
+      m.checkinCode = null;
     } else if (m.seekerCheckedIn) {
       m.disputed = true; // конфликт
     }
-  }
+  });
   return Promise.resolve();
 }
 export function checkinShift(
   matchId: string,
   body: { code: string },
 ): Promise<MatchModel> {
-  const m = matches.find((x) => x.id === matchId);
-  if (!m) return Promise.reject(new Error("not found"));
-  const byCode = !!body.code && body.code.trim() === (m.checkinCode ?? "123456");
+  const cur = matches.find((x) => x.id === matchId);
+  if (!cur) return Promise.reject(new Error("not found"));
+  const byCode = !!body.code && body.code.trim() === (cur.checkinCode ?? "123456");
   if (!byCode) return Promise.reject(new Error("bad checkin"));
-  m.seekerCheckedIn = true;
-  if (m.employerCheckedIn) {
-    m.status = "completed";
-    m.checkedIn = true;
-  }
-  return Promise.resolve(m);
+  const m = patchMatch(matchId, (x) => {
+    x.seekerCheckedIn = true;
+    if (x.employerCheckedIn) {
+      x.status = "completed";
+      x.checkedIn = true;
+    }
+  });
+  return Promise.resolve(m as MatchModel);
 }
 export function disputeShift(matchId: string, _note: string): Promise<MatchModel> {
   void _note;
-  const m = matches.find((x) => x.id === matchId);
+  const m = patchMatch(matchId, (x) => { x.disputed = true; });
   if (!m) return Promise.reject(new Error("not found"));
-  m.disputed = true;
   return Promise.resolve(m);
 }
 

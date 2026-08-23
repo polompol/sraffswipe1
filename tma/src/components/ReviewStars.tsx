@@ -57,8 +57,11 @@ export function ReviewStars({ matchId }: { matchId: string }) {
       <div className="muted" style={{ marginBottom: 8 }}>
         Как прошла смена? Нажмите на звёзды
       </div>
+      {/* Класс: на экране 320 пять звёзд с зазорами занимают ровно ширину
+          карточки, и по краям не остаётся ни точки поля. */}
       <div
-        style={{ display: "inline-flex", gap: 6 }}
+        className="stars-row"
+        style={{ display: "inline-flex" }}
         onMouseLeave={() => setHover(0)}
       >
         {[1, 2, 3, 4, 5].map((s) => (

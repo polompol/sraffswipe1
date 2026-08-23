@@ -24,15 +24,16 @@ function counterpart(m: MatchModel, role: string | null): string {
   return (name || "").trim() || (role === "employer" ? "Работник" : "Заведение");
 }
 
-/** Аватар заведения 52×52: буква на градиенте, поверх — фото, если оно есть
- *  и загрузилось. Битая ссылка не оставляет пустого места. */
+/** Аватар заведения: буква на градиенте, поверх — фото, если оно есть и
+ *  загрузилось. Битая ссылка не оставляет пустого места. Размер задан классом
+ *  (.match-ava): на узком экране он меньше — иначе колонке с названием
+ *  оставалось 158 точек из 254, и короткое «Бар «Полночь»» ломалось надвое. */
 function MatchAvatar({ src, initial }: { src?: string; initial: string }) {
   const [ok, setOk] = useState(!!src);
   return (
     <span
+      className="match-ava"
       style={{
-        width: 52,
-        height: 52,
         borderRadius: 12,
         flex: "none",
         position: "relative",
@@ -306,21 +307,22 @@ export function MatchesPage() {
                   initial={counterpart(m, role).charAt(0)}
                 />
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
-                    {counterpart(m, role)}
-                  </div>
+                  <div className="match-name">{counterpart(m, role)}</div>
                   {/* Должность и время — одной строкой: «Бариста · завтра,
                       08:00–16:00». Без должности человек с двумя сменами в
                       один день не понимал, какая из них какая. */}
                   {(m.role || shiftWhen(m)) && (
-                    <div className="muted">
+                    <div className="muted match-when">
                       {[m.role ? STAFF_ROLE_LABELS[m.role] : "", shiftWhen(m)]
                         .filter(Boolean)
                         .join(" · ")}
                     </div>
                   )}
                 </span>
-                <span style={{ color: "var(--muted)", display: "inline-flex" }}>
+                {/* Шеврон декоративный: вся строка и так кнопка. На узком
+                    экране он уходит (см. .row-chevron) — это 32 точки ширины
+                    для названия заведения. */}
+                <span className="row-chevron" style={{ color: "var(--muted)" }}>
                   <IconChevronRight size={20} />
                 </span>
               </button>
@@ -381,7 +383,7 @@ export function MatchesPage() {
                     <div style={{ marginTop: 12 }}>
                       <Button onClick={() => mark(m.id, true)}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <IconCheck size={16} /> Человек пришёл — закрыть смену
+                          <IconCheck size={16} /> Подтвердить выход
                         </span>
                       </Button>
                     </div>
@@ -400,14 +402,19 @@ export function MatchesPage() {
                     <div className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: 6 }}>
                       Код прихода — попросите у администратора на месте
                     </div>
-                    <div className="row" style={{ gap: 8 }}>
+                    {/* Поле и кнопка делят строку и оба умеют сжиматься.
+                        Раньше у поля была жёсткая ширина 128, а кнопка не
+                        сжималась уже своей подписи: на экране 320 строке
+                        требовалось 272 точки при доступных 254 — и страница
+                        уезжала вправо вместе с карточкой. */}
+                    <div className="row checkin-row" style={{ gap: 8 }}>
                       <input
                         className="input"
                         inputMode="numeric"
                         aria-label="6-значный код прихода от заведения"
                         maxLength={6}
                         placeholder="000000"
-                        style={{ width: 128, letterSpacing: 4, fontWeight: 800 }}
+                        style={{ letterSpacing: 4, fontWeight: 800 }}
                         value={codes[m.id] ?? ""}
                         onChange={(e) =>
                           setCodes((c) => ({ ...c, [m.id]: e.target.value.replace(/\D/g, "") }))
@@ -415,7 +422,6 @@ export function MatchesPage() {
                       />
                       <Button
                         block={false}
-                        style={{ flex: 1 }}
                         disabled={(codes[m.id] ?? "").length < 6}
                         onClick={() => doCheckin(m.id)}
                       >

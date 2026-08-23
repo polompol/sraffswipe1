@@ -331,8 +331,11 @@ export function FeedPage() {
           onClick={() => setFilterOpen(true)}
           aria-label={`${locText} — открыть фильтры`}
         >
-          {locText}
-          <span aria-hidden style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
+          {/* Многоточие ставится на самом тексте, а не на кнопке целиком:
+              иначе на узком экране обрезалась стрелка — единственный признак
+              того, что строка раскрывается, — а вместе с ней и число смен. */}
+          <span className="feed-loc-text">{locText}</span>
+          <span aria-hidden className="feed-loc-caret" style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
             <IconChevronRight size={16} />
           </span>
         </button>
