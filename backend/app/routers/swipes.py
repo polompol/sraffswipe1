@@ -67,14 +67,25 @@ def _claim_slot(db: Session, vacancy_id: str) -> None:
         raise SlotsFull
 
 
-def _ensure_match(
-    db: Session, user_id: str, employer_id: str, vacancy_id: str
-) -> tuple[Match, bool]:
-    existing = (
+def _find_match(db: Session, user_id: str, vacancy_id: str) -> Match | None:
+    """Мэтч этой пары на эту смену, если он уже есть.
+
+    Отдельной функцией, а не строкой внутри: между этой проверкой и вставкой
+    есть окно, в которое успевает встречный свайп второй стороны. Окно закрыто
+    уникальностью пары «смена + человек» и перехватом ошибки ниже — а чтобы
+    это можно было проверить тестом, проверку надо уметь «ослепить».
+    """
+    return (
         db.query(Match)
         .filter(Match.vacancy_id == vacancy_id, Match.user_id == user_id)
         .first()
     )
+
+
+def _ensure_match(
+    db: Session, user_id: str, employer_id: str, vacancy_id: str
+) -> tuple[Match, bool]:
+    existing = _find_match(db, user_id, vacancy_id)
     if existing:
         return existing, False
     # Должник не набирает новых людей — проверяем ЗДЕСЬ, на создании мэтча, а
@@ -87,17 +98,24 @@ def _ensure_match(
     match = Match(
         user_id=user_id, employer_id=employer_id, vacancy_id=vacancy_id
     )
-    db.add(match)
-    db.flush()
-    db.add(
-        Message(
-            match_id=match.id,
-            sender_id="system",
-            text="Это мэтч! Договоритесь о деталях смены.",
-            is_system=True,
-        )
-    )
+    # Вставка ВНУТРИ перехвата — вместе с flush.
+    #
+    # Раньше flush стоял снаружи, и это была настоящая дыра: при встречных
+    # свайпах в одну секунду уникальность срабатывает именно на flush, а не на
+    # commit. Ошибка улетала наверх мимо восстановления — одна из сторон
+    # получала «Внутренняя ошибка сервера» вместо мэтча, который в этот момент
+    # уже создавала вторая.
     try:
+        db.add(match)
+        db.flush()
+        db.add(
+            Message(
+                match_id=match.id,
+                sender_id="system",
+                text="Это мэтч! Договоритесь о деталях смены.",
+                is_system=True,
+            )
+        )
         db.commit()
     except IntegrityError:
         # Гонка встречных свайпов — мэтч уже создан параллельно, берём его.
