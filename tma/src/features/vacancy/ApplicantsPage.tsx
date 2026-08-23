@@ -44,11 +44,11 @@ export function ApplicantsPage() {
       qc.invalidateQueries({ queryKey: ["me"] });
       if (take && res.matched) {
         qc.invalidateQueries({ queryKey: ["matches"] });
-        toast("Готово! Открылся чат — договоритесь о деталях", "success");
+        toast("Взяли! Открылся чат — напишите, во сколько прийти", "success");
         if (res.matchId) nav(`/chat/${res.matchId}`);
         return;
       }
-      toast(take ? "Отклик принят" : "Отклик отклонён", "success");
+      toast(take ? "Взяли на смену" : "Отказали. Передумаете — можно взять позже", "success");
     } catch (e) {
       haptic("error");
       toast(apiError(e, "Не получилось — попробуйте ещё раз"), "error");
@@ -70,7 +70,7 @@ export function ApplicantsPage() {
             fill
             icon={<IconCheck size={34} />}
             title="Откликов пока нет"
-            text="Как только кто-то выберет вашу смену, он появится здесь. Если смена висит без откликов — поднимите ставку или нажмите «Позвать людей» в списке смен."
+            text="Здесь появятся те, кто выбрал вашу смену. Пока тихо — поднимите ставку или позовите людей сами."
             action={<Button onClick={() => nav("/vacancy/my")}>Мои смены</Button>}
           />
         )}

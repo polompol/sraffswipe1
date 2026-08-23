@@ -48,7 +48,7 @@ export function ReviewStars({ matchId }: { matchId: string }) {
       // получал отказ «отзыв уже оставлен».
       haptic("error");
       setPicked(0);
-      toast(apiError(e, "Не удалось отправить оценку"), "error");
+      toast(apiError(e, "Оценка не ушла — попробуйте ещё раз"), "error");
     }
   }
 

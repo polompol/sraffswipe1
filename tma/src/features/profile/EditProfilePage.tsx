@@ -130,7 +130,7 @@ export function EditProfilePage() {
       nav(-1);
     } catch (e) {
       haptic("error");
-      setError(apiError(e, "Не удалось сохранить"));
+      setError(apiError(e, "Не удалось сохранить — попробуйте ещё раз"));
     } finally {
       setSaving(false);
     }
@@ -140,7 +140,7 @@ export function EditProfilePage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 16 }}>
-          {isEmployer ? "Заведение" : "Анкета"}
+          {isEmployer ? "Профиль заведения" : "Мой профиль"}
         </h1>
 
         {isEmployer ? (
@@ -165,7 +165,7 @@ export function EditProfilePage() {
             <CityPicker
               value={city}
               onChange={setCity}
-              hint="По нему вам показывают людей, которые рядом."
+              hint="Покажем людей из вашего города."
             />
 
             <label className="form-label" htmlFor="inn">ИНН (необязательно)</label>
@@ -175,13 +175,14 @@ export function EditProfilePage() {
               style={{ marginBottom: 12 }}
               inputMode="numeric"
               maxLength={12}
-              placeholder="Нужен для актов и бейджа «Проверено»"
+              placeholder="12 цифр"
               value={inn}
               onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
             />
             <p className="muted" style={{ marginTop: 0 }}>
-              Название видят работники в ленте. Если поменять название или ИНН,
-              бейдж «Проверено» слетит — его нужно будет получить заново.
+              ИНН нужен для счетов, актов и значка «Проверено». Название видят
+              работники в списке смен. Поменяете название или ИНН — значок
+              «Проверено» придётся получить заново.
             </p>
           </>
         ) : (
@@ -202,7 +203,7 @@ export function EditProfilePage() {
         {/* Группировка «Зал/Бар/Кухня/Хозяйство» — как при создании смены.
             Раньше здесь была плоская простыня из 12 чипов, и один и тот же
             выбор в двух местах приложения выглядел по-разному. */}
-        <div className="form-label">Должности</div>
+        <div className="form-label">Кем готовы выйти</div>
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
@@ -249,7 +250,7 @@ export function EditProfilePage() {
           ))}
         </div>
 
-        <label className="form-label" htmlFor="about">О себе и пожелания по выходу</label>
+        <label className="form-label" htmlFor="about">О себе: когда и где удобно выходить</label>
         <textarea
           id="about"
           className="input"
@@ -266,7 +267,7 @@ export function EditProfilePage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <label className="row" style={{ cursor: "pointer" }}>
             <input type="checkbox" checked={selfEmployed} onChange={(e) => setSelfEmployed(e.target.checked)} />
-            <span>Я самозанятый (плательщик НПД)</span>
+            <span>Я самозанятый</span>
           </label>
           {selfEmployed && (
             <>

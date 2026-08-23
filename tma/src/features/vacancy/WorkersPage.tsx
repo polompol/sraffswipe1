@@ -28,14 +28,14 @@ export function WorkersPage() {
       setInvited((s) => new Set(s).add(id));
       toast(
         notified
-          ? "Приглашение отправлено"
+          ? "Позвали — ждём ответа"
           : "Этого человека вы уже звали — он видит вашу смену",
         "success",
       );
     } catch (e) {
       haptic("error");
       // 409 — нет опубликованной смены: звать некуда, и сервер это объясняет.
-      toast(apiError(e, "Не удалось пригласить"), "error");
+      toast(apiError(e, "Не получилось позвать. Попробуйте ещё раз"), "error");
     }
   }
 
@@ -50,8 +50,8 @@ export function WorkersPage() {
             fill
             icon={<IconCheck size={34} />}
             title="Пока никого"
-            text="Здесь появятся те, кто уже выходил на ваши смены — чтобы позвать их снова в один тап."
-            action={<Button onClick={() => nav("/feed")}>Открыть ленту кандидатов</Button>}
+            text="Здесь появятся те, кто уже выходил на ваши смены, — позвать снова можно одной кнопкой."
+            action={<Button onClick={() => nav("/feed")}>Посмотреть, кто свободен</Button>}
           />
         )}
         <div className="stagger stack stack-lg">
@@ -78,7 +78,7 @@ export function WorkersPage() {
                 disabled={invited.has(w.id)}
                 onClick={() => invite(w.id)}
               >
-                {invited.has(w.id) ? "Приглашение отправлено" : "Позвать снова"}
+                {invited.has(w.id) ? "Позвали" : "Позвать снова"}
               </Button>
             </div>
           ))}

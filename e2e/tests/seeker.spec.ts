@@ -64,7 +64,7 @@ test.describe("человек находит смену и доходит до �
     await card.click({ position: { x: 40, y: 60 } });
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
-    await expect(sheet).toContainText("Разбивка оплаты");
+    await expect(sheet).toContainText("Сколько заплатят");
     await expect(sheet).toContainText("Что взять с собой");
 
     // 3. Откликнуться можно прямо из шторки, не закрывая её руками.

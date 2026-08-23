@@ -55,7 +55,7 @@ describe("Редактирование профиля: форма зависит
 
     await screen.findByText("Название заведения");
     expect(screen.queryByText("Дата рождения (только 18+)")).toBeNull();
-    expect(screen.queryByText("Должности")).toBeNull();
+    expect(screen.queryByText("Кем готовы выйти")).toBeNull();
     // А вот фото заведению как раз НУЖНО: его поле есть в базе, лента и список
     // мэтчей его показывают — а поставить было нельзя ничем, и у каждого
     // живого заведения оставалась буква на цветном квадрате.
@@ -97,7 +97,7 @@ describe("Редактирование профиля: форма зависит
     renderPage();
 
     await screen.findByText("Дата рождения (только 18+)");
-    expect(screen.getByText("Должности")).toBeTruthy();
+    expect(screen.getByText("Кем готовы выйти")).toBeTruthy();
     expect(screen.queryByText("Название заведения")).toBeNull();
 
     fireEvent.click(screen.getByText("Сохранить"));

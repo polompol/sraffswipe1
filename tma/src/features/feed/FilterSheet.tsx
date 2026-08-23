@@ -23,7 +23,7 @@ import { haptic } from "@/telegram/sdk";
 
 const SORTS: { id: string; label: string }[] = [
   { id: "distance", label: "Ближе" },
-  { id: "rate", label: "Выше ставка" },
+  { id: "rate", label: "Где платят больше" },
   { id: "date", label: "Раньше" },
 ];
 
@@ -81,7 +81,7 @@ export function FilterSheet({
       toast("Подписка отключена", "success");
     } catch {
       haptic("error");
-      toast("Не удалось отключить", "error");
+      toast("Подписка не отключилась — попробуйте ещё раз", "error");
     }
   }
   const set = (patch: Partial<FeedFilters>) => setF((cur) => ({ ...cur, ...patch }));
@@ -108,7 +108,7 @@ export function FilterSheet({
       toast("Поиск сохранён — пришлём новые смены", "success");
     } catch {
       haptic("error");
-      toast("Не удалось сохранить поиск", "error");
+      toast("Не получилось подписаться. Попробуйте ещё раз", "error");
     }
   }
 
@@ -134,7 +134,7 @@ export function FilterSheet({
 
   return (
     <Sheet
-      title="Фильтры"
+      title="Что ищете"
       onClose={onClose}
       footer={
         <>
@@ -144,7 +144,7 @@ export function FilterSheet({
           >
             Сбросить
           </Button>
-          <Button onClick={() => onApply(f)}>Показать</Button>
+          <Button onClick={() => onApply(f)}>Показать смены</Button>
         </>
       }
     >
@@ -186,9 +186,9 @@ export function FilterSheet({
         ))}
       </div>
 
-      <div className="form-label">Тип ставки</div>
+      <div className="form-label">Как платят</div>
       <div className="row" style={{ margin: "8px 0 16px" }}>
-        <Chip on={!f.rate_type} label="Любая" onClick={() => set({ rate_type: undefined })} />
+        <Chip on={!f.rate_type} label="Неважно" onClick={() => set({ rate_type: undefined })} />
         <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
         <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
       </div>
@@ -211,7 +211,7 @@ export function FilterSheet({
         onChange={(e) => set({ min_rate: e.target.value ? Number(e.target.value) : undefined })}
       />
 
-      <div className="form-label">Сортировка</div>
+      <div className="form-label">Сначала показывать</div>
       <div className="row" style={{ margin: "8px 0 18px" }}>
         {SORTS.map((s) => (
           <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
@@ -219,7 +219,7 @@ export function FilterSheet({
       </div>
 
       <label className="form-label" htmlFor="radius">
-        Радиус{hasLocation ? `: ${f.radius_km ?? 25} км` : ""}
+        {hasLocation ? `Не дальше ${f.radius_km ?? 25} км` : "Не дальше"}
       </label>
       {hasLocation ? (
         <input
@@ -234,7 +234,7 @@ export function FilterSheet({
         />
       ) : (
         <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "6px 0 18px" }}>
-          Разреши доступ к геолокации, чтобы фильтровать смены по расстоянию.
+          Разрешите доступ к месту — и сможете искать смены поближе.
         </div>
       )}
 
@@ -246,7 +246,7 @@ export function FilterSheet({
         icon={saved ? <IconCheck size={16} /> : <IconBell size={16} />}
         onClick={saveSearch}
       >
-        {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
+        {saved ? "Будем присылать" : "Присылать новые смены в бота"}
       </Button>
 
       {!!searches?.length && (

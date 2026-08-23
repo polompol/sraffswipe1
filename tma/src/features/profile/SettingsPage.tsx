@@ -129,7 +129,7 @@ export function SettingsPage() {
       <Toggle
         on={sound}
         label="Звук"
-        sub="Приятный сигнал на мэтч и закрытие смены"
+        sub="Сигнал, когда ответили взаимно или закрылась смена"
         aria="Звук"
         onToggle={() => {
           const next = !sound;

@@ -21,6 +21,10 @@ interface Props<T> {
    *  Отдельная крупная кнопка деталей на карточке была лишним действием:
    *  свайп — главное, а подробности человек и так открывает касанием. */
   onTap?: (item: T) => void;
+  /** Слово на штампе при свайпе вправо. У соискателя «ХОЧУ», у заведения
+   *  «ЗОВУ»: один штамп на обе стороны ложился поперёк лица человека и
+   *  расходился с кнопкой под колодой, которая подписана «Позвать». */
+  likeStamp?: string;
 }
 
 const VISIBLE = 3;
@@ -33,7 +37,7 @@ function dirFrom(mx: number, sx: number): SwipeDirection {
 }
 
 export function SwipeDeck<T>(props: Props<T>) {
-  const { items, renderCard, onSwipe, keyOf } = props;
+  const { items, renderCard, onSwipe, keyOf, likeStamp = "ХОЧУ" } = props;
   // Улетевшие карточки помним ПО НОМЕРУ, но сбрасываем при смене набора.
   // Раньше номера жили вечно: человек свайпал две карточки, менял город — и
   // первые две смены нового города считались уже просмотренными. Он их не
@@ -216,7 +220,7 @@ export function SwipeDeck<T>(props: Props<T>) {
           >
             {renderCard(item)}
             <Tint x={style.x} />
-            <Stamps x={style.x} />
+            <Stamps x={style.x} like={likeStamp} />
           </animated.div>
         );
       })}
@@ -246,7 +250,7 @@ function Tint({ x }: { x: SpringValue<number> }) {
   );
 }
 
-function Stamps({ x }: { x: SpringValue<number> }) {
+function Stamps({ x, like }: { x: SpringValue<number>; like: string }) {
   return (
     <>
       <animated.div
@@ -258,7 +262,7 @@ function Stamps({ x }: { x: SpringValue<number> }) {
           opacity: to(x, (v) => Math.max(0, Math.min(1, v / 80))),
         }}
       >
-        ХОЧУ
+        {like}
       </animated.div>
       <animated.div
         className="stamp"

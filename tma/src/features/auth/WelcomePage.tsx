@@ -106,7 +106,7 @@ export function WelcomePage() {
         </h1>
         <p className="muted" style={{ marginTop: 4 }}>
           {isEmployer
-            ? "Название увидят соискатели в ленте смен"
+            ? "Название увидят работники в списке смен"
             : "Пара штрихов — и заведения начнут вас звать"}
         </p>
 
@@ -164,13 +164,13 @@ export function WelcomePage() {
           onChange={setCity}
           hint={
             isEmployer
-              ? "По городу вам будут показывать людей, которые рядом."
-              : "По городу вам будут показывать смены, которые рядом."
+              ? "Покажем людей из вашего города."
+              : "Покажем смены в вашем городе."
           }
         />
 
         <div className="form-label" style={{ marginTop: 20 }}>
-          Фото {isEmployer ? "заведения" : ""} — по желанию
+          Фото {isEmployer ? "заведения" : "профиля"} — по желанию
         </div>
         <div className="row" style={{ gap: 12, alignItems: "center" }}>
           {photo && (
@@ -202,7 +202,7 @@ export function WelcomePage() {
 
         <div style={{ marginTop: 28, display: "grid", gap: 10 }}>
           <Button block loading={busy} disabled={!canSave} onClick={save}>
-            Готово
+            {isEmployer ? "Сохранить и найти людей" : "Сохранить и смотреть смены"}
           </Button>
           <Button
             variant="ghost"
@@ -214,8 +214,8 @@ export function WelcomePage() {
         </div>
         <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 12 }}>
           {isEmployer
-            ? "Без названия смену опубликовать можно, но откликов будет меньше."
-            : "Анкеты с именем и профессией зовут на смены заметно чаще."}
+            ? "Смену можно разместить и без названия, но откликов будет меньше."
+            : "С именем и профессией на смены зовут заметно чаще."}
         </p>
       </div>
     </div>

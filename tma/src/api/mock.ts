@@ -215,7 +215,7 @@ const messagesByMatch: Record<string, Message[]> = {
       id: "demo-m1",
       chatId: DEMO_MATCH_ID,
       senderId: "system",
-      text: "Это мэтч! Смена: Кофейня «Дрова». Договоритесь о деталях.",
+      text: "Взаимно! Смена: Кофейня «Дрова». Договоритесь о деталях.",
       isSystem: true,
       timestamp: new Date(Date.now() - 7200000).toISOString(),
     },
@@ -337,7 +337,7 @@ export function sendSwipe(
         id: uid(),
         chatId: m.id,
         senderId: "system",
-        text: `Это мэтч! Смена: ${mine.companyName}. Договоритесь о деталях.`,
+        text: `Взаимно! Смена: ${mine.companyName}. Договоритесь о деталях.`,
         isSystem: true,
         timestamp: new Date().toISOString(),
       },
@@ -374,7 +374,7 @@ export function sendSwipe(
       id: uid(),
       chatId: match.id,
       senderId: "system",
-      text: `Это мэтч! Смена: ${vac.companyName}. Договоритесь о деталях.`,
+      text: `Взаимно! Смена: ${vac.companyName}. Договоритесь о деталях.`,
       isSystem: true,
       timestamp: new Date().toISOString(),
     },
@@ -946,7 +946,7 @@ export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);
 }
 export function urgentPing(_vacancyId: string): Promise<number> {
-  return Promise.resolve(7); // демо: «пингнули 7 доступных рядом»
+  return Promise.resolve(7); // демо: «позвали 7 свободных рядом»
 }
 
 export function fetchMyWorkers() {

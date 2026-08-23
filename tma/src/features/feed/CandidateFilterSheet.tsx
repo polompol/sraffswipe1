@@ -53,7 +53,7 @@ export function CandidateFilterSheet({
           <Button variant="secondary" onClick={() => onApply({})}>
             Сбросить
           </Button>
-          <Button onClick={() => onApply(f)}>Показать</Button>
+          <Button onClick={() => onApply(f)}>Показать людей</Button>
         </>
       }
     >
@@ -88,7 +88,7 @@ export function CandidateFilterSheet({
         onChange={(e) => set({ district: e.target.value || undefined })}
       />
 
-      <div className="form-label">Показать</div>
+      <div className="form-label">Кого показывать</div>
       <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 18px" }}>
         <Chip
           on={!!f.available_today}
@@ -97,7 +97,7 @@ export function CandidateFilterSheet({
         />
         <Chip
           on={!!f.reliable_only}
-          label="Надёжные (без неявок)"
+          label="Кто ни разу не подводил"
           onClick={() => set({ reliable_only: !f.reliable_only })}
         />
       </div>

@@ -10,10 +10,10 @@ import { Button } from "@/components/Button";
 import { Sheet } from "@/components/Sheet";
 
 const REASONS: { id: ReportReason; label: string }[] = [
-  { id: "fake", label: "Фейковая смена" },
+  { id: "fake", label: "Смена ненастоящая" },
   { id: "scam", label: "Обман / мошенничество" },
   { id: "spam", label: "Спам" },
-  { id: "abuse", label: "Оскорбления / абьюз" },
+  { id: "abuse", label: "Оскорбления и грубость" },
   { id: "other", label: "Другое" },
 ];
 
@@ -41,7 +41,7 @@ export function ReportSheet({
       onClose();
     } catch {
       haptic("error");
-      toast("Не удалось отправить жалобу", "error");
+      toast("Жалоба не ушла — попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -57,7 +57,7 @@ export function ReportSheet({
             Отмена
           </Button>
           <Button loading={busy} disabled={!reason} onClick={submit}>
-            Отправить
+            Отправить жалобу
           </Button>
         </>
       }

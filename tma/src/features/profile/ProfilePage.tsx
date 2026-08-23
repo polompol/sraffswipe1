@@ -49,7 +49,7 @@ function CommissionCard() {
       openExternal(url);
     } catch {
       haptic("error");
-      toast("Не удалось открыть оплату", "error");
+      toast("Оплата не открылась — попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -76,22 +76,18 @@ function CommissionCard() {
         {due
           ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса ` +
             `автоматически — пополните его картой ниже.`
-          : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
+          : "Платите только за смены, которые состоялись."}
       </div>
       {bill.overdue && (
         <div style={{ marginTop: 8, fontSize: "var(--text-sm)", color: "var(--danger)", fontWeight: 700 }}>
-          Баланс закончился — публикация новых смен на паузе. Пополните
-          картой ниже, и всё сразу возобновится.
+          Баланс закончился — новые смены пока не публикуются. Пополните
+          ниже, и всё снова заработает.
         </div>
       )}
       <div className="row" style={{ marginTop: 10 }}>
-        <span className="muted" style={{ fontSize: "var(--text-sm)" }}>Баланс (аванс)</span>
+        <span className="muted" style={{ fontSize: "var(--text-sm)" }}>Баланс</span>
         <span className="spacer" />
         <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
-      </div>
-      <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
-        Комиссия списывается с баланса сама — пополняйте его заранее, и
-        считать ничего не придётся.
       </div>
       {/* Документы для бухгалтерии. Ресторан-юрлицо не проведёт оплату по
           безналу без счёта с реквизитами и не поставит расход без акта —
@@ -159,8 +155,8 @@ function CommissionCard() {
         </>
       ) : (
         <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
-          Оплата картой внутри приложения подключается к запуску — тогда
-          баланс можно будет пополнить в один тап.
+          Оплата картой пока не подключена. Нужно пополнить баланс —
+          напишите в поддержку.
         </div>
       )}
     </div>
@@ -248,10 +244,10 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
     haptic("select");
     try {
       await setAvailability(next);
-      toast(next ? "Вы готовы выйти сегодня" : "Статус снят", "success");
+      toast(next ? "Вы готовы выйти сегодня" : "Отметку убрали", "success");
     } catch {
       setOn(!next); // откат при ошибке
-      toast("Не удалось сохранить", "error");
+      toast("Отметка не сохранилась. Попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -275,7 +271,7 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
         </b>
         <div className="muted">
           {on
-            ? "Ты наверху ленты — на срочные смены зовут первым"
+            ? "Вы наверху списка — на срочные смены позовут первым"
             : "Включите — и срочные смены найдут вас быстрее"}
         </div>
       </span>
@@ -431,7 +427,7 @@ export function ProfilePage() {
         </span>
         <span className="grow">
           <div style={{ fontWeight: 800, fontSize: "var(--text-lg)", overflowWrap: "anywhere" }}>
-            {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
+            {me?.name ?? (role === "employer" ? "Добавьте название" : "Добавьте имя")}
           </div>
           <div className="muted">
             {me ? (me.rating > 0 ? (
@@ -470,10 +466,14 @@ export function ProfilePage() {
               ? `Новых откликов: ${me.incomingLikes}`
               : `Вас зовут на смены: ${me.incomingLikes}`}
           </b>
-          <div style={{ fontSize: "var(--text-sm)", marginTop: 2 }}>
+          {/* line-height здесь обязателен: это <button>, а браузер даёт кнопке
+              своё «normal» (около 1.2) и общий межстрочный из body внутрь не
+              попадает. Строки слипались ровно там, где объясняется, что
+              произойдёт по нажатию. */}
+          <div style={{ fontSize: "var(--text-sm)", marginTop: 2, lineHeight: 1.5 }}>
             {role === "employer"
-              ? "нажмите, чтобы увидеть, кто именно, и ответить"
-              : "нажмите, чтобы увидеть, кто зовёт, и ответить в один тап"}
+              ? "Посмотреть, кто откликнулся"
+              : "Посмотреть, кто зовёт"}
           </div>
         </button>
       )}
@@ -497,8 +497,7 @@ export function ProfilePage() {
         >
           <b style={{ fontSize: "var(--text-md)" }}>Добавьте фото заведения</b>
           <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-sm)" }}>
-            Карточку с фотографией зала листают заметно чаще, чем карточку
-            с одной буквой названия.
+            С фотографией зала на ваши смены откликаются заметно чаще.
           </div>
         </button>
       )}
@@ -511,8 +510,7 @@ export function ProfilePage() {
             <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
           </div>
           <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
-            Закрытые смены формируют ваш рейтинг: его видят работники в ленте
-            до того, как откликнуться.
+            Из закрытых смен складывается рейтинг — его видно ещё до отклика.
           </div>
         </div>
       )}
@@ -535,7 +533,12 @@ export function ProfilePage() {
           {role === "employer"
             ? "Чем больше рядом заведений и людей, тем быстрее закрываются смены у всех."
             : "Чем больше рядом людей, тем чаще заведения ищут именно здесь."}
-          {" "}Уже пришло по вашей ссылке: {ref?.invited ?? 0}.
+          {" "}
+          {/* «Пришло по ссылке: 0» — цифра в хвосте фразы, которую читают на
+              бегу. Ноль лучше сказать словами: он и так самый частый. */}
+          {ref?.invited
+            ? `По вашей ссылке уже пришли: ${ref.invited}.`
+            : "По вашей ссылке пока никто не пришёл."}
         </div>
         <Button onClick={invite}>
           <span className="inline">

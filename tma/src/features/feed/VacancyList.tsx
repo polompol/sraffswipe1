@@ -88,7 +88,7 @@ export function VacancyList({
       qc.invalidateQueries({ queryKey: ["fav-ids"] });
       qc.invalidateQueries({ queryKey: ["favorites"] });
     } catch {
-      toast("Не удалось сохранить", "error");
+      toast("Смена не сохранилась. Попробуйте ещё раз", "error");
     }
   }
 

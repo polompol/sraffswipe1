@@ -39,7 +39,7 @@ export function RolePage() {
       // возвращалось как было. В метро это выглядит как «приложение не
       // работает», и на этом знакомство заканчивалось.
       haptic("error");
-      toast(apiError(e, "Не удалось войти — проверьте интернет"), "error");
+      toast(apiError(e, "Не удалось войти. Попробуйте ещё раз через минуту"), "error");
       setBusy(null);
     }
   }
@@ -128,7 +128,7 @@ export function RolePage() {
               href={PRIVACY_URL}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExternal(PRIVACY_URL); }}
             >
-              политику обработки ПДн (152-ФЗ)
+              политику обработки персональных данных
             </a>{" "}
             и даю согласие на обработку персональных данных.
           </span>
@@ -138,7 +138,7 @@ export function RolePage() {
             тап не срабатывает. Теперь причина написана явно. */}
         {!consent && (
           <p className="muted" style={{ marginBottom: 0 }}>
-            Отметьте согласие выше, чтобы выбрать роль
+            Поставьте галочку выше — и выбирайте
           </p>
         )}
 

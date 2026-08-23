@@ -282,8 +282,11 @@ test.describe("главные фильтры на экране", () => {
       address: "Ленина, 1",
       contact_phone: "+79990000006",
     });
+    // Обе смены — в будущие дни. Смену «на сегодня» сцена не заводит нарочно:
+    // сервер не принимает смену, время которой уже прошло, и тест разваливался
+    // сам собой после шести вечера — в зависимости от часа запуска.
     await publishShift(request, emp, { city: "Екатеринбург", days: 2 });
-    await publishShift(request, emp, { city: "Екатеринбург", days: 0, role: "cook" });
+    await publishShift(request, emp, { city: "Екатеринбург", days: 3, role: "cook" });
 
     const seeker = await login(request, "seeker", 830_031, "Дарья");
     await fillProfile(request, seeker, {
@@ -307,8 +310,10 @@ test.describe("главные фильтры на экране", () => {
     await expect(seekerChips.first()).toContainText("Екатеринбург");
 
     // Счётчик показывает, сколько нашлось — по нему видно, что фильтр сузил
-    // ленту, а не что смен нет. Ради этого он и стоит на чипе.
+    // ленту, а не что смен нет. Ради этого он и стоит на чипе: обе смены на
+    // будущие дни, значит после «Сегодня» счётчик обязан измениться.
     const before = (await seekerChips.first().innerText()).trim();
+    expect(before).toContain("2");
     await a.page.getByRole("button", { name: "Сегодня", exact: true }).click();
     await expect(seekerChips.first()).not.toHaveText(before);
     await expect(

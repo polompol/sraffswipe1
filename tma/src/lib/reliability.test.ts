@@ -8,9 +8,9 @@ describe("надёжность одной строкой", () => {
   });
 
   it("показывает выходы и число разных заведений", () => {
-    expect(reliabilityText(5, 5, 3)).toBe("вышел на 5 из 5 смен · 3 заведения");
-    expect(reliabilityText(12, 11, 6)).toBe("вышел на 11 из 12 смен · 6 заведений");
-    expect(reliabilityText(1, 1, 1)).toBe("вышел на 1 из 1 смен · 1 заведение");
+    expect(reliabilityText(5, 5, 3)).toBe("100% выходов · 3 заведения");
+    expect(reliabilityText(12, 11, 6)).toBe("91% выходов · 6 заведений");
+    expect(reliabilityText(1, 1, 1)).toBe("100% выходов · 1 заведение");
   });
 
   it("накрутка одной парой аккаунтов видна: много смен, одно заведение", () => {
@@ -18,7 +18,12 @@ describe("надёжность одной строкой", () => {
   });
 
   it("без данных о заведениях показывает хотя бы выходы", () => {
-    expect(reliabilityText(4, 3)).toBe("вышел на 3 из 4 смен");
+    expect(reliabilityText(4, 3)).toBe("75% выходов");
+  });
+
+  it("одна мысль сказана один раз: процента и «N из M» вместе больше нет", () => {
+    expect(reliabilityText(12, 11, 6)).not.toContain("из");
+    expect(reliabilityText(12, 11, 6)).not.toContain("вышел");
   });
 });
 
@@ -33,10 +38,5 @@ describe("процент выходов", () => {
     expect(attendanceRate(40, 39)).toBe("97%");
     expect(attendanceRate(12, 12)).toBe("100%");
     expect(attendanceRate(3, 0)).toBe("0%");
-  });
-
-  it("у новичка с одной сменой честные 100% — поэтому рядом всегда «1 из 1»", () => {
-    expect(attendanceRate(1, 1)).toBe("100%");
-    expect(reliabilityText(1, 1, 1)).toContain("1 из 1");
   });
 });

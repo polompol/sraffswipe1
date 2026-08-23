@@ -52,7 +52,7 @@ export function InvitesPage() {
       // Успешный отклик без мэтча → VacancyList покажет тост (не дублируем).
       return dir !== "dislike";
     } catch {
-      toast("Не удалось. Попробуйте ещё раз", "error");
+      toast("Отклик не ушёл. Попробуйте ещё раз", "error");
       return false;
     }
   }
@@ -74,8 +74,8 @@ export function InvitesPage() {
           fill
           icon={<IconBolt size={34} />}
           title="Пока никто не позвал"
-          text="Листайте ленту и откликайтесь — заведения начнут звать в ответ."
-          action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
+          text="Листайте смены и откликайтесь — заведения начнут звать в ответ."
+          action={<Button onClick={() => nav("/feed")}>Смотреть смены</Button>}
         />
       )}
 

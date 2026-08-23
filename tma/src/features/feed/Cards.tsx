@@ -33,7 +33,7 @@ import {
 } from "@/components/Icons";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
-import { attendanceRate, reliabilityText } from "@/lib/reliability";
+import { reliabilityText } from "@/lib/reliability";
 import { haptic } from "@/telegram/sdk";
 
 const PAY_ICON: Record<PayMethod, typeof IconCash> = {
@@ -107,7 +107,7 @@ function CardFavButton({ id }: { id: string }) {
       qc.invalidateQueries({ queryKey: ["favorites"] });
       toast(saved ? "Убрано из избранного" : "Сохранено в избранное", "success");
     } catch {
-      toast("Не удалось сохранить", "error");
+      toast("Смена не сохранилась. Попробуйте ещё раз", "error");
     }
   }
   return (
@@ -280,7 +280,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           // описание — оно наименее важное на карточке. Иначе обрезался низ, а
           // там способ оплаты и «медкнижка» — то, из-за чего человек зря
           // приедет на смену.
-          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.92, fontSize: "var(--text-base)", lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.92, fontSize: "var(--text-base)", lineHeight: 1.45 }}>
             {v.description}
           </div>
         )}
@@ -312,7 +312,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
               что место одно, и не откликается «наверняка уже заняли». */}
           {(v.headcount ?? 1) > 1 && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700 }}>
-              Нужно {v.headcount} чел.
+              Нужно {v.headcount} {plural(v.headcount ?? 1, "человек", "человека", "человек")}
               {v.slotsLeft != null && v.slotsLeft < (v.headcount ?? 1)
                 ? ` · свободно ${v.slotsLeft}`
                 : ""}
@@ -380,16 +380,10 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
             <div className="swipe-hero-cap">
               {s.shiftsTotal ? (
                 <>
-                  {/* Процент отвечает на вопрос заведения быстрее всего, но
-                      сам по себе обманчив: у новичка «1 из 1» — это 100%.
-                      Поэтому рядом всегда стоит, из скольких смен и у
-                      скольких заведений он набран. */}
-                  <b>{attendanceRate(s.shiftsTotal, s.shiftsAttended)} выходов</b>
-                  {" · "}
                   {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
                 </>
               ) : (
-                "новичок в сервисе"
+                "смен пока не было"
               )}
             </div>
           </div>
@@ -427,7 +421,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           // места ужимается ИМЕННО рассказ о себе, а не район, медкнижка и
           // надёжность. На узком экране (320 точек) без этого обрезался низ
           // карточки, где как раз и написано, можно ли человеку доверять.
-          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.95, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.95 }}>
             {s.about}
           </div>
         )}
@@ -435,7 +429,6 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
               <IconCheck size={15} />{" "}
-              {attendanceRate(s.shiftsTotal, s.shiftsAttended)} выходов ·{" "}
               {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
             </div>
           )}

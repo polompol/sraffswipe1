@@ -17,21 +17,23 @@ import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { IconSend, IconBack, IconWarning, IconCheck, IconChat } from "@/components/Icons";
 
-// Быстрые ответы — частые фразы в один тап. У сторон они РАЗНЫЕ: заведению
-// предлагались реплики работника («Готов выйти на смену», «Какой адрес?»),
-// то есть человеку показывали вопросы, ответы на которые он и должен дать.
+// Быстрые ответы — частые фразы одним нажатием. У сторон они РАЗНЫЕ: заведению
+// предлагались реплики работника («Какой адрес?», «Что взять с собой?»), то
+// есть человеку показывали вопросы, ответы на которые он и должен дать.
+// Мужского рода тут тоже быть не должно: половина бариста и официантов —
+// женщины, и подсказка «Готов выйти» им не подходит.
 const QUICK_REPLIES_SEEKER = [
   "Здравствуйте!",
-  "Готов выйти на смену",
+  "Выйду на смену",
   "Во сколько выходить?",
   "Какой адрес?",
   "Что взять с собой?",
 ];
 const QUICK_REPLIES_EMPLOYER = [
   "Здравствуйте!",
-  "Ждём вас на смене",
-  "Подходите к началу смены",
+  "Ждём вас к началу смены",
   "Спросите администратора на входе",
+  "Во сколько будете?",
   "Форма: чёрный верх, фартук дадим",
 ];
 
@@ -113,7 +115,7 @@ export function ChatPage() {
         if (older.length < MESSAGES_PAGE) setNoMoreOlder(true);
       }
     } catch {
-      toast("Не удалось загрузить старые сообщения", "error");
+      toast("Старые сообщения не загрузились — попробуйте ещё раз", "error");
     } finally {
       setOlderLoading(false);
     }
@@ -268,11 +270,11 @@ export function ChatPage() {
       haptic("success");
       setMatchState(m);
       setHoursOpen(false);
-      toast("Часы уточнены, работник уведомлён", "success");
+      toast("Часы сохранили — работник уже видит", "success");
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
     } catch (e: any) {
       haptic("error");
-      toast(apiError(e, "Не удалось сохранить часы"), "error");
+      toast(apiError(e, "Часы не сохранились — попробуйте ещё раз"), "error");
     }
   }
 
@@ -283,11 +285,11 @@ export function ChatPage() {
       haptic("success");
       setMatchState(m);
       setMoveOpen(false);
-      toast("Предложение отправлено работнику", "success");
+      toast("Предложили перенос — ждём ответа", "success");
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
     } catch (e: any) {
       haptic("error");
-      toast(apiError(e, "Не удалось предложить перенос"), "error");
+      toast(apiError(e, "Перенос не предложился — попробуйте ещё раз"), "error");
     }
   }
 
@@ -296,12 +298,12 @@ export function ChatPage() {
       const m = await answerReschedule(matchId, accept);
       haptic(accept ? "success" : "warning");
       setMatchState(m);
-      toast(accept ? "Перенос принят" : "Отказ отправлен", "success");
+      toast(accept ? "Смена перенесена ✓" : "Ответили: выйти не сможете", "success");
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
       haptic("error");
-      toast("Не удалось ответить", "error");
+      toast("Ответ не ушёл — попробуйте ещё раз", "error");
     }
   }
 
@@ -312,13 +314,18 @@ export function ChatPage() {
       setMatchState(m);
       setCancelOpen(false);
       setCancelReason("");
-      toast("Смена отменена. Вторая сторона уведомлена", "success");
+      toast(
+        role === "employer"
+          ? "Смена отменена — работник уже знает"
+          : "Смена отменена — заведение уже знает",
+        "success",
+      );
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch (e: any) {
       haptic("error");
       toast(
-        apiError(e, "Не удалось отменить смену"),
+        apiError(e, "Смена не отменилась — попробуйте ещё раз"),
         "error",
       );
     }
@@ -333,8 +340,10 @@ export function ChatPage() {
       setMatchState(m);
       toast(
         m.confirmedBySeeker && m.confirmedByEmployer
-          ? "Смена подтверждена обеими сторонами ✓"
-          : "Готово! Ждём подтверждения второй стороны",
+          ? "Договорились ✓ Смена подтверждена"
+          : role === "employer"
+            ? "Готово! Ждём, когда работник подтвердит"
+            : "Готово! Ждём, когда заведение подтвердит",
         "success",
       );
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
@@ -348,7 +357,7 @@ export function ChatPage() {
         return;
       }
       haptic("error");
-      toast("Не удалось подтвердить смену. Попробуйте ещё раз", "error");
+      toast("Смена не подтвердилась — попробуйте ещё раз", "error");
     }
   }
 
@@ -362,7 +371,10 @@ export function ChatPage() {
           {/* Когда смена — прямо в шапке. Раньше в чате не было ни даты, ни
               времени: человек договорился и потом искал их в переписке. */}
           <span className="grow">
-            <b style={{ display: "block" }}>Чат по смене</b>
+            <b style={{ display: "block" }}>
+              {(role === "employer" ? srvMatch?.seekerName : srvMatch?.companyName)
+                || "Чат по смене"}
+            </b>
             {srvMatch && shiftWhen(srvMatch) && (
               <span className="muted small">
                 {shiftWhen(srvMatch)}
@@ -421,7 +433,7 @@ export function ChatPage() {
               cursor: "pointer",
             }}
           >
-            {olderLoading ? "Загружаем…" : "Показать более ранние"}
+            {olderLoading ? "Загружаем…" : "Показать старые сообщения"}
           </button>
         )}
 
@@ -497,7 +509,9 @@ export function ChatPage() {
               {bothConfirmed
                 ? "Смена подтверждена"
                 : iConfirmed
-                  ? "Ждём подтверждения второй стороны"
+                  ? role === "employer"
+                    ? "Ждём, когда работник подтвердит"
+                    : "Ждём, когда заведение подтвердит"
                   : "Подтвердить смену"}
             </span>
           </Button>
@@ -519,7 +533,7 @@ export function ChatPage() {
                 cursor: "pointer",
               }}
             >
-              Что-то пошло не так
+              Изменить смену
             </button>
           )}
 
@@ -569,10 +583,10 @@ export function ChatPage() {
       </div>
 
       {troubleOpen && (
-        <Sheet title="Что-то пошло не так" onClose={() => setTroubleOpen(false)}>
+        <Sheet title="Изменить смену" onClose={() => setTroubleOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Планы меняются — это нормально. Главное, чтобы вторая сторона
-              узнала об этом заранее, а не в последний момент.
+              Планы меняются — это нормально. Главное предупредить заранее,
+              а не в последний момент.
             </p>
             <div className="stack">
               {canSetHours && (
@@ -584,7 +598,7 @@ export function ChatPage() {
                     setHoursOpen(true);
                   }}
                 >
-                  Смена прошла не по времени
+                  Смена вышла короче или длиннее
                 </Button>
               )}
               {canMove && (
@@ -643,7 +657,7 @@ export function ChatPage() {
               onChange={(e) => setHoursNote(e.target.value)}
             />
             <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-              <Button block onClick={saveHours}>Сохранить</Button>
+              <Button block onClick={saveHours}>Сохранить часы</Button>
               <Button variant="ghost" block onClick={() => setHoursOpen(false)}>
                 Отмена
               </Button>
@@ -654,8 +668,8 @@ export function ChatPage() {
       {moveOpen && (
         <Sheet title="Перенести смену" onClose={() => setMoveOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Человек уже согласился на прежние условия, поэтому перенос — это
-              предложение: он может не смочь в новое время.
+              Человек согласился на этот день. Перенос — просьба: в новое
+              время он может не выйти.
             </p>
             <div className="form-label">Новая дата</div>
             <input
@@ -698,9 +712,9 @@ export function ChatPage() {
       {cancelOpen && (
         <Sheet title="Отменить смену?" onClose={() => setCancelOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Вторая сторона получит уведомление сразу. Чем раньше
-              предупредите, тем лучше: заранее отменённая смена не влияет на
-              надёжность профиля, за несколько часов до начала — влияет.
+              {role === "employer" ? "Работник узнает сразу." : "Заведение узнает сразу."}{" "}
+              Отменить заранее — не страшно, а за пару часов до начала ударит
+              по надёжности профиля.
             </p>
             <input
               className="input"
@@ -734,8 +748,10 @@ export function ChatPage() {
               >
                 Всё равно беру
               </Button>
+              {/* Не «Отменить»: рядом стоит «Всё равно беру», и человек читал
+                  это как «отменить смену» — ценой была потерянная подработка. */}
               <Button variant="ghost" block onClick={() => setConflict(null)}>
-                Отменить
+                Не сейчас
               </Button>
             </div>
         </Sheet>

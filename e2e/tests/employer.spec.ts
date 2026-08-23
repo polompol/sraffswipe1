@@ -51,16 +51,16 @@ test.describe("заведение публикует смену и зовёт ч
     await page.locator('input[type="date"]').fill(inDays(2));
     await page.locator("#city-picker").fill("Казань");
     await page.locator('input[inputmode="numeric"]').first().fill("400");
-    await page.getByRole("button", { name: /Опубликовать смену/ }).click();
+    await page.getByRole("button", { name: /Разместить смену/ }).click();
 
     // 2. Экран после публикации: раньше здесь была всплывашка и прыжок назад.
     await expect(
-      page.getByRole("heading", { name: "Смена опубликована" }),
+      page.getByRole("heading", { name: "Смена размещена" }),
     ).toBeVisible();
     await expect(page.locator(".page")).toContainText("Официант");
 
     // 3. Оттуда — сразу к кандидатам.
-    await page.getByRole("button", { name: "Посмотреть кандидатов" }).click();
+    await page.getByRole("button", { name: "Посмотреть, кто свободен" }).click();
     await expect(page).toHaveURL(/#\/feed/);
 
     const card = page.locator(".swipe-card").first();
@@ -94,8 +94,9 @@ test.describe("заведение публикует смену и зовёт ч
     //    шло искать человека руками во вкладке «Люди».
     await hooray.getByRole("button", { name: /Перейти в чат/ }).click();
     await expect(page).toHaveURL(/#\/chat\//);
-    // В шапке чата — сама смена: время и день, о которых договариваются.
-    await expect(page.locator("body")).toContainText("Чат по смене");
+    // В шапке чата — с кем разговор и когда смена. «Чат по смене» ничего не
+    // говорило: таких чатов у заведения несколько, и различить их было нечем.
+    await expect(page.locator("body")).toContainText("Иван");
     await expect(page.locator("body")).toContainText("10:00–22:00");
 
     await context.close();

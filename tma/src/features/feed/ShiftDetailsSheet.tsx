@@ -104,7 +104,7 @@ export function ShiftDetailsSheet({
       </Row>
 
       <Row icon={<IconMoney size={18} />}>
-        <b>Разбивка оплаты</b>
+        <b>Сколько заплатят</b>
         <div className="muted" style={{ marginTop: 2 }}>
           {v.rateType === "perHour"
             ? `${v.rate} ₽/час × ${hours} ч ≈ ${estimatedPay(v).toLocaleString("ru-RU")} ₽`
@@ -137,7 +137,7 @@ export function ShiftDetailsSheet({
       <div className="card" style={{ marginTop: 16, background: "var(--gold-tint)", borderColor: "var(--gold)" }}>
         <div className="row" style={{ gap: 8 }}>
           <span style={{ color: "var(--gold)", display: "inline-flex" }}><IconCheck size={16} /></span>
-          <span className="muted">Оплату получаете напрямую от заведения. Никаких предоплат — это мошенничество.</span>
+          <span className="muted">Заведение платит вам напрямую. Просят деньги вперёд — это обман.</span>
         </div>
       </div>
     </Sheet>

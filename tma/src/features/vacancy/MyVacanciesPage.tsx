@@ -28,17 +28,17 @@ export function MyVacanciesPage() {
     queryFn: fetchMyVacancies,
   });
   async function doRemove(id: string, title: string) {
-    if (!(await confirmAction(`Снять смену «${title}» с публикации?`, "Снять"))) return;
+    if (!(await confirmAction(`Убрать смену «${title}» из ленты?`, "Убрать"))) return;
     haptic("warning");
     try {
       await deleteVacancy(id);
-      toast("Смена снята", "success");
+      toast("Смена убрана из ленты", "success");
       qc.invalidateQueries({ queryKey: ["my-vacancies"] });
       qc.invalidateQueries({ queryKey: ["feed"] });
     } catch (e) {
       haptic("error");
       // 409 — по смене уже откликнулись: сервер объясняет, почему нельзя.
-      toast(apiError(e, "Не удалось снять смену"), "error");
+      toast(apiError(e, "Не получилось убрать смену. Попробуйте ещё раз"), "error");
     }
   }
 
@@ -46,9 +46,18 @@ export function MyVacanciesPage() {
     haptic("medium");
     try {
       const n = await urgentPing(id);
-      toast(n > 0 ? `Пингнули ${n} доступных рядом` : "Сейчас рядом нет доступных", "success");
+      // Пустой результат — не успех: зелёный тост «никого нет» читался как
+      // «получилось», хотя ничего хорошего не случилось.
+      if (n > 0) {
+        toast(
+          `Позвали — сообщение ушло ${n} ${plural(n, "свободному", "свободным", "свободным")} рядом`,
+          "success",
+        );
+      } else {
+        toast("Рядом сейчас никого свободного. Попробуйте позже", "info");
+      }
     } catch {
-      toast("Не удалось отправить", "error");
+      toast("Не получилось позвать. Попробуйте ещё раз", "error");
     }
   }
 
@@ -100,7 +109,7 @@ export function MyVacanciesPage() {
           fill
           icon={<IconCalendar size={34} />}
           title="Смен пока нет"
-          text="Разместите первую смену — она появится в ленте у работников рядом, и пойдут отклики."
+          text="Разместите первую смену — её увидят работники рядом, и пойдут отклики."
           action={
             <Button block={false} onClick={() => nav("/vacancy/new")}>
               + Разместить смену
@@ -135,8 +144,8 @@ export function MyVacanciesPage() {
                   }}
                 >
                   {full
-                    ? "Все места закрыты ✓"
-                    : `Набрано ${taken} из ${need} · ищем ещё ${left} ${plural(left, "человека", "человек", "человек")}`}
+                    ? "Все места заняты ✓"
+                    : `Набрано ${taken} из ${need} · ищем ещё ${left} ${plural(left, "человека", "человека", "человек")}`}
                 </div>
               );
             })()}
@@ -219,7 +228,7 @@ export function MyVacanciesPage() {
               }}
             >
               <span className="inline">
-                <IconWarning size={16} /> Снять с публикации
+                <IconWarning size={16} /> Убрать из ленты
               </span>
             </Button>
           </div>

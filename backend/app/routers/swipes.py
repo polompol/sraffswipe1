@@ -112,7 +112,7 @@ def _ensure_match(
             Message(
                 match_id=match.id,
                 sender_id="system",
-                text="Это мэтч! Договоритесь о деталях смены.",
+                text="Взаимно! Договоритесь о деталях смены.",
                 is_system=True,
             )
         )

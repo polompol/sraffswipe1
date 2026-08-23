@@ -175,8 +175,8 @@ export function CreateVacancyPage() {
         apiError(
           e,
           editing
-            ? "Не удалось сохранить. Проверьте поля."
-            : "Не удалось опубликовать. Проверьте поля.",
+            ? "Не получилось сохранить. Проверьте дату, время и ставку."
+            : "Не получилось разместить. Проверьте дату, время и ставку.",
         ),
         "error",
       );
@@ -231,7 +231,7 @@ export function CreateVacancyPage() {
             <IconCheck size={34} />
           </div>
           <h1 className="h1" style={{ marginBottom: 8 }}>
-            Смена опубликована
+            Смена размещена
           </h1>
           <p className="muted" style={{ marginBottom: 4 }}>
             {STAFF_ROLE_LABELS[role]} ·{" "}
@@ -242,12 +242,11 @@ export function CreateVacancyPage() {
             })}
           </p>
           <p className="muted" style={{ marginBottom: 24 }}>
-            Она уже в ленте у соискателей поблизости. Ждать отклика не
-            обязательно: позовите тех, кто подходит, — так смена закрывается
-            быстрее.
+            Её уже видят работники рядом. Можно не ждать откликов: позовите
+            тех, кто подходит — так быстрее.
           </p>
           <div className="stack">
-            <Button onClick={() => nav("/feed")}>Посмотреть кандидатов</Button>
+            <Button onClick={() => nav("/feed")}>Посмотреть, кто свободен</Button>
             <Button variant="secondary" onClick={() => nav("/vacancy/my")}>
               К моим сменам
             </Button>
@@ -261,7 +260,7 @@ export function CreateVacancyPage() {
     <div className="app">
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>
-          {editing ? "Исправить смену" : pre ? "Повторить смену" : "Новая смена"}
+          {editing ? "Исправить условия" : pre ? "Повторить смену" : "Новая смена"}
         </h1>
         {editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
@@ -371,7 +370,7 @@ export function CreateVacancyPage() {
         {custom ? (
           <>
             <label className="form-label" htmlFor="headcount">
-              Сколько именно человек
+              Впишите своё число
             </label>
             <input
               id="headcount"
@@ -408,8 +407,8 @@ export function CreateVacancyPage() {
           </button>
         )}
         <p className="muted" style={{ margin: "-8px 0 16px", fontSize: "var(--text-xs)" }}>
-          Одна смена на всех — не нужно публиковать несколько одинаковых.
-          Когда наберётся столько людей, смена уйдёт из ленты сама.
+          Одной смены хватит на всех — одинаковые размещать не нужно.
+          Наберёте нужных людей — она уйдёт из ленты сама.
         </p>
 
         <div className="form-label">Как и когда платите</div>
@@ -460,7 +459,7 @@ export function CreateVacancyPage() {
         <CityPicker
           value={city}
           onChange={setCity}
-          hint="Смену увидят люди из этого города. Время смены тоже считается по нему."
+          hint="Смену увидят люди из этого города. Время — местное."
         />
 
         <label className="form-label" htmlFor="addr">Адрес</label>
@@ -516,7 +515,7 @@ export function CreateVacancyPage() {
             фотографию смене было нельзя ничем. Именно фото решает, листнут
             карточку дальше или остановятся. */}
         <PhotoUpload
-          label="Фото места (необязательно, но с ним откликаются заметно чаще)"
+          label="Фото места — по желанию, но с ним откликаются чаще"
           value={interiorPhoto}
           onChange={setInteriorPhoto}
         />
@@ -531,7 +530,7 @@ export function CreateVacancyPage() {
         />
 
         <Button loading={busy} onClick={publish}>
-          {editing ? "Сохранить изменения" : "Опубликовать смену"}
+          {editing ? "Сохранить изменения" : "Разместить смену"}
         </Button>
       </div>
     </div>

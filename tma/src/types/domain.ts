@@ -102,17 +102,19 @@ export const TIPS_LABELS: Record<TipsMode, string> = {
   shared: "Чаевые поровну",
 };
 
-// Короткая подпись для бейджа на карточке (none — не показываем).
+// Короткая подпись для плашки на карточке (none — не показываем).
+// Тире убрано: в колонке шириной в половину карточки оно уводило слово на
+// вторую строку — «Чаевые — / поровну». Смысла тире не добавляло.
 export const TIPS_BADGE: Record<TipsMode, string> = {
   none: "",
-  individual: "Чаевые — вам",
-  shared: "Чаевые — поровну",
+  individual: "Чаевые вам",
+  shared: "Чаевые поровну",
 };
 
 export type MatchStatus = "matched" | "confirmed" | "completed" | "cancelled" | "expired";
 
 export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
-  matched: "Мэтч",
+  matched: "Совпало",
   confirmed: "Смена подтверждена",
   completed: "Смена закрыта",
   cancelled: "Отменена",

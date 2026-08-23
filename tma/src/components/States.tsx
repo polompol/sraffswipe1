@@ -1,7 +1,7 @@
 import { Button } from "@/components/Button";
 import { IconWarning } from "./Icons";
 
-export function Loading({ label = "Загрузка…" }: { label?: string }) {
+export function Loading({ label = "Секунду…" }: { label?: string }) {
   return (
     <div className="card" style={{ textAlign: "center" }} role="status" aria-live="polite">
       {label}
@@ -67,7 +67,7 @@ export function ErrorBox({ onRetry }: { onRetry?: () => void }) {
         <IconWarning size={36} />
       </div>
       <p className="muted" style={{ margin: "8px 0 12px" }}>
-        Не удалось загрузить. Проверьте соединение.
+        Не загрузилось. Проверьте интернет и нажмите «Повторить».
       </p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry}>

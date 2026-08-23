@@ -81,7 +81,7 @@ function StatusLine({ m, role }: { m: MatchModel; role: string | null }) {
   if (m.disputed) {
     color = "var(--danger)";
     icon = <IconWarning size={17} />;
-    text = "Спор по смене — разбирает оператор";
+    text = "Разбираемся — оператор скоро напишет";
   } else if (m.status === "completed" || m.checkedIn) {
     color = "var(--success)";
     icon = <IconCheck size={17} />;
@@ -140,13 +140,12 @@ function HowItWorks({ role }: { role: string | null }) {
           className="muted"
           style={{ fontSize: "var(--text-sm)", lineHeight: 1.5, marginTop: 4 }}
         >
-          Смена закроется сама через 12 часов после окончания — нажимать ничего
-          не нужно.{" "}
+          Смена закроется сама через 12 часов — нажимать ничего не нужно.{" "}
           {role === "employer"
-            ? "Назовите работнику код прихода: так у него останется доказательство, что он был на месте, а у вас — что смена состоялась."
-            : "Попросите у администратора код прихода: с ним заведение не сможет записать смену в неявку."}{" "}
-          Если смены не было — отметьте это в меню «Что-то пошло не так»,
-          комиссия за неё начислена не будет.
+            ? "Назовите работнику код прихода — он подтвердит, что человек был на месте."
+            : "Попросите код прихода у администратора — с ним вам не запишут неявку."}{" "}
+          Если смены не было — скажите об этом в «Что-то пошло не так», и
+          комиссию не возьмём.
         </div>
       )}
     </div>
@@ -175,7 +174,7 @@ export function MatchesPage() {
       toast(attended ? "Смена закрыта ✓" : "Отмечено: не вышел", "success");
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
-      toast("Не удалось отметить", "error");
+      toast("Не отметилось — проверьте связь и нажмите ещё раз", "error");
     }
   }
 
@@ -190,7 +189,7 @@ export function MatchesPage() {
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
       haptic("error");
-      toast("Неверный код прихода", "error");
+      toast("Код не подошёл — проверьте цифры у администратора", "error");
     }
   }
 
@@ -214,22 +213,25 @@ export function MatchesPage() {
     haptic("warning");
     try {
       await disputeShift(matchId, "Не заплатили за смену");
-      toast("Оператор получил вашу жалобу и свяжется с вами", "success");
+      toast("Жалоба у оператора — он скоро напишет", "success");
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
-      toast("Не удалось отправить жалобу", "error");
+      toast("Жалоба не ушла — попробуйте ещё раз", "error");
     }
   }
 
   async function doDispute(matchId: string) {
-    if (!(await confirmAction("Открыть спор по смене? Его разберёт оператор.", "Открыть спор"))) return;
+    if (!(await confirmAction(
+      "Позвать оператора по этой смене? Он свяжется с обеими сторонами.",
+      "Позвать оператора",
+    ))) return;
     haptic("warning");
     try {
       await disputeShift(matchId);
-      toast("Спор открыт — с вами свяжется оператор", "success");
+      toast("Оператор получил заявку — скоро напишет", "success");
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
-      toast("Не удалось открыть спор", "error");
+      toast("Не получилось позвать оператора — попробуйте ещё раз", "error");
     }
   }
 
@@ -238,7 +240,7 @@ export function MatchesPage() {
   // обе стороны нажимали кнопку. Теперь наоборот, и отказ надо заявить явно.
   async function doNotHeld(matchId: string) {
     const ok = await confirmAction(
-      "Отметить, что смена не состоялась? Комиссия за неё начислена не будет.",
+      "Отметить, что смена не состоялась? Комиссию за неё не возьмём.",
       "Смена не состоялась",
     );
     if (!ok) return;
@@ -249,7 +251,7 @@ export function MatchesPage() {
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch (e) {
       haptic("error");
-      toast(apiError(e, "Не удалось отметить"), "error");
+      toast(apiError(e, "Не получилось отметить — попробуйте ещё раз"), "error");
     }
   }
 
@@ -268,9 +270,9 @@ export function MatchesPage() {
           text={
             role === "employer"
               ? "Здесь появятся люди, с которыми вы договорились. Позовите кого-нибудь из ленты или ответьте на отклик."
-              : "Откликайтесь на смены в ленте — как только заведение ответит, здесь откроется чат."
+              : "Откликайтесь на смены — как только заведение ответит, здесь откроется чат."
           }
-          action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
+          action={<Button onClick={() => nav("/feed")}>Смотреть смены</Button>}
         />
       )}
       <div className="stagger stack stack-lg">
@@ -395,7 +397,7 @@ export function MatchesPage() {
               {live && role === "seeker" && started && (
                 m.seekerCheckedIn ? (
                   <div className="muted" style={{ marginTop: 10 }}>
-                    Код принят ✓ Ваше подтверждение, что вы были на месте.
+                    Код принят ✓ Теперь видно, что вы были на смене.
                   </div>
                 ) : (
                   <div style={{ marginTop: 12 }}>
@@ -445,7 +447,7 @@ export function MatchesPage() {
                 <div style={{ marginTop: 12 }}>
                   <Button variant="secondary" onClick={() => downloadAct(m.id)}>
                     <span className="inline">
-                      <IconDoc size={17} /> Скачать акт (PDF)
+                      <IconDoc size={17} /> Скачать акт о смене (PDF)
                     </span>
                   </Button>
                 </div>
@@ -528,8 +530,8 @@ export function MatchesPage() {
               </Button>
             )}
             <div className="muted" style={{ fontSize: "var(--text-sm)", lineHeight: 1.5 }}>
-              Оператор разбирает спор по переписке и коду прихода. Если смены не
-              было вовсе — отметьте это, и комиссия за неё начислена не будет.
+              Оператор разберётся по переписке и коду прихода. Если смены не
+              было — отметьте это, комиссию не возьмём.
             </div>
           </div>
         </Sheet>

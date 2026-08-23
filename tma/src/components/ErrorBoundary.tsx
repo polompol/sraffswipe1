@@ -35,9 +35,9 @@ export class ErrorBoundary extends Component<Props, State> {
           }}>
             <IconWarning size={36} />
           </div>
-          <h1 className="h1" style={{ marginTop: 12 }}>Что-то пошло не так</h1>
+          <h1 className="h1" style={{ marginTop: 12 }}>Экран не открылся</h1>
           <p className="muted" style={{ margin: "8px 0 20px" }}>
-            Мы уже знаем о проблеме. Попробуйте перезапустить.
+            Мы уже знаем о сбое. Нажмите «Перезапустить» — обычно помогает.
           </p>
           <Button onClick={() => location.reload()}>Перезапустить</Button>
         </div>
