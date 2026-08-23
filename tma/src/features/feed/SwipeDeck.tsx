@@ -35,11 +35,20 @@ export function SwipeDeck<T>(props: Props<T>) {
   // первые две смены нового города считались уже просмотренными. Он их не
   // видел никогда и не мог понять почему.
   const [gone] = useState(() => new Set<number>());
+  // Карточки, по которым сервер УЖЕ ответил согласием. Отдельно от `gone`:
+  // туда карточка попадает сразу, ещё до ответа, — иначе она бы вернулась под
+  // палец прямо во время анимации. Из-за этой разницы «смены закончились»
+  // могло сработать раньше времени: человек быстро смахивает две последние
+  // карточки, первая проходит, вторая получает отказ — и на момент ответа по
+  // первой в `gone` уже лежат обе. Экран объявлял, что смен нет, а вторая
+  // карточка через мгновение возвращалась в пустую колоду.
+  const [settled] = useState(() => new Set<number>());
   const deckKey = items.map((it) => keyOf(it)).join("|");
   const lastDeck = useRef(deckKey);
   if (lastDeck.current !== deckKey) {
     lastDeck.current = deckKey;
     gone.clear();
+    settled.clear();
   }
 
   const [springs, apiRef] = useSprings(items.length, (i) => ({
@@ -69,12 +78,14 @@ export function SwipeDeck<T>(props: Props<T>) {
     // а смена исчезала из колоды — вернуться к ней было нельзя ничем.
     const back = () => {
       gone.delete(index);
+      settled.delete(index);
       apiRef.start((i) => (i === index
         ? { x: 0, y: 0, rot: 0, config: { tension: 220, friction: 26 } }
         : {}));
       restack();
     };
-    // «Смены закончились» объявляем только ПОСЛЕ ответа сервера.
+    // «Смены закончились» объявляем только ПОСЛЕ ответа сервера и только по
+    // тем карточкам, на которые сервер ответил согласием.
     //
     // Раньше это делалось сразу, вместе с анимацией. На последней карточке
     // получалось так: человек смахнул, сервер отказал («место уже заняли»,
@@ -82,7 +93,8 @@ export function SwipeDeck<T>(props: Props<T>) {
     // сообщил, что смен больше нет, и показал пустое состояние поверх
     // вернувшейся карточки.
     const done = () => {
-      if (gone.size === items.length) props.onEmpty?.();
+      settled.add(index);
+      if (settled.size === items.length) props.onEmpty?.();
     };
     const res = onSwipe(items[index], dir) as unknown;
     if (res && typeof (res as Promise<unknown>).then === "function") {

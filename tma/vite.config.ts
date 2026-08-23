@@ -2,29 +2,10 @@ import { defineConfig } from "vite";
 import pkg from "./package.json";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
+// Проверка боевой сборки лежит отдельным файлом, чтобы её покрывал тест.
+import { assertNotDemoBuild } from "./src/lib/buildGuard";
 
-// БОЕВАЯ СБОРКА НЕ ДОЛЖНА СОБРАТЬСЯ НА ДЕМО-ДАННЫХ.
-//
-// Без backend приложение работает на выдуманных сменах — это удобно для
-// показа и для локальной работы. Но если такая сборка уедет на сервер,
-// поломки не будет видно вообще: приложение откроется, лента заполнится,
-// люди начнут откликаться на смены, которых нет, и заведения не получат
-// ни одного отклика. Никакой ошибки при этом никто не увидит.
-//
-// Поэтому боевая сборка (её помечает docker-compose.prod.yml) падает сразу,
-// если demo-режим не выключен. Обычные сборки — локальная и в CI — этой
-// проверки не касаются.
-function assertNotDemoBuild(): void {
-  if (process.env.PROD_BUILD !== "1") return;
-  if (process.env.VITE_USE_BACKEND === "true") return;
-  throw new Error(
-    "Боевая сборка с демо-данными: VITE_USE_BACKEND должен быть \"true\". "
-    + "Проверьте args в docker-compose.prod.yml — приложение уехало бы на "
-    + "сервер с выдуманными сменами.",
-  );
-}
-
-assertNotDemoBuild();
+assertNotDemoBuild(process.env);
 
 // https://vitejs.dev/config/
 export default defineConfig({
