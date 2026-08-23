@@ -17,6 +17,10 @@ interface Props<T> {
   controllerRef?: (
     fn: (dir: SwipeDirection, expectKey?: string) => void,
   ) => void;
+  /** Короткий тап по карточке (не свайп) — «расскажи подробнее».
+   *  Отдельная крупная кнопка деталей на карточке была лишним действием:
+   *  свайп — главное, а подробности человек и так открывает касанием. */
+  onTap?: (item: T) => void;
 }
 
 const VISIBLE = 3;
@@ -43,6 +47,8 @@ export function SwipeDeck<T>(props: Props<T>) {
   // первой в `gone` уже лежат обе. Экран объявлял, что смен нет, а вторая
   // карточка через мгновение возвращалась в пустую колоду.
   const [settled] = useState(() => new Set<number>());
+  // Тащили ли карточку в текущем жесте (см. handleClick ниже).
+  const draggedRef = useRef(false);
   const deckKey = items.map((it) => keyOf(it)).join("|");
   const lastDeck = useRef(deckKey);
   if (lastDeck.current !== deckKey) {
@@ -155,6 +161,11 @@ export function SwipeDeck<T>(props: Props<T>) {
 
   const bind = useDrag(
     ({ args: [index], active, movement: [mx, my], swipe: [sx], last }) => {
+      // Запоминаем, тащили карточку или только коснулись: по этому потом
+      // отличаем «расскажи подробнее» от неудачного свайпа. Само нажатие
+      // ловим обычным onClick — так предсказуемее, чем распознавание тапа
+      // внутри жеста.
+      if (Math.abs(mx) > 6 || Math.abs(my) > 6) draggedRef.current = true;
       // Триггер: длинный свайп вбок ИЛИ быстрый флик (swipe от use-gesture).
       const trigger = sx !== 0 || Math.abs(mx) > 110;
       if (last && trigger) {
@@ -168,11 +179,20 @@ export function SwipeDeck<T>(props: Props<T>) {
           y: active ? my : 0,
           rot: active ? mx / 18 : 0,
           scale: 1,
-          config: { tension: 350, friction: 32 },
+            config: { tension: 350, friction: 32 },
         };
       });
     },
+    { filterTaps: true },
   );
+
+  /** Нажатие по карточке — «расскажи подробнее». После перетаскивания не
+   *  срабатывает: иначе каждый неудачный свайп открывал бы шторку. */
+  function handleClick(item: T): void {
+    const dragged = draggedRef.current;
+    draggedRef.current = false;
+    if (!dragged) props.onTap?.(item);
+  }
 
   return (
     <div className="deck">
@@ -184,6 +204,7 @@ export function SwipeDeck<T>(props: Props<T>) {
             key={keyOf(item)}
             className="swipe-card"
             {...bind(i)}
+            onClick={() => handleClick(item)}
             style={{
               transform: to(
                 [style.x, style.y, style.yStack, style.rot, style.scale],

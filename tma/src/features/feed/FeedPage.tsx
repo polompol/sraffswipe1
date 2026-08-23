@@ -448,8 +448,9 @@ export function FeedPage() {
             <SwipeDeck<Vacancy>
               items={data as Vacancy[]}
               keyOf={(v) => v.id}
-              renderCard={(v) => <VacancyCardContent v={v} onDetails={setDetails} />}
+              renderCard={(v) => <VacancyCardContent v={v} />}
               onSwipe={handleSwipe}
+              onTap={setDetails}
               onEmpty={() => setEmpty(true)}
               controllerRef={(fn) => (controller.current = fn)}
             />

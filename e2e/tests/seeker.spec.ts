@@ -57,8 +57,11 @@ test.describe("человек находит смену и доходит до �
     await expect(card).toContainText("ул. Льва Толстого, 16");
     await expect(card).toContainText(`${SHIFT.pay.toLocaleString("ru-RU")}`);
 
-    // 2. Кнопка деталей нажимается — её накрывал невидимый штамп ХОЧУ/НЕТ.
-    await page.getByRole("button", { name: "Детали смены" }).click();
+    // 2. Подробности открываются касанием самой карточки. Отдельной кнопки
+    //    больше нет: свайп — главное действие, и крупная кнопка рядом с ним
+    //    соперничала за внимание. Раньше эту кнопку вдобавок накрывал
+    //    невидимый штамп ХОЧУ/НЕТ, и она не нажималась вовсе.
+    await card.click({ position: { x: 40, y: 60 } });
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await expect(sheet).toContainText("Разбивка оплаты");

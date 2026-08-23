@@ -184,6 +184,16 @@ export const IconShare = ({ size = 24, className }: P) => (
   </svg>
 );
 
+/** Три точки — «ещё действия». Редкие и неприятные действия (пожаловаться,
+ *  поделиться) прячутся за ней, чтобы не спорить за внимание с главным. */
+export const IconMore = ({ size = 24, className }: P) => (
+  <svg {...base(size)} className={className}>
+    <circle cx="5" cy="12" r="1.8" fill={S} />
+    <circle cx="12" cy="12" r="1.8" fill={S} />
+    <circle cx="19" cy="12" r="1.8" fill={S} />
+  </svg>
+);
+
 export const IconWarning = ({ size = 24, className }: P) => (
   <svg {...base(size)} className={className}>
     <path d="M12 3.5l9 16H3l9-16z" stroke={S} strokeWidth="1.9" strokeLinejoin="round" />

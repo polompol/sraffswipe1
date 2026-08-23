@@ -7,7 +7,8 @@ import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { ReportSheet } from "@/components/ReportSheet";
-import { IconFire, IconShare, IconWarning, IconBookmark } from "@/components/Icons";
+import { Sheet } from "@/components/Sheet";
+import { IconFire, IconShare, IconWarning, IconBookmark, IconMore } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
 
 /** Миниатюра 64×64 с фолбэком: бренд-градиент+инициал, поверх — фото (если
@@ -67,6 +68,7 @@ export function VacancyList({
   hideSkip?: boolean; // в избранном «Пропустить» бессмысленна — прячем
 }) {
   const [reportId, setReportId] = useState<string | null>(null);
+  const [moreFor, setMoreFor] = useState<Vacancy | null>(null);
   const qc = useQueryClient();
   const { data: favIds } = useQuery({ queryKey: ["fav-ids"], queryFn: listFavoriteIds });
   const saved = new Set(favIds ?? []);
@@ -145,9 +147,12 @@ export function VacancyList({
           </div>
           <div className="row" style={{ gap: 8, marginTop: 12 }}>
             {!hideSkip && (
+              // Отклик — главное действие строки, пропуск — вспомогательное.
+              // Рядом стояли две одинаково залитые кнопки, и глазу было не за
+              // что зацепиться: «пропустить» спрашивало так же громко.
               <button
-                className="btn secondary"
-                style={{ minHeight: 44 }}
+                className="btn ghost"
+                style={{ minHeight: 44, flex: "0 1 auto" }}
                 onClick={() => onAct(v, "dislike")}
               >
                 Пропустить
@@ -173,25 +178,52 @@ export function VacancyList({
             >
               <IconBookmark size={18} filled={saved.has(v.id)} />
             </button>
+            <span className="spacer" />
+            {/* «Поделиться» и «Пожаловаться» ушли под «ещё». В первом ряду у
+                каждой смены было четыре действия, и жалоба стояла ровно так
+                же заметно, как отклик. Жалуются редко — а глаз спотыкался о
+                неё каждый раз. */}
             <button
               className="icon-btn"
-              aria-label="Поделиться сменой"
+              aria-label="Ещё действия со сменой"
               style={{ color: "var(--muted)" }}
-              onClick={() => shareVacancy(v)}
+              onClick={() => setMoreFor(v)}
             >
-              <IconShare size={18} />
-            </button>
-            <span className="spacer" />
-            <button
-              // Кнопка была ~39px высотой — ниже минимальных 44px для пальца.
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: "var(--text-xs)", minHeight: 44, padding: "0 8px", display: "inline-flex", alignItems: "center", gap: 5 }}
-              onClick={() => setReportId(v.id)}
-            >
-              <IconWarning size={13} /> Пожаловаться
+              <IconMore size={18} />
             </button>
           </div>
         </div>
       ))}
+      {moreFor && (
+        <Sheet title="Что сделать со сменой" onClose={() => setMoreFor(null)}>
+          <div style={{ display: "grid", gap: 10 }}>
+            <button
+              className="btn secondary"
+              onClick={() => {
+                const v = moreFor;
+                setMoreFor(null);
+                shareVacancy(v);
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconShare size={16} /> Поделиться сменой
+              </span>
+            </button>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setReportId(moreFor.id);
+                setMoreFor(null);
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IconWarning size={16} /> Пожаловаться на смену
+              </span>
+            </button>
+          </div>
+        </Sheet>
+      )}
+
       {reportId && (
         <ReportSheet
           targetType="vacancy"

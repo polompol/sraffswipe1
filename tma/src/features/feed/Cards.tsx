@@ -29,12 +29,11 @@ import {
   IconMedBook,
   IconMoney,
   IconPin,
-  IconHelp,
   IconStar,
 } from "@/components/Icons";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
-import { reliabilityText } from "@/lib/reliability";
+import { attendanceRate, reliabilityText } from "@/lib/reliability";
 import { haptic } from "@/telegram/sdk";
 
 const PAY_ICON: Record<PayMethod, typeof IconCash> = {
@@ -163,7 +162,7 @@ function VerifiedDot({ size = 20, title }: { size?: number; title: string }) {
   );
 }
 
-export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (v: Vacancy) => void }) {
+export function VacancyCardContent({ v }: { v: Vacancy }) {
   const urgent = isUrgentShift(v.date);
   const hasPhoto = !!v.interiorPhotoUrl;
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
@@ -200,21 +199,11 @@ export function VacancyCardContent({ v, onDetails }: { v: Vacancy; onDetails?: (
         <span className="glass swipe-rate">
           <IconMoney size={14} /> {rateLabel(v.rate, v.rateType)}
         </span>
+        {/* Закладка — единственная кнопка на карточке, и та второстепенная.
+            Круглая кнопка «Детали смены» отсюда убрана: подробности
+            открываются касанием самой карточки. Свайп — главное действие, и
+            всё, что стоит рядом с ним крупной кнопкой, с ним соперничает. */}
         <CardFavButton id={v.id} />
-        {onDetails && (
-          <button
-            aria-label="Детали смены"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onDetails(v); }}
-            style={{
-              width: 44, height: 44, borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,.18)", background: "rgba(0,0,0,0.45)",
-              color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            }}
-          >
-            <IconHelp size={18} />
-          </button>
-        )}
         <span className="spacer" />
         {urgent ? (
           <span className="glass pulse" style={{ background: "var(--gold-fill)" }}>
@@ -389,9 +378,19 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
                 работал, а надёжность лежала в самом низу карточки мелким
                 текстом. Теперь она прямо под должностью. */}
             <div className="swipe-hero-cap">
-              {s.shiftsTotal
-                ? reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)
-                : "новичок в сервисе"}
+              {s.shiftsTotal ? (
+                <>
+                  {/* Процент отвечает на вопрос заведения быстрее всего, но
+                      сам по себе обманчив: у новичка «1 из 1» — это 100%.
+                      Поэтому рядом всегда стоит, из скольких смен и у
+                      скольких заведений он набран. */}
+                  <b>{attendanceRate(s.shiftsTotal, s.shiftsAttended)} выходов</b>
+                  {" · "}
+                  {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
+                </>
+              ) : (
+                "новичок в сервисе"
+              )}
             </div>
           </div>
         )}
@@ -436,6 +435,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
               <IconCheck size={15} />{" "}
+              {attendanceRate(s.shiftsTotal, s.shiftsAttended)} выходов ·{" "}
               {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
             </div>
           )}

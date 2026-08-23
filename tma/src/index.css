@@ -1508,6 +1508,19 @@ body[data-large="1"] .page {
   height: var(--act-size);
   pointer-events: auto;
 }
+/* «Отклик» — главное действие экрана, «Пропустить» — вспомогательное.
+   Раньше они были одного размера и веса, то есть спрашивали одинаково
+   громко. Теперь у отклика заливка, тень и полный размер, у пропуска —
+   тонкая обводка и на восемь точек меньше. Меньше — но не меньше 44:
+   промахнуться по нему по-прежнему нельзя. */
+.page.feed-deck .act-skip {
+  width: calc(var(--act-size) - 8px);
+  height: calc(var(--act-size) - 8px);
+  border-width: 1.5px;
+}
+.page.feed-deck .act-like {
+  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.38);
+}
 .page.feed-deck .act-col {
   gap: 5px;
 }

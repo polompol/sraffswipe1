@@ -91,16 +91,13 @@ test.describe("лента на любом телефоне", () => {
             return !!el && !!el.closest(".act");
           },
         );
-        const details = document.querySelector('[aria-label="Детали смены"]');
-        let detailsReachable = true;
-        if (details) {
-          const r = details.getBoundingClientRect();
-          const el = document.elementFromPoint(
-            r.left + r.width / 2,
-            r.top + r.height / 2,
-          );
-          detailsReachable = !!el && !!el.closest('[aria-label="Детали смены"]');
-        }
+        // Подробности открываются касанием карточки, поэтому проверяем не
+        // кнопку, а саму карточку: не накрыта ли она украшением. Именно так
+        // ломался штамп ХОЧУ/НЕТ — прозрачный, но ловящий нажатия.
+        const cardEl = document.querySelector(".swipe-card")!;
+        const cr = cardEl.getBoundingClientRect();
+        const hit = document.elementFromPoint(cr.left + 40, cr.top + 60);
+        const detailsReachable = !!hit && !!hit.closest(".swipe-card");
         return {
           overflowX: de.scrollWidth - de.clientWidth,
           deckShare: Math.round((deck.height / window.innerHeight) * 100),
@@ -113,7 +110,7 @@ test.describe("лента на любом телефоне", () => {
 
       expect(m.overflowX, "экран не должен ездить вбок").toBe(0);
       expect(m.reachable, "круглые кнопки должны нажиматься").toBe(true);
-      expect(m.detailsReachable, "кнопка деталей должна нажиматься").toBe(true);
+      expect(m.detailsReachable, "карточка должна принимать касание").toBe(true);
       // Карточка — главный предмет на экране. Ниже 60% она перестаёт им быть.
       expect(m.deckShare, "доля экрана под карточкой").toBeGreaterThanOrEqual(60);
       // Пара точек — округление подпиксельных высот, не потерянная строка.
