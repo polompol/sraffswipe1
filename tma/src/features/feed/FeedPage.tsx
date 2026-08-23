@@ -19,6 +19,7 @@ import { todayISO } from "@/lib/format";
 import { useGeo } from "@/lib/useGeo";
 import { pop } from "@/lib/sfx";
 import { SwipeDeck } from "./SwipeDeck";
+import { FilterChips, type Chip } from "./FilterChips";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
@@ -39,7 +40,7 @@ import {
   IconCards,
   IconFire,
   IconBell,
-  IconChevronRight,
+  IconPin,
 } from "@/components/Icons";
 
 export function FeedPage() {
@@ -142,6 +143,102 @@ export function FeedPage() {
     queryFn: () => fetchFeed(role, feedFilters),
   });
 
+  // Первый чип — город и сколько нашлось: «Москва · 12».
+  //
+  // Число здесь не украшение: без него человек не отличает «фильтр слишком
+  // узкий» от «сегодня и правда пусто», а это два разных следующих шага.
+  // Без выбранного города — «Рядом», а не «Все города»: сервер и так отдаёт
+  // ленту по городу самого человека (у заведения — по его городу, у
+  // соискателя — по профилю и радиусу). «Все города» было бы неправдой.
+  const cityChipValue =
+    (filters.city || "Рядом") +
+    (typeof data?.length === "number" ? ` · ${data.length}` : "");
+
+  /** Снять один фильтр, не трогая остальные. */
+  function clearFilter(key: keyof FeedFilters) {
+    const next = { ...filters };
+    delete next[key];
+    applyFilters(next);
+  }
+
+  /* ГЛАВНЫЕ ФИЛЬТРЫ РОЛИ.
+   *
+   * У работника и заведения они РАЗНЫЕ, потому что разные вопросы. Работник
+   * спрашивает «какие смены доступны сегодня и сколько платят»; заведение —
+   * «кто выйдет сегодня и можно ли на него положиться».
+   *
+   * Про район у работника: его тут нет намеренно, и это не забывчивость. У
+   * смены в базе есть город и адрес строкой, а поля района нет вовсе —
+   * фильтровать не по чему. Ближайшее, что работает по-настоящему, — радиус
+   * в километрах от человека, и он живёт в шторке рядом с городом.
+   */
+  const mainChips: Chip[] = isSeeker
+    ? [
+        {
+          label: "Город",
+          picker: true,
+          value: cityChipValue,
+          icon: <IconPin size={13} />,
+          onPick: () => setFilterOpen(true),
+        },
+        {
+          label: "Сегодня",
+          value: todayOnly ? "Сегодня" : undefined,
+          icon: <IconFire size={13} />,
+          onPick: toggleToday,
+        },
+        {
+          label: "Роль",
+          picker: true,
+          value: filters.role ? STAFF_ROLE_LABELS[filters.role as StaffRole] : undefined,
+          onPick: () => setFilterOpen(true),
+          onClear: () => clearFilter("role"),
+        },
+        {
+          label: "Оплата",
+          picker: true,
+          value: filters.min_rate ? `от ${filters.min_rate} ₽` : undefined,
+          onPick: () => setFilterOpen(true),
+          onClear: () => clearFilter("min_rate"),
+        },
+      ]
+    : [
+        {
+          label: "Город",
+          picker: true,
+          value: cityChipValue,
+          icon: <IconPin size={13} />,
+          onPick: () => setFilterOpen(true),
+        },
+        {
+          label: "Сегодня",
+          value: filters.available_today ? "Готов сегодня" : undefined,
+          icon: <IconFire size={13} />,
+          onPick: () =>
+            applyFilters({ ...filters, available_today: !filters.available_today || undefined }),
+        },
+        {
+          label: "Роль",
+          picker: true,
+          value: filters.role ? STAFF_ROLE_LABELS[filters.role as StaffRole] : undefined,
+          onPick: () => setFilterOpen(true),
+          onClear: () => clearFilter("role"),
+        },
+        {
+          label: "Район",
+          picker: true,
+          value: filters.district || undefined,
+          onPick: () => setFilterOpen(true),
+          onClear: () => clearFilter("district"),
+        },
+        {
+          label: "Надёжность",
+          value: filters.reliable_only ? "Без неявок" : undefined,
+          onPick: () =>
+            applyFilters({ ...filters, reliable_only: !filters.reliable_only || undefined }),
+        },
+      ];
+
   const { data: searches } = useQuery({
     queryKey: ["saved-searches"],
     queryFn: listSavedSearches,
@@ -239,14 +336,6 @@ export function FeedPage() {
     }
   }
 
-  // Подпись строки фильтров: «Смены рядом · Москва · 12».
-  const locText =
-    (isSeeker ? "Смены рядом" : "Кандидаты рядом") +
-    (isSeeker && filters.city ? ` · ${filters.city}` : "") +
-    (!isSeeker && filters.role
-      ? ` · ${STAFF_ROLE_LABELS[filters.role as StaffRole]}`
-      : "") +
-    (typeof data?.length === "number" ? ` · ${data.length}` : "");
 
   // Экран с колодой живёт по своим правилам: он не прокручивается, а карточка
   // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
@@ -279,12 +368,22 @@ export function FeedPage() {
         {/* Именно h1: это главный экран приложения, и заголовка первого уровня
             на нём не было вовсе — скринридер не мог назвать страницу. Класс
             .h2 оставляем: он задаёт размер, а не уровень. */}
-        <h1 className="h2" style={{ margin: 0, flex: 1, fontSize: "var(--text-2xl)", letterSpacing: -0.3 }}>
-          Staff<span style={{ color: "var(--gold)" }}>Swipe</span>
+        {/* Заголовок отвечает на вопрос, с которым человек открыл приложение,
+            а не повторяет его название: оно и так стоит слева значком, и своё
+            приложение человек узнаёт. У ролей вопросы разные — «какие смены
+            доступны» и «кто выйдет сегодня», — и экраны не должны выглядеть
+            одинаково. */}
+        <h1
+          className="h2"
+          style={{ margin: 0, flex: 1, fontSize: "var(--text-2xl)", letterSpacing: -0.3 }}
+        >
+          {isSeeker ? "Смены рядом" : "Кто выйдет сегодня?"}
         </h1>
         {isSeeker && (
           <button
             className="icon-btn"
+            // Тише фильтров: вид переключают редко, а фильтры — каждый день.
+            style={{ color: "var(--muted)" }}
             aria-label={view === "swipe" ? "Показать списком" : "Показать карточками"}
             onClick={() => {
               const next = view === "swipe" ? "list" : "swipe";
@@ -316,59 +415,27 @@ export function FeedPage() {
         </button>
       </div>
 
-      {/* Один ряд вместо трёх: город, «Сегодня» и сохранённые поиски раньше
-          шли отдельными строками и съедали ~54px над карточкой — а карточка
-          и есть продукт. */}
-      {/* Перенос строк задан в CSS, а не здесь: на низких экранах строка
-          обязана оставаться одной, а стиль в разметке перебивал бы правило. */}
-      <div className="row feed-filters" style={{ gap: 8, marginBottom: 10 }}>
-        {/* Имя кнопки для скринридера начинается с того же текста, что виден
-            на экране. Прежний aria-label («Сменить город и фильтры») его
-            перекрывал: вслух не читались ни город, ни число найденных смен,
-            а голосовое управление не находило кнопку по надписи. */}
-        <button
-          className="feed-loc"
-          onClick={() => setFilterOpen(true)}
-          aria-label={`${locText} — открыть фильтры`}
-        >
-          {/* Многоточие ставится на самом тексте, а не на кнопке целиком:
-              иначе на узком экране обрезалась стрелка — единственный признак
-              того, что строка раскрывается, — а вместе с ней и число смен. */}
-          <span className="feed-loc-text">{locText}</span>
-          <span aria-hidden className="feed-loc-caret" style={{ color: "var(--gold)", marginLeft: 4, display: "inline-flex", transform: "rotate(90deg)" }}>
-            <IconChevronRight size={16} />
-          </span>
-        </button>
+      {/* ГЛАВНЫЕ ФИЛЬТРЫ — на экране, а не в шторке.
+          Раньше всё жило за иконкой, и пустая лента читалась как «смен нет»,
+          хотя стоял забытый вчерашний фильтр. Остальные условия (тип ставки,
+          «без медкнижки», «только проверенные») остаются в шторке: их меняют
+          раз в жизни, а эти четыре — каждый день. */}
+      <FilterChips chips={mainChips} />
 
-        {isSeeker && <span className="spacer" />}
-
-        {isSeeker && (
-          <button
-            className="tag"
-            aria-pressed={todayOnly}
-            style={{
-              cursor: "pointer",
-              borderColor: todayOnly ? "var(--gold-fill)" : "var(--border-strong)",
-              background: todayOnly ? "var(--gold-fill)" : "transparent",
-              color: todayOnly ? "var(--on-brand)" : "var(--text)",
-            }}
-            onClick={toggleToday}
-          >
-            <IconFire size={14} /> Сегодня
-          </button>
-        )}
-
-        {isSeeker && searches?.map((s) => (
-          <button
-            key={s.id}
-            className="tag"
-            style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)" }}
-            onClick={() => applyFilters(s.filters)}
-          >
-            <IconBell size={13} /> {s.title}
-          </button>
-        ))}
-      </div>
+      {isSeeker && !!searches?.length && (
+        <div className="chips-row" style={{ marginTop: 6 }}>
+          {searches.map((s) => (
+            <button
+              key={s.id}
+              className="tag"
+              style={{ cursor: "pointer", borderColor: "var(--gold)", color: "var(--gold)", flex: "none" }}
+              onClick={() => applyFilters(s.filters)}
+            >
+              <IconBell size={13} /> {s.title}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Своя смена — выше чужих. В день смены человеку нужно ровно одно:
           во сколько, куда и код прихода. */}

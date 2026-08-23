@@ -272,3 +272,64 @@ test.describe("клавиатура в чате", () => {
     await context.close();
   });
 });
+
+test.describe("главные фильтры на экране", () => {
+  test("работник видит свои четыре, заведение — свои", async ({ browser, request }) => {
+    const emp = await login(request, "employer", 830_030, "Дрова");
+    await fillProfile(request, emp, {
+      company_name: "Кофейня «Дрова»",
+      city: "Екатеринбург",
+      address: "Ленина, 1",
+      contact_phone: "+79990000006",
+    });
+    await publishShift(request, emp, { city: "Екатеринбург", days: 2 });
+    await publishShift(request, emp, { city: "Екатеринбург", days: 0, role: "cook" });
+
+    const seeker = await login(request, "seeker", 830_031, "Дарья");
+    await fillProfile(request, seeker, {
+      name: "Дарья",
+      city: "Екатеринбург",
+      roles: ["barista", "cook"],
+      birth_date: "1997-07-07",
+      med_book: "yes",
+    });
+    await request.post(`${API_URL}/me/available`, {
+      headers: auth(seeker),
+      data: { available: true },
+    });
+
+    // Работник: город со счётчиком, «Сегодня», «Роль», «Оплата».
+    const a = await openApp(browser, seeker);
+    await a.page.goto("/#/feed");
+    await expect(a.page.locator(".swipe-card").first()).toBeVisible();
+    const seekerChips = a.page.locator(".chip");
+    await expect(seekerChips).toHaveCount(4);
+    await expect(seekerChips.first()).toContainText("Екатеринбург");
+
+    // Счётчик показывает, сколько нашлось — по нему видно, что фильтр сузил
+    // ленту, а не что смен нет. Ради этого он и стоит на чипе.
+    const before = (await seekerChips.first().innerText()).trim();
+    await a.page.getByRole("button", { name: "Сегодня", exact: true }).click();
+    await expect(seekerChips.first()).not.toHaveText(before);
+    await expect(
+      a.page.locator(".chip", { hasText: "Сегодня" }),
+    ).toHaveClass(/chip-on/);
+    await a.context.close();
+
+    // Заведение: другой набор — у него другой вопрос.
+    const b = await openApp(browser, emp);
+    await b.page.goto("/#/feed");
+    await expect(b.page.locator(".swipe-card").first()).toBeVisible();
+    const empChips = b.page.locator(".chip");
+    await expect(empChips).toHaveCount(5);
+    for (const name of ["Сегодня", "Роль", "Район", "Надёжность"]) {
+      await expect(b.page.locator(".chip", { hasText: name })).toHaveCount(1);
+    }
+    // «Надёжность» — переключатель, не выбор: стрелки у него быть не должно.
+    await b.page.getByRole("button", { name: "Надёжность", exact: true }).click();
+    await expect(
+      b.page.locator(".chip", { hasText: "Без неявок" }),
+    ).toHaveClass(/chip-on/);
+    await b.context.close();
+  });
+});
