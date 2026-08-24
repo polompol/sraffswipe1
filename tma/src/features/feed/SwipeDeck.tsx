@@ -3,6 +3,7 @@ import { useSprings, animated, to, type SpringValue } from "@react-spring/web";
 import { useDrag } from "@use-gesture/react";
 import type { SwipeDirection } from "@/types/domain";
 import { haptic } from "@/telegram/sdk";
+import { LS } from "@/lib/storage";
 
 interface Props<T> {
   items: T[];
@@ -147,8 +148,8 @@ export function SwipeDeck<T>(props: Props<T>) {
   // возвращается — показывает, что её можно свайпать (удобно для новичков
   // любого возраста). Уважает prefers-reduced-motion (через глобальный CSS).
   useEffect(() => {
-    if (localStorage.getItem("ss_swipe_hinted")) return;
-    localStorage.setItem("ss_swipe_hinted", "1");
+    if (localStorage.getItem(LS.swipeHinted)) return;
+    localStorage.setItem(LS.swipeHinted, "1");
     const nudge = (x: number) =>
       apiRef.start((i) =>
         i === 0 && !gone.has(0)

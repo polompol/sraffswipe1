@@ -5,6 +5,7 @@ import { haptic, showBackButton , openExternal } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 import { IconHelp } from "@/components/Icons";
 import { LEGAL_LINKS } from "@/lib/legal";
+import { LS } from "@/lib/storage";
 
 function Toggle({
   on,
@@ -84,7 +85,7 @@ export function SettingsPage() {
   const [theme, setTheme] = useState(currentTheme());
   const [large, setLarge] = useState(() => document.body.dataset.large === "1");
   const [sound, setSound] = useState(
-    () => localStorage.getItem("ss_sound") !== "off",
+    () => localStorage.getItem(LS.soundOff) !== "off",
   );
 
   return (
@@ -118,10 +119,10 @@ export function SettingsPage() {
           haptic("select");
           if (next) {
             document.body.dataset.large = "1";
-            localStorage.setItem("ss_large", "1");
+            localStorage.setItem(LS.large, "1");
           } else {
             delete document.body.dataset.large;
-            localStorage.removeItem("ss_large");
+            localStorage.removeItem(LS.large);
           }
         }}
       />
@@ -135,8 +136,8 @@ export function SettingsPage() {
           const next = !sound;
           setSound(next);
           haptic("select");
-          if (next) localStorage.removeItem("ss_sound");
-          else localStorage.setItem("ss_sound", "off");
+          if (next) localStorage.removeItem(LS.soundOff);
+          else localStorage.setItem(LS.soundOff, "off");
         }}
       />
 

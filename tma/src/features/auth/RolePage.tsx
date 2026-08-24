@@ -13,6 +13,7 @@ import { apiError } from "@/lib/errors";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
 import { OFFER_URL, PRIVACY_URL } from "@/lib/legal";
 import type { ComponentType } from "react";
+import { LS } from "@/lib/storage";
 
 
 export function RolePage() {
@@ -20,7 +21,7 @@ export function RolePage() {
   const setAuth = useSession((s) => s.setAuth);
   const [busy, setBusy] = useState<AppRole | null>(null);
   const [consent, setConsent] = useState(
-    localStorage.getItem("ss_consent") === "1",
+    localStorage.getItem(LS.consent) === "1",
   );
 
   async function choose(role: AppRole) {
@@ -47,10 +48,10 @@ export function RolePage() {
   function acceptConsent(v: boolean) {
     setConsent(v);
     if (v) {
-      localStorage.setItem("ss_consent", "1");
+      localStorage.setItem(LS.consent, "1");
       track("consent");
     } else {
-      localStorage.removeItem("ss_consent");
+      localStorage.removeItem(LS.consent);
     }
   }
 

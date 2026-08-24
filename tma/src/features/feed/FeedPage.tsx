@@ -1,24 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import type { MatchModel, Seeker, StaffRole, SwipeDirection, Vacancy } from "@/types/domain";
+import type { Seeker, StaffRole, SwipeDirection, Vacancy } from "@/types/domain";
 import { STAFF_ROLE_LABELS } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { TodayShift } from "./TodayShift";
 import {
-  createSavedSearch,
   fetchFeed,
   fetchMe,
   fetchMyVacancies,
   listSavedSearches,
-  sendSwipe,
-  track,
   type FeedFilters,
 } from "@/api/endpoints";
-import { todayISO } from "@/lib/format";
 import { useGeo } from "@/lib/useGeo";
-import { pop } from "@/lib/sfx";
 import { SwipeDeck } from "./SwipeDeck";
+import { useFeedFilters, toggleTodayFilter } from "./useFeedFilters";
+import { useShiftAlerts } from "./useShiftAlerts";
+import { useSwipeAction } from "./useSwipeAction";
+import { LS } from "@/lib/storage";
 import { FilterChips, type Chip } from "./FilterChips";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
@@ -28,7 +27,6 @@ import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
-import { apiError } from "@/lib/errors";
 import { haptic } from "@/telegram/sdk";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/Button";
@@ -48,89 +46,41 @@ export function FeedPage() {
   const isSeeker = role === "seeker";
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [match, setMatch] = useState<MatchModel | null>(null);
+  // Свайп и его последствия — отдельным хуком (useSwipeAction).
+  const { swipe: handleSwipe, match, setMatch } = useSwipeAction(isSeeker);
   const [details, setDetails] = useState<Vacancy | null>(null);
   const [empty, setEmpty] = useState(false);
-  const [filters, setFilters] = useState<FeedFilters>(() => {
-    const c = localStorage.getItem("ss_city");
-    return c ? { city: c } : {};
-  });
   const [filterOpen, setFilterOpen] = useState(false);
-
-  // Город по умолчанию — из профиля соискателя, чтобы человек из другого города
-  // видел свою ленту, а не чужую (важно для рекламы на широкую аудиторию).
-  // Применяем РОВНО ОДИН раз, иначе очистка города пользователем сбрасывалась бы.
-  const cityDefaulted = useRef(localStorage.getItem("ss_city") != null);
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe, enabled: isSeeker });
-  useEffect(() => {
-    if (!isSeeker || cityDefaulted.current) return;
-    if (me?.city) {
-      cityDefaulted.current = true;
-      setFilters((f) => ({ ...f, city: me.city }));
-    }
-  }, [me, isSeeker]);
+
+  // Условия ленты живут отдельным хуком: хранение города, подстановка его из
+  // анкеты, переключатель «Сегодня» и подсчёт включённых условий — всё это
+  // чистая логика, и она покрыта тестами (useFeedFilters.test.ts).
+  const feed = useFeedFilters(isSeeker, me?.city);
+  const filters = feed.filters;
 
   function applyFilters(f: FeedFilters) {
-    if (f.city) localStorage.setItem("ss_city", f.city);
-    else localStorage.removeItem("ss_city");
-    setFilters(f);
+    feed.apply(f);
+    // Колода начинает набор заново — «карточки кончились» больше не в силе.
     setEmpty(false);
   }
 
   // Пустая лента на старте — не тупик: превращаем в подписку на уведомления.
-  // Как только заведение заведёт подходящую смену, бот напишет человеку.
-  const [subscribing, setSubscribing] = useState(false);
-  const [subscribed, setSubscribed] = useState(false);
-  async function notifyOnNewShifts() {
-    setSubscribing(true);
-    try {
-      await createSavedSearch(
-        filters.city ? `Смены · ${filters.city}` : "Смены рядом",
-        filters,
-        true,
-      );
-      qc.invalidateQueries({ queryKey: ["saved-searches"] });
-      setSubscribed(true);
-      toast("Готово! Напишем в бота, как появится смена рядом", "success");
-    } catch {
-      toast("Не получилось подписаться. Попробуйте ещё раз", "error");
-    } finally {
-      setSubscribing(false);
-    }
-  }
+  const alerts = useShiftAlerts(filters);
 
   // Быстрый фильтр «Сегодня» — главный крючок: смены, которые горят сейчас.
-  const todayOnly = filters.date_from === todayISO() && filters.date_to === todayISO();
+  const todayOnly = feed.todayOnly;
   function toggleToday() {
-    if (todayOnly) {
-      const { date_from: _f, date_to: _t, ...rest } = filters;
-      void _f;
-      void _t;
-      applyFilters(rest);
-    } else {
-      applyFilters({ ...filters, date_from: todayISO(), date_to: todayISO() });
-    }
+    applyFilters(toggleTodayFilter(filters));
   }
   const [view, setView] = useState<"swipe" | "list">(
-    (localStorage.getItem("ss_view") as "swipe" | "list" | null) ?? "swipe",
+    (localStorage.getItem(LS.view) as "swipe" | "list" | null) ?? "swipe",
   );
   const controller = useRef<
     ((dir: SwipeDirection, expectKey?: string) => void) | null
   >(null);
 
-  const activeFilterCount = isSeeker
-    ? (filters.role ? 1 : 0) +
-      (filters.city ? 1 : 0) +
-      (filters.min_rate ? 1 : 0) +
-      (filters.date_from ? 1 : 0) +
-      (filters.rate_type ? 1 : 0) +
-      (filters.no_med_book ? 1 : 0) +
-      (filters.tips_only ? 1 : 0) +
-      (filters.verified_only ? 1 : 0)
-    : (filters.role ? 1 : 0) +
-      (filters.district ? 1 : 0) +
-      (filters.available_today ? 1 : 0) +
-      (filters.reliable_only ? 1 : 0);
+  const activeFilterCount = feed.activeCount;
 
   // Геолокация устройства → «смены рядом» (расстояние + сортировка «Ближе» +
   // фильтр радиуса). Спрашиваем только у соискателя; отказ — работаем без.
@@ -270,82 +220,6 @@ export function FeedPage() {
     if (await handleSwipe(v, "like")) toast("Отклик отправлен", "success");
   }
 
-  // Возвращает true, если это был успешный отклик без мэтча — тогда список-вид
-  // покажет тост «Отклик отправлен». В колоде (свайп) результат игнорируется —
-  // там обратная связь — улетающая карточка.
-  async function handleSwipe(item: Vacancy | Seeker, dir: SwipeDirection): Promise<boolean> {
-    const targetType = isSeeker ? "vacancy" : "user";
-    track("swipe", { dir });
-    try {
-      const res = await sendSwipe(item.id, targetType, dir);
-      if (res.matched && res.matchId) {
-        track("match");
-        pop();
-        if (isSeeker) {
-          const v = item as Vacancy;
-          setMatch({
-            id: res.matchId,
-            seekerId: "me",
-            employerId: v.employerId,
-            vacancyId: v.id,
-            status: "matched",
-            confirmedBySeeker: false,
-            confirmedByEmployer: false,
-            companyName: v.companyName,
-            companyPhotoUrl: v.companyPhotoUrl,
-            role: v.role,
-            shiftDate: v.date,
-            shiftStart: v.startTime,
-            shiftEnd: v.endTime,
-          });
-          qc.invalidateQueries({ queryKey: ["matches"] });
-          return false; // мэтч → оверлей, тост не нужен
-        }
-        // Раньше заведение о мэтче узнавало только всплывашкой: карточка
-        // улетала, экран не менялся, и попасть в чат отсюда было нельзя —
-        // приходилось искать человека руками во вкладке «Люди». Человеку при
-        // этом уже ушло уведомление и открылся чат. Теперь обе стороны видят
-        // один и тот же экран с кнопкой «Перейти в чат».
-        const s = item as Seeker;
-        setMatch({
-          id: res.matchId,
-          seekerId: s.id,
-          employerId: "me",
-          vacancyId: res.vacancyId ?? "",
-          status: "matched",
-          confirmedBySeeker: false,
-          confirmedByEmployer: false,
-          seekerName: s.name,
-          role: res.role,
-          shiftDate: res.shiftDate,
-          shiftStart: res.shiftStart,
-          shiftEnd: res.shiftEnd,
-        });
-        qc.invalidateQueries({ queryKey: ["matches"] });
-        return false;
-      }
-      return dir === "like";
-    } catch (e) {
-      // Сервер объясняет отказ сам: просроченная комиссия (402), слишком
-      // часто (429), «на смену уже набраны все люди» (409). Последнее
-      // подменялось бессмысленным «Не удалось отправить».
-      toast(
-        apiError(
-          e,
-          isSeeker
-            ? "Отклик не ушёл. Попробуйте ещё раз"
-            : "Не получилось позвать. Попробуйте ещё раз",
-        ),
-        "error",
-      );
-      // Ошибку пробрасываем дальше: колода вернёт карточку на место. Раньше
-      // она улетала насовсем — человек читал «оплатите счёт», а смена уже
-      // исчезла из колоды, и вернуться к ней было нельзя ничем.
-      throw e;
-    }
-  }
-
-
   // Экран с колодой живёт по своим правилам: он не прокручивается, а карточка
   // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
   // см. `.page.feed-deck` в index.css.
@@ -397,7 +271,7 @@ export function FeedPage() {
             onClick={() => {
               const next = view === "swipe" ? "list" : "swipe";
               setView(next);
-              localStorage.setItem("ss_view", next);
+              localStorage.setItem(LS.view, next);
               haptic("light");
             }}
           >
@@ -518,11 +392,11 @@ export function FeedPage() {
               // Свой флаг оставляем: он держит кнопку выключенной и ПОСЛЕ
               // подписки («Будем присылать») — этого внутренняя защита кнопки
               // от двойного нажатия не делает, она снимается сразу после ответа.
-              disabled={subscribing || subscribed}
+              disabled={alerts.busy || alerts.done}
               icon={<IconBell size={18} />}
-              onClick={notifyOnNewShifts}
+              onClick={alerts.subscribe}
             >
-              {subscribed ? "Будем присылать" : "Присылать новые смены в бота"}
+              {alerts.done ? "Будем присылать" : "Присылать новые смены в бота"}
             </Button>
           )}
           {isSeeker && (

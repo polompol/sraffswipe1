@@ -1,4 +1,5 @@
 import { reportError } from "@/lib/report";
+import { LS } from "@/lib/storage";
 
 /**
  * Сетевой слой приложения.
@@ -54,12 +55,12 @@ export class ApiError extends Error {
   }
 }
 
-let token: string | null = localStorage.getItem("ss_jwt");
+let token: string | null = localStorage.getItem(LS.jwt);
 
 export function setToken(value: string | null): void {
   token = value;
-  if (value) localStorage.setItem("ss_jwt", value);
-  else localStorage.removeItem("ss_jwt");
+  if (value) localStorage.setItem(LS.jwt, value);
+  else localStorage.removeItem(LS.jwt);
 }
 
 export function getToken(): string | null {
@@ -113,7 +114,7 @@ async function parseBody(res: Response): Promise<unknown> {
  * снова привела бы сюда, и мы ушли бы в рекурсию.
  */
 async function silentReauth(): Promise<string | null> {
-  const role = localStorage.getItem("ss_role");
+  const role = localStorage.getItem(LS.role);
   if (!role) return null;
   try {
     const { retrieveRawInitData } = await import("@telegram-apps/sdk-react");
@@ -188,8 +189,8 @@ async function request<T>(
       return request<T>(method, url, body, { ...config, retried: true });
     }
     setToken(null);
-    localStorage.removeItem("ss_role");
-    localStorage.removeItem("ss_uid");
+    localStorage.removeItem(LS.role);
+    localStorage.removeItem(LS.uid);
     if (!location.hash.startsWith("#/onboarding")) {
       location.hash = "#/onboarding";
     }
