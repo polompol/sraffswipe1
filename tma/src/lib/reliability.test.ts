@@ -8,9 +8,9 @@ describe("надёжность одной строкой", () => {
   });
 
   it("показывает выходы и число разных заведений", () => {
-    expect(reliabilityText(5, 5, 3)).toBe("100% выходов · 3 заведения");
-    expect(reliabilityText(12, 11, 6)).toBe("91% выходов · 6 заведений");
-    expect(reliabilityText(1, 1, 1)).toBe("100% выходов · 1 заведение");
+    expect(reliabilityText(5, 5, 3)).toBe("100% из 5 смен · 3 заведения");
+    expect(reliabilityText(12, 11, 6)).toBe("91% из 12 смен · 6 заведений");
+    expect(reliabilityText(1, 1, 1)).toBe("100% из 1 смены · 1 заведение");
   });
 
   it("накрутка одной парой аккаунтов видна: много смен, одно заведение", () => {
@@ -18,11 +18,15 @@ describe("надёжность одной строкой", () => {
   });
 
   it("без данных о заведениях показывает хотя бы выходы", () => {
-    expect(reliabilityText(4, 3)).toBe("75% выходов");
+    expect(reliabilityText(4, 3)).toBe("75% из 4 смен");
   });
 
-  it("одна мысль сказана один раз: процента и «N из M» вместе больше нет", () => {
-    expect(reliabilityText(12, 11, 6)).not.toContain("из");
+  it("объём смен виден: 100% из одной и из сорока — разный разговор", () => {
+    expect(reliabilityText(1, 1, 2)).toContain("из 1 смены");
+    expect(reliabilityText(40, 40, 9)).toContain("из 40 смен");
+  });
+
+  it("мужского рода в строке нет: половина бариста — женщины", () => {
     expect(reliabilityText(12, 11, 6)).not.toContain("вышел");
   });
 });

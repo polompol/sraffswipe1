@@ -23,7 +23,7 @@ import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
-import { IconSend, IconBack, IconWarning, IconCheck, IconChat } from "@/components/Icons";
+import { IconSend, IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
 
 // Быстрые ответы — частые фразы одним нажатием. У сторон они РАЗНЫЕ: заведению
 // предлагались реплики работника («Какой адрес?», «Что взять с собой?»), то
@@ -57,6 +57,7 @@ export function ChatPage() {
   // рабочим, но ничего не получает.
   const [live, setLive] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   // Подтверждение смены берём из данных сервера, а не из локального стейта —
   // иначе при переоткрытии чата кнопка снова «Подтвердить», хотя ты уже нажал.
   const [match, setMatchState] = useState<MatchModel | null>(null);
@@ -422,13 +423,17 @@ export function ChatPage() {
               </span>
             )}
           </span>
+          {/* Жалоба ушла под «ещё»: знак предупреждения в шапке чата стоял
+              рядом с именем собеседника и мозолил глаз при каждом сообщении,
+              хотя жалуются редко. Найти её по-прежнему можно за одно
+              нажатие — так же, как в списке смен. */}
           <button
             className="icon-btn"
             style={{ color: "var(--muted)" }}
-            aria-label="Пожаловаться"
-            onClick={() => setReportOpen(true)}
+            aria-label="Ещё действия"
+            onClick={() => setMoreOpen(true)}
           >
-            <IconWarning size={20} />
+            <IconMore size={20} />
           </button>
         </div>
 
@@ -806,6 +811,23 @@ export function ChatPage() {
                 Не сейчас
               </Button>
             </div>
+        </Sheet>
+      )}
+
+      {moreOpen && (
+        <Sheet title="Что сделать" onClose={() => setMoreOpen(false)}>
+          <div className="stack">
+            <Button
+              variant="secondary"
+              icon={<IconWarning size={16} />}
+              onClick={() => {
+                setMoreOpen(false);
+                setReportOpen(true);
+              }}
+            >
+              Пожаловаться
+            </Button>
+          </div>
         </Sheet>
       )}
 
