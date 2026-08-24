@@ -121,14 +121,6 @@ export const TIPS_BADGE: Record<TipsMode, string> = {
 
 export type MatchStatus = "matched" | "confirmed" | "completed" | "cancelled" | "expired";
 
-export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
-  matched: "Совпало",
-  confirmed: "Смена подтверждена",
-  completed: "Смена закрыта",
-  cancelled: "Отменена",
-  expired: "Не состоялась",
-};
-
 export type ExperienceTag =
   | "medBook"
   | "experienced"
@@ -143,12 +135,6 @@ export const EXPERIENCE_TAG_LABELS: Record<ExperienceTag, string> = {
   cashRegister: "Работа с кассой",
   selfEmployed: "Самозанятый",
 };
-
-export interface AvailabilitySlot {
-  weekday: number; // 1..7
-  start: number; // минуты от полуночи
-  end: number;
-}
 
 export interface Seeker {
   id: string;
@@ -165,7 +151,6 @@ export interface Seeker {
   selfEmployed: boolean;
   inn?: string | null;
   experienceTags: ExperienceTag[];
-  availableSlots: AvailabilitySlot[];
   rating: number;
   photoUrls: string[];
   about: string;
@@ -253,13 +238,3 @@ export interface Message {
   timestamp: string;
 }
 
-// --- Монетизация / entitlements ---
-
-
-export interface PriceItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  priceRub?: number; // ₽ (ЮKassa)
-  badge?: string;
-}

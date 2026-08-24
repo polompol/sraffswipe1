@@ -259,7 +259,7 @@ export function MatchesPage() {
 
   return (
     <div className="page">
-      <h1 className="h1" style={{ marginBottom: 12 }}>
+      <h1 className="h1">
         {role === "employer" ? "Кто выходит" : "Мои смены"}
       </h1>
       {isLoading && <SkeletonList />}

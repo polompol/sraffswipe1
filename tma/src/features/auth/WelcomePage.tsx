@@ -127,12 +127,12 @@ export function WelcomePage() {
             <div className="form-label" style={{ marginTop: 20 }}>
               Кем готовы выйти
             </div>
-            <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-xs)" }}>
+            <p className="hint">
               Можно выбрать несколько — смен будет больше
             </p>
             {ROLE_FAMILY_ORDER.map((fam) => (
               <div key={fam} style={{ marginBottom: 12 }}>
-                <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
+                <div className="hint">
                   {ROLE_FAMILY_LABELS[fam]}
                 </div>
                 <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -213,7 +213,7 @@ export function WelcomePage() {
             Заполню позже
           </Button>
         </div>
-        <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 12 }}>
+        <p className="hint">
           {isEmployer
             ? "Смену можно разместить и без названия, но откликов будет меньше."
             : "С именем и профессией на смены зовут заметно чаще."}

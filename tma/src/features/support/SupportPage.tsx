@@ -89,7 +89,7 @@ export function SupportPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>Помощь</h1>
+        <h1 className="h1 tight">Помощь</h1>
         <p className="muted" style={{ marginBottom: 16 }}>
           Частые вопросы. Не нашли ответ — напишите нам.
         </p>

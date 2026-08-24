@@ -61,7 +61,7 @@ export function CandidateFilterSheet({
       <div style={{ margin: "8px 0 16px" }}>
         {ROLE_FAMILY_ORDER.map((fam) => (
           <div key={fam} style={{ marginBottom: 10 }}>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
+            <div className="hint">
               {ROLE_FAMILY_LABELS[fam]}
             </div>
             <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>

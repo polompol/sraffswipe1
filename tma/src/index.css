@@ -48,11 +48,33 @@
      размажет буквы. Вес даёт сам рисунок шрифта. */
   font-weight: 400;
   letter-spacing: -0.5px;
-  margin: 0 0 4px;
+  /* Один отступ на все экраны. Раньше он писался в разметке на каждом
+     заголовке и разошёлся: 0, 4, 8, 12, 16, 24 — на «Настройках» первая
+     карточка прилипала к заголовку, на «Моих сменах» дышала вдвое сильнее.
+     Случая всего два, и оба здесь: заголовок перед содержимым (16) и
+     заголовок перед подзаголовком (.h1.tight — 4). */
+  margin: 0 0 var(--space-4);
   /* Заголовок разбивается на строки поровну, а не «сколько влезло».
      Без этого «Смены рядом с домом — на / один день» оставляло тире висеть
      на краю, а вторую строку — почти пустой. */
   text-wrap: balance;
+}
+/* Заголовок, под которым сразу идёт поясняющая строка: их держим вместе. */
+.h1.tight {
+  margin-bottom: var(--space-1);
+}
+
+/* Мелкое пояснение под полем, строкой или блоком.
+   Раньше писалось в разметке три десятка раз, и отступы разошлись: 2, 4, 6,
+   8, 10, 12 — на соседних экранах одинаковые подсказки стояли по-разному. */
+.hint {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin: 6px 0 12px;
+}
+/* Последняя строка в карточке: нижний отступ уже даёт сама карточка. */
+.hint:last-child {
+  margin-bottom: 0;
 }
 .h2 {
   font-family: var(--font-display);
@@ -341,6 +363,36 @@ input:focus-visible {
   color: inherit;
   transition: transform 0.08s ease, background 0.15s ease, opacity 0.15s ease;
 }
+/* ЦВЕТА ПЛАШЕК — КЛАССАМИ, А НЕ ЧИСЛАМИ В РАЗМЕТКЕ.
+
+   Одни и те же четыре расцветки писались инлайном в семи местах, и каждый
+   раз чуть иначе: где-то рамка --super, где-то --super-text, где-то к ним
+   добавлен свой кегль. Теперь набор один, и добавить пятую расцветку можно
+   только здесь. */
+.tag-gold {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+/* Залитая плашка — то, что уже выбрано или уже верно (должность смены,
+   роли человека). */
+.tag-gold-fill {
+  background: var(--gold-fill);
+  border-color: var(--gold-fill);
+  color: var(--on-brand);
+}
+.tag-super {
+  color: var(--super-text);
+  border-color: var(--super);
+}
+.tag-muted {
+  color: var(--muted);
+  border-color: var(--border);
+}
+/* Плашка мелким кеглем — в плотных списках, где их по три в строке. */
+.tag-sm {
+  font-size: var(--text-xs);
+}
+
 /* Чип-кнопка (фильтры, быстрые действия): тактильный отклик при нажатии. */
 button.tag:active {
   transform: scale(0.95);
@@ -512,11 +564,6 @@ button.tag:disabled {
 .overlay:focus {
   outline: none;
 }
-.sheet-pad {
-  /* Простая шторка без прокручиваемого тела: отступы задаём ей самой,
-     иначе текст упирается в края экрана. */
-  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
-}
 .sheet-grab {
   width: 40px;
   height: 5px;
@@ -532,9 +579,9 @@ button.tag:disabled {
   /* Долистав список фильтров до конца, палец начинал тащить страницу ПОД
      шторкой — на телефоне это выглядит как будто приложение «поехало». */
   overscroll-behavior: contain;
-  /* Снизу — «домашняя полоска» iPhone. У соседних .sheet-pad и .sheet-foot
-     запас есть, а здесь его не было: у шторки без нижней кнопки последняя
-     строка пояснения ложилась ровно на полоску. */
+  /* Снизу — «домашняя полоска» iPhone. У .sheet-foot запас есть, а здесь его
+     не было: у шторки без нижней кнопки последняя строка пояснения ложилась
+     ровно на полоску. */
   padding: 8px 20px calc(16px + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
 }
@@ -549,23 +596,6 @@ button.tag:disabled {
 .sheet-foot .ui-btn {
   margin: 0;
 }
-/* Строка локации/фильтра под шапкой — вся кликабельна */
-.feed-loc {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  /* 44px — минимальная зона нажатия пальцем. Строка «Смены рядом · Москва»
-     открывает фильтры, а была высотой ~35px: мимо неё промахивались. */
-  min-height: 44px;
-  padding: 2px 0;
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-base);
-  font-weight: 600;
-  cursor: pointer;
-}
-
 /* Колода свайпа */
 .deck {
   position: relative;
@@ -1179,23 +1209,6 @@ body[data-large="1"] .page {
   outline-offset: -2px;
 }
 
-/* Строка «Смены рядом · Москва · 3 ⌄»: при нехватке места сжимается только
-   текст, стрелка остаётся на месте. */
-.feed-loc {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-.feed-loc-text {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.feed-loc-caret {
-  flex: none;
-}
-
 .stars-row {
   gap: 6px;
 }
@@ -1312,23 +1325,6 @@ body[data-large="1"] .page {
 .chip-clear:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: -2px;
-}
-
-/* Строка «Смены рядом · Москва · 3 ⌄»: при нехватке места сжимается только
-   текст, стрелка остаётся на месте. */
-.feed-loc {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-.feed-loc-text {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.feed-loc-caret {
-  flex: none;
 }
 
 .stars-row {
@@ -1464,36 +1460,6 @@ body[data-large="1"] .page {
   to {
     transform: translateY(110vh) rotate(360deg);
     opacity: 0;
-  }
-}
-
-/* Денежный дождь при закрытии смены — фирменный момент радости */
-.money-rain {
-  overflow: hidden;
-}
-.money-rain .coin {
-  position: absolute;
-  top: -8%;
-  font-size: var(--text-2xl);
-  font-weight: 900;
-  color: #f4cf6a;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  animation-name: coinFall;
-  animation-timing-function: cubic-bezier(0.3, 0.1, 0.5, 1);
-  animation-iteration-count: infinite;
-  will-change: transform;
-}
-@keyframes coinFall {
-  0% {
-    transform: translateY(-10vh) rotate(0deg) scale(0.9);
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(115vh) rotate(220deg) scale(1.05);
-    opacity: 0.9;
   }
 }
 
@@ -1722,10 +1688,6 @@ body[data-large="1"] .page {
   flex: none;
 }
 
-.feed-filters {
-  flex-wrap: wrap;
-}
-
 /* ГЛАВНЫЙ ЭКРАН: карточка занимает ВСЁ, что осталось.
 
    Высота колоды раньше считалась вычитанием: «экран минус 328 точек» — на
@@ -1878,9 +1840,6 @@ body[data-large="1"] .page {
   .feed-head > *:not(.icon-btn):not(:first-child) {
     margin-left: auto;
   }
-  .feed-filters {
-    margin-bottom: 6px !important;
-  }
   .tabbar {
     padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
   }
@@ -1893,16 +1852,6 @@ body[data-large="1"] .page {
 /* На низких экранах кнопки чуть меньше: 60 точек вместо 72 — всё ещё заметно
    крупнее минимальных 44, но экономят место карточке. */
 @media (max-height: 760px) {
-  /* Строка «город · сколько смен» и кнопка «Сегодня» на узком экране
-     переносились на две строки и съедали у карточки полсотни точек. Держим
-     их в одну строку: город при нехватке места обрезается многоточием — он
-     и так продублирован внутри фильтров. */
-  .feed-filters {
-    flex-wrap: nowrap;
-  }
-  .feed-filters .feed-loc {
-    min-width: 0;
-  }
   /* На низком экране кнопки меньше: 60 точек вместо 72 — всё ещё заметно
      крупнее минимальных 44, но экономят карточке два десятка точек. Запас под
      ними уменьшается вместе с ними. */

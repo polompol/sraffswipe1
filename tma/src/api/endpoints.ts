@@ -314,10 +314,6 @@ export async function disputeShift(
   return data;
 }
 
-export interface InvoiceLink {
-  link: string;
-}
-
 
 export interface Me {
   id: string;

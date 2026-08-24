@@ -139,7 +139,7 @@ export function EditProfilePage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 16 }}>
+        <h1 className="h1">
           {isEmployer ? "Профиль заведения" : "Мой профиль"}
         </h1>
 
@@ -197,7 +197,7 @@ export function EditProfilePage() {
             строкой ниже, — а таких скобок тут было две подряд. */}
         <label className="form-label" htmlFor="bdate">Дата рождения</label>
         <input id="bdate" className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-        <p className="muted" style={{ margin: "6px 0 12px", fontSize: "var(--text-xs)" }}>
+        <p className="hint">
           Смены — только с 18 лет.
         </p>
 
@@ -205,7 +205,7 @@ export function EditProfilePage() {
 
         <label className="form-label" htmlFor="district">Район</label>
         <input id="district" className="input" placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
-        <p className="muted" style={{ margin: "6px 0 12px", fontSize: "var(--text-xs)" }}>
+        <p className="hint">
           Чтобы звали на смены поближе к дому.
         </p>
 
@@ -216,7 +216,7 @@ export function EditProfilePage() {
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
+              <div className="hint">
                 {ROLE_FAMILY_LABELS[fam]}
               </div>
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -297,7 +297,7 @@ export function EditProfilePage() {
                 value={inn}
                 onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
               />
-              <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--text-xs)" }}>
+              <p className="hint">
                 Номер есть в приложении «Мой налог» и в личном кабинете
                 налоговой. Нужен только для акта по смене — заведения его
                 не видят.

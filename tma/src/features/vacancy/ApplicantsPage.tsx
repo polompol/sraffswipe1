@@ -58,7 +58,7 @@ export function ApplicantsPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>Кто откликнулся</h1>
+        <h1 className="h1 tight">Кто откликнулся</h1>
         {!!data?.length && (
           <p className="muted" style={{ margin: "0 0 14px" }}>
             Ответьте — и сразу откроется чат.
@@ -95,14 +95,11 @@ export function ApplicantsPage() {
                   {/* Отказ больше не прячет человека навсегда: он сам выбрал
                       вашу смену, а свайп влево легко сделать случайно. */}
                   {a.declined && (
-                    <span
-                      className="tag"
-                      style={{ marginLeft: 8, fontSize: "var(--text-xs)", color: "var(--muted)", borderColor: "var(--border)" }}
-                    >
+                    <span className="tag tag-muted tag-sm" style={{ marginLeft: 8 }}>
                       вы отказали
                     </span>
                   )}
-                  <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2 }}>
+                  <div className="hint">
                     {a.rating > 0 ? (
                       <><IconStar size={12} /> {dec1(a.rating)}</>
                     ) : "Новичок"}
@@ -157,7 +154,7 @@ export function ApplicantsPage() {
                   {a.about}
                 </p>
               )}
-              <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+              <div className="hint">
                 Медкнижка: {MED_BOOK_LABELS[a.medBook as MedBookStatus] ?? a.medBook}
                 {/* Должность смены уже написана строкой выше крупно и цветом.
                     Человек откликнулся именно на неё, поэтому в списке его

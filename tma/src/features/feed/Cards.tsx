@@ -245,7 +245,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
 
       <div className="swipe-body">
         <div className="row" style={{ marginBottom: 8, gap: 6, flexWrap: "wrap" }}>
-          <span className="tag" style={{ background: "var(--gold-fill)", color: "var(--on-brand)", borderColor: "var(--gold-fill)" }}>
+          <span className="tag tag-gold-fill">
             {STAFF_ROLE_LABELS[v.role]}
           </span>
         </div>
@@ -412,12 +412,12 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
             {s.name}{age !== null ? `, ${age}` : ""}
           </span>
           {experienced && (
-            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
+            <span className="tag tag-super">
               Опытный
             </span>
           )}
           {s.selfEmployed && (
-            <span className="tag" style={{ color: "var(--super)", borderColor: "var(--super)" }}>
+            <span className="tag tag-super">
               Самозанятый
             </span>
           )}
@@ -427,7 +427,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
         {(heroShown ? roles.slice(1) : roles).length > 0 && (
           <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
             {(heroShown ? roles.slice(1) : roles).map((r) => (
-              <span key={r} className="tag" style={{ background: "var(--gold-fill)", color: "var(--on-brand)", borderColor: "var(--gold-fill)" }}>
+              <span key={r} className="tag tag-gold-fill">
                 {STAFF_ROLE_LABELS[r]}
               </span>
             ))}

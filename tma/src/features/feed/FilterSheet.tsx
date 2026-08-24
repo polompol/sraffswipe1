@@ -169,7 +169,7 @@ export function FilterSheet({
       <div style={{ margin: "8px 0 16px" }}>
         {ROLE_FAMILY_ORDER.map((fam) => (
           <div key={fam} style={{ marginBottom: 10 }}>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
+            <div className="hint">
               {ROLE_FAMILY_LABELS[fam]}
             </div>
             <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -233,7 +233,7 @@ export function FilterSheet({
           style={{ width: "100%", margin: "8px 0 18px", accentColor: "var(--gold)" }}
         />
       ) : (
-        <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "6px 0 18px" }}>
+        <div className="hint">
           Разрешите доступ к месту — и сможете искать смены поближе.
         </div>
       )}

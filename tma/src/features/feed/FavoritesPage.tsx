@@ -46,7 +46,7 @@ export function FavoritesPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 12 }}>Избранные смены</h1>
+        <h1 className="h1">Избранные смены</h1>
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (

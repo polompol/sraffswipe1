@@ -144,12 +144,12 @@ export function VacancyList({
               сломанной. Подписи заодно короче — теперь помещаются в одну. */}
           <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10 }}>
             {v.payMethod && (
-              <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: "var(--text-xs)" }}>
+              <span className="tag tag-super tag-sm">
                 {PAY_METHOD_SHORT[v.payMethod]}
               </span>
             )}
             {!!v.employerShiftsDone && (
-              <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: "var(--text-xs)" }}>
+              <span className="tag tag-muted tag-sm">
                 {v.employerShiftsDone}{" "}
                 {plural(v.employerShiftsDone, "смена", "смены", "смен")}{" "}
                 {plural(v.employerShiftsDone, "закрыта", "закрыто", "закрыто")}

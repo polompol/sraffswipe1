@@ -230,7 +230,7 @@ export function CreateVacancyPage() {
           >
             <IconCheck size={34} />
           </div>
-          <h1 className="h1" style={{ marginBottom: 8 }}>
+          <h1 className="h1 tight">
             Смена размещена
           </h1>
           <p className="muted" style={{ marginBottom: 4 }}>
@@ -259,7 +259,7 @@ export function CreateVacancyPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>
+        <h1 className="h1 tight">
           {editing ? "Исправить условия" : pre ? "Повторить смену" : "Новая смена"}
         </h1>
         {editing && (
@@ -278,7 +278,7 @@ export function CreateVacancyPage() {
         <div style={{ margin: "8px 0 16px" }}>
           {ROLE_FAMILY_ORDER.map((fam) => (
             <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
+              <div className="hint">
                 {ROLE_FAMILY_LABELS[fam]}
               </div>
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
@@ -307,7 +307,7 @@ export function CreateVacancyPage() {
         {/* Поле даты рисует сама система телефона, и формат у неё свой: на
             английском телефоне это «08/29/2026». Спутать 08/29 и 29/08 легко,
             а цена ошибки — смена в другой день. Повторяем выбранное словами. */}
-        <p className="muted" style={{ margin: "6px 0 12px", fontSize: "var(--text-xs)" }}>
+        <p className="hint">
           {date ? dateLong(date) : "Выберите день смены"}
         </p>
 
@@ -416,7 +416,7 @@ export function CreateVacancyPage() {
           </button>
         )}
         {headcount > 1 && (
-          <p className="muted" style={{ margin: "-8px 0 16px", fontSize: "var(--text-xs)" }}>
+          <p className="hint">
             Одной смены хватит на всех — одинаковые размещать не нужно.
             Наберёте нужных людей — она уйдёт из ленты сама.
           </p>

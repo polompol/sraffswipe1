@@ -90,8 +90,7 @@ export function PhotoUpload({
       </div>
       {error && (
         <div
-          className="muted"
-          style={{ marginTop: 6, fontSize: "var(--text-xs)" }}
+          className="hint"
           role="status"
         >
           {error}

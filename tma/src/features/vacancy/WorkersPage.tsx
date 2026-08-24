@@ -43,7 +43,7 @@ export function WorkersPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 12 }}>Мои работники</h1>
+        <h1 className="h1">Мои работники</h1>
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
@@ -61,7 +61,7 @@ export function WorkersPage() {
               <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
                 <b style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{w.name}</b>
                 {w.availableToday && (
-                  <span className="tag" style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}>
+                  <span className="tag tag-gold" style={{ flex: "none" }}>
                     <IconBolt size={12} /> может сегодня
                   </span>
                 )}

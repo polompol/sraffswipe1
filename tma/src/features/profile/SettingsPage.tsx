@@ -92,7 +92,7 @@ export function SettingsPage() {
     // тумблеры растягивались во всю ширину (единственная такая страница).
     <div className="app">
       <div className="page">
-      <h1 className="h1" style={{ marginBottom: 16 }}>Настройки</h1>
+      <h1 className="h1">Настройки</h1>
 
       <Toggle
         on={theme === "dark"}
@@ -149,7 +149,7 @@ export function SettingsPage() {
           <span className="spacer" />
           <b>{__APP_VERSION__}</b>
         </div>
-        <p className="muted" style={{ margin: "10px 0 0", fontSize: "var(--text-xs)" }}>
+        <p className="hint">
           Если что-то работает не так — напишите в поддержку и назовите эту
           версию, так проблему найдут быстрее.
         </p>

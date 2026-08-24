@@ -97,7 +97,7 @@ function CommissionCard() {
           есть за что платить. */}
       {due && bill.docsAvailable !== false && (
         <>
-          <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
+          <div className="hint">
             Документы для бухгалтерии
           </div>
           <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
@@ -123,14 +123,14 @@ function CommissionCard() {
           кнопки нельзя: заведение упирается в отказ ровно в тот момент,
           когда собралось платить. */}
       {due && bill.docsAvailable === false && (
-        <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
+        <div className="hint">
           Нужен счёт или акт для бухгалтерии? Напишите в поддержку — пришлём.
         </div>
       )}
 
       {bill.topupAvailable ? (
         <>
-          <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
+          <div className="hint">
             Пополнить баланс
           </div>
           {/* На чипе оставляем только сумму: «Пополнить 1 000 ₽» в трети
@@ -163,7 +163,7 @@ function CommissionCard() {
           </div>
         </>
       ) : (
-        <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
+        <div className="hint">
           Оплата картой пока не подключена. Нужно пополнить баланс —
           напишите в поддержку.
         </div>
@@ -524,7 +524,7 @@ export function ProfilePage() {
             <span className="spacer" />
             <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
           </div>
-          <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
+          <div className="hint">
             Из закрытых смен складывается рейтинг — его видно ещё до отклика.
           </div>
         </div>
