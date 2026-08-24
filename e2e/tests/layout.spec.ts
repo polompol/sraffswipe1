@@ -352,6 +352,14 @@ test.describe("клавиатура в чате", () => {
       `последнее сообщение («${m.text}») уходит под панель`,
     ).toBeLessThanOrEqual(m.barTop + 1);
 
+    // Уже отправленную фразу второй раз не предлагаем: человек видел свою
+    // реплику в переписке и кнопку с ровно тем же текстом под ней.
+    const hello = page.getByRole("button", { name: "Здравствуйте!" });
+    await expect(hello).toHaveCount(1);
+    await hello.click();
+    await expect(page.locator(".bubble.mine").last()).toContainText("Здравствуйте!");
+    await expect(page.getByRole("button", { name: "Здравствуйте!" })).toHaveCount(0);
+
     await context.close();
   });
 });

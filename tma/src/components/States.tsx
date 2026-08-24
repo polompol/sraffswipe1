@@ -67,7 +67,7 @@ export function ErrorBox({ onRetry }: { onRetry?: () => void }) {
         <IconWarning size={36} />
       </div>
       <p className="muted" style={{ margin: "8px 0 12px" }}>
-        Не загрузилось. Проверьте интернет и нажмите «Повторить».
+        Не загрузилось. Проверьте интернет.
       </p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry}>

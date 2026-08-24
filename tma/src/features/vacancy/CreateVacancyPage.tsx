@@ -4,12 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/domain";
 import { MIN_RATE_PER_HOUR, MIN_RATE_PER_SHIFT } from "@/types/domain";
 import {
-  PAY_METHOD_LABELS,
+  PAY_METHOD_SHORT,
   ROLE_FAMILIES,
   ROLE_FAMILY_LABELS,
   ROLE_FAMILY_ORDER,
   STAFF_ROLE_LABELS,
-  TIPS_LABELS,
+  TIPS_CHOICE,
 } from "@/types/domain";
 import {
   createVacancy,
@@ -409,14 +409,16 @@ export function CreateVacancyPage() {
             Нужно другое число
           </button>
         )}
-        <p className="muted" style={{ margin: "-8px 0 16px", fontSize: "var(--text-xs)" }}>
-          Одной смены хватит на всех — одинаковые размещать не нужно.
-          Наберёте нужных людей — она уйдёт из ленты сама.
-        </p>
+        {headcount > 1 && (
+          <p className="muted" style={{ margin: "-8px 0 16px", fontSize: "var(--text-xs)" }}>
+            Одной смены хватит на всех — одинаковые размещать не нужно.
+            Наберёте нужных людей — она уйдёт из ленты сама.
+          </p>
+        )}
 
         <div className="form-label">Как и когда платите</div>
         <div style={{ display: "grid", gap: 8, margin: "8px 0 16px" }}>
-          {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((p) => (
+          {(Object.keys(PAY_METHOD_SHORT) as PayMethod[]).map((p) => (
             <button
               key={p}
               className="tag"
@@ -428,7 +430,7 @@ export function CreateVacancyPage() {
               }}
               onClick={() => setPayMethod(p)}
             >
-              {PAY_METHOD_LABELS[p]}
+              {PAY_METHOD_SHORT[p]}
             </button>
           ))}
         </div>
@@ -442,7 +444,7 @@ export function CreateVacancyPage() {
             margin: "8px 0 16px",
           }}
         >
-          {(Object.keys(TIPS_LABELS) as TipsMode[]).map((t) => (
+          {(Object.keys(TIPS_CHOICE) as TipsMode[]).map((t) => (
             <button
               key={t}
               className="tag"
@@ -454,7 +456,7 @@ export function CreateVacancyPage() {
               }}
               onClick={() => setTips(t)}
             >
-              {TIPS_LABELS[t]}
+              {TIPS_CHOICE[t]}
             </button>
           ))}
         </div>

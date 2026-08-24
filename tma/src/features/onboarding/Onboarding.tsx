@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/Button";
 import { Logo } from "@/components/Logo";
-import { IconChat, IconDoc, IconMoney, IconBolt } from "@/components/Icons";
+import { IconChat, IconDoc, IconBolt } from "@/components/Icons";
 import { currentCampaign } from "@/lib/campaign";
 
 // Пришёл по рекламной ссылке (шортс/ролик) — показываем цепляющий экран под
@@ -131,20 +131,6 @@ export function Onboarding() {
           <p className="muted" style={{ fontSize: "var(--text-base)", maxWidth: 320 }}>
             {slide.text}
           </p>
-          {i === 0 && (
-            <span
-              className="tag"
-              style={{
-                color: "var(--super-text)",
-                borderColor: "var(--super-text)",
-                fontWeight: 700,
-                padding: "8px 14px",
-                gap: 6,
-              }}
-            >
-              <IconMoney size={15} /> Платит заведение · без посредников
-            </span>
-          )}
         </div>
         <p className="muted" style={{ textAlign: "center", fontSize: "var(--text-xs)", marginBottom: 12 }}>
           Новые смены появляются каждый день

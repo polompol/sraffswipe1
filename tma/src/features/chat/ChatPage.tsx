@@ -104,6 +104,13 @@ export function ChatPage() {
   // Следим именно за ПОСЛЕДНИМ сообщением, а не за всем списком: когда
   // догружается старая переписка, список меняется, а прокручивать вниз нельзя
   // — человек только что нажал «показать более ранние» и смотрит наверх.
+  // Что я в этом чате уже отправлял — чтобы не предлагать это снова кнопкой.
+  const mySent = new Set(
+    (messages ?? [])
+      .filter((m: Message) => !m.isSystem && m.senderId === (myId ?? "me"))
+      .map((m: Message) => m.text.trim()),
+  );
+
   const lastId = messages?.length ? messages[messages.length - 1].id : "";
   // Прокручиваем и когда меняется высота панели: кнопка «Подтвердить смену»
   // появляется не сразу, и без этого список оставался стоять как был.
@@ -525,7 +532,13 @@ export function ChatPage() {
             marginBottom: 2,
           }}
         >
-          {(role === "employer" ? QUICK_REPLIES_EMPLOYER : QUICK_REPLIES_SEEKER).map((q) => (
+          {/* Уже сказанное не предлагаем во второй раз. Заведение писало
+              «Ждём вас к началу смены», эта же фраза висела кнопкой прямо под
+              перепиской — человек видел свою реплику и предложение повторить
+              её. Сравниваем по своим отправленным сообщениям. */}
+          {(role === "employer" ? QUICK_REPLIES_EMPLOYER : QUICK_REPLIES_SEEKER)
+            .filter((q) => !mySent.has(q))
+            .map((q) => (
             <button
               key={q}
               className="tag"
@@ -626,10 +639,16 @@ export function ChatPage() {
 
       {troubleOpen && (
         <Sheet title="Изменить смену" onClose={() => setTroubleOpen(false)}>
-            <p className="muted" style={{ marginBottom: 12 }}>
-              Планы меняются — это нормально. Главное предупредить заранее,
-              а не в последний момент.
-            </p>
+            {/* Совет про «предупредить заранее» имеет смысл, только пока
+                смену ещё можно перенести или отменить. После её окончания в
+                шторке остаётся одна кнопка — уточнить часы, — и предупреждать
+                уже не о чем. */}
+            {(canMove || canCancel) && (
+              <p className="muted" style={{ marginBottom: 12 }}>
+                Планы меняются — это нормально. Главное предупредить заранее,
+                а не в последний момент.
+              </p>
+            )}
             <div className="stack">
               {canSetHours && (
                 <Button

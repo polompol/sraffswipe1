@@ -61,7 +61,7 @@ export function ApplicantsPage() {
         <h1 className="h1" style={{ marginBottom: 4 }}>Кто откликнулся</h1>
         {!!data?.length && (
           <p className="muted" style={{ margin: "0 0 14px" }}>
-            Эти люди сами выбрали вашу смену. Ответьте — и сразу откроется чат.
+            Ответьте — и сразу откроется чат.
           </p>
         )}
 
@@ -159,10 +159,18 @@ export function ApplicantsPage() {
               )}
               <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
                 Медкнижка: {MED_BOOK_LABELS[a.medBook as MedBookStatus] ?? a.medBook}
-                {a.roles.length > 0 &&
-                  ` · ${a.roles
+                {/* Должность смены уже написана строкой выше крупно и цветом.
+                    Человек откликнулся именно на неё, поэтому в списке его
+                    должностей она — повтор: на карточке официанта, который
+                    откликнулся на смену официанта, слово стояло дважды.
+                    Показываем только ОСТАЛЬНЫЕ его должности. */}
+                {(() => {
+                  const rest = a.roles.filter((r) => r !== a.vacancyRole);
+                  if (!rest.length) return "";
+                  return ` · ещё ${rest
                     .map((r) => STAFF_ROLE_LABELS[r as StaffRole] ?? r)
-                    .join(", ")}`}
+                    .join(", ")}`;
+                })()}
               </div>
 
               <div

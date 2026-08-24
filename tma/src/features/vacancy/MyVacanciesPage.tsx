@@ -109,12 +109,9 @@ export function MyVacanciesPage() {
           fill
           icon={<IconCalendar size={34} />}
           title="Смен пока нет"
+          // Кнопки внутри карточки нет: ровно такая же, слово в слово,
+          // стоит на этом же экране прямо над списком.
           text="Разместите первую смену — её увидят работники рядом, и пойдут отклики."
-          action={
-            <Button block={false} onClick={() => nav("/vacancy/new")}>
-              + Разместить смену
-            </Button>
-          }
         />
       )}
 
@@ -144,10 +141,12 @@ export function MyVacanciesPage() {
                   }}
                 >
                   {full
-                    ? "Все места заняты ✓"
-                    : taken === 0
-                      ? `Ищем ${need} ${plural(need, "человека", "человека", "человек")}`
-                      : `Набрано ${taken} из ${need}`}
+                    ? need > 1 ? "Все места заняты ✓" : "Место занято ✓"
+                    : need === 1
+                      ? ""
+                      : taken === 0
+                        ? `Ищем ${need} ${plural(need, "человека", "человека", "человек")}`
+                        : `Набрано ${taken} из ${need}`}
                 </div>
               );
             })()}
@@ -161,7 +160,7 @@ export function MyVacanciesPage() {
               {(v.slotsLeft ?? v.headcount ?? 1) > 0 ? (
                 <Button variant="secondary" onClick={() => doUrgent(v.id)}>
                   <span className="inline">
-                    <IconFire size={16} /> Позвать людей на эту смену
+                    <IconFire size={16} /> Позвать людей
                   </span>
                 </Button>
               ) : (

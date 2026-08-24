@@ -110,11 +110,12 @@ export function WelcomePage() {
             : "Пара штрихов — и заведения начнут вас звать"}
         </p>
 
-        <div className="form-label" style={{ marginTop: 20 }}>
-          {isEmployer ? "Название" : "Имя"}
-        </div>
+        {/* Подписи у поля нет: заголовок экрана уже спросил имя, а формат
+            показывает подсказка внутри поля. */}
         <input
           className="input"
+          style={{ marginTop: 20 }}
+          aria-label={isEmployer ? "Название заведения" : "Имя"}
           value={name}
           maxLength={isEmployer ? 120 : 80}
           placeholder={isEmployer ? "Кофейня «Дрова»" : "Анна"}

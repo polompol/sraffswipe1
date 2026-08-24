@@ -93,8 +93,10 @@ function StatusLine({ m, role }: { m: MatchModel; role: string | null }) {
   } else if (m.status === "confirmed") {
     color = "var(--gold)";
     icon = <IconCheck size={17} />;
+    // День уже написан строкой выше вместе с часами («Сегодня, 08:00–16:00»)
+    // — здесь только состояние, без повтора дня.
     text = shiftStarted(m)
-      ? (role === "employer" ? "Смена идёт — ждём человека" : "Сегодня ваша смена")
+      ? (role === "employer" ? "Смена идёт — ждём человека" : "Смена идёт")
       : "Смена подтверждена";
   }
 
@@ -171,7 +173,7 @@ export function MatchesPage() {
     haptic(attended ? "success" : "warning");
     try {
       await markAttendance(matchId, attended);
-      toast(attended ? "Смена закрыта ✓" : "Отмечено: не вышел", "success");
+      toast(attended ? "Отметили: человек вышел ✓" : "Отмечено: не вышел", "success");
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
       toast("Не отметилось — проверьте связь и нажмите ещё раз", "error");
@@ -382,7 +384,7 @@ export function MatchesPage() {
                   )}
                   {m.employerCheckedIn ? (
                     <div className="muted" style={{ marginTop: 10 }}>
-                      Вы подтвердили выход ✓ Смена закрыта.
+                      Вы подтвердили выход ✓
                     </div>
                   ) : (
                     <div style={{ marginTop: 12 }}>
