@@ -43,6 +43,21 @@ export function shiftDayLabel(iso: string): string {
   return fmtDate(iso);
 }
 
+/** Дата словами и с днём недели: «29 августа, вторник».
+ *
+ *  Поле выбора даты рисует сама система телефона, и формат берётся из её
+ *  языка: на английском телефоне это «08/29/2026». Спутать 08/29 и 29/08 в
+ *  чужом формате легко, а цена ошибки — смена в другой день. Поэтому под
+ *  полем повторяем выбранное по-русски.
+ */
+export function dateLong(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const week = ["воскресенье", "понедельник", "вторник", "среда",
+    "четверг", "пятница", "суббота"];
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${week[d.getDay()]}`;
+}
+
 /** Смена «горит» — она сегодня. Такие показываем с пометкой «Срочно». */
 export function isUrgentShift(dateIso: string): boolean {
   return dateIso === todayISO();

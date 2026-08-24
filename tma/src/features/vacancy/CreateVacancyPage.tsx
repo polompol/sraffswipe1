@@ -19,7 +19,7 @@ import {
   type AddressSuggestion,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
-import { shiftWhen } from "@/lib/format";
+import { dateLong, shiftWhen } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
 import { PhotoUpload } from "@/components/PhotoUpload";
@@ -303,7 +303,13 @@ export function CreateVacancyPage() {
         </div>
 
         <div className="form-label">Дата смены</div>
-        <input className="input" type="date" style={{ marginBottom: 12 }} value={date} onChange={(e) => setDate(e.target.value)} />
+        <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        {/* Поле даты рисует сама система телефона, и формат у неё свой: на
+            английском телефоне это «08/29/2026». Спутать 08/29 и 29/08 легко,
+            а цена ошибки — смена в другой день. Повторяем выбранное словами. */}
+        <p className="muted" style={{ margin: "6px 0 12px", fontSize: "var(--text-xs)" }}>
+          {date ? dateLong(date) : "Выберите день смены"}
+        </p>
 
         <div className="row" style={{ marginBottom: 12 }}>
           <span style={{ flex: 1 }}>

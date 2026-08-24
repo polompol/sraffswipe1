@@ -400,7 +400,7 @@ export function ChatPage() {
 
   return (
     <div className="app">
-      <div className="page" style={{ paddingBottom: 0 }}>
+      <div className="page chat" style={{ paddingBottom: 0 }}>
         <div className="row" style={{ marginBottom: 12 }}>
           <button className="icon-btn" aria-label="Назад" onClick={() => nav(-1)}>
             <IconBack size={22} />
@@ -456,6 +456,8 @@ export function ChatPage() {
           />
         )}
 
+        {/* Лента переписки прижата к низу — см. .chat-list в index.css. */}
+        <div className="chat-list">
         {hasOlder && (
           <button
             onClick={loadOlder}
@@ -487,6 +489,7 @@ export function ChatPage() {
             </div>
           );
         })}
+        </div>
         {/* Якорь для прокрутки и одновременно распорка под нижнюю панель.
             Без него чат открывался на самом первом сообщении: свежие
             оставались ниже экрана, за панелью ввода. Человек отправлял
