@@ -14,6 +14,7 @@ from .cities import normalize
 from .models import Employer, Match, Swipe, User, Vacancy
 from .notify import notify_owner
 from .roles import date_ru, role_ru, time_ru
+from .rubles import plural
 from .timeutil import local_today, shift_end_utc
 
 _log = logging.getLogger("staffswipe")
@@ -155,7 +156,7 @@ def send_reminders(db: Session) -> int:
     reminders = build_reminders(db)
     for match_id, user_id, text in reminders:
         notify_owner(db, user_id, text,
-                     open_app="Я на смене — отметиться", screen="shifts")
+                     open_app="Открыть смену", screen="shifts")
         m = db.get(Match, match_id)
         if m is not None:
             v = db.get(Vacancy, m.vacancy_id)
@@ -231,24 +232,28 @@ def build_unfilled_alerts(db: Session) -> list[tuple[str, str, str]]:
         if got >= need:
             continue
         left = need - got
-        who = "человека" if left == 1 else "человек"
+        # Формы были перепутаны: при двух-четырёх выходило «не хватает
+        # 2 человек» — читается как опечатка.
+        who = plural(left, "человека", "человека", "человек")
         text = (
             f"Завтра смена в {_fmt_time(v.start_time)}"
             + (f", {v.address}" if v.address else "")
             + f" — не хватает {left} {who}.\n\n"
         )
         if waiting:
-            ppl = "человек" if waiting == 1 else "человека"
+            # Творительный падеж: «с 1 человеком», «с 2 людьми».
+            ppl = plural(waiting, "человеком", "людьми", "людьми")
             text += (
-                f"С {waiting} {ppl} вы уже договорились, но смена ещё не "
-                "подтверждена с обеих сторон — напомните им в чате и нажмите "
+                f"С {waiting} {ppl} вы уже договорились, но смену пока "
+                "подтвердила только одна сторона — напомните в чате и нажмите "
                 "«Подтвердить смену». Без этого место считается занятым, а "
                 "выйти человек не обязан.\n\n"
             )
         text += (
-            "Что помогает за день до смены: поднять ставку, нажать «Срочно» "
-            "(разошлём тем, кто готов выйти) или позвать своих через "
-            "«Мои работники»."
+            # Кнопки «Срочно» в приложении больше нет — она называется
+            # «Позвать людей на эту смену». Звать нажать то, чего нет, нельзя.
+            "Что помогает за день до смены: поднять ставку, нажать «Позвать "
+            "людей на эту смену» или позвать своих через «Мои работники»."
         )
         out.append((v.id, v.employer_id, text))
     return out
@@ -315,8 +320,11 @@ def build_aftershift_asks(db: Session) -> list[tuple[str, str]]:
             f"Смена {date_ru(v.date)} в {_fmt_time(v.start_time)} завершилась.\n\n"
             "Если всё прошло как договаривались — делать ничего не нужно, "
             "смена закроется сама.\n"
-            "Если смена не состоялась — откройте её и нажмите "
-            "«Смена не состоялась», иначе она будет засчитана.",
+            # Путь к кнопке называем целиком: сама по себе «Смена не
+            # состоялась» лежит внутри меню «Что-то пошло не так», и человек
+            # искал её на экране, где её нет.
+            "Если смены не было — откройте её, «Что-то пошло не так» → "
+            "«Смена не состоялась». Иначе засчитаем её как состоявшуюся.",
         ))
     return out
 
@@ -408,7 +416,7 @@ def settle_shifts(db: Session) -> int:
             continue
         notify_owner(
             db, m.employer_id,
-            "Смена закрыта — возражений не было. Комиссия начислена.",
+            "Смена закрыта: возражений не было. Комиссия — 10% от смены.",
         )
         notify_owner(
             db, m.user_id,

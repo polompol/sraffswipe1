@@ -6,7 +6,15 @@ import { MESSAGES_PAGE, ShiftConflict, answerReschedule, cancelShift, confirmShi
 import { getToken, useBackend, wsBaseURL } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
-import { fmtTime, shiftEnded, shiftStarted, shiftWhen } from "@/lib/format";
+import {
+  fmtTime,
+  numRu,
+  shiftDayLabel,
+  shiftEnded,
+  shiftLengthHours,
+  shiftStarted,
+  shiftWhen,
+} from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
@@ -393,7 +401,11 @@ export function ChatPage() {
           {/* Когда смена — прямо в шапке. Раньше в чате не было ни даты, ни
               времени: человек договорился и потом искал их в переписке. */}
           <span className="grow">
-            <b style={{ display: "block" }}>
+            {/* Тот же класс, что в списке смен: сюда приходит название,
+                которое человек вписал сам. Без него «КофейняНаБольшойДмитровке»
+                наезжало на кнопку жалобы справа, а длинное название с
+                пробелами разворачивало шапку на четыре строки. */}
+            <b className="match-name" style={{ display: "block" }}>
               {(role === "employer" ? srvMatch?.seekerName : srvMatch?.companyName)
                 || "Чат по смене"}
             </b>
@@ -517,7 +529,7 @@ export function ChatPage() {
             <button
               key={q}
               className="tag"
-              style={{ cursor: "pointer", whiteSpace: "nowrap", flex: "none", borderColor: "var(--border)" }}
+              style={{ cursor: "pointer", whiteSpace: "nowrap", flex: "none", borderColor: "var(--border-strong)" }}
               onClick={() => quickReply(q)}
             >
               {q}
@@ -540,8 +552,8 @@ export function ChatPage() {
                 ? "Смена подтверждена"
                 : iConfirmed
                   ? role === "employer"
-                    ? "Ждём, когда работник подтвердит"
-                    : "Ждём, когда заведение подтвердит"
+                    ? "Ждём ответа работника"
+                    : "Ждём ответа заведения"
                   : "Подтвердить смену"}
             </span>
           </Button>
@@ -578,12 +590,12 @@ export function ChatPage() {
                 Заведение предлагает перенос
               </div>
               <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-sm)" }}>
-                {srvMatch.rescheduleDate}
+                {shiftDayLabel(srvMatch.rescheduleDate)}
                 {srvMatch.rescheduleStart != null &&
                   ` · ${fmtTime(srvMatch.rescheduleStart)}–${fmtTime(srvMatch.rescheduleEnd ?? 0)}`}
               </p>
               <div className="row" style={{ gap: 8 }}>
-                <Button onClick={() => answerMove(true)}>Согласен</Button>
+                <Button onClick={() => answerMove(true)}>Подходит</Button>
                 <Button variant="ghost" onClick={() => answerMove(false)}>
                   Не смогу
                 </Button>
@@ -625,6 +637,7 @@ export function ChatPage() {
                   block
                   onClick={() => {
                     setTroubleOpen(false);
+                    if (srvMatch) setHoursValue(numRu(shiftLengthHours(srvMatch)));
                     setHoursOpen(true);
                   }}
                 >
@@ -637,6 +650,12 @@ export function ChatPage() {
                   block
                   onClick={() => {
                     setTroubleOpen(false);
+                    if (srvMatch?.shiftStart != null) {
+                      setMoveStart(fmtTime(srvMatch.shiftStart));
+                    }
+                    if (srvMatch?.shiftEnd != null) {
+                      setMoveEnd(fmtTime(srvMatch.shiftEnd));
+                    }
                     setMoveOpen(true);
                   }}
                 >
@@ -652,7 +671,7 @@ export function ChatPage() {
                     setCancelOpen(true);
                   }}
                 >
-                  {role === "employer" ? "Смена не состоится" : "Не смогу выйти"}
+                  {role === "employer" ? "Отменить смену" : "Не смогу выйти"}
                 </Button>
               )}
               <Button variant="ghost" block onClick={() => setTroubleOpen(false)}>
@@ -665,7 +684,7 @@ export function ChatPage() {
       {hoursOpen && (
         <Sheet title="Сколько часов вышло" onClose={() => setHoursOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Опоздал, ушёл раньше или задержался — оплата и комиссия
+              Смена вышла короче или длиннее, чем договаривались, — оплата и комиссия
               пересчитаются по факту. Работник увидит это в чате.
             </p>
             <div className="form-label">Часов</div>
@@ -746,10 +765,11 @@ export function ChatPage() {
               Отменить заранее — не страшно, а за пару часов до начала ударит
               по надёжности профиля.
             </p>
+            <div className="form-label">Причина — по желанию</div>
             <input
               className="input"
               aria-label="Причина отмены смены"
-              placeholder="Причина (по желанию)"
+              placeholder="например, заболел администратор"
               maxLength={200}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}

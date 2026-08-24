@@ -186,8 +186,8 @@ export function FilterSheet({
         ))}
       </div>
 
-      <div className="form-label">Как платят</div>
-      <div className="row" style={{ margin: "8px 0 16px" }}>
+      <div className="form-label">Как считают ставку</div>
+      <div className="row" style={{ margin: "8px 0 16px", flexWrap: "wrap" }}>
         <Chip on={!f.rate_type} label="Неважно" onClick={() => set({ rate_type: undefined })} />
         <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
         <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
@@ -212,7 +212,7 @@ export function FilterSheet({
       />
 
       <div className="form-label">Сначала показывать</div>
-      <div className="row" style={{ margin: "8px 0 18px" }}>
+      <div className="row" style={{ margin: "8px 0 18px", flexWrap: "wrap" }}>
         {SORTS.map((s) => (
           <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
         ))}

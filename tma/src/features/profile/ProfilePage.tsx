@@ -30,7 +30,7 @@ import {
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
-import { plural } from "@/lib/format";
+import { dec1, plural } from "@/lib/format";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -74,8 +74,10 @@ function CommissionCard() {
       </div>
       <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-sm)" }}>
         {due
-          ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса ` +
-            `автоматически — пополните его картой ниже.`
+          ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса `
+            + (bill.topupAvailable
+              ? "автоматически — пополните его картой ниже."
+              : "автоматически, когда на нём будут деньги.")
           : "Платите только за смены, которые состоялись."}
       </div>
       {bill.overdue && (
@@ -132,16 +134,23 @@ function CommissionCard() {
             Пополнить баланс
           </div>
           {/* На чипе оставляем только сумму: «Пополнить 1 000 ₽» в трети
-              ширины экрана переносилось на 3-4 строки и ломало ряд. */}
-          <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+              ширины экрана переносилось на 3-4 строки и ломало ряд.
+
+              Ряд с переносом заменён сеткой из трёх равных долей: на 320
+              точках внутри карточки остаётся 252, а ряду из трёх чипов по 88
+              нужно 280 — третий срывался вниз и растягивался во всю ширину. */}
+          <div style={{
+            marginTop: 6,
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 8,
+          }}>
             {[1000, 3000, 5000].map((a) => (
               <button
                 key={a}
                 className="tag"
                 disabled={busy}
                 style={{
-                  flex: 1,
-                  minWidth: 88,
                   cursor: "pointer",
                   borderColor: "var(--gold)",
                   color: "var(--gold)",
@@ -431,12 +440,16 @@ export function ProfilePage() {
           <div style={{ fontWeight: 800, fontSize: "var(--text-lg)", overflowWrap: "anywhere" }}>
             {me?.name ?? (role === "employer" ? "Добавьте название" : "Добавьте имя")}
           </div>
-          <div className="muted">
+          <div className="muted" style={{ overflowWrap: "anywhere" }}>
             {me ? (me.rating > 0 ? (
-              <><IconStar size={13} /> {me.rating.toFixed(1)}</>
+              <><IconStar size={13} /> {dec1(me.rating)}</>
             ) : "Новичок") : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
-            {me?.shiftsDone
+            {/* У заведения то же число стоит отдельной карточкой «Смен
+                проведено» ниже по экрану: два одинаковых числа в пяти
+                сантиметрах друг от друга заставляют сверять, не разные ли
+                они. В шапке оставляем его только работнику. */}
+            {role === "seeker" && me?.shiftsDone
               ? ` · ${me.shiftsDone} ${plural(me.shiftsDone, "смена", "смены", "смен")}`
               : ""}
           </div>
@@ -541,7 +554,8 @@ export function ProfilePage() {
           {/* «Пришло по ссылке: 0» — цифра в хвосте фразы, которую читают на
               бегу. Ноль лучше сказать словами: он и так самый частый. */}
           {ref?.invited
-            ? `По вашей ссылке уже пришли: ${ref.invited}.`
+            ? `По вашей ссылке ${plural(ref.invited, "пришёл", "пришли", "пришли")} `
+              + `${ref.invited} ${plural(ref.invited, "человек", "человека", "человек")}.`
             : "По вашей ссылке пока никто не пришёл."}
         </div>
         <Button onClick={invite}>

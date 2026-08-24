@@ -328,7 +328,7 @@ export function CreateVacancyPage() {
           />
           <button
             className="tag"
-            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border)" }}
+            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border-strong)" }}
             onClick={() => setRateType(rateType === "perHour" ? "perShift" : "perHour")}
           >
             {rateType === "perHour" ? "₽/час" : "₽/смена"}
@@ -469,7 +469,7 @@ export function CreateVacancyPage() {
         <input
           id="addr"
           className="input"
-          placeholder="улица и дом — например, Баумана, 12"
+          placeholder="например, Баумана, 12"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
@@ -481,7 +481,7 @@ export function CreateVacancyPage() {
                 // Подсказки адреса стояли плотным списком высотой ~35px.
                 // Промах здесь дороже прочих: смена уезжает на соседнюю улицу,
                 // а человек приходит не туда.
-                style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", minHeight: 44, padding: "0 10px", cursor: "pointer", color: "var(--text)" }}
+                style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", minHeight: 44, padding: "0 10px", cursor: "pointer", color: "var(--text)", font: "inherit", fontSize: "var(--text-base)" }}
                 onClick={() => {
                   chosenAddress.current = s.value;
                   setAddress(s.value);

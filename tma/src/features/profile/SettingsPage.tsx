@@ -92,7 +92,7 @@ export function SettingsPage() {
     // тумблеры растягивались во всю ширину (единственная такая страница).
     <div className="app">
       <div className="page">
-      <h1 className="h1">Настройки</h1>
+      <h1 className="h1" style={{ marginBottom: 16 }}>Настройки</h1>
 
       <Toggle
         on={theme === "dark"}
@@ -143,7 +143,7 @@ export function SettingsPage() {
       {/* Экран заканчивался тремя переключателями и пустотой. Версия здесь
           не для красоты: её называют в поддержке, чтобы понять, какая
           сборка у человека на телефоне. */}
-      <div className="card" style={{ marginTop: 8 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
           <span className="muted">Версия приложения</span>
           <span className="spacer" />
@@ -167,7 +167,7 @@ export function SettingsPage() {
       {/* По 152-ФЗ документы должны быть доступны всегда, а не только галочкой
           при первом входе: человек согласился месяц назад и уже не помнит, на
           что именно. Здесь их можно перечитать в любой момент. */}
-      <div className="card" style={{ marginTop: 8 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="row" style={{ marginBottom: 8 }}>
           <b>Документы</b>
         </div>

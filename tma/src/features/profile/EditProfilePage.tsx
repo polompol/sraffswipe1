@@ -264,7 +264,7 @@ export function EditProfilePage() {
           id="about"
           className="input"
           style={{ marginBottom: 12, minHeight: 88, resize: "vertical", paddingTop: 12 }}
-          placeholder="Например: официант с опытом, выхожу по вечерам и в выходные, район Центр"
+          placeholder="например: официант с опытом, выхожу по вечерам и в выходные, район Центр"
           maxLength={1000}
           value={about}
           onChange={(e) => setAbout(e.target.value)}
@@ -274,9 +274,11 @@ export function EditProfilePage() {
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <label className="row" style={{ cursor: "pointer" }}>
+          {/* minHeight: зона нажатия была около 25 точек, а это единственный
+              способ открыть поле ИНН. И род: анкету заполняют и женщины. */}
+          <label className="row" style={{ cursor: "pointer", minHeight: 44 }}>
             <input type="checkbox" checked={selfEmployed} onChange={(e) => setSelfEmployed(e.target.checked)} />
-            <span>Я самозанятый</span>
+            <span>У меня оформлена самозанятость</span>
           </label>
           {selfEmployed && (
             <>

@@ -96,7 +96,7 @@
   --btn-h-lg: 54px;
   --btn-pad-sm: 0 14px;
   --btn-pad-md: 0 18px;
-  --btn-pad-lg: 0 20px;
+  --btn-pad-lg: 10px 20px;
   --btn-radius: 12px;
   --btn-disabled: 0.55;
   /* Тень главной кнопки и её же в нажатом состоянии. */

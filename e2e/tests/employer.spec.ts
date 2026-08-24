@@ -66,7 +66,7 @@ test.describe("заведение публикует смену и зовёт ч
     const card = page.locator(".swipe-card").first();
     await expect(card).toBeVisible();
     await expect(card).toContainText("Иван");
-    await expect(card).toContainText("Готов сегодня");
+    await expect(card).toContainText("Может сегодня");
 
     // 4. Человек тем временем откликнулся на эту смену — значит «Позвать»
     //    даст совпадение. (Он делает это со своего телефона, не с этого.)

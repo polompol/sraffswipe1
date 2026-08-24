@@ -34,7 +34,7 @@ function MatchAvatar({ src, initial }: { src?: string; initial: string }) {
     <span
       className="match-ava"
       style={{
-        borderRadius: 12,
+        borderRadius: "var(--radius-sm)",
         flex: "none",
         position: "relative",
         overflow: "hidden",
@@ -332,7 +332,10 @@ export function MatchesPage() {
               <StatusLine m={m} role={role} />
 
               {!!m.shiftPay && m.shiftPay > 0 && (
-                <div style={{ marginTop: 6, fontWeight: 800, fontSize: "var(--text-md)" }}>
+                // Сумма отбита так же, как остальные блоки карточки: на 6
+                // точках она читалась как хвостик строки состояния, хотя это
+                // главное число здесь.
+                <div style={{ marginTop: 12, fontWeight: 800, fontSize: "var(--text-md)" }}>
                   {m.shiftPay.toLocaleString("ru-RU")} ₽
                   {/* Заведение не зарабатывает на смене, а платит за неё:
                       «заработано» в его списке читалось как ошибка. */}
@@ -401,7 +404,10 @@ export function MatchesPage() {
                   </div>
                 ) : (
                   <div style={{ marginTop: 12 }}>
-                    <div className="muted" style={{ fontSize: "var(--text-sm)", marginBottom: 6 }}>
+                    {/* Тот же класс, что у подписей полей в чате: это была
+                        единственная подпись поля в продукте без полужирного —
+                        и как раз у самого денежного поля. */}
+                    <div className="form-label">
                       Код прихода — попросите у администратора на месте
                     </div>
                     {/* Поле и кнопка делят строку и оба умеют сжиматься.
@@ -447,7 +453,7 @@ export function MatchesPage() {
                 <div style={{ marginTop: 12 }}>
                   <Button variant="secondary" onClick={() => downloadAct(m.id)}>
                     <span className="inline">
-                      <IconDoc size={17} /> Скачать акт о смене (PDF)
+                      <IconDoc size={17} /> Скачать акт (PDF)
                     </span>
                   </Button>
                 </div>
@@ -529,9 +535,17 @@ export function MatchesPage() {
                 Мне не заплатили за смену
               </Button>
             )}
+            {/* Вторая фраза — только когда кнопка «Смена не состоялась» и
+                правда на экране (условие то же, что у неё). Пока смена не
+                закончилась, человек читал «отметьте это» и искал глазами
+                кнопку, которой там нет. */}
             <div className="muted" style={{ fontSize: "var(--text-sm)", lineHeight: 1.5 }}>
-              Оператор разберётся по переписке и коду прихода. Если смены не
-              было — отметьте это, комиссию не возьмём.
+              Оператор разберётся по переписке и коду прихода.
+              {troubleFor.status === "confirmed"
+                && !troubleFor.disputed
+                && shiftEnded(troubleFor)
+                ? " Если смены не было — отметьте это, комиссию не возьмём."
+                : ""}
             </div>
           </div>
         </Sheet>

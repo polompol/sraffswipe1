@@ -58,7 +58,10 @@ export function InvitesPage() {
   }
 
   return (
-    <div className="page">
+    // Обёртка .app даёт ширину 520 и центрирование, как у остальных экранов
+    // этой части приложения (Настройки, Помощь, Анкета).
+    <div className="app">
+      <div className="page">
       <h1 className="h1">Кто меня зовёт</h1>
       <p className="muted" style={{ marginTop: -6 }}>
         Эти заведения уже позвали вас. Ответьте — и сразу откроется чат.
@@ -84,6 +87,7 @@ export function InvitesPage() {
       )}
 
       {match && <MatchOverlay match={match} onClose={() => setMatch(null)} />}
+      </div>
     </div>
   );
 }

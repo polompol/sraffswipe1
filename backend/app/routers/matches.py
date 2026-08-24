@@ -338,8 +338,8 @@ def mark_not_held(
         other = m.user_id if is_employer else m.employer_id
         notify_owner(
             db, other,
-            "Вторая сторона отметила, что смена не состоялась. Комиссия не "
-            "начислена. Если это не так — откройте смену и нажмите «Проблема».",
+            "Смену отметили как несостоявшуюся — комиссию за неё не берём. "
+            "Если это не так, откройте смену и позовите оператора.",
             open_app="Открыть смену", screen="chat", ident=m.id,
         )
     db.commit()
@@ -572,7 +572,7 @@ def dispute(
     ))
     _sys(db, m.id, "Открыт спор по смене — разбирает оператор StaffSwipe.")
     other = m.employer_id if principal["id"] == m.user_id else m.user_id
-    notify_owner(db, other, "По вашей смене открыт спор — с вами свяжется оператор.")
+    notify_owner(db, other, "По вашей смене позвали оператора — он скоро напишет.")
     notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
     db.commit()
     db.refresh(m)

@@ -2,7 +2,15 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { PAY_METHOD_SHORT, STAFF_ROLE_LABELS } from "@/types/domain";
-import { fmtTime, isUrgentShift, plural, rateLabel, shiftDayLabel } from "@/lib/format";
+import {
+  dec1,
+  fmtTime,
+  isUrgentShift,
+  plural,
+  rateLabel,
+  shiftDayLabel,
+  slotsLabel,
+} from "@/lib/format";
 import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
@@ -120,12 +128,13 @@ export function VacancyList({
               </div>
               <div className="muted" style={{ marginTop: 2 }}>
                 {STAFF_ROLE_LABELS[v.role]} · {rateLabel(v.rate, v.rateType)}
-                {(v.headcount ?? 1) > 1 &&
-                  ` · набрано ${(v.headcount ?? 1) - (v.slotsLeft ?? 0)} из ${v.headcount}`}
+                {slotsLabel(v.headcount, v.slotsLeft)
+                  ? ` · ${slotsLabel(v.headcount, v.slotsLeft)}`
+                  : ""}
               </div>
               <div className="muted">
                 {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
-                {typeof v.distanceKm === "number" ? ` · ${v.distanceKm.toFixed(1)} км` : ""}
+                {typeof v.distanceKm === "number" ? ` · ${dec1(v.distanceKm)} км` : ""}
               </div>
             </div>
           </div>
@@ -142,7 +151,8 @@ export function VacancyList({
             {!!v.employerShiftsDone && (
               <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: "var(--text-xs)" }}>
                 {v.employerShiftsDone}{" "}
-                {plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто
+                {plural(v.employerShiftsDone, "смена", "смены", "смен")}{" "}
+                {plural(v.employerShiftsDone, "закрыта", "закрыто", "закрыто")}
               </span>
             )}
           </div>

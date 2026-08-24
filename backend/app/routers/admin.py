@@ -389,7 +389,7 @@ def set_employer_verified(
         notify_owner(
             db, emp.id,
             "Ваше заведение проверено оператором StaffSwipe ✓ "
-            "Теперь работники видят бейдж «Проверено» в ленте смен.",
+            "Теперь работники видят у вас значок «Проверено».",
         )
     return {"ok": True, "verified": emp.verified}
 

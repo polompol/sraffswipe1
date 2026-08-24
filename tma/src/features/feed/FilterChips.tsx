@@ -18,6 +18,11 @@ export interface Chip {
   label: string;
   /** Выбранное значение, если фильтр включён: «Бариста», «от 400 ₽». */
   value?: string;
+  /** Число рядом со значением — сколько нашлось. Отдельным полем, а не
+   *  внутри value: у .chip-text стоит обрезка по 11 знакам, и «Санкт-Петербург
+   *  · 12» превращалось в «Санкт-Пете…» — число пропадало совсем именно там,
+   *  где оно и нужно: отличить «фильтр слишком узкий» от «смен нет». */
+  count?: number;
   icon?: ReactNode;
   /** Нажатие по чипу: включить или открыть выбор. */
   onPick: () => void;
@@ -44,11 +49,15 @@ export function FilterChips({ chips }: { chips: Chip[] }) {
               aria-pressed={on}
               // Вслух: «Роль: Бариста» — а не просто «Бариста», иначе
               // непонятно, что это фильтр и по какому полю.
-              aria-label={on ? `${c.label}: ${c.value}` : c.label}
+              aria-label={
+                (on ? `${c.label}: ${c.value}` : c.label)
+                + (c.count != null ? `, найдено: ${c.count}` : "")
+              }
               onClick={c.onPick}
             >
               {c.icon}
               <span className="chip-text">{on ? c.value : c.label}</span>
+              {c.count != null && <span className="chip-count">{c.count}</span>}
               {!on && c.picker && (
                 <span aria-hidden className="chip-caret">
                   <IconChevronRight size={13} />

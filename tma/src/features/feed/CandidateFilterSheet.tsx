@@ -92,7 +92,7 @@ export function CandidateFilterSheet({
       <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 18px" }}>
         <Chip
           on={!!f.available_today}
-          label="Готов сегодня"
+          label="Может сегодня"
           onClick={() => set({ available_today: !f.available_today })}
         />
         <Chip

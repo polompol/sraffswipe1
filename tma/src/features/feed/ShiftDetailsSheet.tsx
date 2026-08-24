@@ -5,7 +5,7 @@ import {
   STAFF_ROLE_LABELS,
   TIPS_LABELS,
 } from "@/types/domain";
-import { estimatedPay, fmtTime, shiftDayLabel } from "@/lib/format";
+import { dec1, estimatedPay, fmtTime, shiftDayLabel } from "@/lib/format";
 import {
   IconMoney,
   IconPin,
@@ -118,7 +118,7 @@ export function ShiftDetailsSheet({
         {v.address}
         {walkMin !== null && (
           <div className="muted" style={{ marginTop: 2 }}>
-            ~{walkMin} мин пешком · {v.distanceKm?.toFixed(1)} км
+            ~{walkMin} мин пешком · {v.distanceKm != null ? dec1(v.distanceKm) : "—"} км
           </div>
         )}
       </Row>

@@ -145,8 +145,8 @@ def _on_match(db: Session, match: Match, created: bool) -> None:
     )
     notify_owner(
         db, match.employer_id,
-        "Новый мэтч в StaffSwipe — договоритесь о деталях смены.",
-        open_app="Открыть мэтчи", screen="matches",
+        "Работник ответил взаимно! Откройте чат и договоритесь о смене.",
+        open_app="Открыть чат", screen="chat", ident=match.id,
     )
 
 

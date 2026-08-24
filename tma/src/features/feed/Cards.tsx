@@ -10,12 +10,14 @@ import {
   TIPS_BADGE,
 } from "@/types/domain";
 import {
+  dec1,
   estimatedPay,
   fmtTime,
   isUrgentShift,
   plural,
   rateLabel,
   shiftDayLabel,
+  slotsLabel,
 } from "@/lib/format";
 import {
   IconBank,
@@ -116,12 +118,17 @@ function CardFavButton({ id }: { id: string }) {
       aria-pressed={saved}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={toggle}
+      // Подложка — из класса .glass, как у соседних плашек «350 ₽/час» и
+      // «1,6 км». Раньше она была вписана числами и осталась на старом,
+      // отвергнутом значении 0.45: поверх светлого фото закладка выходила
+      // заметно бледнее соседей, и верхний ряд карточки выглядел собранным
+      // из двух разных материалов.
+      className="glass"
       style={{
         width: 44,
         height: 44,
+        padding: 0,
         borderRadius: "50%",
-        border: "1px solid rgba(255,255,255,.18)",
-        background: "rgba(0,0,0,0.45)",
         color: saved ? "var(--super)" : "var(--on-dark)",
         display: "inline-flex",
         alignItems: "center",
@@ -212,7 +219,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
         ) : null}
         {typeof v.distanceKm === "number" && (
           <span className="glass">
-            <IconPin size={13} /> {v.distanceKm.toFixed(1)} км
+            <IconPin size={13} /> {dec1(v.distanceKm)} км
           </span>
         )}
         </div>
@@ -222,9 +229,10 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
               {estimatedPay(v).toLocaleString("ru-RU")}
               <span className="rub">₽</span>
             </div>
-            <div className="swipe-hero-cap">
-              за смену · {shiftDayLabel(v.date)}
-            </div>
+            {/* Только «за смену»: день и часы стоят строкой ниже вместе,
+                а у сегодняшней смены он был напечатан ещё и плашкой сверху —
+                три раза одно слово на одной карточке. */}
+            <div className="swipe-hero-cap">за смену</div>
           </div>
         )}
       </div>
@@ -250,7 +258,8 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             marginTop: 4, fontWeight: 800, fontSize: "var(--text-md)",
             fontVariantNumeric: "tabular-nums",
           }}>
-            ≈ {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
+            {v.rateType === "perShift" ? "" : "≈ "}
+            {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
           </div>
         )}
 
@@ -267,9 +276,9 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             // строка уходит первой. Рейтинг заведения полезен, но адрес, часы
             // и медкнижка решают, ехать ли вообще, — они важнее.
             <div className="card-meta-trust">
-              <IconStar size={14} /> {v.employerRating ? v.employerRating.toFixed(1) : "—"}
+              <IconStar size={14} /> {v.employerRating ? dec1(v.employerRating) : "—"}
               {v.employerShiftsDone
-                ? ` · ${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} закрыто`
+                ? ` · ${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} ${plural(v.employerShiftsDone, "закрыта", "закрыто", "закрыто")}`
                 : ""}
             </div>
           ) : null}
@@ -310,12 +319,12 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           )}
           {/* Набор на несколько человек: без этой строки соискатель думает,
               что место одно, и не откликается «наверняка уже заняли». */}
-          {(v.headcount ?? 1) > 1 && (
+          {/* Та же фраза, что в списке: вид переключается кнопкой в шапке,
+              и по одной смене человек видел то «набрано 3 из 4», то «свободно
+              1» — чтобы понять, что это одно и то же, надо вычесть в уме. */}
+          {!!slotsLabel(v.headcount, v.slotsLeft) && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700 }}>
-              Нужно {v.headcount} {plural(v.headcount ?? 1, "человек", "человека", "человек")}
-              {v.slotsLeft != null && v.slotsLeft < (v.headcount ?? 1)
-                ? ` · свободно ${v.slotsLeft}`
-                : ""}
+              {slotsLabel(v.headcount, v.slotsLeft)}
             </span>
           )}
         </div>
@@ -358,12 +367,12 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           запрещали переноситься именно поэтому. */}
       <div className="swipe-top">
         <div className="row" style={{ gap: 8, flexWrap: "wrap", rowGap: 8 }}>
-        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? <><IconStar size={13} /> {s.rating.toFixed(1)}</> : "Новичок"}</span>
+        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? <><IconStar size={13} /> {dec1(s.rating)}</> : "Новичок"}</span>
         {s.availableToday && (
           // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
           // самая заметная плашка карточки читалась хуже всего остального.
           <span className="glass pulse" style={{ background: "var(--super)", color: "var(--on-gold)", flex: "none", whiteSpace: "nowrap" }}>
-            <IconBolt size={13} /> Готов сегодня
+            <IconBolt size={13} /> Может сегодня
           </span>
         )}
         <span className="spacer" />

@@ -57,7 +57,7 @@ export function TodayShift() {
               ? `Сегодня к вам выходят ${shifts.length} ${plural(shifts.length, "человек", "человека", "человек")}`
               : "Сегодня к вам выходит человек"
             : "Сегодня ваша смена"}
-          {when ? ` · ${when}` : ""}
+          {when ? (shifts.length > 1 ? ` · первый в ${when}` : ` · ${when}`) : ""}
         </b>
         <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
           {role === "employer"

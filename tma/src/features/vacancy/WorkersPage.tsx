@@ -9,6 +9,7 @@ import { Button } from "@/components/Button";
 import { IconBriefcase, IconBolt, IconStar } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { reliabilityText } from "@/lib/reliability";
+import { dec1 } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 
 /** «Мои работники» — кто уже выходил, чтобы позвать снова (постоянство). */
@@ -57,24 +58,23 @@ export function WorkersPage() {
         <div className="stagger stack stack-lg">
           {data?.map((w) => (
             <div key={w.id} className="card">
-              <div className="row">
-                <b style={{ flex: 1 }}>{w.name}</b>
+              <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                <b style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{w.name}</b>
                 {w.availableToday && (
-                  <span className="tag" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>
-                    <IconBolt size={12} /> готов сегодня
+                  <span className="tag" style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}>
+                    <IconBolt size={12} /> может сегодня
                   </span>
                 )}
               </div>
               <div className="muted" style={{ marginTop: 4 }}>
-                <IconStar size={13} /> {w.rating.toFixed(1)}
+                {w.rating > 0 ? <><IconStar size={13} /> {dec1(w.rating)}</> : "Новичок"}
                 {w.shiftsTotal > 0
                   ? ` · ${reliabilityText(w.shiftsTotal, w.shiftsAttended, w.employersTotal)}`
                   : ""}
               </div>
-              {/* minHeight оставлен прежним: в карточке работника кнопка ниже обычной. */}
               <Button
                 variant="secondary"
-                style={{ marginTop: 12, minHeight: 46 }}
+                style={{ marginTop: 12 }}
                 disabled={invited.has(w.id)}
                 onClick={() => invite(w.id)}
               >

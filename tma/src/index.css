@@ -123,6 +123,11 @@ input[type="range"] {
   border-radius: var(--btn-radius);
   font-family: inherit;
   font-weight: 700;
+  /* Браузер даёт кнопке своё «normal» (около 1.2), и общий межстрочный из
+     body внутрь не попадает: двухстрочная подпись слипалась. А подписи тут
+     длинные — «Ждём ответа работника», «Сохранить и смотреть смены», — и в
+     крупном режиме они переносятся почти всегда. */
+  line-height: 1.25;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -1112,6 +1117,18 @@ body[data-large="1"] .page {
   max-width: 11ch;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Число «сколько нашлось» стоит рядом с названием города, а не внутри него:
+   обрезается только название, число видно всегда. */
+.chip-count {
+  flex: none;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.chip-count::before {
+  content: "·";
+  margin: 0 4px 0 0;
+  opacity: 0.6;
 }
 .chip-caret {
   display: inline-flex;

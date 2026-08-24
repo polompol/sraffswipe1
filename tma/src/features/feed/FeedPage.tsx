@@ -150,9 +150,8 @@ export function FeedPage() {
   // Без выбранного города — «Рядом», а не «Все города»: сервер и так отдаёт
   // ленту по городу самого человека (у заведения — по его городу, у
   // соискателя — по профилю и радиусу). «Все города» было бы неправдой.
-  const cityChipValue =
-    (filters.city || "Рядом") +
-    (typeof data?.length === "number" ? ` · ${data.length}` : "");
+  const cityChipValue = filters.city || "Рядом";
+  const foundCount = typeof data?.length === "number" ? data.length : undefined;
 
   /** Снять один фильтр, не трогая остальные. */
   function clearFilter(key: keyof FeedFilters) {
@@ -178,6 +177,7 @@ export function FeedPage() {
           label: "Город",
           picker: true,
           value: cityChipValue,
+          count: foundCount,
           icon: <IconPin size={13} />,
           onPick: () => setFilterOpen(true),
         },
@@ -207,12 +207,13 @@ export function FeedPage() {
           label: "Город",
           picker: true,
           value: cityChipValue,
+          count: foundCount,
           icon: <IconPin size={13} />,
           onPick: () => setFilterOpen(true),
         },
         {
           label: "Сегодня",
-          value: filters.available_today ? "Готов сегодня" : undefined,
+          value: filters.available_today ? "Может сегодня" : undefined,
           icon: <IconFire size={13} />,
           onPick: () =>
             applyFilters({ ...filters, available_today: !filters.available_today || undefined }),
@@ -469,7 +470,7 @@ export function FeedPage() {
       {isError && <ErrorBox onRetry={() => refetch()} />}
 
       {!isLoading && !isError && data && (empty || data.length === 0) && (
-        <div className="card" style={{ textAlign: "center", padding: 40 }}>
+        <div className="card" style={{ textAlign: "center", padding: "var(--space-5)" }}>
           <div style={{
             width: 64, height: 64, borderRadius: "50%", margin: "0 auto",
             background: "var(--grad-brand)", color: "var(--on-brand)",

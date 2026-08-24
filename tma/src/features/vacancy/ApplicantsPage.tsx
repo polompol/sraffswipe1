@@ -9,7 +9,7 @@ import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { Avatar } from "@/components/Avatar";
 import { reliabilityText } from "@/lib/reliability";
-import { fmtDate, fmtTime } from "@/lib/format";
+import { dec1, shiftWhen } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { MED_BOOK_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import type { MedBookStatus, StaffRole } from "@/types/domain";
@@ -104,7 +104,7 @@ export function ApplicantsPage() {
                   )}
                   <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2 }}>
                     {a.rating > 0 ? (
-                      <><IconStar size={12} /> {a.rating.toFixed(1)}</>
+                      <><IconStar size={12} /> {dec1(a.rating)}</>
                     ) : "Новичок"}
                     {a.district ? ` · ${a.district}` : ""}
                     {a.shiftsTotal > 0
@@ -117,7 +117,7 @@ export function ApplicantsPage() {
                     className="tag"
                     style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}
                   >
-                    <IconBolt size={12} /> готов сегодня
+                    <IconBolt size={12} /> может сегодня
                   </span>
                 )}
               </div>
@@ -142,8 +142,14 @@ export function ApplicantsPage() {
               >
                 <IconCalendar size={13} />
                 {STAFF_ROLE_LABELS[a.vacancyRole as StaffRole] ?? a.vacancyRole}
-                {" · "}{fmtDate(a.vacancyDate)}
-                {" · "}{fmtTime(a.vacancyStart)}–{fmtTime(a.vacancyEnd)}
+                {" ·\u00a0"}
+                <span style={{ whiteSpace: "nowrap" }}>
+                  {shiftWhen({
+                    shiftDate: a.vacancyDate,
+                    shiftStart: a.vacancyStart,
+                    shiftEnd: a.vacancyEnd,
+                  })}
+                </span>
               </div>
 
               {a.about && (
@@ -167,7 +173,7 @@ export function ApplicantsPage() {
                 }}
               >
                 <Button onClick={() => answer(a, true)}>
-                  {a.declined ? "Передумал — беру" : "Беру на смену"}
+                  {a.declined ? "Всё-таки беру" : "Беру на смену"}
                 </Button>
                 {!a.declined && (
                   <Button variant="ghost" onClick={() => answer(a, false)}>

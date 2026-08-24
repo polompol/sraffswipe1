@@ -48,8 +48,68 @@ export function isUrgentShift(dateIso: string): boolean {
   return dateIso === todayISO();
 }
 
+/** Дробное число по-русски: «7,5», «4,7».
+ *
+ *  toFixed даёт точку — «7.5 ч», «4.7». Рядом на той же карточке сумма уже
+ *  набрана по-русски («4 500» с неразрывным пробелом), и точка в соседней
+ *  строке читается как опечатка. В деталях смены она попадала прямо в
+ *  денежную строку: «350 ₽/час × 7.5 ч ≈ 2 625 ₽».
+ */
+export function dec1(n: number): string {
+  return n.toLocaleString("ru-RU", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+/** Сколько мест на смене осталось: «свободно 1 из 4».
+ *
+ *  Одна фраза на оба вида ленты. Раньше в списке писали «набрано 3 из 4», а
+ *  на карточке — «Нужно 4 человека · свободно 1»: вид переключается кнопкой
+ *  в шапке, и по одной и той же смене человек видел то «3», то «1». Пусто,
+ *  когда место всего одно, — там считать нечего.
+ */
+export function slotsLabel(headcount?: number, slotsLeft?: number): string {
+  const need = headcount ?? 1;
+  if (need <= 1) return "";
+  const left = slotsLeft ?? need;
+  if (left <= 0) return "мест не осталось";
+  return `свободно ${left} из ${need}`;
+}
+
+/** Сколько часов длится смена: 20:00–04:00 — это 8, а не −16.
+ *
+ *  Нужна там, где поле надо предзаполнить из самой смены. Раньше в шторке
+ *  «Сколько часов вышло» всегда стояло «8», а в переносе — «10:00» и
+ *  «18:00»: у ночной смены администратор менял только дату, и смена молча
+ *  становилась дневной. А на этих часах считаются оплата и комиссия.
+ */
+export function shiftLengthHours(m: {
+  shiftStart?: number;
+  shiftEnd?: number;
+}): number {
+  let mins = (m.shiftEnd ?? 0) - (m.shiftStart ?? 0);
+  if (mins <= 0) mins += 1440;
+  return Math.round((mins / 60) * 10) / 10;
+}
+
+/** Число по-русски, дробная часть — только если она есть: «8», «7,5».
+ *
+ *  Для длительности смены: «8,0 ч» выглядело бы придиркой, а «7.5 ч» с
+ *  точкой — опечаткой.
+ */
+export function numRu(n: number): string {
+  return n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+}
+
+/** Ставка с суффиксом: «350 ₽/час», «4 500 ₽/смена».
+ *
+ *  Разряды обязательны: плашка на карточке давала «4500 ₽/смена», а тело той
+ *  же карточки и детали смены — «4 500 ₽». Человек видел два разных числа на
+ *  одном экране и начинал сверять, не разные ли это деньги.
+ */
 export function rateLabel(rate: number, type: RateType): string {
-  return `${rate} ${RATE_SUFFIX[type]}`;
+  return `${rate.toLocaleString("ru-RU")} ${RATE_SUFFIX[type]}`;
 }
 
 export function estimatedPay(v: Vacancy): number {

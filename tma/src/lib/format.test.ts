@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   plural,
   fmtTime,
+  dec1,
   rateLabel,
   estimatedPay,
   todayISO,
@@ -17,9 +18,17 @@ describe("format", () => {
     expect(fmtTime(23 * 60 + 30)).toBe("23:30");
   });
 
+  it("дробные — через запятую, как принято по-русски", () => {
+    expect(dec1(7.5)).toBe("7,5");
+    expect(dec1(4)).toBe("4,0");
+    expect(dec1(1.64)).toBe("1,6");
+  });
+
   it("rateLabel добавляет суффикс", () => {
     expect(rateLabel(350, "perHour")).toBe("350 ₽/час");
-    expect(rateLabel(4500, "perShift")).toBe("4500 ₽/смена");
+    // Разряды: иначе плашка «4500 ₽/смена» спорит с «4 500 ₽» в теле
+    // карточки и в деталях смены — одно и то же число в двух видах.
+    expect(rateLabel(4500, "perShift")).toBe("4\u00a0500 ₽/смена");
   });
 
   it("estimatedPay: за смену — как есть, за час — умножает на часы", () => {
