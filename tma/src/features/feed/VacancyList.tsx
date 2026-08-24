@@ -15,53 +15,11 @@ import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
+import { Avatar } from "@/components/Avatar";
 import { ReportSheet } from "@/components/ReportSheet";
 import { Sheet } from "@/components/Sheet";
 import { IconFire, IconShare, IconWarning, IconBookmark, IconMore } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
-
-/** Миниатюра 64×64 с фолбэком: бренд-градиент+инициал, поверх — фото (если
- *  загрузилось). Битая ссылка не оставляет пустой квадрат. */
-function Thumb({ src, initial }: { src?: string; initial: string }) {
-  const [ok, setOk] = useState(!!src);
-  return (
-    <div
-      style={{
-        width: 64,
-        height: 64,
-        borderRadius: 14,
-        flex: "none",
-        position: "relative",
-        overflow: "hidden",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "rgba(255,255,255,.9)",
-        fontWeight: 800,
-        fontSize: "var(--text-xl)",
-        background: "var(--grad-brand)",
-      }}
-    >
-      {!ok && initial}
-      {src && (
-        <img
-          src={src}
-          alt=""
-          onError={() => setOk(false)}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            opacity: ok ? 1 : 0,
-            transition: "opacity .3s ease",
-          }}
-        />
-      )}
-    </div>
-  );
-}
 
 /** Список-вид ленты — альтернатива свайпу для тех, кто любит просматривать. */
 export function VacancyList({
@@ -105,7 +63,7 @@ export function VacancyList({
       {items.map((v) => (
         <div key={v.id} className="card fade-up">
           <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-            <Thumb src={v.interiorPhotoUrl} initial={(v.companyName || "С").charAt(0)} />
+            <Avatar size={64} src={v.interiorPhotoUrl} name={v.companyName || "Смена"} />
             <div className="grow">
               {/* Заголовку — вся ширина строки. Иконки закладки и «поделиться»
                   перенесены вниз: в одной строке с ними название сжималось до
@@ -123,7 +81,7 @@ export function VacancyList({
                   {v.companyName}
                 </b>
                 {isUrgentShift(v.date) && (
-                  <span className="tag pulse" style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}><IconFire size={12} /> Сегодня</span>
+                  <span className="tag tag-gold pulse" style={{ flex: "none" }}><IconFire size={12} /> Сегодня</span>
                 )}
               </div>
               <div className="muted" style={{ marginTop: 2 }}>

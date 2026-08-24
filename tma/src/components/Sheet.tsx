@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { showBackButton } from "@/telegram/sdk";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]),' +
@@ -51,6 +52,9 @@ export function useDialog<T extends HTMLElement>(onClose: () => void) {
     // обнаруживает, что список уехал куда-то вниз сам собой.
     const bodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // «Назад» в Telegram закрывает шторку, а не уводит с экрана: обработчик
+    // ложится поверх экранного и снимается вместе с окном.
+    const restoreBack = showBackButton(() => closeRef.current());
     box?.focus();
 
     function focusables(): HTMLElement[] {
@@ -92,6 +96,7 @@ export function useDialog<T extends HTMLElement>(onClose: () => void) {
     return () => {
       document.body.style.overflow = bodyOverflow;
       document.removeEventListener("keydown", onKey, true);
+      restoreBack();
       showBackground();
       restoreTo?.focus?.();
     };
