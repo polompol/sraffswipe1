@@ -6,6 +6,7 @@ import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
+import { Avatar } from "@/components/Avatar";
 import { ReviewStars } from "@/components/ReviewStars";
 import { Sheet } from "@/components/Sheet";
 import { IconTabMatches, IconCheck, IconWarning, IconChevronRight, IconDoc } from "@/components/Icons";
@@ -22,49 +23,6 @@ import { haptic, confirmAction, openExternal } from "@/telegram/sdk";
 function counterpart(m: MatchModel, role: string | null): string {
   const name = role === "employer" ? m.seekerName : m.companyName;
   return (name || "").trim() || (role === "employer" ? "Работник" : "Заведение");
-}
-
-/** Аватар заведения: буква на градиенте, поверх — фото, если оно есть и
- *  загрузилось. Битая ссылка не оставляет пустого места. Размер задан классом
- *  (.match-ava): на узком экране он меньше — иначе колонке с названием
- *  оставалось 158 точек из 254, и короткое «Бар «Полночь»» ломалось надвое. */
-function MatchAvatar({ src, initial }: { src?: string; initial: string }) {
-  const [ok, setOk] = useState(!!src);
-  return (
-    <span
-      className="match-ava"
-      style={{
-        borderRadius: "var(--radius-sm)",
-        flex: "none",
-        position: "relative",
-        overflow: "hidden",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--grad-brand)",
-        color: "var(--on-brand)",
-        fontWeight: 800,
-        fontSize: "var(--text-lg)",
-      }}
-    >
-      {!ok && initial}
-      {src && (
-        <img
-          src={src}
-          alt=""
-          onError={() => setOk(false)}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            opacity: ok ? 1 : 0,
-          }}
-        />
-      )}
-    </span>
-  );
 }
 
 /** Состояние смены одной заметной строкой.
@@ -123,17 +81,7 @@ function HowItWorks({ role }: { role: string | null }) {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        style={{
-          minHeight: 44,
-          padding: 0,
-          background: "none",
-          border: "none",
-          color: "var(--link)",
-          font: "inherit",
-          fontSize: "var(--text-sm)",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
+        className={"text-btn text-btn--link"}
       >
         {open ? "Свернуть" : "Как это работает"}
       </button>
@@ -306,9 +254,13 @@ export function MatchesPage() {
                 }}
                 onClick={() => nav(`/chat/${m.id}`)}
               >
-                <MatchAvatar
+                {/* Размер задан классом .match-ava: на узком экране он меньше
+                    — иначе колонке с названием оставалось 158 точек из 254, и
+                    короткое «Бар «Полночь»» ломалось надвое. */}
+                <Avatar
+                  className="match-ava"
                   src={role === "employer" ? undefined : m.companyPhotoUrl}
-                  initial={counterpart(m, role).charAt(0)}
+                  name={counterpart(m, role)}
                 />
                 <span className="grow">
                   <div className="match-name">{counterpart(m, role)}</div>
@@ -473,19 +425,8 @@ export function MatchesPage() {
               {hasTrouble && (
                 <button
                   onClick={() => setTroubleFor(m)}
-                  style={{
-                    marginTop: 6,
-                    minHeight: 44,
-                    padding: 0,
-                    background: "none",
-                    border: "none",
-                    color: "var(--muted)",
-                    font: "inherit",
-                    fontSize: "var(--text-sm)",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
+                  className="text-btn"
+                  style={{ marginTop: 6, textAlign: "left" }}
                 >
                   Что-то пошло не так
                 </button>

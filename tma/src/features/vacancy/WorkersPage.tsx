@@ -6,10 +6,10 @@ import { showBackButton, haptic } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
-import { IconBriefcase, IconBolt, IconStar } from "@/components/Icons";
+import { IconBriefcase, IconBolt } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { reliabilityText } from "@/lib/reliability";
-import { dec1 } from "@/lib/format";
+import { Rating } from "@/components/Rating";
 import { apiError } from "@/lib/errors";
 
 /** «Мои работники» — кто уже выходил, чтобы позвать снова (постоянство). */
@@ -67,7 +67,7 @@ export function WorkersPage() {
                 )}
               </div>
               <div className="muted" style={{ marginTop: 4 }}>
-                {w.rating > 0 ? <><IconStar size={13} /> {dec1(w.rating)}</> : "Новичок"}
+                <Rating value={w.rating} />
                 {w.shiftsTotal > 0
                   ? ` · ${reliabilityText(w.shiftsTotal, w.shiftsAttended, w.employersTotal)}`
                   : ""}

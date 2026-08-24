@@ -25,12 +25,13 @@ import {
   IconCheck,
   IconBookmark,
   IconChevronRight,
-  IconStar,
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
+import { Avatar } from "@/components/Avatar";
+import { Rating } from "@/components/Rating";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
-import { dec1, plural } from "@/lib/format";
+import { plural } from "@/lib/format";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -416,34 +417,18 @@ export function ProfilePage() {
             Раньше вместо лица стояла иконка-портфель — та самая, которой на
             экране выбора роли подписано «Я ищу подработку». В своём профиле
             она читается как «вакансия», а не «это я». */}
-        <span style={{
-          width: 56, height: 56, borderRadius: 16, flex: "none",
-          background: "var(--grad-brand)", color: "var(--on-brand)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          overflow: "hidden", fontWeight: 800, fontSize: "var(--text-xl)",
-        }}>
-          {me?.photoUrl ? (
-            <img
-              src={me.photoUrl}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          ) : me?.name ? (
-            me.name.trim().charAt(0).toUpperCase()
-          ) : role === "employer" ? (
-            <IconStore size={30} />
-          ) : (
-            <IconBriefcase size={30} />
-          )}
-        </span>
+        <Avatar
+          size={56}
+          src={me?.photoUrl}
+          name={me?.name}
+          fallback={role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
+        />
         <span className="grow">
           <div style={{ fontWeight: 800, fontSize: "var(--text-lg)", overflowWrap: "anywhere" }}>
             {me?.name ?? (role === "employer" ? "Добавьте название" : "Добавьте имя")}
           </div>
           <div className="muted" style={{ overflowWrap: "anywhere" }}>
-            {me ? (me.rating > 0 ? (
-              <><IconStar size={13} /> {dec1(me.rating)}</>
-            ) : "Новичок") : "—"}
+            {me ? <Rating value={me.rating} /> : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
             {/* У заведения то же число стоит отдельной карточкой «Смен
                 проведено» ниже по экрану: два одинаковых числа в пяти

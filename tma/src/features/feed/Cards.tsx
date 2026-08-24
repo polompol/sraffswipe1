@@ -36,6 +36,7 @@ import {
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { reliabilityText } from "@/lib/reliability";
+import { Rating } from "@/components/Rating";
 import { haptic } from "@/telegram/sdk";
 
 const PAY_ICON: Record<PayMethod, typeof IconCash> = {
@@ -282,9 +283,17 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             // строка уходит первой. Рейтинг заведения полезен, но адрес, часы
             // и медкнижка решают, ехать ли вообще, — они важнее.
             <div className="card-meta-trust">
-              <IconStar size={14} /> {v.employerRating ? dec1(v.employerRating) : "—"}
+              {/* Прочерк вместо оценки читался как «ноль». У заведения без
+                  оценок просто не показываем звезду — закрытые смены говорят
+                  сами за себя. */}
+              {!!v.employerRating && (
+                <>
+                  <IconStar size={14} /> {dec1(v.employerRating)}
+                  {v.employerShiftsDone ? " · " : ""}
+                </>
+              )}
               {v.employerShiftsDone
-                ? ` · ${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} ${plural(v.employerShiftsDone, "закрыта", "закрыто", "закрыто")}`
+                ? `${v.employerShiftsDone} ${plural(v.employerShiftsDone, "смена", "смены", "смен")} ${plural(v.employerShiftsDone, "закрыта", "закрыто", "закрыто")}`
                 : ""}
             </div>
           ) : null}
@@ -373,7 +382,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           запрещали переноситься именно поэтому. */}
       <div className="swipe-top">
         <div className="row" style={{ gap: 8, flexWrap: "wrap", rowGap: 8 }}>
-        <span className="glass" style={{ flex: "none" }}>{s.rating > 0 ? <><IconStar size={13} /> {dec1(s.rating)}</> : "Новичок"}</span>
+        <span className="glass" style={{ flex: "none" }}><Rating value={s.rating} /></span>
         {s.availableToday && (
           // Тёмный текст на золоте. Белый по золоту давал контраст 2.3:1 —
           // самая заметная плашка карточки читалась хуже всего остального.

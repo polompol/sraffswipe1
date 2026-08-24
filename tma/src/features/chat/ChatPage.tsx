@@ -462,19 +462,8 @@ export function ChatPage() {
           <button
             onClick={loadOlder}
             disabled={olderLoading}
-            style={{
-              display: "block",
-              margin: "0 auto 10px",
-              // 44px — минимальная зона, в которую уверенно попадает палец.
-              minHeight: 44,
-              padding: "0 14px",
-              background: "none",
-              border: "none",
-              color: "var(--muted)",
-              fontSize: "var(--text-sm)",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            className="text-btn"
+            style={{ display: "block", margin: "0 auto 10px", padding: "0 14px" }}
           >
             {olderLoading ? "Загружаем…" : "Показать старые сообщения"}
           </button>
@@ -579,17 +568,8 @@ export function ChatPage() {
           {canAct && (
             <button
               onClick={() => setTroubleOpen(true)}
-              style={{
-                marginTop: 8,
-                width: "100%",
-                minHeight: 44,
-                background: "none",
-                border: "none",
-                color: "var(--muted)",
-                fontSize: "var(--text-sm)",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              className="text-btn"
+              style={{ marginTop: 8, width: "100%" }}
             >
               Изменить смену
             </button>

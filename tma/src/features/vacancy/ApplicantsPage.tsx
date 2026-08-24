@@ -9,11 +9,12 @@ import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { Avatar } from "@/components/Avatar";
 import { reliabilityText } from "@/lib/reliability";
-import { dec1, shiftWhen } from "@/lib/format";
+import { shiftWhen } from "@/lib/format";
+import { Rating } from "@/components/Rating";
 import { apiError } from "@/lib/errors";
 import { MED_BOOK_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import type { MedBookStatus, StaffRole } from "@/types/domain";
-import { IconBell, IconBolt, IconCalendar, IconStar } from "@/components/Icons";
+import { IconBell, IconBolt, IconCalendar } from "@/components/Icons";
 
 /**
  * «Кто откликнулся» — зеркало экрана «Тебя зовут» у работника.
@@ -100,9 +101,7 @@ export function ApplicantsPage() {
                     </span>
                   )}
                   <div className="hint">
-                    {a.rating > 0 ? (
-                      <><IconStar size={12} /> {dec1(a.rating)}</>
-                    ) : "Новичок"}
+                    <Rating value={a.rating} size={12} />
                     {a.district ? ` · ${a.district}` : ""}
                     {a.shiftsTotal > 0
                       ? ` · ${reliabilityText(a.shiftsTotal, a.shiftsAttended, a.employersTotal)}`

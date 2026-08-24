@@ -396,21 +396,11 @@ export function CreateVacancyPage() {
           <button
             type="button"
             onClick={() => setCustom(true)}
-            style={{
-              background: "none",
-              border: "none",
-              // Ссылка-кнопка была высотой около 30px: по ней промахивались.
-              minHeight: 44,
-              padding: "4px 0 12px",
-              // Не ссылка с подчёркиванием: багровый подчёркнутый текст в
-              // ряду кнопок читался как сообщение об ошибке, хотя это обычный
-              // способ вписать своё число.
-              color: "var(--gold)",
-              font: "inherit",
-              fontSize: "var(--text-sm)",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
+            /* Не ссылка с подчёркиванием: багровый подчёркнутый текст в ряду
+               кнопок читался как сообщение об ошибке, хотя это обычный способ
+               вписать своё число. */
+            className="text-btn text-btn--gold"
+            style={{ padding: "4px 0 12px" }}
           >
             Нужно другое число
           </button>

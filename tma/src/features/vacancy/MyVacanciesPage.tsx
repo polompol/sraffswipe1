@@ -175,17 +175,7 @@ export function MyVacanciesPage() {
               )}
               <button
                 onClick={() => setMoreFor(v)}
-                style={{
-                  minHeight: 44,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  color: "var(--muted)",
-                  font: "inherit",
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                className={"text-btn"}
               >
                 Ещё
               </button>
