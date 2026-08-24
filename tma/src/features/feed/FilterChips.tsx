@@ -47,10 +47,11 @@ export function FilterChips({ chips }: { chips: Chip[] }) {
               type="button"
               className="chip-main"
               aria-pressed={on}
-              // Вслух: «Роль: Бариста» — а не просто «Бариста», иначе
-              // непонятно, что это фильтр и по какому полю.
+              // «Роль: Бариста» — а не просто «Бариста», иначе непонятно, что
+              // это условие и по какому полю. Но у переключателей значение
+              // совпадает с названием, и вслух выходило «Сегодня: Сегодня».
               aria-label={
-                (on ? `${c.label}: ${c.value}` : c.label)
+                (on && c.value !== c.label ? `${c.label}: ${c.value}` : c.label)
                 + (c.count != null ? `, найдено: ${c.count}` : "")
               }
               onClick={c.onPick}

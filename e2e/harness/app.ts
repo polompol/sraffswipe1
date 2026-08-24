@@ -1,4 +1,6 @@
 import type { APIRequestContext, Browser, BrowserContext, Page } from "@playwright/test";
+import { DatabaseSync } from "node:sqlite";
+
 import { API_URL } from "./env";
 
 export interface Session {
@@ -158,4 +160,37 @@ export async function waitForStableLayout(page: Page, selector: string): Promise
     selector,
     { polling: "raf", timeout: 10_000 },
   );
+}
+
+/** Перемотать смену в прошлое — чтобы её можно было закрыть.
+ *
+ *  Закрыть смену, отметить неявку и уточнить часы можно только ПОСЛЕ её
+ *  окончания: без этого правила пара сговорившихся аккаунтов набивала бы себе
+ *  закрытые смены и рейтинг за минуты, а работник мог получить ложную неявку
+ *  ещё до того, как выйдет на работу.
+ *
+ *  Живому браузеру время не перемотать, поэтому дату смены двигаем прямо в
+ *  базе — той самой, что создана для этого прогона. Служебных ручек ради
+ *  тестов в приложении заводить нельзя: любая такая ручка живёт и в бою.
+ *
+ *  Двигаем на СУТКИ С ЗАПАСОМ, а не «на вчера»: в час ночи вчерашняя смена
+ *  10:00–18:00 закончилась семь часов назад, а расчёту нужно двенадцать — и
+ *  тест падал бы по ночам при исправном коде.
+ */
+export function ageShift(matchId: string, days = 2): void {
+  const file = process.env.E2E_DB;
+  if (!file) throw new Error("не задан путь к базе прогона (E2E_DB)");
+  const db = new DatabaseSync(file);
+  try {
+    const row = db
+      .prepare("SELECT vacancy_id FROM matches WHERE id = ?")
+      .get(matchId) as { vacancy_id?: string } | undefined;
+    if (!row?.vacancy_id) throw new Error(`смена ${matchId} не найдена`);
+    const past = new Date(Date.now() - days * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    db.prepare("UPDATE vacancies SET date = ? WHERE id = ?").run(past, row.vacancy_id);
+  } finally {
+    db.close();
+  }
 }
