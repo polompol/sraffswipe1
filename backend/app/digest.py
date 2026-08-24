@@ -15,6 +15,7 @@ from .models import Employer, Match, Swipe, User, Vacancy
 from .notify import notify_owner
 from .roles import date_ru, role_ru, time_ru
 from .rubles import plural
+from .shift_rules import accrue_commission, sys_message
 from .timeutil import local_today, shift_end_utc
 
 _log = logging.getLogger("staffswipe")
@@ -366,8 +367,6 @@ def settle_shifts(db: Session) -> int:
     Не трогаем: спорные смены (их решает оператор) и те, по которым уже
     заявили, что смены не было.
     """
-    from .routers.matches import _accrue_commission, _sys
-
     now = datetime.now(UTC)
     deadline = now - timedelta(hours=SETTLE_AFTER_HOURS)
     too_old = now - timedelta(days=SETTLE_MAX_AGE_DAYS)
@@ -394,14 +393,14 @@ def settle_shifts(db: Session) -> int:
             # помнит, — верный способ поссориться с заведением. Закрываем без
             # комиссии, чтобы смена не висела вечно и не держала место.
             m.status = "expired"
-            _sys(db, m.id,
+            sys_message(db, m.id,
                  "Смена закрыта без комиссии: с её окончания прошло слишком "
                  "много времени, чтобы разбираться автоматически.")
             continue
         m.status = "completed"
         m.no_show = False
-        _accrue_commission(db, m)
-        _sys(db, m.id, "Смена закрыта ✓ Возражений не поступило.")
+        accrue_commission(db, m)
+        sys_message(db, m.id, "Смена закрыта ✓ Возражений не поступило.")
         # Коммит на КАЖДУЮ смену, и только потом уведомления. Раньше был один
         # коммит на весь прогон, а сообщения улетали сразу: любой конфликт при
         # записи (например гонка с отметкой кодом, где на комиссию стоит

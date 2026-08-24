@@ -100,8 +100,8 @@ def test_two_simultaneous_accruals_charge_once(client, age_shift, monkeypatch):
     Дальше — настоящий код и настоящая уникальность в базе. Проигравший в
     гонке должен молча уйти, не сломав ни свою работу, ни чужую.
     """
-    import app.routers.matches as matches_module
-    from app.routers.matches import _accrue_commission
+    import app.shift_rules as rules
+    from app.shift_rules import accrue_commission
 
     emp_h, eid, mid = _matched(client, tg=960100)
     admin_h, _ = _auth(client, "seeker")   # tg_id=0 — оператор
@@ -111,17 +111,17 @@ def test_two_simultaneous_accruals_charge_once(client, age_shift, monkeypatch):
     # Б успевает первой и фиксирует начисление.
     b = SessionLocal()
     try:
-        _accrue_commission(b, b.get(Match, mid))
+        accrue_commission(b, b.get(Match, mid))
         b.commit()
     finally:
         b.close()
     assert len(_commissions(mid)) == 1
 
     # А идёт следом со СТАРЫМ знанием «начисления нет» — то самое окно гонки.
-    monkeypatch.setattr(matches_module, "_already_accrued", lambda db, mid: False)
+    monkeypatch.setattr(rules, "already_accrued", lambda db, mid: False)
     a = SessionLocal()
     try:
-        _accrue_commission(a, a.get(Match, mid))
+        accrue_commission(a, a.get(Match, mid))
         a.commit()
     finally:
         a.close()
@@ -169,16 +169,16 @@ def test_scheduler_and_button_together_charge_once(client, age_shift):
 
 def test_without_balance_the_debt_is_counted_once(client, age_shift):
     """Без аванса комиссия висит счётом — и в гонке тоже ровно одна."""
-    from app.routers.matches import _accrue_commission
+    from app.shift_rules import accrue_commission
 
     emp_h, eid, mid = _matched(client, tg=960300)
     age_shift(mid, 0)
 
     a, b = SessionLocal(), SessionLocal()
     try:
-        _accrue_commission(b, b.get(Match, mid))
+        accrue_commission(b, b.get(Match, mid))
         b.commit()
-        _accrue_commission(a, a.get(Match, mid))
+        accrue_commission(a, a.get(Match, mid))
         a.commit()
     finally:
         a.close()
