@@ -12,7 +12,7 @@ import { Sheet } from "@/components/Sheet";
 import { IconTabMatches, IconCheck, IconWarning, IconChevronRight, IconDoc } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
-import { canReportNoPay, shiftEnded, shiftStarted, shiftWhen } from "@/lib/format";
+import { canReportNoPay, money, shiftEnded, shiftStarted, shiftWhen } from "@/lib/format";
 import { Button } from "@/components/Button";
 import { baseURL, getToken } from "@/api/client";
 import { haptic, confirmAction, openExternal } from "@/telegram/sdk";
@@ -290,7 +290,7 @@ export function MatchesPage() {
                 // точках она читалась как хвостик строки состояния, хотя это
                 // главное число здесь.
                 <div style={{ marginTop: 12, fontWeight: 800, fontSize: "var(--text-md)" }}>
-                  {m.shiftPay.toLocaleString("ru-RU")} ₽
+                  {money(m.shiftPay)}
                   {/* Заведение не зарабатывает на смене, а платит за неё:
                       «заработано» в его списке читалось как ошибка. */}
                   {m.status === "completed"

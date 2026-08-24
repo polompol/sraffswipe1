@@ -3,6 +3,8 @@ import {
   plural,
   fmtTime,
   dec1,
+  distance,
+  money,
   rateLabel,
   estimatedPay,
   todayISO,
@@ -22,6 +24,19 @@ describe("format", () => {
     expect(dec1(7.5)).toBe("7,5");
     expect(dec1(4)).toBe("4,0");
     expect(dec1(1.64)).toBe("1,6");
+  });
+
+  it("деньги — с разрядами и неразрывным знаком рубля", () => {
+    // Разрывный пробел оставлял «3 200» в конце строки, а «₽» уносил вниз.
+    expect(money(3200)).toBe("3\u00a0200\u00a0₽");
+    expect(money(0)).toBe("0\u00a0₽");
+    expect(money(1000000)).toBe("1\u00a0000\u00a0000\u00a0₽");
+  });
+
+  it("расстояние — через запятую, и пусто без данных", () => {
+    expect(distance(1.64)).toBe("1,6\u00a0км");
+    expect(distance(12)).toBe("12,0\u00a0км");
+    expect(distance(undefined)).toBe("");
   });
 
   it("rateLabel добавляет суффикс", () => {

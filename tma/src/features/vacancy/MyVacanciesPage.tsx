@@ -81,15 +81,13 @@ export function MyVacanciesPage() {
         }}
       >
         <button
-          className="tag"
-          style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
+          className="tag tag-nav"
           onClick={() => nav("/applicants")}
         >
           Кто откликнулся
         </button>
         <button
-          className="tag"
-          style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
+          className="tag tag-nav"
           onClick={() => nav("/workers")}
         >
           Мои работники

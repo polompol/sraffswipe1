@@ -31,7 +31,7 @@ import { Avatar } from "@/components/Avatar";
 import { Rating } from "@/components/Rating";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
-import { plural } from "@/lib/format";
+import { money, plural } from "@/lib/format";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -70,7 +70,7 @@ function CommissionCard() {
         <b>Комиссия сервиса · {bill.pct}%</b>
         <span className="spacer" />
         <b style={{ color: due ? "var(--gold)" : "var(--muted)" }}>
-          {bill.pendingRub.toLocaleString("ru-RU")} ₽
+          {money(bill.pendingRub)}
         </b>
       </div>
       <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-sm)" }}>
@@ -90,7 +90,7 @@ function CommissionCard() {
       <div className="row" style={{ marginTop: 10 }}>
         <span className="muted" style={{ fontSize: "var(--text-sm)" }}>Баланс</span>
         <span className="spacer" />
-        <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
+        <b>{money(bill.balanceRub)}</b>
       </div>
       {/* Документы для бухгалтерии. Ресторан-юрлицо не проведёт оплату по
           безналу без счёта с реквизитами и не поставит расход без акта —
@@ -158,7 +158,7 @@ function CommissionCard() {
                 }}
                 onClick={() => topup(a)}
               >
-                {a.toLocaleString("ru-RU")} ₽
+                {money(a)}
               </button>
             ))}
           </div>

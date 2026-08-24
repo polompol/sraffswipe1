@@ -457,6 +457,14 @@ input:focus-visible {
   color: var(--muted);
   border-color: var(--border);
 }
+/* Чип-кнопка перехода: «Кто откликнулся», «Мои работники». Обычный цвет
+   текста и заметная рамка — это переход, а не выбранный фильтр. */
+.tag.tag-nav {
+  color: var(--text);
+  border-color: var(--border-strong);
+  cursor: pointer;
+}
+
 /* Плашка мелким кеглем — в плотных списках, где их по три в строке. */
 .tag-sm {
   font-size: var(--text-xs);

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { PAY_METHOD_SHORT, STAFF_ROLE_LABELS } from "@/types/domain";
 import {
-  dec1,
+  distance,
   fmtTime,
   isUrgentShift,
   plural,
@@ -92,7 +92,7 @@ export function VacancyList({
               </div>
               <div className="muted">
                 {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
-                {typeof v.distanceKm === "number" ? ` · ${dec1(v.distanceKm)} км` : ""}
+                {distance(v.distanceKm) ? ` · ${distance(v.distanceKm)}` : ""}
               </div>
             </div>
           </div>

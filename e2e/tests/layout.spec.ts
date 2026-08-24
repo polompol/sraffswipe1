@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { API_URL } from "../harness/env";
-import { auth, fillProfile, login, openApp, publishShift } from "../harness/app";
+import {
+  auth,
+  fillProfile,
+  login,
+  openApp,
+  publishShift,
+  waitForStableLayout,
+} from "../harness/app";
 
 /**
  * РАСКЛАДКА НА РАЗНЫХ ТЕЛЕФОНАХ — постоянная проверка вместо разовых замеров.
@@ -65,6 +72,9 @@ test.describe("лента на любом телефоне", () => {
       await page.setViewportSize({ width: phone.w, height: phone.h });
       await page.goto("/#/feed");
       await expect(page.locator(".swipe-card").first()).toBeVisible();
+      // Замеры — только когда экран перестал двигаться: карточка появляется
+      // с анимацией, и промежуточный кадр даёт неверную геометрию.
+      await waitForStableLayout(page, ".deck");
 
       const m = await page.evaluate(() => {
         const de = document.documentElement;

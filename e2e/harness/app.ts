@@ -127,3 +127,35 @@ export async function fillProfile(
     throw new Error(`анкета не сохранилась (${res.status()}): ${await res.text()}`);
   }
 }
+
+/** Дождаться, пока экран перестанет двигаться.
+ *
+ *  Карточка появляется с анимацией: страница выезжает снизу (`pageIn`),
+ *  колода расставляет карты пружинами. `toBeVisible()` срабатывает раньше —
+ *  элемент уже виден, но ещё едет, и замеры геометрии ловят промежуточный
+ *  кадр. Раз в несколько прогонов из-за этого падала проверка раскладки на
+ *  дешёвом андроиде: доля экрана под карточкой оказывалась меньше порога.
+ *
+ *  Ждём, пока прямоугольник перестанет меняться три кадра подряд, — этого
+ *  достаточно и для CSS-анимаций, и для пружин, которые Web Animations не
+ *  используют вовсе.
+ */
+export async function waitForStableLayout(page: Page, selector: string): Promise<void> {
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return false;
+      const w = window as unknown as { __ss?: { box: string; same: number } };
+      const box = JSON.stringify(el.getBoundingClientRect());
+      const prev = w.__ss;
+      if (!prev || prev.box !== box) {
+        w.__ss = { box, same: 0 };
+        return false;
+      }
+      prev.same += 1;
+      return prev.same >= 3;
+    },
+    selector,
+    { polling: "raf", timeout: 10_000 },
+  );
+}

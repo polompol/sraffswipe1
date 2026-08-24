@@ -5,7 +5,14 @@ import {
   STAFF_ROLE_LABELS,
   TIPS_LABELS,
 } from "@/types/domain";
-import { dec1, estimatedPay, fmtTime, shiftDayLabel } from "@/lib/format";
+import {
+  distance,
+  estimatedPay,
+  fmtTime,
+  money,
+  numRu,
+  shiftDayLabel,
+} from "@/lib/format";
 import {
   IconMoney,
   IconPin,
@@ -100,15 +107,15 @@ export function ShiftDetailsSheet({
       <div className="muted">{STAFF_ROLE_LABELS[v.role]}</div>
 
       <Row icon={<IconCalendar size={18} />}>
-        {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)} · {hours} ч
+        {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)} · {numRu(hours)} ч
       </Row>
 
       <Row icon={<IconMoney size={18} />}>
         <b>Сколько заплатят</b>
         <div className="muted" style={{ marginTop: 2 }}>
           {v.rateType === "perHour"
-            ? `${v.rate} ₽/час × ${hours} ч ≈ ${estimatedPay(v).toLocaleString("ru-RU")} ₽`
-            : `${v.rate.toLocaleString("ru-RU")} ₽ за смену`}
+            ? `${money(v.rate)}/час × ${numRu(hours)} ч ≈ ${money(estimatedPay(v))}`
+            : `${money(v.rate)} за смену`}
           {v.payMethod ? ` · ${PAY_METHOD_LABELS[v.payMethod]}` : ""}
           {v.tips && v.tips !== "none" ? ` · ${TIPS_LABELS[v.tips]}` : ""}
         </div>
@@ -118,7 +125,7 @@ export function ShiftDetailsSheet({
         {v.address}
         {walkMin !== null && (
           <div className="muted" style={{ marginTop: 2 }}>
-            ~{walkMin} мин пешком · {v.distanceKm != null ? dec1(v.distanceKm) : "—"} км
+            ~{walkMin} мин пешком · {distance(v.distanceKm) || "—"}
           </div>
         )}
       </Row>

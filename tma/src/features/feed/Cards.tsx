@@ -11,9 +11,11 @@ import {
 } from "@/types/domain";
 import {
   dec1,
+  distance,
   estimatedPay,
   fmtTime,
   isUrgentShift,
+  money,
   plural,
   rateLabel,
   shiftDayLabel,
@@ -226,7 +228,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
         ) : null}
         {typeof v.distanceKm === "number" && (
           <span className="glass">
-            <IconPin size={13} /> {dec1(v.distanceKm)} км
+            <IconPin size={13} /> {distance(v.distanceKm)}
           </span>
         )}
         </div>
@@ -266,7 +268,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             fontVariantNumeric: "tabular-nums",
           }}>
             {v.rateType === "perShift" ? "" : "≈ "}
-            {estimatedPay(v).toLocaleString("ru-RU")} ₽ за смену
+            {money(estimatedPay(v))} за смену
           </div>
         )}
 

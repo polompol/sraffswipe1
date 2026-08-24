@@ -117,6 +117,21 @@ export function numRu(n: number): string {
   return n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
 }
 
+/** Деньги: «3 200 ₽».
+ *
+ *  Собиралось руками в восьми местах — `toLocaleString("ru-RU") + " ₽"`, и
+ *  кое-где без разрядов вовсе. Пробел перед знаком рубля неразрывный: иначе
+ *  «3 200» остаётся в конце строки, а «₽» уезжает на следующую.
+ */
+export function money(rub: number): string {
+  return `${rub.toLocaleString("ru-RU")}\u00a0₽`;
+}
+
+/** Расстояние: «1,6 км». Пусто, если сервер его не прислал. */
+export function distance(km?: number): string {
+  return typeof km === "number" ? `${dec1(km)}\u00a0км` : "";
+}
+
 /** Ставка с суффиксом: «350 ₽/час», «4 500 ₽/смена».
  *
  *  Разряды обязательны: плашка на карточке давала «4500 ₽/смена», а тело той
