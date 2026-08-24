@@ -17,6 +17,8 @@ import { SwipeDeck } from "./SwipeDeck";
 import { useFeedFilters, toggleTodayFilter } from "./useFeedFilters";
 import { useShiftAlerts } from "./useShiftAlerts";
 import { useSwipeAction } from "./useSwipeAction";
+import { FeedHeader } from "./FeedHeader";
+import { FeedEmpty } from "./FeedEmpty";
 import { LS } from "@/lib/storage";
 import { FilterChips, type Chip } from "./FilterChips";
 import { SeekerCardContent, VacancyCardContent } from "./Cards";
@@ -27,15 +29,10 @@ import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
-import { haptic } from "@/telegram/sdk";
-import { Logo } from "@/components/Logo";
 import { Button } from "@/components/Button";
 import {
   IconSkip,
   IconLike,
-  IconFilter,
-  IconList,
-  IconCards,
   IconFire,
   IconBell,
   IconPin,
@@ -229,74 +226,16 @@ export function FeedPage() {
 
   return (
     <div className={deckMode ? "page feed-deck" : "page"}>
-      {/* Шапка с именем сервиса. На низких экранах она ужимается (см.
-          .feed-head в index.css): место на телефоне принадлежит карточке,
-          а не логотипу — своё название человек и так знает. */}
-      <div className="row feed-head" style={{ marginBottom: 6, gap: 4 }}>
-        <span
-          aria-hidden
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 10,
-            marginRight: 8,
-            background: "linear-gradient(135deg,var(--gold-soft),var(--gold))",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Logo size={24} color="var(--on-brand)" />
-        </span>
-        {/* Именно h1: это главный экран приложения, и заголовка первого уровня
-            на нём не было вовсе — скринридер не мог назвать страницу. Класс
-            .h2 оставляем: он задаёт размер, а не уровень. */}
-        {/* Заголовок отвечает на вопрос, с которым человек открыл приложение,
-            а не повторяет его название: оно и так стоит слева значком, и своё
-            приложение человек узнаёт. У ролей вопросы разные — «какие смены
-            доступны» и «кто выйдет сегодня», — и экраны не должны выглядеть
-            одинаково. */}
-        <h1
-          className="h2"
-          style={{ margin: 0, flex: 1, fontSize: "var(--text-2xl)", letterSpacing: -0.3 }}
-        >
-          {isSeeker ? "Смены рядом" : "Кто свободен"}
-        </h1>
-        {isSeeker && (
-          <button
-            className="icon-btn"
-            // Тише фильтров: вид переключают редко, а фильтры — каждый день.
-            style={{ color: "var(--muted)" }}
-            aria-label={view === "swipe" ? "Показать списком" : "Показать карточками"}
-            onClick={() => {
-              const next = view === "swipe" ? "list" : "swipe";
-              setView(next);
-              localStorage.setItem(LS.view, next);
-              haptic("light");
-            }}
-          >
-            {view === "swipe" ? <IconList size={22} /> : <IconCards size={22} />}
-          </button>
-        )}
-        <button
-          className="icon-btn"
-          // Число активных фильтров нарисовано бейджем поверх иконки, но
-          // aria-label перекрывал его: вслух читалось просто «Фильтры», и
-          // сколько их включено — было не узнать.
-          aria-label={
-            activeFilterCount > 0
-              ? `Фильтры, включено: ${activeFilterCount}`
-              : "Фильтры"
-          }
-          style={{ color: activeFilterCount ? "var(--gold)" : undefined }}
-          onClick={() => setFilterOpen(true)}
-        >
-          <IconFilter size={22} />
-          {activeFilterCount > 0 && (
-            <span className="icon-badge">{activeFilterCount}</span>
-          )}
-        </button>
-      </div>
+      <FeedHeader
+        isSeeker={isSeeker}
+        view={view}
+        onView={(next) => {
+          setView(next);
+          localStorage.setItem(LS.view, next);
+        }}
+        activeFilterCount={activeFilterCount}
+        onFilters={() => setFilterOpen(true)}
+      />
 
       {/* ГЛАВНЫЕ ФИЛЬТРЫ — на экране, а не в шторке.
           Раньше всё жило за иконкой, и пустая лента читалась как «смен нет»,
@@ -344,67 +283,14 @@ export function FeedPage() {
       {isError && <ErrorBox onRetry={() => refetch()} />}
 
       {!isLoading && !isError && data && (empty || data.length === 0) && (
-        <div className="card" style={{ textAlign: "center", padding: "var(--space-5)" }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: "50%", margin: "0 auto",
-            background: "var(--grad-brand)", color: "var(--on-brand)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            {isSeeker ? <IconFilter size={34} /> : <IconBell size={34} />}
-          </div>
-          <h2 className="h2" style={{ marginTop: 12 }}>
-            {isSeeker
-              ? filters.city
-                ? `В городе ${filters.city} пока нет смен`
-                : "Вы посмотрели все смены"
-              : "Пока никого не нашли"}
-          </h2>
-          {/* Совет «уберите условия» имеет смысл, только если условия и правда
-              включены. Раньше он стоял всегда, и заведение с пустым набором
-              фильтров искало сверху то, чего там нет. */}
-          <p className="muted">
-            {activeFilterCount > 0
-              ? "Похоже, условия сверху слишком узкие — попробуйте снять пару"
-              : isSeeker
-                // Пусто: обещание «напишем в бота» целиком несёт подпись
-                // кнопки прямо под этой строкой — и, в отличие от неё,
-                // честно меняется после подписки.
-                ? ""
-                : "Загляните позже: новые люди отмечаются каждый день"}
-          </p>
-          {/* У заведения на пустом экране не было ни одной кнопки — только
-              совет. Если условия включены, дать выход отсюда обязательно. */}
-          {!isSeeker && activeFilterCount > 0 && (
-            <Button
-              variant="secondary"
-              style={{ marginTop: 14 }}
-              onClick={() => applyFilters({})}
-            >
-              Снять все условия
-            </Button>
-          )}
-          {/* Подписку прятать в пилоте было ошибкой: лента пуста именно на
-              старте, и это единственный способ не потерять человека, который
-              пришёл первым. Механика работает — незачем её скрывать. */}
-          {isSeeker && (
-            <Button
-              style={{ marginTop: 14 }}
-              // Свой флаг оставляем: он держит кнопку выключенной и ПОСЛЕ
-              // подписки («Будем присылать») — этого внутренняя защита кнопки
-              // от двойного нажатия не делает, она снимается сразу после ответа.
-              disabled={alerts.busy || alerts.done}
-              icon={<IconBell size={18} />}
-              onClick={alerts.subscribe}
-            >
-              {alerts.done ? "Будем присылать" : "Присылать новые смены в бота"}
-            </Button>
-          )}
-          {isSeeker && (
-            <Button variant="ghost" style={{ marginTop: 10 }} onClick={() => setFilterOpen(true)}>
-              {filters.city ? "Сменить город" : "Настроить фильтры"}
-            </Button>
-          )}
-        </div>
+        <FeedEmpty
+          isSeeker={isSeeker}
+          city={filters.city}
+          activeFilterCount={activeFilterCount}
+          alerts={alerts}
+          onResetFilters={() => applyFilters({})}
+          onOpenFilters={() => setFilterOpen(true)}
+        />
       )}
 
       {!isLoading && !isError && data && !empty && data.length > 0 && isSeeker && view === "list" && (
