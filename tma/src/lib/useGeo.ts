@@ -1,23 +1,20 @@
 import { useEffect, useState } from "react";
-import { LS } from "@/lib/storage";
 
 export interface Geo {
   lat: number;
   lng: number;
 }
 
-/** Геолокация устройства для ленты «смены рядом». Спрашиваем один раз, кешируем
- *  в localStorage (мгновенно при следующем заходе). Отказ/недоступность — тихо:
- *  лента просто работает без расстояния (сортировка по ставке/дате остаётся). */
+/** Геолокация устройства для ленты «смены рядом».
+ *
+ * Точные координаты намеренно НЕ сохраняем в localStorage: это чувствительные
+ * данные о местоположении устройства, а для работы текущего экрана достаточно
+ * держать их в памяти до закрытия Mini App. После нового запуска Telegram
+ * браузер снова запросит позицию по обычному разрешению геолокации.
+ * Отказ/недоступность — тихо: лента просто работает без расстояния.
+ */
 export function useGeo(enabled = true): Geo | null {
-  const [geo, setGeo] = useState<Geo | null>(() => {
-    try {
-      const raw = localStorage.getItem(LS.geo);
-      return raw ? (JSON.parse(raw) as Geo) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [geo, setGeo] = useState<Geo | null>(null);
 
   useEffect(() => {
     if (!enabled || !("geolocation" in navigator)) return;
@@ -25,11 +22,6 @@ export function useGeo(enabled = true): Geo | null {
       (pos) => {
         const g: Geo = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setGeo(g);
-        try {
-          localStorage.setItem(LS.geo, JSON.stringify(g));
-        } catch {
-          /* приватный режим — не критично */
-        }
       },
       () => {
         /* отказ/ошибка — работаем без геолокации */
