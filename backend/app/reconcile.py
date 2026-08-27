@@ -70,7 +70,7 @@ def reconcile(db: Session, hours: int = 48) -> dict:
     """Сверить платежи за последние `hours` часов и дозачислить пропущенные.
 
     Возвращает сводку для оператора: сколько проверено, сколько не хватало,
-    сколько денег дозачислено, что не удалось разобрать.
+    сколько денег дозачислено. Подробности исключений наружу не возвращаются.
     """
     if not settings.yookassa_ready:
         return {"skipped": "ЮKassa не подключена"}
@@ -78,9 +78,9 @@ def reconcile(db: Session, hours: int = 48) -> dict:
     since = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
     try:
         items = _fetch_payments(since)
-    except Exception as exc:  # noqa: BLE001 — сверка не должна ронять крон
-        _log.error("Сверка с ЮKassa не удалась: %s", exc)
-        return {"error": str(exc)[:200]}
+    except Exception:  # noqa: BLE001 — сверка не должна ронять крон
+        _log.exception("Сверка с ЮKassa не удалась")
+        return {"error": "Не удалось получить платежи ЮKassa"}
 
     from .routers.billing import credit_wallet
 
