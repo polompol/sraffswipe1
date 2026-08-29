@@ -75,7 +75,7 @@ def test_employer_creates_vacancy_and_seeker_sees_it(client):
     assert items[0]["distance_km"] is not None
 
 
-def test_full_match_flow(client):
+def test_full_match_flow(client, doc_token):
     # Работодатель создаёт вакансию
     emp_token, emp_id = _auth(client, "+79990000010", "employer")
     vac = client.post(
@@ -149,12 +149,14 @@ def test_full_match_flow(client):
                 json={"attended": True})
 
     # PDF-акт генерируется (токен участника передаётся query-параметром)
-    r = client.get(f"/matches/{match_id}/act.pdf?token={seeker_token}")
+    link = doc_token(client, seeker_token)
+    r = client.get(f"/matches/{match_id}/act.pdf?token={link}")
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content[:4] == b"%PDF"
 
     # Чужой токен к этому акту — запрещено
     other_token, _ = _auth(client, "+79990009999", "seeker")
-    forbidden = client.get(f"/matches/{match_id}/act.pdf?token={other_token}")
+    stranger = doc_token(client, other_token)
+    forbidden = client.get(f"/matches/{match_id}/act.pdf?token={stranger}")
     assert forbidden.status_code == 403

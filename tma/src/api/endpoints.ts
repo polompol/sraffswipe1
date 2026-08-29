@@ -1,4 +1,4 @@
-import { api, baseURL, getToken, postForm } from "./client";
+import { api, baseURL, postForm } from "./client";
 import * as mock from "./mock";
 import type {
   AppRole,
@@ -932,16 +932,32 @@ export async function adminEraseAccount(
   return data.removed;
 }
 
+/** Короткий токен на скачивание документа — живёт пять минут. */
+async function docToken(): Promise<string> {
+  const { data } = await api.post<{ token: string }>("/auth/doc-token", {});
+  return data.token;
+}
+
 /**
  * Ссылка на счёт или акт от сервиса заведению (PDF).
  *
  * Ресторану-юрлицу без этих двух документов не оплатить по безналу и не
  * поставить расход. Токен идёт в адресе: PDF открывает браузер по прямой
  * ссылке, заголовки он не передаёт.
+ *
+ * Поэтому токен здесь ОТДЕЛЬНЫЙ и короткий. Раньше в адрес клался обычный —
+ * тот, что живёт днями и открывает всё. Адрес оседает в истории браузера и в
+ * логах сервера: одной строки из лога хватало, чтобы войти в чужой аккаунт.
  */
-export function billingDocUrl(kind: "invoice" | "act"): string {
-  const token = getToken() ?? "";
+export async function billingDocUrl(kind: "invoice" | "act"): Promise<string> {
+  const token = await docToken();
   return `${baseURL}/billing/${kind}.pdf?token=${encodeURIComponent(token)}`;
+}
+
+/** Ссылка на акт по конкретной смене — тем же коротким токеном. */
+export async function shiftActUrl(matchId: string): Promise<string> {
+  const token = await docToken();
+  return `${baseURL}/matches/${matchId}/act.pdf?token=${encodeURIComponent(token)}`;
 }
 
 /** Оператор зачисляет аванс на баланс заведения (принял СБП/счёт). */

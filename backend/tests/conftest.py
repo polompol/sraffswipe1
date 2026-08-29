@@ -171,3 +171,22 @@ def make_match():
             db.close()
 
     return _make
+
+
+@pytest.fixture()
+def doc_token():
+    """Короткий токен для скачивания документа.
+
+    PDF открывает браузер по прямой ссылке и заголовков не шлёт, поэтому
+    токен едет в адресе. Обычный туда больше не годится: он живёт днями, а
+    адрес оседает в истории браузера и в логах. Документы принимают только
+    этот — пять минут и ни на что другое (см. POST /auth/doc-token).
+    """
+    def _get(client, token: str) -> str:
+        r = client.post(
+            "/auth/doc-token", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.status_code == 200, r.text
+        return r.json()["token"]
+
+    return _get

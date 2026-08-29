@@ -194,3 +194,20 @@ export function ageShift(matchId: string, days = 2): void {
     db.close();
   }
 }
+
+/** Короткая ссылка на документ — та же, что берёт приложение.
+ *
+ *  Полный токен в адресе больше не принимается: он живёт днями, а адрес
+ *  оседает в истории браузера и в логах сервера. Документы открывает
+ *  отдельный токен на пять минут (POST /auth/doc-token).
+ */
+export async function docToken(
+  request: APIRequestContext,
+  s: Session,
+): Promise<string> {
+  const res = await request.post(`${API_URL}/auth/doc-token`, { headers: auth(s) });
+  if (!res.ok()) {
+    throw new Error(`токен на документ не выдан (${res.status()})`);
+  }
+  return (await res.json()).token;
+}

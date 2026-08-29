@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { checkinShift, disputeShift, fetchMatches, markAttendance, markNotHeld } from "@/api/endpoints";
+import {
+  checkinShift,
+  disputeShift,
+  fetchMatches,
+  markAttendance,
+  markNotHeld,
+  shiftActUrl,
+} from "@/api/endpoints";
 import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
@@ -14,7 +21,6 @@ import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { canReportNoPay, money, shiftEnded, shiftStarted, shiftWhen } from "@/lib/format";
 import { Button } from "@/components/Button";
-import { baseURL, getToken } from "@/api/client";
 import { haptic, confirmAction, openExternal } from "@/telegram/sdk";
 
 /** С кем договорились: заведению — имя работника, работнику — название
@@ -143,11 +149,14 @@ export function MatchesPage() {
     }
   }
 
-  function downloadAct(matchId: string) {
-    const token = getToken();
-    openExternal(
-      `${baseURL}/matches/${matchId}/act.pdf${token ? `?token=${token}` : ""}`,
-    );
+  async function downloadAct(matchId: string) {
+    // Ссылка собирается на месте и живёт пять минут: полный токен в адресе
+    // оседал в истории браузера и в логах сервера.
+    try {
+      openExternal(await shiftActUrl(matchId));
+    } catch {
+      toast("Не удалось открыть акт", "error");
+    }
   }
 
   // Смена закрыта, а денег нет. До этой кнопки в приложении не оставалось

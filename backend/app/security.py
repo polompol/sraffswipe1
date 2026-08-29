@@ -55,15 +55,38 @@ def _is_revoked(owner, principal: dict) -> bool:
     )
 
 
-def create_token(subject_id: str, role: str, version: int = 0) -> str:
+# Сколько живёт токен для скачивания документа. Пять минут — с запасом на
+# «нажал, отвлёкся, открылось».
+DOC_TOKEN_TTL = timedelta(minutes=5)
+
+
+def create_token(
+    subject_id: str,
+    role: str,
+    version: int = 0,
+    scope: str | None = None,
+    ttl: timedelta | None = None,
+) -> str:
+    """Токен доступа. `scope` сужает его до одного дела.
+
+    Обычный токен живёт днями и открывает всё — это правильно для заголовка
+    запроса, который никуда не записывается. Но PDF открывает браузер по
+    прямой ссылке, заголовков он не шлёт, и токен приходится класть в адрес.
+    Адрес же оседает в истории браузера и в логах сервера. Поэтому для
+    документов выдаётся отдельный токен: пять минут жизни и ни на что, кроме
+    скачивания, не годен (см. current_principal — обычные ручки его не
+    принимают).
+    """
     now = datetime.now(UTC)
     payload = {
         "sub": subject_id,
         "role": role,  # seeker|employer
         "ver": version,  # поколение токенов владельца (см. _is_revoked)
         "iat": now,
-        "exp": now + timedelta(hours=settings.jwt_ttl_hours),
+        "exp": now + (ttl or timedelta(hours=settings.jwt_ttl_hours)),
     }
+    if scope:
+        payload["scope"] = scope
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_alg)
 
 
@@ -83,6 +106,9 @@ def decode_token(token: str) -> dict | None:
         "role": payload.get("role", "seeker"),
         # Поколение токена — по нему отличаем отозванные (см. _is_revoked).
         "ver": payload.get("ver", 0),
+        # Для чего выдан. Пусто — обычный токен на всё; «doc» — только на
+        # скачивание документа.
+        "scope": payload.get("scope", ""),
     }
 
 
@@ -98,6 +124,14 @@ def current_principal(
     if principal is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалидный токен"
+        )
+    # Токен, выданный на одно дело, обычные ручки не открывает. Без этой
+    # проверки короткий токен для скачивания был бы просто обычным токеном
+    # с меньшим сроком — а он ездит в адресе и оседает в логах.
+    if principal.get("scope"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Этот токен только для скачивания документа",
         )
     ensure_token_usable(db, principal)
     return principal
@@ -136,6 +170,9 @@ def optional_principal(
         return None
     principal = decode_token(creds.credentials)
     if principal is None:
+        return None
+    # Токен на одно дело здесь тоже не считается: см. current_principal.
+    if principal.get("scope"):
         return None
     try:
         ensure_token_usable(db, principal)

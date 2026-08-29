@@ -66,10 +66,19 @@ def act_number(match_id: str) -> str:
     dependencies=[Depends(rate_limit_ip("act", 20, 60))],
 )
 def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
-    # Браузер открывает PDF через window.open — токен передаётся как query-параметр.
+    # Браузер открывает PDF по прямой ссылке и заголовков не шлёт, поэтому
+    # токен приходится класть в адрес. Принимаем только короткий токен «на
+    # документ» (POST /auth/doc-token): он живёт пять минут и больше ни на что
+    # не годен. Обычный токен живёт днями, а адрес оседает в истории браузера
+    # и в логах сервера — одна строка из лога давала доступ ко всему аккаунту.
     principal = decode_token(token)
     if principal is None:
         raise HTTPException(status_code=401, detail="Нужен токен")
+    if principal.get("scope") != "doc":
+        raise HTTPException(
+            status_code=401,
+            detail="Ссылка устарела — откройте акт из приложения заново",
+        )
     # Query-токен идёт мимо current_principal — проверяем теми же правилами:
     # иначе забаненный или разлогиненный тянул бы акт с ИНН обеих сторон.
     ensure_token_usable(db, principal)

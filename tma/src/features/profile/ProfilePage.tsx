@@ -108,9 +108,13 @@ function CommissionCard() {
                   key={kind}
                   className="tag"
                   style={{ flex: 1, minWidth: 120, cursor: "pointer" }}
-                  onClick={() => {
+                  onClick={async () => {
                     haptic("light");
-                    openExternal(billingDocUrl(kind));
+                    try {
+                      openExternal(await billingDocUrl(kind));
+                    } catch {
+                      toast("Не удалось открыть документ", "error");
+                    }
                   }}
                 >
                   {label}

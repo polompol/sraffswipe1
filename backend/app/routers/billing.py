@@ -6,10 +6,11 @@
 в пилоте выдаёт оператор (буст) и реферальная программа (супер-лайки).
 """
 import base64
+import hashlib
 import json
 import re
+import time
 import urllib.request
-import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -21,7 +22,7 @@ from ..config import settings
 from ..db import get_db
 from ..entitlements import ensure, get_or_create
 from ..models import Commission, Entitlement, Purchase, WalletTxn
-from ..ratelimit import rate_limit_ip
+from ..ratelimit import rate_limit, rate_limit_ip
 from ..security import (
     current_principal,
     decode_token,
@@ -58,6 +59,26 @@ def _document_response(
     )
 
 
+def _doc_principal(token: str, db: Session) -> dict:
+    """Кто скачивает документ — по короткому токену из адреса.
+
+    Принимаем ТОЛЬКО токен, выданный на скачивание (POST /auth/doc-token):
+    он живёт пять минут и больше ни на что не годен. Раньше сюда клался
+    обычный токен на несколько дней — а адрес оседает в истории браузера и в
+    логах сервера, и одна строка из лога давала полный доступ к аккаунту.
+    """
+    principal = decode_token(token)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Нужен токен")
+    if principal.get("scope") != "doc":
+        raise HTTPException(
+            status_code=401,
+            detail="Ссылка устарела — откройте документ из приложения заново",
+        )
+    ensure_token_usable(db, principal)
+    return principal
+
+
 @router.get(
     "/invoice.pdf",
     dependencies=[Depends(rate_limit_ip("doc", 20, 60))],
@@ -71,10 +92,7 @@ def commission_invoice(
     Токен в адресе: PDF открывает браузер по прямой ссылке, заголовки он не
     шлёт. Проверяем теми же правилами, что и обычные ручки.
     """
-    principal = decode_token(token)
-    if principal is None:
-        raise HTTPException(status_code=401, detail="Нужен токен")
-    ensure_token_usable(db, principal)
+    principal = _doc_principal(token, db)
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
     return _document_response("invoice", db, principal["id"])
@@ -93,10 +111,7 @@ def commission_act(
 
     period — «ГГГГ-ММ»; по умолчанию текущий месяц.
     """
-    principal = decode_token(token)
-    if principal is None:
-        raise HTTPException(status_code=401, detail="Нужен токен")
-    ensure_token_usable(db, principal)
+    principal = _doc_principal(token, db)
     if principal["role"] != "employer":
         raise HTTPException(status_code=403, detail="Только для работодателя")
     # Месяц именно 01–12: под прежний шаблон подходило и «2026-13», и
@@ -227,6 +242,17 @@ def _yk_payload(
     return payload
 
 
+# Окно, в котором повторный запрос считается тем же платежом.
+_IDEMPOTENCE_WINDOW_SEC = 300
+
+
+def _idempotence_key(owner_id: str, sku: str, rub: int) -> str:
+    """Один и тот же платёж — один и тот же ключ (см. вызов ниже)."""
+    bucket = int(time.time()) // _IDEMPOTENCE_WINDOW_SEC
+    raw = f"{owner_id}|{sku}|{rub}|{bucket}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
 def _create_yookassa_payment(
     owner_id: str, sku: str, rub: int, title: str,
     email: str | None = None, extra_meta: dict | None = None,
@@ -240,7 +266,19 @@ def _create_yookassa_payment(
         data=json.dumps(payload).encode(),
         headers={
             "Authorization": f"Basic {auth}",
-            "Idempotence-Key": uuid.uuid4().hex,
+            # Ключ повтора — НЕ случайный.
+            #
+            # Он для того и существует: два одинаковых запроса подряд должны
+            # дать один платёж, а не два. Со случайным ключом двойное нажатие
+            # «Пополнить» заводило в кассе два платежа. Денег дважды не
+            # списывалось (человек платит по одной ссылке), но в кабинете
+            # копился мусор, а при сетевом повторе запроса — и подавно.
+            #
+            # Собираем ключ из того, что делает платёж тем же платежом: кто,
+            # за что, сколько и когда с точностью до пяти минут. Через пять
+            # минут это уже осознанное второе пополнение, и оно должно
+            # создаться отдельно.
+            "Idempotence-Key": _idempotence_key(owner_id, sku, rub),
             "Content-Type": "application/json",
         },
     )
@@ -257,7 +295,15 @@ class TopupIn(BaseModel):
     email: str | None = None  # для фискального чека
 
 
-@router.post("/wallet/topup", response_model=PaymentOut)
+@router.post(
+    "/wallet/topup",
+    response_model=PaymentOut,
+    # Каждый вызов заводит платёж в кассе. Без ограничения их можно было
+    # насоздавать сколько угодно — чужой кабинет забивается мусором, а касса
+    # начинает отвечать отказами уже нам. Живому человеку пяти попыток за
+    # пять минут хватает с запасом.
+    dependencies=[Depends(rate_limit("topup", 5, 300))],
+)
 def wallet_topup(
     body: TopupIn,
     principal: dict = Depends(current_principal),
@@ -328,6 +374,18 @@ def yookassa_webhook(
     expected = settings.yookassa_webhook_secret or settings.internal_api_secret
     if not expected or not secure_equals(secret, expected):
         raise HTTPException(status_code=401, detail="Требуется внутренний токен")
+    # Без ключей кассы ручка закрыта совсем.
+    #
+    # Ниже сумма и владелец сверяются запросом в саму ЮKassa нашими ключами —
+    # именно это и делает подделку письма бесполезной. Без ключей сверять
+    # нечем, и остаётся только доверять письму. А письмо целиком пишет
+    # отправитель: утёк секрет из адреса — и «платёж прошёл, зачислите
+    # 100 000 ₽» становится правдой для сервера. При этом без ключей платежей
+    # у нас и не бывает, так что закрывать нечего: любой вебхук тут ложный.
+    if not settings.yookassa_ready and not settings.dev_mode:
+        raise HTTPException(
+            status_code=503, detail="Оплата картой не настроена"
+        )
     if payload.get("event") != "payment.succeeded":
         return {"ok": True, "ignored": True}
     obj = payload.get("object", {})

@@ -4,6 +4,7 @@ import {
   SHIFT,
   ageShift,
   auth,
+  docToken,
   fillProfile,
   login,
   openApp,
@@ -184,7 +185,7 @@ test.describe("весь путь целиком", () => {
     ).toBeVisible({ timeout: 15_000 });
 
     const act = await request.get(
-      `${API_URL}/matches/${matchId}/act.pdf?token=${seeker.token}`,
+      `${API_URL}/matches/${matchId}/act.pdf?token=${await docToken(request, seeker)}`,
     );
     expect(act.status(), "акт отдаётся").toBe(200);
     expect(act.headers()["content-type"]).toContain("pdf");
@@ -337,7 +338,7 @@ test.describe("весь путь целиком", () => {
     // бухгалтер будет жать кнопку и звонить в поддержку.
     for (const kind of ["invoice", "act"]) {
       const doc = await request.get(
-        `${API_URL}/billing/${kind}.pdf?token=${emp.token}`,
+        `${API_URL}/billing/${kind}.pdf?token=${await docToken(request, emp)}`,
       );
       expect(doc.status(), `${kind}: без реквизитов сервис не выставляет документ`)
         .toBe(503);
@@ -350,7 +351,7 @@ test.describe("весь путь целиком", () => {
     // А вот акт по самой смене реквизитов сервиса не требует — это документ
     // между заведением и работником, и он должен быть доступен сразу.
     const shiftAct = await request.get(
-      `${API_URL}/matches/${matchId}/act.pdf?token=${seeker.token}`,
+      `${API_URL}/matches/${matchId}/act.pdf?token=${await docToken(request, seeker)}`,
     );
     expect(shiftAct.status(), "акт по закрытой смене отдаётся").toBe(200);
     expect((await shiftAct.body()).slice(0, 4).toString()).toBe("%PDF");
