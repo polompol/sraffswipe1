@@ -27,13 +27,19 @@ const PHONE = { width: 360, height: 640 };
 const SEEKER_SCREENS = ["/feed", "/matches", "/profile", "/settings", "/invites"];
 const EMPLOYER_SCREENS = ["/feed", "/matches", "/vacancy/my", "/applicants"];
 
-async function scene(request: Parameters<typeof login>[0]) {
-  const emp = await login(request, "employer", 840_001, "Дрова");
+/** Сцена под один тест.
+ *
+ *  У каждого теста своё заведение и свои работники: публикация смен
+ *  ограничена десятью в час на заведение — это боевое правило, и общая на всех
+ *  сцена в него упиралась на шестом тесте.
+ */
+async function scene(request: Parameters<typeof login>[0], seed: number) {
+  const emp = await login(request, "employer", seed + 1, "Дрова");
   await fillProfile(request, emp, {
     company_name: "Кофейня «Дрова»",
     city: "Москва",
     address: "ул. Льва Толстого, 16",
-    contact_phone: "+79990000011",
+    contact_phone: `+7999${String(seed).slice(0, 7)}`,
   });
   // Две смены: на одну работник откликается сам (получается мэтч), вторая
   // остаётся приглашением — иначе экран «Кто меня зовёт» пустой, и проверять
@@ -41,7 +47,7 @@ async function scene(request: Parameters<typeof login>[0]) {
   const vac = await publishShift(request, emp);
   const other = await publishShift(request, emp, { role: "waiter", days: 3 });
 
-  const seeker = await login(request, "seeker", 840_002, "Мария");
+  const seeker = await login(request, "seeker", seed + 2, "Мария");
   await fillProfile(request, seeker, {
     name: "Мария",
     city: "Москва",
@@ -67,7 +73,7 @@ async function scene(request: Parameters<typeof login>[0]) {
   });
   // Ещё один человек откликается и ответа пока не получил — иначе экран
   // «Кто откликнулся» у заведения пустой.
-  const applicant = await login(request, "seeker", 840_003, "Игорь");
+  const applicant = await login(request, "seeker", seed + 3, "Игорь");
   await fillProfile(request, applicant, {
     name: "Игорь",
     city: "Москва",
@@ -89,7 +95,7 @@ for (const theme of ["light", "dark"] as const) {
       browser,
       request,
     }) => {
-      const { seeker } = await scene(request);
+      const { seeker } = await scene(request, theme === "dark" ? 843_100 : 843_200);
       const { context, page } = await openApp(browser, seeker, {
         ss_theme: theme,
       });
@@ -120,7 +126,7 @@ for (const theme of ["light", "dark"] as const) {
       browser,
       request,
     }) => {
-      const { emp } = await scene(request);
+      const { emp } = await scene(request, theme === "dark" ? 843_300 : 843_400);
       const { context, page } = await openApp(browser, emp, { ss_theme: theme });
       await page.setViewportSize(PHONE);
       for (const screen of EMPLOYER_SCREENS) {
@@ -148,7 +154,7 @@ for (const theme of ["light", "dark"] as const) {
 }
 
 test("крупный шрифт ничего не ломает", async ({ browser, request }) => {
-  const { seeker } = await scene(request);
+  const { seeker } = await scene(request, 843_500);
   const { context, page } = await openApp(browser, seeker, { ss_large: "1" });
   await page.setViewportSize({ width: 320, height: 568 });
   for (const screen of SEEKER_SCREENS) {
@@ -206,4 +212,49 @@ test("длинное название и адрес не ломают карто
 
   await context.close();
   await empApp.context.close();
+});
+
+test("шторки и чат читаются так же, как экраны", async ({ browser, request }) => {
+  // Шторки закрывают собой экран целиком, и текста в них не меньше, чем на
+  // странице: условия смены, что взять с собой, фильтры. Проверять их
+  // отдельно нужно потому, что фон у них свой.
+  const { seeker } = await scene(request, 843_600);
+  const { context, page } = await openApp(browser, seeker, { ss_theme: "dark" });
+  await page.setViewportSize(PHONE);
+  await page.goto("/#/feed");
+  await waitForStableLayout(page, ".page");
+
+  // Подробности смены — касанием карточки.
+  await page.locator(".swipe-card").first().click({ position: { x: 40, y: 60 } });
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const details = await sweep(page);
+  expect(details.checked, "в шторке должен быть текст").toBeGreaterThan(8);
+  expect(details.contrast, `шторка смены:\n${report(details.contrast)}`).toEqual([]);
+  expect(details.overflowX, "шторка не должна ездить вбок").toBe(0);
+  expect(details.tiny, `мелкие зоны нажатия ${details.tinyWhere}`).toBe(0);
+  await page.keyboard.press("Escape");
+
+  // Фильтры.
+  await page.getByRole("button", { name: /^Фильтры/ }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const filters = await sweep(page);
+  expect(filters.checked, "в фильтрах должен быть текст").toBeGreaterThan(8);
+  expect(filters.contrast, `фильтры:\n${report(filters.contrast)}`).toEqual([]);
+  expect(filters.overflowX, "фильтры не должны ездить вбок").toBe(0);
+  expect(filters.tiny, `мелкие зоны нажатия ${filters.tinyWhere}`).toBe(0);
+  await page.keyboard.press("Escape");
+
+  // Чат смены — у работника он уже есть: заведение позвало в ответ.
+  await page.goto("/#/matches");
+  await waitForStableLayout(page, ".page");
+  await page.getByRole("button", { name: /Открыть чат/ }).first().click();
+  await expect(page.locator(".page.chat")).toBeVisible();
+  await waitForStableLayout(page, ".page");
+  const chat = await sweep(page);
+  expect(chat.checked, "в чате должен быть текст").toBeGreaterThan(8);
+  expect(chat.contrast, `чат:\n${report(chat.contrast)}`).toEqual([]);
+  expect(chat.overflowX, "чат не должен ездить вбок").toBe(0);
+  expect(chat.tiny, `мелкие зоны нажатия ${chat.tinyWhere}`).toBe(0);
+
+  await context.close();
 });
