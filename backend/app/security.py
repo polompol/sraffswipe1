@@ -35,12 +35,6 @@ def _owner(db: Session, principal: dict):
     )
 
 
-def _is_blocked(db: Session, principal: dict) -> bool:
-    """Забанен ли владелец токена. Проверяется на КАЖДОМ запросе, а не только
-    при логине — иначе бан админа не действует до истечения токена."""
-    return bool((o := _owner(db, principal)) is not None and o.blocked)
-
-
 def _is_revoked(owner, principal: dict) -> bool:
     """Отозван ли токен: его поколение не совпадает с текущим у владельца.
 

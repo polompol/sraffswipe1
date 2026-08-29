@@ -1295,121 +1295,13 @@ body[data-large="1"] .page {
   gap: 6px;
 }
 @media (max-width: 380px) {
-  /* ПРОСТЫЕ РАСКЛАДКИ — КЛАССАМИ, А НЕ ЧИСЛАМИ В РАЗМЕТКЕ.
-
-   Четыре набора повторялись в коде полсотни раз: «столбик с зазором»,
-   «иконка и текст в строку», «занять остаток» и «мелкий текст». Каждый раз
-   числа писались заново, и они потихоньку разъезжались — где 10, где 12.
-   Теперь это четыре класса, и зазор меняется в одном месте. */
-.stack {
-  display: grid;
-  gap: 10px;
-}
-.stack-lg {
-  gap: 12px;
-}
-/* Иконка и подпись в одну строку — самый частый ряд в приложении. */
-.inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-/* Занять остаток строки и разрешить себя сжимать. Без min-width:0 длинное
-   слово внутри распирает флекс-строку и уносит соседей за край экрана. */
-.grow {
-  flex: 1;
-  min-width: 0;
-}
-.small {
-  font-size: var(--text-xs);
-}
-
-/* ГЛАВНЫЕ ФИЛЬТРЫ ЧИПАМИ.
-
-   Ряд прокручивается вбок и НЕ переносится: на экране 320 четыре чипа со
-   значениями в строку не помещаются, а вторая строка отняла бы у карточки
-   полсотни точек — а карточка и есть продукт.
-
-   Полоса прокрутки скрыта: на телефоне её всё равно не видно, а на десктопе
-   она добавляла бы к ряду лишние восемь точек высоты. О том, что дальше есть
-   ещё, говорит затухание у правого края (маска). */
-.chips-row {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 2px;
-  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
-}
-.chips-row::-webkit-scrollbar {
-  display: none;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: transparent;
-  overflow: hidden;
-}
-/* Включённый фильтр залит фирменным — видно с одного взгляда, что лента
-   показана не целиком. */
-.chip-on {
-  border-color: var(--gold-fill);
-  background: var(--gold-fill);
-  color: var(--on-brand);
-}
-.chip-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  /* 44 точки — минимальная зона, в которую уверенно попадает палец. Чип
-     выглядит невысоким, но нажимается по всей высоте ряда. */
-  min-height: 44px;
-  padding: 0 12px;
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.chip-text {
-  max-width: 11ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.chip-caret {
-  display: inline-flex;
-  opacity: 0.55;
-  transform: rotate(90deg);
-}
-/* Крестик снимает фильтр, не открывая шторку. Отдельной кнопкой, а не общим
-   нажатием: иначе нельзя было бы поменять значение, не сбросив его сначала. */
-.chip-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  min-height: 44px;
-  padding: 0 8px 0 0;
-  border: none;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0.85;
-}
-.chip-main:focus-visible,
-.chip-clear:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: -2px;
-}
-
-.stars-row {
+  /* Единственное, что здесь и должно быть: на самом узком экране звёзды
+     стоят теснее. Всё остальное когда-то заехало сюда по ошибке — целый
+     кусок файла оказался скопирован внутрь этого правила, причём в старой
+     редакции. Видно не было ничего: значения совпадали. Но любая будущая
+     правка .stack, .inline или чипов молча не доезжала бы до телефонов
+     уже 380 точек шириной — а это большинство наших. */
+  .stars-row {
     gap: 2px;
   }
 }
