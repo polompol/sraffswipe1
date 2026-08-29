@@ -96,7 +96,17 @@ export async function measure(page: Page): Promise<Paint> {
         const c = rgb(cs.backgroundColor);
         if (c[3] > 0.95) return { color: c, unknown: false };
       }
-      return { color: [255, 255, 255, 1], unknown: false };
+      // Ничего непрозрачного в стопке — значит, красит холст. Браузер берёт
+      // фон у <html>, а если у того его нет — переносит на холст фон <body>.
+      // Без этого правила проверка выдумывала белый: у body высота 100%, и
+      // под длинной страницей его прямоугольник просто кончается, хотя фон
+      // на экране есть. В тёмной теме это давало ложные «нечитаемо».
+      for (const node of [document.documentElement, document.body]) {
+        const c = rgb(getComputedStyle(node).backgroundColor);
+        if (c[3] > 0.95) return { color: c, unknown: false };
+      }
+      // Не выдумываем: не смогли определить — не проверяем.
+      return { color: [255, 255, 255, 1], unknown: true };
     };
 
     const violations: Violation[] = [];

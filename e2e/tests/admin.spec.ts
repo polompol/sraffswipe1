@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { API_URL } from "../harness/env";
+import { report, sweep } from "../harness/paint";
 import {
   auth,
   fillProfile,
@@ -165,7 +166,9 @@ test("оператор читает переписку по спорной см�
   });
 
   const admin = await login(request, "seeker", 0, "Оператор");
-  const { context, page } = await openApp(browser, admin);
+  // Тёмная тема: у неё свои цвета, и разбор спора оператор часто открывает
+  // вечером.
+  const { context, page } = await openApp(browser, admin, { ss_theme: "dark" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/#/admin");
   await waitForStableLayout(page, ".page");
@@ -178,6 +181,13 @@ test("оператор читает переписку по спорной см�
   await expect(page.getByText("Я на месте, но здесь закрыто")).toBeVisible();
   // Видно, кто говорит и когда: без этого переписка не доказательство.
   await expect(page.getByText(/Мария · работник · \d{2}\.\d{2} \d{2}:\d{2}/)).toBeVisible();
+
+  // Это рабочий экран оператора: он читает его каждый день и по нему решает
+  // споры о деньгах. Читаемость проверяем так же, как у экранов людей.
+  const m = await sweep(page);
+  expect(m.contrast, `разбор спора:\n${report(m.contrast)}`).toEqual([]);
+  expect(m.overflowX, "панель не должна ездить вбок").toBe(0);
+  expect(m.tiny, `мелкие зоны нажатия ${m.tinyWhere}`).toBe(0);
 
   await context.close();
 });
