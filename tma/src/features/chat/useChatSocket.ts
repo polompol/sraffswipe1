@@ -46,6 +46,11 @@ export function useChatSocket(matchId: string, handlers: Handlers): void {
           senderId: raw.sender_id,
           text: raw.text,
           isSystem: Boolean(raw.is_system),
+          // Сокет отдаёт серверные имена как есть (переименование
+          // snake_case → camelCase делает обычный слой запросов, а этот кадр
+          // мимо него). Своё время на случай старого сервера — лучше, чем
+          // пустое место в углу пузыря.
+          createdAt: raw.created_at ?? new Date().toISOString(),
         });
         // Системные сообщения приходят на смену статуса: вторая сторона
         // подтвердила, отметилась, перенесла. Без обновления кнопка над

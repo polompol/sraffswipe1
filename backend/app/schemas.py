@@ -1,4 +1,5 @@
 """Pydantic-схемы запросов/ответов."""
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
@@ -251,3 +252,8 @@ class MessageOut(BaseModel):
     sender_id: str
     text: str
     is_system: bool
+    # Время написания. Его не отдавали вовсе, и в чате не было ни одной даты.
+    # Для спора это главное: «написал в 23:40, что не выйдет» без времени —
+    # не довод, а слова. Оператор разбирает спор по переписке, и порядок
+    # событий в ней должен быть виден.
+    created_at: datetime

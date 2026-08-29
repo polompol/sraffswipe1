@@ -111,3 +111,73 @@ test("поиск человека в панели находит по имени
 
   await context.close();
 });
+
+test("оператор читает переписку по спорной смене", async ({ browser, request }) => {
+  /**
+   * Жалобы бывают ровно про написанное: «мошенничество», «абьюз», «спам».
+   * Раньше оператор открывал такую жалобу и видел всё, кроме самой
+   * переписки, — и решал по одному тексту заявителя.
+   */
+  const emp = await login(request, "employer", 845_021, "Дрова");
+  await fillProfile(request, emp, {
+    company_name: "Кофейня «Дрова»",
+    city: "Москва",
+    address: "ул. Льва Толстого, 16",
+    contact_phone: "+79990000022",
+  });
+  const vac = await publishShift(request, emp);
+
+  const seeker = await login(request, "seeker", 845_022, "Мария");
+  await fillProfile(request, seeker, {
+    name: "Мария",
+    city: "Москва",
+    roles: ["barista"],
+    birth_date: "1998-04-12",
+    med_book: "yes",
+  });
+  await request.post(`${API_URL}/swipes`, {
+    headers: auth(seeker),
+    data: { target_id: vac.id, target_type: "vacancy", direction: "like" },
+  });
+  const like = await request.post(`${API_URL}/swipes`, {
+    headers: auth(emp),
+    data: {
+      target_id: seeker.id,
+      target_type: "user",
+      direction: "like",
+      vacancy_id: vac.id,
+    },
+  });
+  const matchId = (await like.json()).match_id as string;
+
+  // Настоящая переписка, а потом спор.
+  await request.post(`${API_URL}/matches/${matchId}/messages`, {
+    headers: auth(emp),
+    data: { text: "Приходите к десяти, спросите Олю" },
+  });
+  await request.post(`${API_URL}/matches/${matchId}/messages`, {
+    headers: auth(seeker),
+    data: { text: "Я на месте, но здесь закрыто" },
+  });
+  await request.post(`${API_URL}/matches/${matchId}/dispute`, {
+    headers: auth(seeker),
+    data: { note: "заведение не открылось" },
+  });
+
+  const admin = await login(request, "seeker", 0, "Оператор");
+  const { context, page } = await openApp(browser, admin);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#/admin");
+  await waitForStableLayout(page, ".page");
+
+  // Переписка не открывается сама — оператор нажимает.
+  await expect(page.getByText("Я на месте, но здесь закрыто")).toHaveCount(0);
+  await page.getByRole("button", { name: "Показать переписку" }).first().click();
+
+  await expect(page.getByText("Приходите к десяти, спросите Олю")).toBeVisible();
+  await expect(page.getByText("Я на месте, но здесь закрыто")).toBeVisible();
+  // Видно, кто говорит и когда: без этого переписка не доказательство.
+  await expect(page.getByText(/Мария · работник · \d{2}\.\d{2} \d{2}:\d{2}/)).toBeVisible();
+
+  await context.close();
+});

@@ -610,6 +610,29 @@ export async function fetchAdminOverview(): Promise<AdminOverview> {
   return data;
 }
 
+/** Одно сообщение переписки — так, как его читает оператор. */
+export interface DisputeMessage {
+  id: string;
+  who: string;    // «Мария», «Кофейня «Дрова»», «Система»
+  side: "seeker" | "employer" | "system";
+  text: string;
+  at: string;     // «16.08 23:40» по времени города смены
+}
+
+/** Переписка по спорной смене.
+ *
+ *  Открывается только там, где на неё пожаловались или идёт спор: это личная
+ *  переписка двух людей, и читать её просто так оператор не должен. Отказ
+ *  приходит как ошибка, а не пустым списком.
+ */
+export async function fetchDisputeChat(matchId: string): Promise<DisputeMessage[]> {
+  if (!USE_BACKEND) return mock.fetchDisputeChat(matchId);
+  const { data } = await api.get<DisputeMessage[]>(
+    `/admin/matches/${matchId}/messages`,
+  );
+  return data;
+}
+
 export async function fetchAdminReports(status = "open"): Promise<AdminReport[]> {
   if (!USE_BACKEND) return mock.fetchAdminReports(status);
   const { data } = await api.get<AdminReport[]>("/admin/reports", {

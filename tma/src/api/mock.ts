@@ -205,6 +205,15 @@ const matches: MatchModel[] = [
     shiftEnd: 4 * 60,
   },
 ];
+/** Время демо-сообщения: «столько-то минут назад» от запуска.
+ *
+ *  Демо-данные должны выглядеть как живая переписка, а не как всё написанное
+ *  в одну секунду: время в чате теперь видно.
+ */
+function minutesAgo(n: number): string {
+  return new Date(Date.now() - n * 60_000).toISOString();
+}
+
 const messagesByMatch: Record<string, Message[]> = {
   [DEMO_MATCH_ID]: [
     {
@@ -212,18 +221,21 @@ const messagesByMatch: Record<string, Message[]> = {
       senderId: "system",
       text: "Взаимно! Смена: Кофейня «Дрова». Договоритесь о деталях.",
       isSystem: true,
+      createdAt: minutesAgo(173),
     },
     {
       id: "demo-m2",
       senderId: "emp1",
       text: "Здравствуйте! Готовы выйти завтра к 8:00?",
       isSystem: false,
+      createdAt: minutesAgo(166),
     },
     {
       id: "demo-m3",
       senderId: "me",
       text: "Да, буду. Что взять с собой?",
       isSystem: false,
+      createdAt: minutesAgo(159),
     },
     {
       id: "demo-m4",
@@ -233,6 +245,7 @@ const messagesByMatch: Record<string, Message[]> = {
         "после окончания она закроется сама. Если смена не состоится — нажмите " +
         "«Смена не состоялась», и комиссии не будет.",
       isSystem: true,
+      createdAt: minutesAgo(152),
     },
   ],
 };
@@ -325,6 +338,7 @@ export function sendSwipe(
         senderId: "system",
         text: `Взаимно! Смена: ${mine.companyName}. Договоритесь о деталях.`,
         isSystem: true,
+        createdAt: minutesAgo(145),
       },
     ];
     return Promise.resolve({
@@ -359,12 +373,14 @@ export function sendSwipe(
       senderId: "system",
       text: `Взаимно! Смена: ${vac.companyName}. Договоритесь о деталях.`,
       isSystem: true,
+      createdAt: minutesAgo(138),
     },
     {
       id: uid(),
       senderId: vac.employerId,
       text: "Здравствуйте! Готовы выйти на смену?",
       isSystem: false,
+      createdAt: minutesAgo(131),
     },
   ];
   return Promise.resolve({
@@ -396,6 +412,7 @@ export function sendMessage(matchId: string, text: string): Promise<Message> {
     senderId: "me",
     text,
     isSystem: false,
+    createdAt: minutesAgo(124),
   };
   (messagesByMatch[matchId] ??= []).push(msg);
   return Promise.resolve(msg);
@@ -412,6 +429,7 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
     senderId: "system",
     text: "Смена подтверждена ✅. Сформирован акт для самозанятого.",
     isSystem: true,
+    createdAt: minutesAgo(117),
   });
   return Promise.resolve({ ...m });
 }
@@ -423,6 +441,7 @@ function sysMessage(matchId: string, text: string): void {
     senderId: "system",
     text,
     isSystem: true,
+    createdAt: minutesAgo(110),
   });
 }
 
@@ -761,6 +780,29 @@ export function fetchAdminReports(status = "open") {
     status === "all" ? adminReports : adminReports.filter((r) => r.status === "open");
   return Promise.resolve([...list]);
 }
+/** Демо-переписка по спору — чтобы экран оператора было на чём смотреть. */
+export function fetchDisputeChat(_matchId: string) {
+  return Promise.resolve([
+    {
+      id: "d1", who: "Система", side: "system" as const,
+      text: "Смена подтверждена ✓", at: "16.08 12:04",
+    },
+    {
+      id: "d2", who: "Кофейня «Дрова»", side: "employer" as const,
+      text: "Приходите к десяти, спросите Олю", at: "16.08 18:20",
+    },
+    {
+      id: "d3", who: "Мария", side: "seeker" as const,
+      text: "Поняла, буду", at: "16.08 18:22",
+    },
+    {
+      id: "d4", who: "Мария", side: "seeker" as const,
+      text: "Я на месте, но здесь закрыто и никто не отвечает",
+      at: "17.08 09:58",
+    },
+  ]);
+}
+
 export function fetchRevenue() {
   return Promise.resolve({
     commissionAccruedRub: 12400,

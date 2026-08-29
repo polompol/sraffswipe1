@@ -8,6 +8,7 @@ import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
 import {
   fmtTime,
+  msgTime,
   numRu,
   shiftDayLabel,
   shiftEnded,
@@ -383,6 +384,7 @@ export function ChatPage() {
           return (
             <div key={m.id} className={`bubble ${mine ? "mine" : "theirs"}`}>
               {m.text}
+              <span className="bubble-at">{msgTime(m.createdAt)}</span>
             </div>
           );
         })}

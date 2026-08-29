@@ -31,6 +31,7 @@ import {
   useJobRunner,
 } from "./shared";
 import { DisputeFacts, REASON_LABEL, TARGET_LABEL } from "./DisputeFacts";
+import { DisputeChat } from "./DisputeChat";
 
 const DAY = 86400000;
 const PERIODS: { id: string; label: string; days: number }[] = [
@@ -243,6 +244,9 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
             </div>
             <div style={{ fontWeight: 700, margin: "4px 0" }}>{r.targetInfo}</div>
             {r.dispute && <DisputeFacts d={r.dispute} />}
+            {/* Сама переписка — по кнопке. Жалобы на «переписку по мэтчу»
+                разбирались без единого сообщения перед глазами. */}
+            {r.targetType === "match" && <DisputeChat matchId={r.targetId} />}
             {r.text && <div className="muted" style={{ margin: "2px 0 6px" }}>{r.text}</div>}
             {r.status === "open" ? (
               <div style={{ marginTop: 8 }}>

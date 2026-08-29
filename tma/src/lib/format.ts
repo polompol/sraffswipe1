@@ -235,3 +235,28 @@ export function shiftWhen(m: {
   // читалось как обрыв. Запятая в конце строки — обычная пунктуация.
   return `${shiftDayLabel(m.shiftDate)}, ${fmtTime(m.shiftStart ?? 0)}–${fmtTime(m.shiftEnd ?? 0)}`;
 }
+
+/** Время сообщения в чате: «23:40», а для не сегодняшнего — «16.08 23:40».
+ *
+ *  Времени у сообщений не было вовсе. В обычной переписке это терпимо, но чат
+ *  смены — ещё и доказательство: «написал в 23:40, что не выйдет» без времени
+ *  не довод, а слова. Дату дописываем только когда она не сегодняшняя, чтобы
+ *  не загромождать обычный разговор.
+ */
+export function msgTime(iso: string): string {
+  if (!iso) return "";
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const hhmm = at.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const now = new Date();
+  const sameDay =
+    at.getFullYear() === now.getFullYear()
+    && at.getMonth() === now.getMonth()
+    && at.getDate() === now.getDate();
+  if (sameDay) return hhmm;
+  const day = at.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+  return `${day} ${hhmm}`;
+}

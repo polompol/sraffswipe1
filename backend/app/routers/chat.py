@@ -45,6 +45,7 @@ def _to_out(m: Message) -> MessageOut:
         sender_id=m.sender_id,
         text=m.text,
         is_system=m.is_system,
+        created_at=m.created_at,
     )
 
 
@@ -119,7 +120,9 @@ async def send(
     db.commit()
     db.refresh(msg)
     out = _to_out(msg)
-    await manager.broadcast(match_id, out.model_dump())
+    # mode="json": дата должна уехать строкой — объект даты в JSON не
+    # укладывается, и раздача молча падала бы вместе с сокетом.
+    await manager.broadcast(match_id, out.model_dump(mode="json"))
     # Уведомляем второго участника мэтча в Telegram.
     other = (
         match.employer_id
@@ -301,10 +304,17 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
                 db.add(msg)
                 db.commit()
                 db.refresh(msg)
-                payload = _to_out(msg).model_dump()
-                # Авто-модерация подозрительных фраз (как на REST-пути).
+                payload = _to_out(msg).model_dump(mode="json")
+                # Авто-модерация подозрительных фраз — ровно как на
+                # REST-пути: жалоба на СМЕНУ, а не на отдельное сообщение.
+                # Здесь стоял тип «message», которого нет в списке
+                # допустимых целей: такая жалоба показывалась оператору без
+                # предмета, а кнопка «Заблокировать» искала пользователя по
+                # id сообщения и отвечала «не найден». То есть мошенник,
+                # писавший через сокет, попадал в жалобу, с которой нельзя
+                # было ничего сделать.
                 from ..moderation import auto_flag
-                auto_flag(db, "message", msg.id, text)
+                auto_flag(db, "match", match_id, text)
             finally:
                 db.close()
             await manager.broadcast(match_id, payload)

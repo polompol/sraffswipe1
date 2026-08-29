@@ -1415,11 +1415,27 @@ body[data-large="1"] .page {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* Время в углу пузыря. Цвет задан явно, а не прозрачностью: полупрозрачный
+   текст проверку контраста обходит стороной, и «сделали потише» незаметно
+   превращается в «не прочитать». */
+.bubble-at {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: var(--text-xs);
+  vertical-align: baseline;
+  white-space: nowrap;
+  color: var(--muted);
+}
 .bubble.mine {
   margin-left: auto;
   background: var(--gold-fill);
   color: #fff;
   border-bottom-right-radius: 4px;
+}
+/* На залитом фирменным пузыре свой оттенок: 5,38 к фону — читается, но не
+   спорит с самим сообщением. */
+.bubble.mine .bubble-at {
+  color: #f3d3d8;
 }
 .bubble.theirs {
   background: var(--card);
@@ -1974,4 +1990,36 @@ span.tag {
   .page.feed-deck .actions {
     bottom: calc(100px + env(safe-area-inset-bottom));
   }
+}
+
+/* ПЕРЕПИСКА В РАЗБОРЕ СПОРА (админ-панель).
+
+   Не пузыри, как в чате: оператор читает не свой разговор, а чужой, и ему
+   важнее порядок и кто сказал, чем «своё справа». Поэтому ровный список с
+   подписью над каждой репликой и полоской сбоку — по цвету сразу видно, чья
+   очередь говорить. */
+.dispute-chat {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.dispute-msg {
+  padding-left: 10px;
+  border-left: 3px solid var(--border-strong);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.dispute-msg--seeker {
+  border-left-color: var(--gold);
+}
+.dispute-msg--employer {
+  border-left-color: var(--super);
+}
+.dispute-msg--system {
+  border-left-color: var(--border);
 }

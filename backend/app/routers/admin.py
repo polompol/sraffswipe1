@@ -8,6 +8,8 @@
 но с тем же префиксом: снаружи админка осталась одним разделом.
 """
 
+from datetime import UTC
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -31,8 +33,12 @@ from ..notify import notify_owner
 from ..roles import date_ru, role_ru, time_ru
 from ..security import current_principal
 from ..shift_rules import shift_pay
-from ..timeutil import local_today
+from ..timeutil import business_tz, local_today
 from .analytics import _is_admin
+
+# Потолок выдачи переписки: у долгой смены сообщений сотни, а
+# оператору нужен разговор, а не выгрузка базы.
+_DISPUTE_CHAT_MAX = 500
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -568,3 +574,83 @@ def list_purchases(
     ]
 
 
+class DisputeMessageOut(BaseModel):
+    """Одно сообщение переписки — так, как его читает оператор."""
+
+    id: str
+    who: str        # «Работник Мария», «Кофейня «Дрова»», «Система»
+    side: str       # seeker | employer | system — для раскраски
+    text: str
+    at: str         # «16.08 23:40» по времени города смены
+
+
+@router.get(
+    "/matches/{match_id}/messages",
+    response_model=list[DisputeMessageOut],
+)
+def dispute_chat(
+    match_id: str,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Переписка по смене — то, по чему оператор разбирает спор.
+
+    До этого её не было видно НИГДЕ. Жалобы бывают ровно про написанное —
+    «мошенничество», «абьюз», «спам», а цель жалобы так и называется:
+    «переписка по мэтчу». Оператор открывал такую жалобу и видел всё, кроме
+    самой переписки: имена, дату смены, код прихода — и ни одного сообщения.
+    Решение приходилось принимать по одному лишь тексту заявителя.
+
+    Открываем не любую переписку, а только ту, на которую пожаловались или по
+    которой идёт спор. Это личная переписка двух людей: у оператора не должно
+    быть возможности читать чужие разговоры просто так. Отказ — 403, а не
+    пустой список: пустой список выглядел бы как «там ничего нет».
+    """
+    m = db.get(Match, match_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Смена не найдена")
+
+    complained = (
+        db.query(Report).filter(Report.target_id == match_id).first() is not None
+    )
+    if not (m.disputed or complained):
+        raise HTTPException(
+            status_code=403,
+            detail="Переписку можно открыть только по жалобе или спору.",
+        )
+
+    vac = db.get(Vacancy, m.vacancy_id)
+    tz = business_tz(vac.city if vac is not None else "")
+    worker = db.get(User, m.user_id)
+    venue = db.get(Employer, m.employer_id)
+    worker_name = (worker.name if worker is not None else "") or "Работник"
+    venue_name = (venue.company_name if venue is not None else "") or "Заведение"
+
+    rows = (
+        db.query(Message)
+        .filter(Message.match_id == match_id)
+        .order_by(Message.created_at, Message.id)
+        .limit(_DISPUTE_CHAT_MAX)
+        .all()
+    )
+    out: list[DisputeMessageOut] = []
+    for msg in rows:
+        if msg.is_system:
+            side, who = "system", "Система"
+        elif msg.sender_id == m.user_id:
+            side, who = "seeker", worker_name
+        else:
+            side, who = "employer", venue_name
+        # Время — по городу смены: оператор в Москве, а смена может быть во
+        # Владивостоке, и «23:40» там означает совсем другое.
+        at = msg.created_at
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=UTC)
+        out.append(DisputeMessageOut(
+            id=msg.id,
+            who=who,
+            side=side,
+            text=msg.text,
+            at=at.astimezone(tz).strftime("%d.%m %H:%M"),
+        ))
+    return out

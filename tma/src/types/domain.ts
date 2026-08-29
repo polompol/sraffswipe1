@@ -256,5 +256,8 @@ export interface Message {
   senderId: string;
   text: string;
   isSystem: boolean;
+  /** Когда написано. Для спора это главное: «написал в 23:40, что не выйдет»
+   *  без времени — не довод, а слова. */
+  createdAt: string;
 }
 
