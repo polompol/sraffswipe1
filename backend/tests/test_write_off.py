@@ -27,28 +27,31 @@ def _detach(owner_id, tg_id):
         db.close()
 
 
-def _employer_with_debt(client, tg_id, amounts=(280, 450)):
+def _employer_with_debt(client, tg_id, make_match, amounts=(280, 450)):
     emp_h, eid = _auth(client, "employer")
     _detach(eid, tg_id)
+    # Смены настоящие, а не выдуманные идентификаторы: комиссия ссылается на
+    # смену внешним ключом, и в бою висеть в воздухе она не может.
+    shifts = [make_match(eid) for _ in amounts]
     db = SessionLocal()
     try:
-        for i, amount in enumerate(amounts):
-            db.add(Commission(employer_id=eid, match_id=f"{eid}-{i}",
+        for amount, mid in zip(amounts, shifts, strict=True):
+            db.add(Commission(employer_id=eid, match_id=mid,
                               shift_pay=amount * 10, amount=amount))
         db.commit()
     finally:
         db.close()
     admin_h, _ = _auth(client, "seeker")   # tg_id=0 — оператор в тестах
-    return admin_h, eid
+    return admin_h, eid, shifts
 
 
 def _revenue(client, admin_h):
     return client.get("/admin/revenue", headers=admin_h).json()
 
 
-def test_write_off_does_not_look_like_revenue(client):
+def test_write_off_does_not_look_like_revenue(client, make_match):
     """Списанное не попадает ни в «оплачено», ни в «к оплате»."""
-    admin_h, eid = _employer_with_debt(client, 850001)
+    admin_h, eid, shifts = _employer_with_debt(client, 850001, make_match)
     before = _revenue(client, admin_h)
     assert before["commissionPendingRub"] == 730
 
@@ -65,9 +68,9 @@ def test_write_off_does_not_look_like_revenue(client):
     assert after["commissionAccruedRub"] == before["commissionAccruedRub"]
 
 
-def test_reason_is_required_and_saved(client):
+def test_reason_is_required_and_saved(client, make_match):
     """Через полгода никто не вспомнит, почему обнулили конкретное начисление."""
-    admin_h, eid = _employer_with_debt(client, 850010)
+    admin_h, eid, shifts = _employer_with_debt(client, 850010, make_match)
     assert client.post(f"/admin/commissions/{eid}/write-off", headers=admin_h,
                        json={"reason": "ок"}).status_code == 422
 
@@ -82,26 +85,26 @@ def test_reason_is_required_and_saved(client):
         db.close()
 
 
-def test_can_write_off_a_single_shift(client):
+def test_can_write_off_a_single_shift(client, make_match):
     """Спор по одной смене не должен обнулять весь счёт заведения."""
-    admin_h, eid = _employer_with_debt(client, 850020)
+    admin_h, eid, shifts = _employer_with_debt(client, 850020, make_match)
     r = client.post(f"/admin/commissions/{eid}/write-off", headers=admin_h,
                     json={"reason": "работник не вышел, комиссия ошибочна",
-                          "match_id": f"{eid}-0"})
+                          "match_id": shifts[0]})
     assert r.json()["written_off"] == 1
     assert r.json()["amount_rub"] == 280
     assert _revenue(client, admin_h)["commissionPendingRub"] == 450
 
 
-def test_nothing_to_write_off_is_404(client):
-    admin_h, eid = _employer_with_debt(client, 850030, amounts=())
+def test_nothing_to_write_off_is_404(client, make_match):
+    admin_h, eid, shifts = _employer_with_debt(client, 850030, make_match, amounts=())
     r = client.post(f"/admin/commissions/{eid}/write-off", headers=admin_h,
                     json={"reason": "нечего списывать"})
     assert r.status_code == 404
 
 
-def test_write_off_requires_admin(client):
-    admin_h, eid = _employer_with_debt(client, 850040)
+def test_write_off_requires_admin(client, make_match):
+    admin_h, eid, shifts = _employer_with_debt(client, 850040, make_match)
     emp_h, other = _auth(client, "employer")
     _detach(other, 850041)
     r = client.post(f"/admin/commissions/{eid}/write-off", headers=emp_h,
@@ -109,7 +112,7 @@ def test_write_off_requires_admin(client):
     assert r.status_code in (401, 403)
 
 
-def test_written_off_debt_stops_blocking_publishing(client):
+def test_written_off_debt_stops_blocking_publishing(client, make_match):
     """Списали долг — блокировка публикации снимается.
 
     Иначе списание было бы бессмысленным: долга нет, а заведение всё ещё не
@@ -120,7 +123,7 @@ def test_written_off_debt_stops_blocking_publishing(client):
 
     from app.routers.billing import commission_overdue
 
-    admin_h, eid = _employer_with_debt(client, 850050)
+    admin_h, eid, shifts = _employer_with_debt(client, 850050, make_match)
     db = SessionLocal()
     try:
         for c in db.query(Commission).filter(Commission.employer_id == eid):

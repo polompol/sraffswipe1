@@ -33,15 +33,21 @@ def test_notifications_are_in_russian(client):
 
     from app.db import SessionLocal
     from app.digest import build_digest
-    from app.models import User, Vacancy
+    from app.models import Employer, User, Vacancy
 
     tomorrow = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%d")
     db = SessionLocal()
     try:
+        # Заведение настоящее: смена ссылается на него внешним ключом, и
+        # выдуманный идентификатор — положение дел, невозможное в бою.
+        emp = Employer(tg_id=90002, phone="tg:90002",
+                       company_name="Кофейня", city="Москва")
+        db.add(emp)
+        db.flush()
         u = User(tg_id=90001, phone="tg:90001", name="Аня", city="Москва")
         db.add(u)
         db.add(Vacancy(
-            employer_id="emp-digest", role="barista", date=tomorrow,
+            employer_id=emp.id, role="barista", date=tomorrow,
             start_time=600, end_time=1080, rate=350, city="Москва",
         ))
         db.commit()
