@@ -34,7 +34,6 @@ export function useSwipeAction(isSeeker: boolean) {
         const v = item as Vacancy;
         setMatch({
           id: res.matchId,
-          seekerId: "me",
           employerId: v.employerId,
           vacancyId: v.id,
           status: "matched",
@@ -56,7 +55,6 @@ export function useSwipeAction(isSeeker: boolean) {
         const s = item as Seeker;
         setMatch({
           id: res.matchId,
-          seekerId: s.id,
           employerId: "me",
           vacancyId: res.vacancyId ?? "",
           status: "matched",

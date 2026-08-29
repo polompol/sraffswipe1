@@ -165,7 +165,6 @@ const DEMO_MATCH_ID = "demo-match";
 const matches: MatchModel[] = [
   {
     id: DEMO_MATCH_ID,
-    seekerId: "me",
     employerId: "emp1",
     vacancyId: "vac1",
     status: "confirmed",
@@ -187,7 +186,6 @@ const matches: MatchModel[] = [
   // кнопки «Мне не заплатили» — то есть половины экрана «Мои смены».
   {
     id: "demo-match-done",
-    seekerId: "me",
     employerId: "emp2",
     vacancyId: "vac2",
     status: "completed",
@@ -211,38 +209,30 @@ const messagesByMatch: Record<string, Message[]> = {
   [DEMO_MATCH_ID]: [
     {
       id: "demo-m1",
-      chatId: DEMO_MATCH_ID,
       senderId: "system",
       text: "Взаимно! Смена: Кофейня «Дрова». Договоритесь о деталях.",
       isSystem: true,
-      timestamp: new Date(Date.now() - 7200000).toISOString(),
     },
     {
       id: "demo-m2",
-      chatId: DEMO_MATCH_ID,
       senderId: "emp1",
       text: "Здравствуйте! Готовы выйти завтра к 8:00?",
       isSystem: false,
-      timestamp: new Date(Date.now() - 7000000).toISOString(),
     },
     {
       id: "demo-m3",
-      chatId: DEMO_MATCH_ID,
       senderId: "me",
       text: "Да, буду. Что взять с собой?",
       isSystem: false,
-      timestamp: new Date(Date.now() - 6800000).toISOString(),
     },
     {
       id: "demo-m4",
-      chatId: DEMO_MATCH_ID,
       senderId: "system",
       text:
         "Смена подтверждена ✓ Дальше ничего нажимать не нужно: через 12 часов " +
         "после окончания она закроется сама. Если смена не состоится — нажмите " +
         "«Смена не состоялась», и комиссии не будет.",
       isSystem: true,
-      timestamp: new Date(Date.now() - 6600000).toISOString(),
     },
   ],
 };
@@ -315,7 +305,6 @@ export function sendSwipe(
       VACANCIES.find((v) => seeker.roles.includes(v.role)) ?? VACANCIES[0];
     const m: MatchModel = {
       id: uid(),
-      seekerId: seeker.id,
       employerId: mine.employerId,
       vacancyId: mine.id,
       status: "matched",
@@ -333,11 +322,9 @@ export function sendSwipe(
     messagesByMatch[m.id] = [
       {
         id: uid(),
-        chatId: m.id,
         senderId: "system",
         text: `Взаимно! Смена: ${mine.companyName}. Договоритесь о деталях.`,
         isSystem: true,
-        timestamp: new Date().toISOString(),
       },
     ];
     return Promise.resolve({
@@ -352,7 +339,6 @@ export function sendSwipe(
   }
   const match: MatchModel = {
     id: uid(),
-    seekerId: "me",
     employerId: vac.employerId,
     vacancyId: vac.id,
     status: "matched",
@@ -370,19 +356,15 @@ export function sendSwipe(
   messagesByMatch[match.id] = [
     {
       id: uid(),
-      chatId: match.id,
       senderId: "system",
       text: `Взаимно! Смена: ${vac.companyName}. Договоритесь о деталях.`,
       isSystem: true,
-      timestamp: new Date().toISOString(),
     },
     {
       id: uid(),
-      chatId: match.id,
       senderId: vac.employerId,
       text: "Здравствуйте! Готовы выйти на смену?",
       isSystem: false,
-      timestamp: new Date().toISOString(),
     },
   ];
   return Promise.resolve({
@@ -411,11 +393,9 @@ export function fetchMessages(matchId: string): Promise<Message[]> {
 export function sendMessage(matchId: string, text: string): Promise<Message> {
   const msg: Message = {
     id: uid(),
-    chatId: matchId,
     senderId: "me",
     text,
     isSystem: false,
-    timestamp: new Date().toISOString(),
   };
   (messagesByMatch[matchId] ??= []).push(msg);
   return Promise.resolve(msg);
@@ -429,11 +409,9 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
   m.checkinCode = "123456"; // демо-код прихода
   (messagesByMatch[matchId] ??= []).push({
     id: uid(),
-    chatId: matchId,
     senderId: "system",
     text: "Смена подтверждена ✅. Сформирован акт для самозанятого.",
     isSystem: true,
-    timestamp: new Date().toISOString(),
   });
   return Promise.resolve({ ...m });
 }
@@ -442,11 +420,9 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
 function sysMessage(matchId: string, text: string): void {
   (messagesByMatch[matchId] ??= []).push({
     id: uid(),
-    chatId: matchId,
     senderId: "system",
     text,
     isSystem: true,
-    timestamp: new Date().toISOString(),
   });
 }
 

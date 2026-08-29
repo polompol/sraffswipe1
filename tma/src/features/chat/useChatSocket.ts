@@ -43,11 +43,9 @@ export function useChatSocket(matchId: string, handlers: Handlers): void {
         const raw = JSON.parse(ev.data);
         ref.current.onMessage({
           id: raw.id,
-          chatId: raw.match_id ?? matchId,
           senderId: raw.sender_id,
           text: raw.text,
           isSystem: Boolean(raw.is_system),
-          timestamp: raw.created_at ?? new Date().toISOString(),
         });
         // Системные сообщения приходят на смену статуса: вторая сторона
         // подтвердила, отметилась, перенесла. Без обновления кнопка над

@@ -3,7 +3,7 @@ import { pickTodayShifts } from "./todayShift";
 import type { MatchModel } from "@/types/domain";
 
 const base: MatchModel = {
-  id: "1", seekerId: "u", employerId: "e", vacancyId: "v",
+  id: "1", employerId: "e", vacancyId: "v",
   status: "confirmed", confirmedBySeeker: true, confirmedByEmployer: true,
   shiftDate: "2026-08-18", shiftStart: 600,
 };

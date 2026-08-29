@@ -209,7 +209,6 @@ export interface Vacancy {
 
 export interface MatchModel {
   id: string;
-  seekerId: string;
   employerId: string;
   vacancyId: string;
   status: MatchStatus;
@@ -228,8 +227,6 @@ export interface MatchModel {
   rescheduleDate?: string;
   rescheduleStart?: number | null;
   rescheduleEnd?: number | null;
-  /** Фактическая длительность смены в минутах, если она отличалась. */
-  actualMinutes?: number | null;
   seekerCheckedIn?: boolean;
   employerCheckedIn?: boolean;
   disputed?: boolean;
@@ -242,12 +239,22 @@ export interface MatchModel {
   shiftEnd?: number;
 }
 
+/** Сообщение в чате смены — ровно то, что присылает сервер.
+ *
+ *  Здесь были ещё два поля, которых сервер не шлёт: `chatId` и `timestamp`.
+ *  Читать их никто не читал, но тип обещал строку, а приходило пусто. Опасно
+ *  это тем, что демо-данные их заполняли: на демо всё выглядело правильно, а
+ *  на живом сервере первый же, кто написал бы `msg.timestamp`, получил бы
+ *  пустоту — и без единой ошибки при сборке. Ровно так однажды пропала
+ *  надёжность работников на экране «Мои работники».
+ *
+ *  Времени у сообщения сейчас нет и на сервере. Если оно понадобится на
+ *  экране, начинать надо с сервера, а не с этого файла.
+ */
 export interface Message {
   id: string;
-  chatId: string;
   senderId: string;
   text: string;
   isSystem: boolean;
-  timestamp: string;
 }
 

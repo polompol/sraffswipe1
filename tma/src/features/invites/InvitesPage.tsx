@@ -37,7 +37,6 @@ export function InvitesPage() {
         pop();
         setMatch({
           id: res.matchId,
-          seekerId: "me",
           employerId: v.employerId,
           vacancyId: v.id,
           status: "matched",

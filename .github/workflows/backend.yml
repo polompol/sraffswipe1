@@ -3,9 +3,20 @@ name: Backend CI
 on:
   push:
     branches: ["**"]
-    paths: ["backend/**", ".github/workflows/backend.yml"]
+    # Типы приложения тоже здесь: договор «сервер шлёт — приложение читает»
+    # проверяется тестом на стороне сервера, и сломать его можно с любой из
+    # двух сторон (см. backend/tests/test_contract_with_app.py).
+    paths:
+      - "backend/**"
+      - "tma/src/types/**"
+      - "tma/src/api/**"
+      - ".github/workflows/backend.yml"
   pull_request:
-    paths: ["backend/**", ".github/workflows/backend.yml"]
+    paths:
+      - "backend/**"
+      - "tma/src/types/**"
+      - "tma/src/api/**"
+      - ".github/workflows/backend.yml"
 
 jobs:
   test:
