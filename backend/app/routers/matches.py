@@ -110,10 +110,12 @@ def mark_not_held(
     is_seeker = principal["id"] == m.user_id and principal["role"] == "seeker"
     if not (is_employer or is_seeker):
         raise HTTPException(status_code=403, detail="Нет доступа к смене")
-    if m.status != "confirmed":
+    # И про ту, которую подтвердил только работник: за неё тоже начисляется
+    # комиссия (см. settle_shifts), значит и выход из неё должен быть.
+    if m.status not in ("confirmed", "matched"):
         raise HTTPException(
             status_code=400,
-            detail="Так можно сказать только про подтверждённую смену",
+            detail="Так можно сказать только про предстоящую смену",
         )
     # Только про СОСТОЯВШУЮСЯ по времени смену. Иначе заведение могло нажать
     # это в момент начала: смена уходила в «не состоялась» с неявкой на
@@ -935,6 +937,21 @@ def confirm(
     else:
         m.confirmed_by_employer = True
 
+    # Работник сказал «выхожу», а заведение ещё молчит. Дальше молчание будет
+    # означать согласие — и за смену начислится комиссия. Человек должен
+    # узнать об этом сейчас, а не из счёта.
+    if (
+        principal["role"] == "seeker"
+        and m.status == "matched"
+        and not m.confirmed_by_employer
+    ):
+        notify_owner(
+            db, m.employer_id,
+            "Работник подтвердил выход на смену. Если смена не нужна — "
+            "отмените её, иначе она считается состоявшейся и за неё будет "
+            "комиссия.",
+            open_app="Открыть смену", screen="chat", ident=m.id,
+        )
     if m.confirmed_by_seeker and m.confirmed_by_employer and m.status == "matched":
         m.status = "confirmed"
         # 6-значный код из криптостойкого генератора (secrets) — 1 000 000
