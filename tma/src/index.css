@@ -220,7 +220,7 @@ input[type="range"] {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
-  box-shadow: var(--elev-1);
+  box-shadow: var(--elev-card);
 }
 
 /* ===== Единая кнопка <Button> (дизайн-система) ===== */
@@ -688,6 +688,8 @@ button.tag:disabled {
   /* Высота считается от ОСТАТКА экрана: шапка+фильтры сверху (~120px),
      кнопки действий (92px) и таббар (88px) снизу. Раньше при 68vh колода
      занимала 560px и кнопки «Пропустить/Отклик» уезжали под таббар. */
+  /* Две высоты подряд — не опечатка: первая на случай браузера без dvh,
+     вторая для всех остальных. */
   height: clamp(300px, calc(100vh - 328px), 560px);
   /* Плюс «домашняя полоска» iPhone: без неё кнопки «Пропустить/Отклик»
      наезжали на панель вкладок ровно на её высоту. */
@@ -1485,9 +1487,9 @@ body[data-large="1"] .page {
   box-shadow: 0 4px 14px rgba(124, 21, 38, 0.14);
   transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
-.act:active {
-  transform: scale(0.88);
-}
+/* Нажатие на круглую кнопку описано ниже, в разделе про кнопки свайпа:
+   здесь стояло второе такое же правило с другим числом, и оно молча
+   перебивалось. */
 
 /* Вкладки — отклик и «всплытие» активной иконки */
 .tab {
@@ -1581,8 +1583,7 @@ body[data-large="1"] .page {
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0) 44%),
     linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
-  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+
   letter-spacing: 0.2px;
 }
 .ui-btn--primary:active:not(:disabled) {
@@ -1628,12 +1629,6 @@ body[data-large="1"] .page {
     box-shadow: 0 16px 32px rgba(165, 28, 48, 0.5),
       inset 0 2px 4px rgba(255, 255, 255, 0.3);
   }
-}
-
-/* Карточки — мягче и «дороже» глубина. */
-.card {
-  box-shadow: 0 1px 2px rgba(60, 20, 25, 0.05),
-    0 6px 18px rgba(60, 20, 25, 0.07);
 }
 
 /* Уважаем настройку «уменьшить движение» (доступность) */
@@ -1885,15 +1880,14 @@ body[data-large="1"] .page {
   }
   .swipe-top {
     margin: 12px 16px 0;
-    gap: 10px;
+    /* 8, а не 10: ниже по этому же правилу стояло второе объявление с
+       восьмёркой, и десятка не действовала никогда. */
+    gap: 8px;
   }
   /* Сумма на низком экране чуть меньше: 46 точек на карточке высотой 366
      смотрелись бы как заголовок афиши и отняли бы строку у названия. */
   .swipe-hero-sum {
     font-size: var(--text-display) !important;
-  }
-  .swipe-top {
-    gap: 8px;
   }
   .actions {
     margin-top: 12px;
