@@ -11,6 +11,7 @@ import {
   blockVacancy,
   fetchAdminReports,
   fetchJobsHealth,
+  fetchNotifyHealth,
   resolveMatch,
   resolveReport,
   sendShiftReminders,
@@ -66,6 +67,24 @@ function SchedulerHealth() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function NotifyHealthCard() {
+  const h = useQuery({ queryKey: ["admin-notify"], queryFn: fetchNotifyHealth });
+  if (!h.data?.broken) return null;
+  return (
+    <div className="card" role="alert" style={{ marginBottom: 16, borderColor: "var(--danger)" }}>
+      <b style={{ color: "var(--danger)" }}>Уведомления не доходят</b>
+      <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--text-xs)" }}>
+        Подряд не доставлено: {h.data.failedRow}. Последняя ошибка:{" "}
+        {h.data.lastError || "—"}.
+        <br />
+        На этих сообщениях держится всё, что человек делает после смены: он не
+        узнает ни про закрытие, ни про то, что смену записали в
+        несостоявшиеся. Проверьте токен бота в настройках сервера.
+      </p>
     </div>
   );
 }
@@ -200,6 +219,7 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
           закрываются, а значит не идёт комиссия. Через две недели такие
           смены закрываются уже без денег, и выручку за простой не догнать. */}
       <SchedulerHealth />
+      <NotifyHealthCard />
 
       <Section
         title="Каждый день"

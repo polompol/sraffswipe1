@@ -657,6 +657,37 @@ def dispute_chat(
     return out
 
 
+class NotifyHealthOut(BaseModel):
+    """Доходят ли уведомления людям."""
+
+    sent: int          # доставлено с последнего запуска сервера
+    failedRow: int     # отказов подряд
+    blocked: int       # человек заблокировал бота — это не поломка
+    lastError: str
+    broken: bool       # похоже на поломку, а не на единичный отказ
+
+
+@router.get("/notifications", response_model=NotifyHealthOut)
+def notifications_health(_admin: dict = Depends(require_admin)):
+    """Доходят ли сообщения бота.
+
+    На них держится вся эскалация: «смену отметили как несостоявшуюся —
+    откройте и позовите оператора». Если протух токен бота или Telegram
+    недоступен, отправка молча проваливалась, и человек просто не узнавал,
+    что потерял деньги. Снаружи не ломалось ничего.
+
+    Пять отказов подряд — это уже не «один человек заблокировал бота», а
+    поломка: неверный токен, заблокированный бот, нет сети.
+    """
+    from ..notify import delivery_health
+
+    h = delivery_health()
+    return NotifyHealthOut(
+        sent=h["sent"], failedRow=h["failed_row"], blocked=h["blocked"],
+        lastError=h["last_error"], broken=h["failed_row"] >= 5,
+    )
+
+
 class JobHealthOut(BaseModel):
     """Состояние ежедневной задачи: когда отработала в последний раз."""
 

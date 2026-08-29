@@ -76,3 +76,31 @@ def test_only_the_operator_sees_this(client):
     finally:
         db.close()
     assert client.get("/admin/jobs", headers=headers).status_code in (401, 403)
+
+
+def test_operator_sees_when_notifications_stop_arriving(client):
+    """Отказы доставки не должны быть тихими.
+
+    На сообщениях бота держится вся эскалация: «смену отметили как
+    несостоявшуюся — откройте и позовите оператора». Раньше отправка молча
+    глотала любую ошибку, и человек просто не узнавал, что потерял деньги.
+    """
+    from app import notify
+
+    r = client.get("/admin/notifications", headers=_auth(client)).json()
+    assert r["broken"] is False, "на чистом сервисе тревоги нет"
+
+    # Telegram отказывает подряд — например, протух токен бота.
+    for _ in range(5):
+        notify._mark_failed("HTTP 401: Unauthorized")
+    r = client.get("/admin/notifications", headers=_auth(client)).json()
+    assert r["broken"] is True, "пять отказов подряд — это поломка"
+    assert "401" in r["lastError"]
+
+    # Человек, заблокировавший бота, поломкой не считается.
+    notify._mark_sent()
+    for _ in range(20):
+        notify._mark_failed("HTTP 403", blocked=True)
+    r = client.get("/admin/notifications", headers=_auth(client)).json()
+    assert r["broken"] is False, "заблокировавшие бота — не поломка сервиса"
+    assert r["blocked"] >= 20

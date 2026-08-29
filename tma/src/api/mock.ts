@@ -803,6 +803,12 @@ export function fetchDisputeChat(_matchId: string) {
   ]);
 }
 
+export function fetchNotifyHealth() {
+  return Promise.resolve({
+    sent: 128, failedRow: 0, blocked: 3, lastError: "", broken: false,
+  });
+}
+
 export function fetchJobsHealth() {
   return Promise.resolve([
     { id: "reminders", title: "Напоминания о сменах", lastRun: "2026-08-29", daysAgo: 0, stale: false },

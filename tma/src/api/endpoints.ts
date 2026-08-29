@@ -633,6 +633,23 @@ export async function fetchDisputeChat(matchId: string): Promise<DisputeMessage[
   return data;
 }
 
+/** Доходят ли уведомления людям. */
+export interface NotifyHealth {
+  sent: number;
+  failedRow: number;
+  blocked: number;
+  lastError: string;
+  broken: boolean;
+}
+
+/** На сообщениях бота держится вся эскалация — если они не доходят, человек
+ *  не узнает, что смену записали в несостоявшиеся. */
+export async function fetchNotifyHealth(): Promise<NotifyHealth> {
+  if (!USE_BACKEND) return mock.fetchNotifyHealth();
+  const { data } = await api.get<NotifyHealth>("/admin/notifications");
+  return data;
+}
+
 /** Состояние ежедневной задачи планировщика. */
 export interface JobHealth {
   id: string;
