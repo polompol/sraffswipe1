@@ -32,6 +32,7 @@ import {
 } from "./shared";
 import { DisputeFacts, REASON_LABEL, TARGET_LABEL } from "./DisputeFacts";
 import { DisputeChat } from "./DisputeChat";
+import { ToggleChip } from "@/components/ToggleChip";
 
 const DAY = 86400000;
 const PERIODS: { id: string; label: string; days: number }[] = [
@@ -208,19 +209,12 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
         }}
       >
         {PERIODS.map((p) => (
-          <button
+          <ToggleChip
             key={p.id}
-            className="tag"
-            style={{
-              cursor: "pointer",
-              background: period === p.id ? "var(--gold-fill)" : "transparent",
-              color: period === p.id ? "var(--on-brand)" : "var(--text)",
-              borderColor: period === p.id ? "var(--gold-fill)" : "var(--border-strong)",
-            }}
+            on={period === p.id}
+            label={p.label}
             onClick={() => setPeriod(p.id)}
-          >
-            {p.label}
-          </button>
+          />
         ))}
       </div>
       {reports.isLoading && <Loading />}

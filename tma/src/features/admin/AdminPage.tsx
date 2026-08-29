@@ -74,14 +74,11 @@ export function AdminPage() {
         {TABS.map((t) => (
           <button
             key={t.id}
-            className="tag"
-            style={{
-              flex: "1 0 auto",
-              cursor: "pointer",
-              background: tab === t.id ? "var(--gold-fill)" : "transparent",
-              color: tab === t.id ? "var(--on-brand)" : "var(--text)",
-              borderColor: tab === t.id ? "var(--gold-fill)" : "var(--border-strong)",
-            }}
+            // Не ToggleChip: это вкладка, а не переключатель — у неё
+            // aria-current и счётчик внутри. Но цвета те же и берутся из тех
+            // же классов, чтобы «выбранное» везде выглядело одинаково.
+            className={`tag ${tab === t.id ? "tag-gold-fill" : "tag-nav"}`}
+            style={{ flex: "1 0 auto" }}
             aria-current={tab === t.id ? "page" : undefined}
             onClick={() => setTab(t.id)}
           >

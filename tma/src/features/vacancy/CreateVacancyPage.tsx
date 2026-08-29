@@ -5,9 +5,6 @@ import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/
 import { MIN_RATE_PER_HOUR, MIN_RATE_PER_SHIFT } from "@/types/domain";
 import {
   PAY_METHOD_SHORT,
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
   STAFF_ROLE_LABELS,
   TIPS_CHOICE,
 } from "@/types/domain";
@@ -22,10 +19,12 @@ import { toast } from "@/components/Toast";
 import { dateLong, shiftWhen } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
+import { RolePicker } from "@/components/RolePicker";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { CityPicker } from "@/components/CityPicker";
 import { IconCheck, IconPin } from "@/components/Icons";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
+import { ToggleChip } from "@/components/ToggleChip";
 
 const toMinutes = (t: string): number => {
   const [h, m] = t.split(":").map(Number);
@@ -275,32 +274,7 @@ export function CreateVacancyPage() {
         )}
 
         <div className="form-label">Должность</div>
-        <div style={{ margin: "8px 0 16px" }}>
-          {ROLE_FAMILY_ORDER.map((fam) => (
-            <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="hint">
-                {ROLE_FAMILY_LABELS[fam]}
-              </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {ROLE_FAMILIES[fam].map((r) => (
-                  <button
-                    key={r}
-                    className="tag"
-                    style={{
-                      cursor: "pointer",
-                      background: role === r ? "var(--gold-fill)" : "transparent",
-                      color: role === r ? "var(--on-brand)" : "var(--text)",
-                      borderColor: role === r ? "var(--gold-fill)" : "var(--border-strong)",
-                    }}
-                    onClick={() => setRole(r)}
-                  >
-                    {STAFF_ROLE_LABELS[r]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <RolePicker isOn={(r) => role === r} onPick={setRole} />
 
         <div className="form-label">Дата смены</div>
         <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -351,21 +325,13 @@ export function CreateVacancyPage() {
           }}
         >
           {HEADCOUNT_PRESETS.map((n) => (
-            <button
+            <ToggleChip
               key={n}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                minWidth: 52,
-                justifyContent: "center",
-                background: headcount === n ? "var(--gold-fill)" : "transparent",
-                color: headcount === n ? "var(--on-brand)" : "var(--text)",
-                borderColor: headcount === n ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={headcount === n}
+              label={n}
+              wide
               onClick={() => setHeadcount(n)}
-            >
-              {n}
-            </button>
+            />
           ))}
         </div>
         {/* Поле для своего числа показываем только по запросу. Раньше оно
@@ -415,19 +381,12 @@ export function CreateVacancyPage() {
         <div className="form-label">Как и когда платите</div>
         <div style={{ display: "grid", gap: 8, margin: "8px 0 16px" }}>
           {(Object.keys(PAY_METHOD_SHORT) as PayMethod[]).map((p) => (
-            <button
+            <ToggleChip
               key={p}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: payMethod === p ? "var(--gold-fill)" : "transparent",
-                color: payMethod === p ? "var(--on-brand)" : "var(--text)",
-                borderColor: payMethod === p ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={payMethod === p}
+              label={PAY_METHOD_SHORT[p]}
               onClick={() => setPayMethod(p)}
-            >
-              {PAY_METHOD_SHORT[p]}
-            </button>
+            />
           ))}
         </div>
 
@@ -441,19 +400,12 @@ export function CreateVacancyPage() {
           }}
         >
           {(Object.keys(TIPS_CHOICE) as TipsMode[]).map((t) => (
-            <button
+            <ToggleChip
               key={t}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: tips === t ? "var(--gold-fill)" : "transparent",
-                color: tips === t ? "var(--on-brand)" : "var(--text)",
-                borderColor: tips === t ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={tips === t}
+              label={TIPS_CHOICE[t]}
               onClick={() => setTips(t)}
-            >
-              {TIPS_CHOICE[t]}
-            </button>
+            />
           ))}
         </div>
 

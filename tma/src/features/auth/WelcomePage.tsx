@@ -21,13 +21,8 @@ import { updateMe, uploadPhoto } from "@/api/endpoints";
 import { useSession } from "@/store/session";
 import { haptic } from "@/telegram/sdk";
 import { toast } from "@/components/Toast";
-import {
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
-  STAFF_ROLE_LABELS,
-} from "@/types/domain";
 import type { StaffRole } from "@/types/domain";
+import { RolePicker } from "@/components/RolePicker";
 
 export function WelcomePage() {
   const nav = useNavigate();
@@ -130,33 +125,7 @@ export function WelcomePage() {
             <p className="hint">
               Можно выбрать несколько — смен будет больше
             </p>
-            {ROLE_FAMILY_ORDER.map((fam) => (
-              <div key={fam} style={{ marginBottom: 12 }}>
-                <div className="hint">
-                  {ROLE_FAMILY_LABELS[fam]}
-                </div>
-                <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                  {ROLE_FAMILIES[fam].map((r) => {
-                    const on = roles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className="tag"
-                        style={{
-                          cursor: "pointer",
-                          background: on ? "var(--gold-fill)" : "transparent",
-                          color: on ? "var(--on-brand)" : "var(--text)",
-                          borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
-                        }}
-                        onClick={() => toggleRole(r)}
-                      >
-                        {STAFF_ROLE_LABELS[r]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+            <RolePicker isOn={(r) => roles.includes(r)} onPick={toggleRole} />
           </>
         )}
 

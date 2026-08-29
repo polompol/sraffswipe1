@@ -4,9 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import { localISO } from "@/lib/format";
 import {
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
   STAFF_ROLE_LABELS,
 } from "@/types/domain";
 import {
@@ -17,6 +14,8 @@ import {
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
+import { RolePicker } from "@/components/RolePicker";
+import { ToggleChip } from "@/components/ToggleChip";
 import { IconBell, IconCheck } from "@/components/Icons";
 import { Sheet } from "@/components/Sheet";
 import { haptic } from "@/telegram/sdk";
@@ -112,26 +111,6 @@ export function FilterSheet({
     }
   }
 
-  function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
-    return (
-      <button
-        className="tag"
-        style={{
-          cursor: "pointer",
-          background: on ? "var(--gold-fill)" : "transparent",
-          color: on ? "var(--on-brand)" : "var(--text)",
-          borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
-        }}
-        onClick={() => {
-          haptic("select");
-          onClick();
-        }}
-      >
-        {label}
-      </button>
-    );
-  }
-
   return (
     <Sheet
       title="Что ищете"
@@ -159,45 +138,30 @@ export function FilterSheet({
 
       <div className="form-label">Когда</div>
       <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-        <Chip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
-        <Chip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
-        <Chip on={whenKind === "tomorrow"} label="Завтра" onClick={() => set(dayRange(1))} />
-        <Chip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
+        <ToggleChip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
+        <ToggleChip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
+        <ToggleChip on={whenKind === "tomorrow"} label="Завтра" onClick={() => set(dayRange(1))} />
+        <ToggleChip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
       </div>
 
       <div className="form-label">Должность</div>
-      <div style={{ margin: "8px 0 16px" }}>
-        {ROLE_FAMILY_ORDER.map((fam) => (
-          <div key={fam} style={{ marginBottom: 10 }}>
-            <div className="hint">
-              {ROLE_FAMILY_LABELS[fam]}
-            </div>
-            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-              {ROLE_FAMILIES[fam].map((r) => (
-                <Chip
-                  key={r}
-                  on={f.role === r}
-                  label={STAFF_ROLE_LABELS[r]}
-                  onClick={() => set({ role: f.role === r ? undefined : r })}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <RolePicker
+        isOn={(r) => f.role === r}
+        onPick={(r) => set({ role: f.role === r ? undefined : r })}
+      />
 
       <div className="form-label">Как считают ставку</div>
       <div className="row" style={{ margin: "8px 0 16px", flexWrap: "wrap" }}>
-        <Chip on={!f.rate_type} label="Неважно" onClick={() => set({ rate_type: undefined })} />
-        <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
-        <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
+        <ToggleChip on={!f.rate_type} label="Неважно" onClick={() => set({ rate_type: undefined })} />
+        <ToggleChip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
+        <ToggleChip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
       </div>
 
       <div className="form-label">Подойдёт мне</div>
       <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-        <Chip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
-        <Chip on={!!f.tips_only} label="С чаевыми" onClick={() => set({ tips_only: !f.tips_only })} />
-        <Chip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
+        <ToggleChip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
+        <ToggleChip on={!!f.tips_only} label="С чаевыми" onClick={() => set({ tips_only: !f.tips_only })} />
+        <ToggleChip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
       </div>
 
       <label className="form-label" htmlFor="minrate">Ставка от, ₽</label>
@@ -214,7 +178,7 @@ export function FilterSheet({
       <div className="form-label">Сначала показывать</div>
       <div className="row" style={{ margin: "8px 0 18px", flexWrap: "wrap" }}>
         {SORTS.map((s) => (
-          <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
+          <ToggleChip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
         ))}
       </div>
 

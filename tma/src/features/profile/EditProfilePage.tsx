@@ -4,18 +4,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExperienceTag, StaffRole } from "@/types/domain";
 import {
   EXPERIENCE_TAG_LABELS,
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
   STAFF_ROLE_LABELS,
 } from "@/types/domain";
 import { Button } from "@/components/Button";
+import { RolePicker } from "@/components/RolePicker";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { CityPicker } from "@/components/CityPicker";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { apiError } from "@/lib/errors";
+import { ToggleChip } from "@/components/ToggleChip";
 
 // Навыки для выбора (медкнижка/самозанятость задаются отдельными полями).
 const SKILLS: ExperienceTag[] = ["experienced", "english", "cashRegister"];
@@ -213,49 +212,17 @@ export function EditProfilePage() {
             Раньше здесь была плоская простыня из 12 чипов, и один и тот же
             выбор в двух местах приложения выглядел по-разному. */}
         <div className="form-label">Кем готовы выйти</div>
-        <div style={{ margin: "8px 0 16px" }}>
-          {ROLE_FAMILY_ORDER.map((fam) => (
-            <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="hint">
-                {ROLE_FAMILY_LABELS[fam]}
-              </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {ROLE_FAMILIES[fam].map((r) => (
-                  <button
-                    key={r}
-                    className="tag"
-                    style={{
-                      cursor: "pointer",
-                      background: roles.includes(r) ? "var(--gold-fill)" : "transparent",
-                      color: roles.includes(r) ? "var(--on-brand)" : "var(--text)",
-                      borderColor: roles.includes(r) ? "var(--gold-fill)" : "var(--border-strong)",
-                    }}
-                    onClick={() => toggle(r)}
-                  >
-                    {STAFF_ROLE_LABELS[r]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <RolePicker isOn={(r) => roles.includes(r)} onPick={toggle} />
 
         <div className="form-label">Опыт и навыки</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {SKILLS.map((s) => (
-            <button
+            <ToggleChip
               key={s}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: skills.includes(s) ? "var(--gold-fill)" : "transparent",
-                color: skills.includes(s) ? "var(--on-brand)" : "var(--text)",
-                borderColor: skills.includes(s) ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={skills.includes(s)}
+              label={EXPERIENCE_TAG_LABELS[s]}
               onClick={() => toggleSkill(s)}
-            >
-              {EXPERIENCE_TAG_LABELS[s]}
-            </button>
+            />
           ))}
         </div>
 
