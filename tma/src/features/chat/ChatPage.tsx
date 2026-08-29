@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { MESSAGES_PAGE, ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
-import { getToken, useBackend, wsBaseURL } from "@/api/client";
+import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, sendMessage, track } from "@/api/endpoints";
+import { useBackend } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
 import {
@@ -22,6 +22,8 @@ import { Sheet } from "@/components/Sheet";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { ErrorBox, SkeletonList } from "@/components/States";
+import { useChatHistory } from "./useChatHistory";
+import { useChatSocket } from "./useChatSocket";
 import { EmptyState } from "@/components/EmptyState";
 import { IconSend, IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
 
@@ -95,10 +97,16 @@ export function ChatPage() {
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
-  const { data: messages, isLoading, isError, refetch } = useQuery({
-    queryKey: ["messages", matchId],
-    queryFn: () => fetchMessages(matchId),
-  });
+  const {
+    messages,
+    isLoading,
+    isError,
+    refetch,
+    hasOlder,
+    olderLoading,
+    loadOlder,
+    appendMessage,
+  } = useChatHistory(matchId);
 
   // К последнему сообщению — при открытии чата и на каждое новое.
   //
@@ -130,35 +138,6 @@ export function ChatPage() {
     return () => ro.disconnect();
   }, []);
 
-  // Догрузка старой переписки. Сервер отдаёт последние 100 сообщений: у смены
-  // с долгой перепиской остальное лежит выше и подтягивается по кнопке.
-  const [olderLoading, setOlderLoading] = useState(false);
-  const [noMoreOlder, setNoMoreOlder] = useState(false);
-  const hasOlder =
-    !noMoreOlder && !!messages && messages.length >= MESSAGES_PAGE;
-
-  async function loadOlder() {
-    if (!messages?.length || olderLoading) return;
-    setOlderLoading(true);
-    try {
-      const older = await fetchMessages(matchId, messages[0].id);
-      if (older.length === 0) {
-        setNoMoreOlder(true);
-      } else {
-        qc.setQueryData<Message[]>(["messages", matchId], (old) => {
-          const list = old ?? [];
-          const known = new Set(list.map((m) => m.id));
-          return [...older.filter((m) => !known.has(m.id)), ...list];
-        });
-        if (older.length < MESSAGES_PAGE) setNoMoreOlder(true);
-      }
-    } catch {
-      toast("Старые сообщения не загрузились — попробуйте ещё раз", "error");
-    } finally {
-      setOlderLoading(false);
-    }
-  }
-
   const { data: matches } = useQuery({ queryKey: ["matches"], queryFn: fetchMatches });
   const srvMatch = match ?? matches?.find((m) => m.id === matchId) ?? null;
   const iConfirmed = role === "employer"
@@ -185,93 +164,17 @@ export function ChatPage() {
     role === "employer" && alive && !!srvMatch && shiftEnded(srvMatch);
   const canAct = canCancel || canMove || canSetHours;
 
-  // Добавить сообщение в кэш с дедупликацией по id (echo от WS не задвоит).
-  function appendMessage(msg: Message) {
-    qc.setQueryData<Message[]>(["messages", matchId], (old) => {
-      const list = old ?? [];
-      if (list.some((m) => m.id === msg.id)) return list;
-      return [...list, msg];
-    });
-  }
 
-  // Живой чат через WebSocket (только при реальном backend).
-  //
-  // С переподключением. Соединение рвётся постоянно и без всяких поломок:
-  // метро, лифт, переключение с вайфая на мобильный, свёрнутое приложение.
-  // Раньше после обрыва чат молча замолкал навсегда — человек писал в пустоту
-  // и видел ответы только если закрывал и открывал экран заново. Теперь
-  // соединение поднимается само, а на время обрыва история подтягивается
-  // обычным запросом, чтобы ничего не потерялось.
-  useEffect(() => {
-    if (!useBackend || !matchId) return;
-    let closed = false;
-    let attempt = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let ws: WebSocket | null = null;
-
-    const connect = () => {
-      if (closed) return;
-      const token = getToken();
-      ws = new WebSocket(
-        `${wsBaseURL}/ws/chat/${matchId}?token=${token ?? ""}`,
-      );
-      ws.onopen = () => {
-        // Соединение восстановилось — дотягиваем то, что пришло, пока молчали.
-        if (attempt > 0) qc.invalidateQueries({ queryKey: ["messages", matchId] });
-        attempt = 0;
-        setLive(true);
-      };
-      const retry = () => {
-        setLive(false);
-        if (closed) return;
-        // Пауза растёт: 1, 2, 4… до 15 секунд. Так мы не долбим сервер,
-        // когда связи нет совсем, но возвращаемся быстро, если она мигнула.
-        const delay = Math.min(15000, 1000 * 2 ** attempt);
-        attempt += 1;
-        timer = setTimeout(connect, delay);
-      };
-      ws.onclose = retry;
-      ws.onerror = () => ws?.close();
-      ws.onmessage = onFrame;
-    };
-
-    const onFrame = (ev: MessageEvent) => {
-      try {
-        const raw = JSON.parse(ev.data);
-        appendMessage({
-          id: raw.id,
-          chatId: raw.match_id ?? matchId,
-          senderId: raw.sender_id,
-          text: raw.text,
-          isSystem: Boolean(raw.is_system),
-          timestamp: raw.created_at ?? new Date().toISOString(),
-        });
-        // Системные сообщения приходят на смену статуса: вторая сторона
-        // подтвердила, отметилась, перенесла. Без обновления кнопка над
-        // чатом продолжала говорить «Ждём подтверждения второй стороны»,
-        // хотя прямо под ней уже висело «Смена подтверждена».
-        if (raw.is_system) {
-          // Локальную копию мэтча сбрасываем: иначе она навсегда перекрывает
-          // свежие данные сервера (`match ?? matches?.find(...)`).
-          setMatchState(null);
-          qc.invalidateQueries({ queryKey: ["matches"] });
-        }
-      } catch {
-        /* ignore malformed frame */
-      }
-    };
-
-    connect();
-    return () => {
-      closed = true;
-      if (timer) clearTimeout(timer);
-      if (ws) {
-        ws.onclose = null;   // иначе закрытие экрана запустит переподключение
-        ws.close();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId]);
+  useChatSocket(matchId, {
+    onMessage: appendMessage,
+    onSystem: () => {
+      // Локальную копию мэтча сбрасываем: иначе она навсегда перекрывает
+      // свежие данные сервера (`match ?? matches?.find(...)`).
+      setMatchState(null);
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    },
+    onLive: setLive,
+  });
 
   async function deliver(t: string) {
     try {

@@ -134,3 +134,66 @@ async function matchId(
   const rows = await r.json();
   return rows[0].id;
 }
+
+test("сообщение собеседника приходит само, без обновления экрана", async ({
+  browser,
+  request,
+}) => {
+  /**
+   * Живой чат держится на сокете. Проверка нужна именно сквозная: сокет
+   * рвётся от любой мелочи — метро, лифт, переход с вайфая на мобильный, — и
+   * когда-то после обрыва чат замолкал навсегда. Человек писал в пустоту и
+   * видел ответы, только если закрывал и открывал экран заново.
+   *
+   * Поэтому здесь никто ничего не обновляет руками: экран открыт, вторая
+   * сторона пишет с сервера, сообщение обязано появиться само.
+   */
+  const emp = await login(request, "employer", 831_101, "Дрова");
+  await fillProfile(request, emp, {
+    company_name: "Кофейня «Дрова»",
+    city: "Москва",
+    address: "ул. Льва Толстого, 16",
+    contact_phone: "+79990000031",
+  });
+  const vac = await publishShift(request, emp);
+
+  const seeker = await login(request, "seeker", 831_102, "Мария");
+  await fillProfile(request, seeker, {
+    name: "Мария",
+    city: "Москва",
+    roles: ["barista"],
+    birth_date: "1998-04-12",
+    med_book: "yes",
+  });
+  await request.post(`${API_URL}/swipes`, {
+    headers: auth(seeker),
+    data: { target_id: vac.id, target_type: "vacancy", direction: "like" },
+  });
+  const like = await request.post(`${API_URL}/swipes`, {
+    headers: auth(emp),
+    data: {
+      target_id: seeker.id,
+      target_type: "user",
+      direction: "like",
+      vacancy_id: vac.id,
+    },
+  });
+  const matchId = (await like.json()).match_id as string;
+  expect(matchId, "мэтч должен создаться").toBeTruthy();
+
+  const { context, page } = await openApp(browser, seeker);
+  await page.goto(`/#/chat/${matchId}`);
+  await expect(page.locator(".page.chat")).toBeVisible();
+
+  // Заведение пишет с сервера — экран у работника никто не трогает.
+  await request.post(`${API_URL}/matches/${matchId}/messages`, {
+    headers: auth(emp),
+    data: { text: "Приходите к десяти, спросите Олю" },
+  });
+
+  await expect(page.getByText("Приходите к десяти, спросите Олю")).toBeVisible({
+    timeout: 5000,
+  });
+
+  await context.close();
+});
