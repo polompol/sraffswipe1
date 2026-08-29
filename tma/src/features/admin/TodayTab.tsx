@@ -10,6 +10,7 @@ import {
   blockUser,
   blockVacancy,
   fetchAdminReports,
+  fetchJobsHealth,
   resolveMatch,
   resolveReport,
   sendShiftReminders,
@@ -40,6 +41,34 @@ const PERIODS: { id: string; label: string; days: number }[] = [
   { id: "week", label: "7 дней", days: 7 },
   { id: "all", label: "Всё время", days: 0 },
 ];
+
+function SchedulerHealth() {
+  const jobs = useQuery({ queryKey: ["admin-jobs"], queryFn: fetchJobsHealth });
+  const broken = (jobs.data ?? []).filter((j) => j.stale);
+  if (!jobs.data || broken.length === 0) return null;
+  return (
+    <div className="card" role="alert" style={{ marginBottom: 16, borderColor: "var(--danger)" }}>
+      <b style={{ color: "var(--danger)" }}>Планировщик не работает</b>
+      <p className="muted" style={{ margin: "6px 0 10px", fontSize: "var(--text-xs)" }}>
+        Пока он стоит, смены не закрываются и комиссия не начисляется. Через
+        две недели такие смены закроются уже без денег. Проверьте, поднят ли
+        процесс `scheduler` на сервере, — или выполните задачи кнопками ниже.
+      </p>
+      <div className="stack">
+        {broken.map((j) => (
+          <div key={j.id} className="row">
+            <span className="grow">{j.title}</span>
+            <span className="muted small">
+              {j.daysAgo < 0
+                ? "не выполнялась ни разу"
+                : `${j.daysAgo} ${plural(j.daysAgo, "день", "дня", "дней")} назад`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOverview } }) {
   const [repStatus, setRepStatus] = useState<"open" | "all">("open");
@@ -166,9 +195,15 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
         </div>
       ) : null}
 
+      {/* Жив ли планировщик. Самая тихая поломка сервиса: процесс перестал
+          запускаться — и на вид не сломалось ничего, только смены не
+          закрываются, а значит не идёт комиссия. Через две недели такие
+          смены закрываются уже без денег, и выручку за простой не догнать. */}
+      <SchedulerHealth />
+
       <Section
         title="Каждый день"
-        hint="Четыре кнопки, которые держат сервис в порядке. Позже вешаются на крон — см. docs/OPERATIONS.md."
+        hint="Четыре кнопки, которые держат сервис в порядке. Планировщик делает то же самое сам — состояние видно выше."
       >
         <div className="stack">
           {JOBS.map((j) => (

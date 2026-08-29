@@ -191,3 +191,30 @@ test("оператор читает переписку по спорной см�
 
   await context.close();
 });
+
+test("остановленный планировщик виден оператору сразу", async ({
+  browser,
+  request,
+}) => {
+  /**
+   * Самая тихая поломка сервиса. Планировщик — отдельный процесс, и если он
+   * перестал запускаться, на вид не сломалось ничего: приложение работает,
+   * смены публикуются, люди переписываются. Не закрываются только смены — а
+   * значит не идёт комиссия. Через две недели такие смены закроются уже без
+   * денег, и выручку за простой не догнать.
+   *
+   * В прогоне планировщик не запускался ни разу — ровно тот случай.
+   */
+  const admin = await login(request, "seeker", 0, "Оператор");
+  const { context, page } = await openApp(browser, admin);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#/admin");
+  await waitForStableLayout(page, ".page");
+
+  const alarm = page.getByRole("alert").filter({ hasText: "Планировщик не работает" });
+  await expect(alarm).toBeVisible();
+  await expect(alarm).toContainText("комиссия не начисляется");
+  await expect(alarm).toContainText("Закрытие смен");
+
+  await context.close();
+});

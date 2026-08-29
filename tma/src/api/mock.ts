@@ -803,6 +803,16 @@ export function fetchDisputeChat(_matchId: string) {
   ]);
 }
 
+export function fetchJobsHealth() {
+  return Promise.resolve([
+    { id: "reminders", title: "Напоминания о сменах", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+    { id: "aftershift", title: "Вопрос про вчерашние смены", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+    { id: "settle", title: "Закрытие смен и комиссия", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+    { id: "unfilled", title: "Смены без людей", lastRun: "2026-08-28", daysAgo: 1, stale: false },
+    { id: "reconcile", title: "Сверка платежей", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+  ]);
+}
+
 export function fetchRevenue() {
   return Promise.resolve({
     commissionAccruedRub: 12400,

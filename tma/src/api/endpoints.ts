@@ -633,6 +633,27 @@ export async function fetchDisputeChat(matchId: string): Promise<DisputeMessage[
   return data;
 }
 
+/** Состояние ежедневной задачи планировщика. */
+export interface JobHealth {
+  id: string;
+  title: string;
+  lastRun: string;
+  daysAgo: number;   // 0 — сегодня; -1 — не отрабатывала ни разу
+  stale: boolean;    // пропущена — надо вмешаться
+}
+
+/** Жив ли планировщик.
+ *
+ *  Самая тихая поломка сервиса: процесс перестал запускаться, а на вид не
+ *  сломалось ничего — приложение работает, смены публикуются. Не закрываются
+ *  только смены, а значит не идёт комиссия.
+ */
+export async function fetchJobsHealth(): Promise<JobHealth[]> {
+  if (!USE_BACKEND) return mock.fetchJobsHealth();
+  const { data } = await api.get<JobHealth[]>("/admin/jobs");
+  return data;
+}
+
 export async function fetchAdminReports(status = "open"): Promise<AdminReport[]> {
   if (!USE_BACKEND) return mock.fetchAdminReports(status);
   const { data } = await api.get<AdminReport[]>("/admin/reports", {

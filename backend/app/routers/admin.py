@@ -8,7 +8,7 @@
 но с тем же префиксом: снаружи админка осталась одним разделом.
 """
 
-from datetime import UTC
+from datetime import UTC, date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ from ..db import get_db
 from ..models import (
     Commission,
     Employer,
+    JobRun,
     Match,
     Message,
     Purchase,
@@ -652,5 +653,73 @@ def dispute_chat(
             side=side,
             text=msg.text,
             at=at.astimezone(tz).strftime("%d.%m %H:%M"),
+        ))
+    return out
+
+
+class JobHealthOut(BaseModel):
+    """Состояние ежедневной задачи: когда отработала в последний раз."""
+
+    id: str
+    title: str
+    lastRun: str      # «ГГГГ-ММ-ДД» или пусто, если не отрабатывала никогда
+    daysAgo: int      # 0 — сегодня; -1 — не отрабатывала ни разу
+    stale: bool       # пропущена хотя бы день — надо вмешаться
+
+
+_JOB_TITLES = {
+    "reminders": "Напоминания о сменах",
+    "aftershift": "Вопрос про вчерашние смены",
+    "settle": "Закрытие смен и комиссия",
+    "unfilled": "Смены без людей",
+    "reconcile": "Сверка платежей",
+}
+
+
+@router.get("/jobs", response_model=list[JobHealthOut])
+def jobs_health(
+    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
+):
+    """Работает ли планировщик.
+
+    Самая тихая поломка во всём сервисе. Планировщик — отдельный процесс, и
+    если он просто перестанет запускаться (упал контейнер, забыли поднять
+    после обновления), НИЧЕГО не сломается на вид: приложение работает, смены
+    публикуются, люди переписываются. Не будет только одного — закрытия смен.
+    А значит и комиссии: ни рубля, и никто об этом не узнает.
+
+    Хуже того, через две недели такие смены закрываются как «слишком старые»
+    уже без денег — то есть выручка за простой не догоняется никогда.
+
+    Отметки о выполнении в базе были всегда, но их никто не читал. Теперь
+    оператор видит их на первом же экране.
+    """
+    from ..scheduler import SCHEDULE
+
+    today = date.fromisoformat(local_today())
+    out: list[JobHealthOut] = []
+    for _h, _m, name in SCHEDULE:
+        last = (
+            db.query(JobRun.day)
+            .filter(JobRun.job == name)
+            .order_by(JobRun.day.desc())
+            .first()
+        )
+        if last is None:
+            out.append(JobHealthOut(
+                id=name, title=_JOB_TITLES.get(name, name),
+                lastRun="", daysAgo=-1, stale=True,
+            ))
+            continue
+        try:
+            ago = (today - date.fromisoformat(last[0])).days
+        except ValueError:
+            ago = -1
+        out.append(JobHealthOut(
+            id=name, title=_JOB_TITLES.get(name, name),
+            lastRun=last[0], daysAgo=ago,
+            # Сегодня задача могла ещё не наступить по времени — поэтому
+            # тревога только со вчерашнего дня.
+            stale=ago < 0 or ago > 1,
         ))
     return out
