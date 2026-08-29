@@ -4,6 +4,7 @@ import type {
   AppRole,
   MatchModel,
   Message,
+  Reliability,
   Seeker,
   StaffRole,
   SwipeDirection,
@@ -402,14 +403,12 @@ export async function urgentPing(vacancyId: string): Promise<number> {
   return data.pinged;
 }
 
-export interface Worker {
+/** Работник, с которым заведение уже работало. */
+export interface Worker extends Reliability {
   id: string;
   name: string;
   rating: number;
   availableToday: boolean;
-  shiftsTotal: number;
-  shiftsAttended: number;
-  employersTotal?: number;
 }
 
 /** Работники, уже выходившие на смены заведения — чтобы позвать снова. */
@@ -436,7 +435,7 @@ export async function inviteWorker(userId: string): Promise<boolean> {
   return data.notified !== false;
 }
 
-export interface Applicant {
+export interface Applicant extends Reliability {
   id: string;
   name: string;
   age?: number | null;
@@ -447,9 +446,6 @@ export interface Applicant {
   photoUrls: string[];
   about: string;
   availableToday: boolean;
-  shiftsTotal: number;
-  shiftsAttended: number;
-  employersTotal?: number;
   /** Заведение уже отказало — но человек остаётся в списке: передумать можно. */
   declined?: boolean;
   vacancyId: string;

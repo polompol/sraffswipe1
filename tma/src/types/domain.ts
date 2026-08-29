@@ -136,7 +136,21 @@ export const EXPERIENCE_TAG_LABELS: Record<ExperienceTag, string> = {
   selfEmployed: "Самозанятый",
 };
 
-export interface Seeker {
+/** Надёжность человека: цифры, которые сервер считает одним запросом.
+ *
+ *  Три числа ходят только вместе (см. `_reliability` на сервере): всего
+ *  подтверждённых смен, из них вышел, и со сколькими РАЗНЫМИ заведениями
+ *  человек работал. Последнее важно не меньше первых двух: двенадцать смен с
+ *  одним и тем же заведением — это не опыт, а один и тот же человек с двух
+ *  сторон.
+ */
+export interface Reliability {
+  shiftsTotal: number;
+  shiftsAttended: number;
+  employersTotal?: number;
+}
+
+export interface Seeker extends Partial<Reliability> {
   id: string;
   name: string;
   // Возраст числом приходит с сервера. Дату рождения в публичную ленту не
@@ -155,9 +169,8 @@ export interface Seeker {
   photoUrls: string[];
   about: string;
   availableToday?: boolean;
-  shiftsTotal?: number; // надёжность: всего подтверждённых смен
-  shiftsAttended?: number; // из них вышел
-  employersTotal?: number; // со сколькими РАЗНЫМИ заведениями работал
+  // В ленте кандидатов надёжность может и не прийти (у новичка смен нет),
+  // поэтому здесь те же поля, но необязательные.
 }
 
 export interface Vacancy {
