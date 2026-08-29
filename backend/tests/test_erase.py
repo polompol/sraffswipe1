@@ -182,3 +182,27 @@ def test_erased_account_frees_telegram_for_a_fresh_start(client):
     me = client.get("/me", headers=again).json()
     assert me["id"] != uid
     assert me["name"] != "Профиль удалён"
+
+
+def test_erase_deletes_the_photo_files_too(client, monkeypatch):
+    """По заявлению удаляем и сами файлы фото, а не только ссылки на них.
+
+    Раньше из базы вычищалась ССЫЛКА, а файл оставался лежать в хранилище:
+    человек просил удалить свои данные, получал ответ «удалили», а его
+    фотография открывалась по прямой ссылке. Адрес неугадываемый, но закон
+    говорит про хранение, а не про удобство поиска.
+    """
+    import app.photos as photos
+
+    called: list[str] = []
+    monkeypatch.setattr(
+        photos, "delete_stored_photos",
+        lambda owner_id: called.append(owner_id) or 2,
+    )
+
+    _emp, _seeker, uid, _vid, _mid = _pair_with_history(client)
+    ah = _admin(client)
+    r = client.post(f"/admin/users/{uid}/erase", headers=ah)
+    assert r.status_code == 200
+    assert called == [uid], "хранилище должны попросить удалить файлы"
+    assert r.json()["removed"]["файлы фото"] == 2

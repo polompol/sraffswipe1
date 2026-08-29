@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..models import (
     Commission,
@@ -393,24 +394,54 @@ def set_employer_verified(
     return {"ok": True, "verified": emp.verified}
 
 
+def _other_role(db: Session, target):
+    """Вторая роль того же человека: вход один (Telegram), а ролей две.
+
+    Один человек МОЖЕТ иметь обе роли — владелец кафе сам иногда выходит на
+    смену, это нормально. Но бан выписывают человеку, а не роли: без этой
+    связки забаненное заведение просто входило соискателем тем же Telegram и
+    продолжало работать. Долг так не переносится (он на заведении), а бан —
+    переносится, потому что это про поведение.
+    """
+    if target.tg_id is None:
+        return None
+    # Аккаунт оператора второй ролью не трогаем: доступ в админку выдаётся по
+    # tg_id, и бан заведения, совладелец которого — сам оператор, запирал бы
+    # его снаружи собственной панели.
+    admins = {x.strip() for x in settings.admin_tg_ids.split(",") if x.strip()}
+    if str(target.tg_id) in admins:
+        return None
+    table = Employer if isinstance(target, User) else User
+    return db.query(table).filter(table.tg_id == target.tg_id).first()
+
+
 @router.post("/users/{user_id}/block")
 def block_user(
     user_id: str,
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Заблокировать соискателя или работодателя (бан мошенника)."""
+    """Заблокировать соискателя или работодателя (бан мошенника).
+
+    Блокируем обе роли этого Telegram-аккаунта — см. `_other_role`.
+    """
     target = db.get(User, user_id) or db.get(Employer, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    target.blocked = True
-    # Если это работодатель — снимаем и его вакансии.
-    if isinstance(target, Employer):
-        for v in db.query(Vacancy).filter(Vacancy.employer_id == user_id).all():
-            v.status = "blocked"
-    _resolve_reports_for(db, user_id)
+    also = _other_role(db, target)
+    for who in (target, also):
+        if who is None:
+            continue
+        who.blocked = True
+        # Если это работодатель — снимаем и его вакансии.
+        if isinstance(who, Employer):
+            for v in db.query(Vacancy).filter(
+                Vacancy.employer_id == who.id
+            ).all():
+                v.status = "blocked"
+        _resolve_reports_for(db, who.id)
     db.commit()
-    return {"ok": True, "blocked": True}
+    return {"ok": True, "blocked": True, "alsoBlocked": also.id if also else None}
 
 
 @router.post("/vacancies/{vacancy_id}/block")
@@ -435,11 +466,17 @@ def unblock_user(
     db: Session = Depends(get_db),
     _admin: dict = Depends(require_admin),
 ):
-    """Снять блокировку с пользователя (отмена ошибочного бана)."""
+    """Снять блокировку с пользователя (отмена ошибочного бана).
+
+    Снимаем с обеих ролей — блокировали тоже обе.
+    """
     target = db.get(User, user_id) or db.get(Employer, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     target.blocked = False
+    also = _other_role(db, target)
+    if also is not None:
+        also.blocked = False
     # Возвращаем и смены. Блокировка заведения снимала все его смены с
     # публикации, а разблокировка их не возвращала: заведение снова входило,
     # видело свои смены у себя в списке, а в ленте их не было и откликов не

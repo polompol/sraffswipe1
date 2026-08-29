@@ -87,11 +87,16 @@ def _auth(client, role):
 
 def test_profile_refuses_a_stranger_photo(client, monkeypatch):
     _s3_on(monkeypatch)
-    h, _ = _auth(client, "seeker")
+    h, uid = _auth(client, "seeker")
     r = client.put("/me", headers=h, json={"photo_url": "https://evil.example/a.jpg"})
     assert r.status_code == 400
+    # Чужая папка в нашем же хранилище — тоже чужое фото.
     r = client.put("/me", headers=h, json={
-        "photo_url": "https://cdn.staffswipe.ru/photos/u1/a.jpg"
+        "photo_url": "https://cdn.staffswipe.ru/photos/somebody-else/a.jpg"
+    })
+    assert r.status_code == 400
+    r = client.put("/me", headers=h, json={
+        "photo_url": f"https://cdn.staffswipe.ru/photos/{uid}/a.jpg"
     })
     assert r.status_code == 200
 
@@ -108,7 +113,7 @@ def test_shift_interior_photo_is_checked_too(client, monkeypatch):
     from datetime import UTC, datetime, timedelta
 
     _s3_on(monkeypatch)
-    h, _ = _auth(client, "employer")
+    h, eid = _auth(client, "employer")
     day = (datetime.now(UTC) + timedelta(days=2)).date().isoformat()
     shift = {
         "role": "waiter", "date": day, "start_time": 600, "end_time": 1080,
@@ -120,6 +125,33 @@ def test_shift_interior_photo_is_checked_too(client, monkeypatch):
     })
     assert r.status_code == 400
     r = client.post("/vacancies", headers=h, json={
-        **shift, "interior_photo_url": "https://cdn.staffswipe.ru/photos/e1/a.jpg"
+        **shift,
+        "interior_photo_url": "https://cdn.staffswipe.ru/photos/other-venue/a.jpg",
+    })
+    assert r.status_code == 400, "чужая папка в нашем хранилище — чужое фото"
+    r = client.post("/vacancies", headers=h, json={
+        **shift, "interior_photo_url": f"https://cdn.staffswipe.ru/photos/{eid}/a.jpg"
     })
     assert r.status_code == 201
+
+
+def test_someone_elses_photo_from_our_own_storage_is_refused(monkeypatch):
+    """Хранилище одно на всех — значит мало проверить сайт, надо и папку.
+
+    Адрес чужой фотографии видно в обычной ленте: заведение листает
+    кандидатов и получает ссылки на их фото. Без проверки папки эту ссылку
+    можно было поставить себе в анкету и выйти на смену под чужим лицом —
+    ровно то, ради чего фото в анкете и существует.
+    """
+    _s3_on(monkeypatch)
+    mine = "https://cdn.staffswipe.ru/photos/u1/a.jpg"
+    theirs = "https://cdn.staffswipe.ru/photos/u2/a.jpg"
+
+    assert photos.is_allowed_photo_url(mine, "u1")
+    assert not photos.is_allowed_photo_url(theirs, "u1"), "чужая папка"
+    # Подстроки мало: «u1» есть и внутри «u123».
+    assert not photos.is_allowed_photo_url(
+        "https://cdn.staffswipe.ru/photos/u123/a.jpg", "u1"
+    )
+    # Аватарка Telegram лежит не у нас — на неё правило не распространяется.
+    assert photos.is_allowed_photo_url("https://t.me/i/userpic/320/abc.jpg", "u1")

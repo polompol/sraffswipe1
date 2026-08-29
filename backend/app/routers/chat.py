@@ -55,6 +55,10 @@ def _to_out(m: Message) -> MessageOut:
 _PAGE = 100
 _PAGE_MAX = 200
 
+# Потолок одного кадра в сокете. Текст мы всё равно режем до 2000 символов,
+# так что с запасом: 8 КБ хватает любому живому сообщению.
+_WS_FRAME_MAX = 8192
+
 
 @router.get("/matches/{match_id}/messages", response_model=list[MessageOut])
 def history(
@@ -253,23 +257,36 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
     await manager.connect(match_id, websocket)
     try:
         while True:
-            data = await websocket.receive_json()
-            # Тот же контроль, что и на REST-пути: обрезаем длину (анти-раздувание
-            # БД) и молча пропускаем пустое. Без этого WS был обходом лимита 2000.
-            raw = data.get("text", "")
-            text = raw.strip()[:2000] if isinstance(raw, str) else ""
-            if not text:
-                continue
-            # Та же частота, что и на REST-пути (30 в минуту). Раньше лимит
-            # стоял только на REST, и через сокет тот же участник мог лить
-            # сообщения без ограничений — точно такой же обход, как когда-то
-            # с длиной текста.
+            frame = await websocket.receive_text()
+            # Считаем КАЖДЫЙ кадр, а не только тот, что дошёл до сохранения.
+            # Лимит стоял после проверок «пусто» и «не строка», поэтому поток
+            # пустых кадров {"text":""} проходил мимо него совсем: соединение
+            # крутилось на полной скорости сети и занимало процесс.
             try:
                 hit(f"msg:{sender}", 30, 60)
             except HTTPException:
                 await websocket.send_json(
                     {"error": "Слишком часто. Подождите немного."}
                 )
+                continue
+            # Размер кадра ограничиваем ДО разбора. Длину текста мы и раньше
+            # резали до 2000, но резали уже после того, как приняли кадр
+            # целиком: один кадр на сотню мегабайт занимал столько же памяти
+            # на сервере, и никакой лимит частоты этого не отменял.
+            if len(frame) > _WS_FRAME_MAX:
+                await websocket.close(code=1009)  # message too big
+                break
+            try:
+                data = json.loads(frame)
+            except ValueError:
+                continue
+            if not isinstance(data, dict):
+                continue
+            # Тот же контроль, что и на REST-пути: обрезаем длину (анти-раздувание
+            # БД) и молча пропускаем пустое. Без этого WS был обходом лимита 2000.
+            raw = data.get("text", "")
+            text = raw.strip()[:2000] if isinstance(raw, str) else ""
+            if not text:
                 continue
             db = SessionLocal()
             try:
@@ -279,7 +296,7 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
                     ensure_token_usable(db, principal)
                 except HTTPException:
                     await websocket.close(code=4403)
-                    return
+                    break
                 msg = Message(match_id=match_id, sender_id=sender, text=text)
                 db.add(msg)
                 db.commit()
@@ -292,4 +309,10 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
                 db.close()
             await manager.broadcast(match_id, payload)
     except WebSocketDisconnect:
+        pass
+    finally:
+        # Отписываем сокет ЛЮБЫМ путём выхода, а не только по обрыву связи.
+        # Раньше выход по ошибке (битый JSON, закрытие с нашей стороны)
+        # оставлял мёртвый сокет в комнате навсегда, и каждое следующее
+        # сообщение в этом чате пыталось в него писать.
         manager.disconnect(match_id, websocket)

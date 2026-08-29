@@ -302,3 +302,46 @@ def test_reschedule_rejects_past_and_zero_length(client):
         json={"date": tomorrow, "start_time": 600, "end_time": 1080},
     )
     assert ok.status_code == 200
+
+
+def test_stale_reschedule_offer_cannot_move_a_shift_into_the_past(client):
+    """Согласиться на предложение, день которого уже прошёл, нельзя.
+
+    Дата проверяется при ОТПРАВКЕ предложения, а согласиться можно и через
+    неделю. Тогда смена переезжала во вчера и в ту же секунду становилась
+    «закончившейся»: заведение могло отметить неявку человеку, который
+    физически не мог выйти, а расчёт закрывал смену, которой не было.
+    Обычно это даже не злой умысел — работник открывает чат через день и
+    жмёт «Согласиться», не глядя на дату.
+    """
+    emp_h, seeker_h, _sid, _v, mid = _pair(client, 7411, 7412)
+    today = date.fromisoformat(local_today())
+    assert client.post(f"/matches/{mid}/reschedule", headers=emp_h, json={
+        "date": (today + timedelta(days=1)).isoformat(),
+        "start_time": 600, "end_time": 1080,
+    }).status_code == 200
+
+    # Прошло несколько дней: сама смена ещё впереди, а предложенный день уже
+    # позади. Отматываем часы ровно так, как это сделало бы время.
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        db.get(Vacancy, m.vacancy_id).date = (
+            today + timedelta(days=7)).isoformat()
+        m.reschedule_date = (today - timedelta(days=1)).isoformat()
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.post(f"/matches/{mid}/reschedule/accept", headers=seeker_h)
+    assert r.status_code == 409, "день предложения уже прошёл"
+
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        assert db.get(Vacancy, m.vacancy_id).date > local_today(), (
+            "смена осталась там же, где была"
+        )
+        assert not m.reschedule_date, "протухшее предложение снято"
+    finally:
+        db.close()

@@ -19,7 +19,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class TelegramAuthIn(BaseModel):
     init_data: str
     role: str = "seeker"  # seeker|employer
-    start_param: str = ""  # dev-override реф-кода (в проде берётся из initData)
+    # Реф-метка для разработки. В бою её берут из подписанных данных
+    # Telegram, а это поле игнорируется — подписать его нечем.
+    start_param: str = ""
 
 
 def _owner_exists(db, owner_id: str) -> bool:
@@ -114,7 +116,13 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     # Аватарка из Telegram — фото профиля сразу, без S3. Telegram кладёт
     # photo_url в initData, если у пользователя есть публичное фото.
     tg_photo = tg_user.get("photo_url") or ""
-    ref_code = body.start_param or parse_start_param(body.init_data)
+    # Метку берём ИЗ ПОДПИСАННЫХ данных Telegram. Поле в теле запроса —
+    # только для разработки: initData там подделать нечем, а в бою оно
+    # позволяло приписать себе любой источник и любого пригласившего, то есть
+    # своими руками испортить единственный ответ на вопрос «откуда люди».
+    ref_code = parse_start_param(body.init_data)
+    if not ref_code and settings.allow_insecure_telegram_auth:
+        ref_code = body.start_param
 
     if body.role == "employer":
         emp = db.query(Employer).filter(Employer.tg_id == tg_id).first()

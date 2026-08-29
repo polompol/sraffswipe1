@@ -362,3 +362,42 @@ def test_nobody_can_act_inside_someone_elses_shift(client):
         assert db.get(Vacancy, v["id"]).status == "active"
     finally:
         db.close()
+
+
+def test_ban_follows_the_person_and_not_the_role(client):
+    """Бан выписывают человеку, а не роли.
+
+    Вход в Telegram один, а ролей две. Без этой связки заблокированное
+    заведение просто входило соискателем тем же Telegram и продолжало
+    работать — а бан ему выписали как раз за поведение. Долг так не
+    переносится (он на заведении), а бан переносится.
+    """
+    emp_h, eid = _auth(client, "employer")
+    see_h, sid = _auth(client, "seeker")
+    _set_tg(eid, 667001)
+    _set_tg(sid, 667001)          # тот же человек, вторая роль
+
+    admin_h, _ = _auth(client, "employer")   # оператор: tg_id=0 из ADMIN_TG_IDS
+    assert client.post(f"/admin/users/{eid}/block",
+                       headers=admin_h).status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert db.get(Employer, eid).blocked, "заведение заблокировано"
+        assert db.get(User, sid).blocked, "и вторая роль того же человека"
+    finally:
+        db.close()
+
+    # Работать второй ролью больше нельзя (лента смен открыта всем, а вот
+    # личные разделы — уже нет).
+    assert client.get("/me", headers=see_h).status_code in (401, 403)
+
+    # Отмена ошибочного бана снимает блокировку тоже с обеих ролей.
+    assert client.post(f"/admin/users/{eid}/unblock",
+                       headers=admin_h).status_code == 200
+    db = SessionLocal()
+    try:
+        assert not db.get(Employer, eid).blocked
+        assert not db.get(User, sid).blocked
+    finally:
+        db.close()
