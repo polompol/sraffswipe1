@@ -345,3 +345,35 @@ def test_stale_reschedule_offer_cannot_move_a_shift_into_the_past(client):
         assert not m.reschedule_date, "протухшее предложение снято"
     finally:
         db.close()
+
+
+def test_an_unconfirmed_shift_today_reminds_both_sides(client):
+    """Смена сегодня, а подтверждения нет — пишем обоим.
+
+    Раньше напоминание уходило только по ПОДТВЕРЖДЁННЫМ сменам, и как раз
+    самый неприятный случай оставался без единого слова: договорились в чате,
+    кнопку никто не нажал. У такой смены нет кода прихода, не будет акта, и
+    заведение за неё не платит. Человек при этом уверен, что смена есть, и
+    едет через полгорода.
+    """
+    from app import digest
+
+    emp_h, _seeker_h, sid, _v, mid = _pair(client, 7421, 7422)
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        eid = m.employer_id
+        # Возвращаем мэтч в состояние «договорились, но не подтвердили»
+        # и переносим смену на сегодня.
+        m.status = "matched"
+        m.confirmed_by_seeker = False
+        m.confirmed_by_employer = False
+        db.get(Vacancy, m.vacancy_id).date = local_today()
+        db.commit()
+
+        who = {owner for _mid, owner, _text in digest.build_reminders(db)}
+    finally:
+        db.close()
+
+    assert sid in who, "работник должен узнать, что смена не подтверждена"
+    assert eid in who, "и заведение — чтобы человек не приехал зря"
