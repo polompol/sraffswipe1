@@ -197,3 +197,66 @@ test("сообщение собеседника приходит само, бе�
 
   await context.close();
 });
+
+test("«Здравствуйте!» не предлагают, когда человек уже написал сам", async ({
+  browser,
+  request,
+}) => {
+  /**
+   * Подсказки в чате нужны против чистого листа: человек открыл переписку с
+   * незнакомым заведением и не знает, с чего начать. Как только он написал
+   * сам, кнопка «Здравствуйте!» под его же репликой выглядит так, будто
+   * приложение не заметило разговора.
+   *
+   * Остальные подсказки — настоящие вопросы («Какой адрес?», «Что взять с
+   * собой?»), они полезны и на третий день.
+   */
+  const emp = await login(request, "employer", 831_201, "Дрова");
+  await fillProfile(request, emp, {
+    company_name: "Кофейня «Дрова»",
+    city: "Москва",
+    address: "ул. Льва Толстого, 16",
+    contact_phone: "+79990000071",
+  });
+  const vac = await publishShift(request, emp);
+  const seeker = await login(request, "seeker", 831_202, "Мария");
+  await fillProfile(request, seeker, {
+    name: "Мария",
+    city: "Москва",
+    roles: ["barista"],
+    birth_date: "1998-04-12",
+    med_book: "yes",
+  });
+  await request.post(`${API_URL}/swipes`, {
+    headers: auth(seeker),
+    data: { target_id: vac.id, target_type: "vacancy", direction: "like" },
+  });
+  const like = await request.post(`${API_URL}/swipes`, {
+    headers: auth(emp),
+    data: {
+      target_id: seeker.id,
+      target_type: "user",
+      direction: "like",
+      vacancy_id: vac.id,
+    },
+  });
+  const matchId = (await like.json()).match_id as string;
+
+  const { context, page } = await openApp(browser, seeker);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/#/chat/${matchId}`);
+  await expect(page.locator(".page.chat")).toBeVisible();
+
+  const hello = page.getByRole("button", { name: "Здравствуйте!", exact: true });
+  await expect(hello, "пока человек молчит — подсказка нужна").toBeVisible();
+
+  await page.getByPlaceholder(/Сообщение/i).fill("Добрый день, буду вовремя");
+  await page.getByRole("button", { name: /Отправить/i }).click();
+  await expect(page.getByText("Добрый день, буду вовремя")).toBeVisible();
+
+  await expect(hello, "человек написал сам — здороваться уже поздно").toBeHidden();
+  // А настоящие вопросы остаются: они полезны и потом.
+  await expect(page.getByRole("button", { name: "Какой адрес?" })).toBeVisible();
+
+  await context.close();
+});
