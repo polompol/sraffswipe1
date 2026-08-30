@@ -36,6 +36,22 @@ def _owner_tg_id(db, owner_id: str) -> int | None:
     return owner.tg_id if owner is not None else None
 
 
+def _banned_by_tg(db, tg_id: int) -> bool:
+    """Заблокирован ли этот Telegram хоть в одной роли.
+
+    Иначе бан обходится в два нажатия: заблокированный работник открывает
+    приложение заведением, и раз такого аккаунта ещё нет — он создаётся
+    чистым. Оператор блокирует человека, а человек продолжает работать.
+    """
+    if tg_id is None:
+        return False
+    for table in (User, Employer):
+        row = db.query(table).filter(table.tg_id == tg_id).first()
+        if row is not None and row.blocked:
+            return True
+    return False
+
+
 def _apply_referral(db, referred_id: str, code: str) -> None:
     """Записать, кто кого привёл. Один раз на приглашённого.
 
@@ -123,6 +139,14 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     ref_code = parse_start_param(body.init_data)
     if not ref_code and settings.allow_insecure_telegram_auth:
         ref_code = body.start_param
+
+    # Бан выписывают ЧЕЛОВЕКУ, а не роли. Вход в Telegram один, ролей две, и
+    # блокировка второй роли переносится оператором сразу. Но если второй роли
+    # на момент бана ещё НЕ БЫЛО, переносить было нечего: заблокированный
+    # работник заводил заведение тем же Telegram и спокойно входил. Поэтому
+    # смотрим не только свою таблицу, но и соседнюю — по тому же tg_id.
+    if _banned_by_tg(db, tg_id):
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
 
     if body.role == "employer":
         emp = db.query(Employer).filter(Employer.tg_id == tg_id).first()

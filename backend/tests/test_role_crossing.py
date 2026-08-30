@@ -401,3 +401,40 @@ def test_ban_follows_the_person_and_not_the_role(client):
         assert not db.get(User, sid).blocked
     finally:
         db.close()
+
+
+def test_ban_holds_even_if_the_second_role_did_not_exist_yet(client):
+    """Заблокированный не заводит вторую роль тем же Telegram.
+
+    Бан переносится на обе роли человека — но только на те, что уже есть.
+    Если второй роли на момент бана не было, переносить было нечего:
+    заблокированный работник открывал приложение заведением, аккаунт
+    создавался чистым, и человек продолжал работать. Бан обходился в два
+    нажатия.
+    """
+    see_h, sid = _auth(client, "seeker")
+    _set_tg(sid, 668001)
+    admin_h, _ = _auth(client, "employer")     # оператор: tg_id=0
+    assert client.post(f"/admin/users/{sid}/block",
+                       headers=admin_h).status_code == 200
+
+    # Тем же Telegram — но другой ролью, которой ещё не существует.
+    import json
+    import urllib.parse
+
+    user = urllib.parse.quote(json.dumps({"id": 668001, "first_name": "Он же"}))
+    r = client.post("/auth/telegram",
+                    json={"init_data": f"user={user}", "role": "employer"})
+    assert r.status_code == 403, "заведение тем же Telegram заводить нельзя"
+    assert "заблокирован" in r.json()["detail"].lower()
+
+    # И работником войти заново тоже нельзя.
+    r = client.post("/auth/telegram",
+                    json={"init_data": f"user={user}", "role": "seeker"})
+    assert r.status_code == 403
+
+    # А вот ДРУГОЙ Telegram — это другой человек, и его мы не знаем.
+    other = urllib.parse.quote(json.dumps({"id": 668002, "first_name": "Другой"}))
+    r = client.post("/auth/telegram",
+                    json={"init_data": f"user={other}", "role": "seeker"})
+    assert r.status_code == 200, "чужой аккаунт блокировать не за что"
