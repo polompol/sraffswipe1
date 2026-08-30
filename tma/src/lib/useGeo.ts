@@ -1,36 +1,31 @@
 import { useEffect, useState } from "react";
-import { LS } from "@/lib/storage";
 
 export interface Geo {
   lat: number;
   lng: number;
 }
 
-/** Геолокация устройства для ленты «смены рядом». Спрашиваем один раз, кешируем
- *  в localStorage (мгновенно при следующем заходе). Отказ/недоступность — тихо:
- *  лента просто работает без расстояния (сортировка по ставке/дате остаётся). */
+/**
+ * Геолокация устройства для ленты «смены рядом».
+ *
+ * Точные координаты НЕ сохраняем на телефоне. Раньше сохраняли — чтобы при
+ * следующем заходе показать расстояния сразу, не дожидаясь спутников. Цена
+ * этому оказалась несоразмерной: точка с точностью до дома лежала в браузере
+ * бессрочно, переживала выход из аккаунта и досталась бы любому, кто получил
+ * доступ к телефону или к содержимому вкладки. Выигрыш был меньше секунды на
+ * втором заходе: разрешение на геолокацию браузер помнит сам, поэтому спрашивать
+ * человека повторно всё равно не приходится.
+ *
+ * Отказ и недоступность — тихо: лента просто работает без расстояния,
+ * сортировка по ставке и дате остаётся.
+ */
 export function useGeo(enabled = true): Geo | null {
-  const [geo, setGeo] = useState<Geo | null>(() => {
-    try {
-      const raw = localStorage.getItem(LS.geo);
-      return raw ? (JSON.parse(raw) as Geo) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [geo, setGeo] = useState<Geo | null>(null);
 
   useEffect(() => {
     if (!enabled || !("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const g: Geo = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setGeo(g);
-        try {
-          localStorage.setItem(LS.geo, JSON.stringify(g));
-        } catch {
-          /* приватный режим — не критично */
-        }
-      },
+      (pos) => setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {
         /* отказ/ошибка — работаем без геолокации */
       },

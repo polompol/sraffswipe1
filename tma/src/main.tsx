@@ -14,7 +14,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Toaster } from "./components/Toast";
 import { App } from "./App";
 import { watchKeyboard } from "@/lib/keyboard";
-import { LS, SS } from "@/lib/storage";
+import { LS, SS, forgetRetired } from "@/lib/storage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -25,6 +25,11 @@ window.addEventListener("error", (e) => reportError(e.error ?? e.message, "windo
 window.addEventListener("unhandledrejection", (e) =>
   reportError(e.reason, "unhandledrejection"),
 );
+
+// Стираем то, что раньше сохраняли, а теперь не сохраняем (точные координаты).
+// Делаем это до первого экрана: у людей, которые пользовались приложением
+// раньше, старое значение лежит в телефоне и само оттуда не денется.
+forgetRetired();
 
 void initSentry();
 // Тему ставим сразу, до первого кадра (иначе вспышка светлого экрана у тех, у
