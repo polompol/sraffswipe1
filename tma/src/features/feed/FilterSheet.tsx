@@ -4,9 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StaffRole } from "@/types/domain";
 import { localISO } from "@/lib/format";
 import {
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
   STAFF_ROLE_LABELS,
 } from "@/types/domain";
 import {
@@ -16,13 +13,16 @@ import {
   type FeedFilters,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
+import { RolePicker } from "@/components/RolePicker";
+import { ToggleChip } from "@/components/ToggleChip";
 import { IconBell, IconCheck } from "@/components/Icons";
 import { Sheet } from "@/components/Sheet";
 import { haptic } from "@/telegram/sdk";
 
 const SORTS: { id: string; label: string }[] = [
   { id: "distance", label: "Ближе" },
-  { id: "rate", label: "Выше ставка" },
+  { id: "rate", label: "Где платят больше" },
   { id: "date", label: "Раньше" },
 ];
 
@@ -80,7 +80,7 @@ export function FilterSheet({
       toast("Подписка отключена", "success");
     } catch {
       haptic("error");
-      toast("Не удалось отключить", "error");
+      toast("Подписка не отключилась — попробуйте ещё раз", "error");
     }
   }
   const set = (patch: Partial<FeedFilters>) => setF((cur) => ({ ...cur, ...patch }));
@@ -107,45 +107,23 @@ export function FilterSheet({
       toast("Поиск сохранён — пришлём новые смены", "success");
     } catch {
       haptic("error");
-      toast("Не удалось сохранить поиск", "error");
+      toast("Не получилось подписаться. Попробуйте ещё раз", "error");
     }
-  }
-
-  function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
-    return (
-      <button
-        className="tag"
-        style={{
-          cursor: "pointer",
-          background: on ? "var(--gold-fill)" : "transparent",
-          color: on ? "#fff" : "var(--text)",
-          borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
-        }}
-        onClick={() => {
-          haptic("select");
-          onClick();
-        }}
-      >
-        {label}
-      </button>
-    );
   }
 
   return (
     <Sheet
-      title="Фильтры"
+      title="Что ищете"
       onClose={onClose}
       footer={
         <>
-          <button
-            className="btn secondary"
+          <Button
+            variant="secondary"
             onClick={() => onApply({ sort: "distance", city: f.city })}
           >
             Сбросить
-          </button>
-          <button className="btn" onClick={() => onApply(f)}>
-            Показать
-          </button>
+          </Button>
+          <Button onClick={() => onApply(f)}>Показать смены</Button>
         </>
       }
     >
@@ -160,45 +138,30 @@ export function FilterSheet({
 
       <div className="form-label">Когда</div>
       <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-        <Chip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
-        <Chip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
-        <Chip on={whenKind === "tomorrow"} label="Завтра" onClick={() => set(dayRange(1))} />
-        <Chip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
+        <ToggleChip on={!f.date_from} label="Любой день" onClick={() => set({ date_from: undefined, date_to: undefined })} />
+        <ToggleChip on={whenKind === "today"} label="Сегодня" onClick={() => set(dayRange(0))} />
+        <ToggleChip on={whenKind === "tomorrow"} label="Завтра" onClick={() => set(dayRange(1))} />
+        <ToggleChip on={whenKind === "weekend"} label="Выходные" onClick={() => set(weekendRange())} />
       </div>
 
       <div className="form-label">Должность</div>
-      <div style={{ margin: "8px 0 16px" }}>
-        {ROLE_FAMILY_ORDER.map((fam) => (
-          <div key={fam} style={{ marginBottom: 10 }}>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
-              {ROLE_FAMILY_LABELS[fam]}
-            </div>
-            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-              {ROLE_FAMILIES[fam].map((r) => (
-                <Chip
-                  key={r}
-                  on={f.role === r}
-                  label={STAFF_ROLE_LABELS[r]}
-                  onClick={() => set({ role: f.role === r ? undefined : r })}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <RolePicker
+        isOn={(r) => f.role === r}
+        onPick={(r) => set({ role: f.role === r ? undefined : r })}
+      />
 
-      <div className="form-label">Тип ставки</div>
-      <div className="row" style={{ margin: "8px 0 16px" }}>
-        <Chip on={!f.rate_type} label="Любая" onClick={() => set({ rate_type: undefined })} />
-        <Chip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
-        <Chip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
+      <div className="form-label">Как считают ставку</div>
+      <div className="row" style={{ margin: "8px 0 16px", flexWrap: "wrap" }}>
+        <ToggleChip on={!f.rate_type} label="Неважно" onClick={() => set({ rate_type: undefined })} />
+        <ToggleChip on={f.rate_type === "perHour"} label="₽/час" onClick={() => set({ rate_type: "perHour" })} />
+        <ToggleChip on={f.rate_type === "perShift"} label="₽/смена" onClick={() => set({ rate_type: "perShift" })} />
       </div>
 
       <div className="form-label">Подойдёт мне</div>
       <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-        <Chip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
-        <Chip on={!!f.tips_only} label="С чаевыми" onClick={() => set({ tips_only: !f.tips_only })} />
-        <Chip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
+        <ToggleChip on={!!f.no_med_book} label="Без медкнижки" onClick={() => set({ no_med_book: !f.no_med_book })} />
+        <ToggleChip on={!!f.tips_only} label="С чаевыми" onClick={() => set({ tips_only: !f.tips_only })} />
+        <ToggleChip on={!!f.verified_only} label="✓ Проверенные" onClick={() => set({ verified_only: !f.verified_only })} />
       </div>
 
       <label className="form-label" htmlFor="minrate">Ставка от, ₽</label>
@@ -212,15 +175,15 @@ export function FilterSheet({
         onChange={(e) => set({ min_rate: e.target.value ? Number(e.target.value) : undefined })}
       />
 
-      <div className="form-label">Сортировка</div>
-      <div className="row" style={{ margin: "8px 0 18px" }}>
+      <div className="form-label">Сначала показывать</div>
+      <div className="row" style={{ margin: "8px 0 18px", flexWrap: "wrap" }}>
         {SORTS.map((s) => (
-          <Chip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
+          <ToggleChip key={s.id} on={f.sort === s.id} label={s.label} onClick={() => set({ sort: s.id })} />
         ))}
       </div>
 
       <label className="form-label" htmlFor="radius">
-        Радиус{hasLocation ? `: ${f.radius_km ?? 25} км` : ""}
+        {hasLocation ? `Не дальше ${f.radius_km ?? 25} км` : "Не дальше"}
       </label>
       {hasLocation ? (
         <input
@@ -234,21 +197,21 @@ export function FilterSheet({
           style={{ width: "100%", margin: "8px 0 18px", accentColor: "var(--gold)" }}
         />
       ) : (
-        <div className="muted" style={{ fontSize: "var(--text-xs)", margin: "6px 0 18px" }}>
-          Разреши доступ к геолокации, чтобы фильтровать смены по расстоянию.
+        <div className="hint">
+          Разрешите доступ к месту — и сможете искать смены поближе.
         </div>
       )}
 
-      <button
-        className="btn ghost"
+      {/* Иконка идёт через icon: компонент сам отделяет её от текста, поэтому
+          обёртка-span внутри кнопки больше не нужна. */}
+      <Button
+        variant="ghost"
         disabled={saved}
+        icon={saved ? <IconCheck size={16} /> : <IconBell size={16} />}
         onClick={saveSearch}
       >
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          {saved ? <IconCheck size={16} /> : <IconBell size={16} />}
-          {saved ? "Поиск сохранён — пришлём новые смены" : "Сохранить поиск и уведомлять"}
-        </span>
-      </button>
+        {saved ? "Будем присылать" : "Присылать новые смены в бота"}
+      </Button>
 
       {!!searches?.length && (
         <>
@@ -258,9 +221,9 @@ export function FilterSheet({
           <div style={{ display: "grid", gap: 8 }}>
             {searches.map((s) => (
               <div key={s.id} className="row" style={{ gap: 8 }}>
-                <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="grow">
                   <b style={{ fontSize: "var(--text-base)" }}>{s.title}</b>
-                  <div className="muted" style={{ fontSize: "var(--text-xs)" }}>
+                  <div className="muted small">
                     {s.notify ? "уведомления включены" : "уведомления выключены"}
                   </div>
                 </span>

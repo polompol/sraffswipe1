@@ -67,14 +67,25 @@ def _claim_slot(db: Session, vacancy_id: str) -> None:
         raise SlotsFull
 
 
-def _ensure_match(
-    db: Session, user_id: str, employer_id: str, vacancy_id: str
-) -> tuple[Match, bool]:
-    existing = (
+def _find_match(db: Session, user_id: str, vacancy_id: str) -> Match | None:
+    """Мэтч этой пары на эту смену, если он уже есть.
+
+    Отдельной функцией, а не строкой внутри: между этой проверкой и вставкой
+    есть окно, в которое успевает встречный свайп второй стороны. Окно закрыто
+    уникальностью пары «смена + человек» и перехватом ошибки ниже — а чтобы
+    это можно было проверить тестом, проверку надо уметь «ослепить».
+    """
+    return (
         db.query(Match)
         .filter(Match.vacancy_id == vacancy_id, Match.user_id == user_id)
         .first()
     )
+
+
+def _ensure_match(
+    db: Session, user_id: str, employer_id: str, vacancy_id: str
+) -> tuple[Match, bool]:
+    existing = _find_match(db, user_id, vacancy_id)
     if existing:
         return existing, False
     # Должник не набирает новых людей — проверяем ЗДЕСЬ, на создании мэтча, а
@@ -87,17 +98,24 @@ def _ensure_match(
     match = Match(
         user_id=user_id, employer_id=employer_id, vacancy_id=vacancy_id
     )
-    db.add(match)
-    db.flush()
-    db.add(
-        Message(
-            match_id=match.id,
-            sender_id="system",
-            text="Это мэтч! Договоритесь о деталях смены.",
-            is_system=True,
-        )
-    )
+    # Вставка ВНУТРИ перехвата — вместе с flush.
+    #
+    # Раньше flush стоял снаружи, и это была настоящая дыра: при встречных
+    # свайпах в одну секунду уникальность срабатывает именно на flush, а не на
+    # commit. Ошибка улетала наверх мимо восстановления — одна из сторон
+    # получала «Внутренняя ошибка сервера» вместо мэтча, который в этот момент
+    # уже создавала вторая.
     try:
+        db.add(match)
+        db.flush()
+        db.add(
+            Message(
+                match_id=match.id,
+                sender_id="system",
+                text="Взаимно! Договоритесь о деталях смены.",
+                is_system=True,
+            )
+        )
         db.commit()
     except IntegrityError:
         # Гонка встречных свайпов — мэтч уже создан параллельно, берём его.
@@ -127,8 +145,22 @@ def _on_match(db: Session, match: Match, created: bool) -> None:
     )
     notify_owner(
         db, match.employer_id,
-        "Новый мэтч в StaffSwipe — договоритесь о деталях смены.",
-        open_app="Открыть мэтчи", screen="matches",
+        "Работник ответил взаимно! Откройте чат и договоритесь о смене.",
+        open_app="Открыть чат", screen="chat", ident=match.id,
+    )
+
+
+def _matched_out(match_id: str, vac: Vacancy) -> SwipeOut:
+    """Ответ о совпадении вместе со сменой, на которую оно случилось."""
+    return SwipeOut(
+        recorded=True,
+        matched=True,
+        match_id=match_id,
+        vacancy_id=vac.id,
+        role=vac.role,
+        shift_date=vac.date,
+        shift_start=vac.start_time,
+        shift_end=vac.end_time,
     )
 
 
@@ -254,26 +286,48 @@ def swipe(
                 # Но мэтча нет: мест не осталось.
                 return SwipeOut(recorded=True, matched=False)
             _on_match(db, match, created)
-            return SwipeOut(recorded=True, matched=True, match_id=match.id)
+            return _matched_out(match.id, vac)
 
-    # Работодатель лайкнул кандидата → ищем его лайк на любую нашу вакансию.
+    # Работодатель лайкнул кандидата → ищем его лайк на нашу смену.
     if principal["role"] == "employer" and body.target_type == "user":
-        # Только действующие смены: по заблокированной мэтч создавать нельзя.
+        # Только действующие и ещё не прошедшие смены: мэтч на вчерашнюю
+        # означает человека, приехавшего в день, которого уже не было.
         my_vacs = [
-            v.id
+            v
             for v in db.query(Vacancy)
             .filter(Vacancy.employer_id == me, Vacancy.status == "active")
             .all()
+            if v.date >= local_today(v.city)
         ]
-        seeker_like = (
+        # Заведение назвало смену явно (экран «Кто откликнулся» — там под
+        # каждым человеком написано, на какую именно смену он откликнулся).
+        # Тогда мэтч только по ней: молча подставить другую смену нельзя,
+        # это разные день, время и деньги.
+        if body.vacancy_id:
+            my_vacs = [v for v in my_vacs if v.id == body.vacancy_id]
+            if not my_vacs:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Смена не найдена или уже неактуальна",
+                )
+        # Порядок важен: если человек лайкнул несколько наших смен и смена не
+        # названа (лента кандидатов — там её негде выбрать), берём БЛИЖАЙШУЮ.
+        # Раньше бралась «первая попавшаяся» из базы: какая именно — зависело
+        # от порядка записей, то есть по сути случайная.
+        order = {v.id: (v.date, v.start_time) for v in my_vacs}
+        order_vac = {v.id: v for v in my_vacs}
+        likes = (
             db.query(Swipe)
             .filter(
                 Swipe.swiper_id == body.target_id,
                 Swipe.target_type == "vacancy",
-                Swipe.target_id.in_(my_vacs or ["__none__"]),
+                Swipe.target_id.in_(list(order) or ["__none__"]),
                 Swipe.direction.in_(_POSITIVE),
             )
-            .first()
+            .all()
+        )
+        seeker_like = min(
+            likes, key=lambda sw: order[sw.target_id], default=None
         )
         if seeker_like and not _same_person(db, body.target_id, me):
             try:
@@ -289,6 +343,6 @@ def swipe(
                            "Увеличьте число мест или опубликуйте новую смену.",
                 ) from None
             _on_match(db, match, created)
-            return SwipeOut(recorded=True, matched=True, match_id=match.id)
+            return _matched_out(match.id, order_vac[seeker_like.target_id])
 
     return SwipeOut(recorded=True, matched=False)

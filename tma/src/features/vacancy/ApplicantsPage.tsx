@@ -9,11 +9,12 @@ import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { Avatar } from "@/components/Avatar";
 import { reliabilityText } from "@/lib/reliability";
-import { fmtDate, fmtTime } from "@/lib/format";
+import { shiftWhen } from "@/lib/format";
+import { Rating } from "@/components/Rating";
 import { apiError } from "@/lib/errors";
 import { MED_BOOK_LABELS, STAFF_ROLE_LABELS } from "@/types/domain";
 import type { MedBookStatus, StaffRole } from "@/types/domain";
-import { IconBolt, IconCheck, IconCalendar, IconStar } from "@/components/Icons";
+import { IconBell, IconBolt, IconCalendar } from "@/components/Icons";
 
 /**
  * «Кто откликнулся» — зеркало экрана «Тебя зовут» у работника.
@@ -35,16 +36,20 @@ export function ApplicantsPage() {
   async function answer(a: Applicant, take: boolean) {
     haptic(take ? "success" : "light");
     try {
-      const res = await sendSwipe(a.id, "user", take ? "like" : "dislike");
+      // Смена передаётся явно: на карточке написано, на какую именно человек
+      // откликнулся, и мэтч должен получиться ровно по ней.
+      const res = await sendSwipe(
+        a.id, "user", take ? "like" : "dislike", take ? a.vacancyId : undefined,
+      );
       qc.invalidateQueries({ queryKey: ["applicants"] });
       qc.invalidateQueries({ queryKey: ["me"] });
       if (take && res.matched) {
         qc.invalidateQueries({ queryKey: ["matches"] });
-        toast("Готово! Открылся чат — договоритесь о деталях", "success");
+        toast("Взяли! Открылся чат — напишите, во сколько прийти", "success");
         if (res.matchId) nav(`/chat/${res.matchId}`);
         return;
       }
-      toast(take ? "Отклик принят" : "Отклик отклонён", "success");
+      toast(take ? "Взяли на смену" : "Отказали. Передумаете — можно взять позже", "success");
     } catch (e) {
       haptic("error");
       toast(apiError(e, "Не получилось — попробуйте ещё раз"), "error");
@@ -54,24 +59,26 @@ export function ApplicantsPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>Кто откликнулся</h1>
-        <p className="muted" style={{ margin: "0 0 14px" }}>
-          Эти люди сами выбрали вашу смену. Ответьте — и сразу откроется чат.
-        </p>
+        <h1 className="h1 tight">Кто откликнулся</h1>
+        {!!data?.length && (
+          <p className="muted" style={{ margin: "0 0 14px" }}>
+            Ответьте — и сразу откроется чат.
+          </p>
+        )}
 
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
             fill
-            icon={<IconCheck size={34} />}
+            icon={<IconBell size={34} />}
             title="Откликов пока нет"
-            text="Как только кто-то выберет вашу смену, он появится здесь. Если смена висит без откликов — поднимите ставку или нажмите «Позвать людей» в списке смен."
+            text="Здесь появятся те, кто выбрал вашу смену. Пока тихо — поднимите ставку или позовите людей сами."
             action={<Button onClick={() => nav("/vacancy/my")}>Мои смены</Button>}
           />
         )}
 
-        <div className="stagger" style={{ display: "grid", gap: 12 }}>
+        <div className="stagger stack stack-lg">
           {data?.map((a) => (
             <div key={a.id} className="card">
               {/* Ряд переносится, а длинные слова рвутся: у людей бывают
@@ -89,17 +96,12 @@ export function ApplicantsPage() {
                   {/* Отказ больше не прячет человека навсегда: он сам выбрал
                       вашу смену, а свайп влево легко сделать случайно. */}
                   {a.declined && (
-                    <span
-                      className="tag"
-                      style={{ marginLeft: 8, fontSize: "var(--text-xs)", color: "var(--muted)", borderColor: "var(--border)" }}
-                    >
+                    <span className="tag tag-muted tag-sm" style={{ marginLeft: 8 }}>
                       вы отказали
                     </span>
                   )}
-                  <div className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 2 }}>
-                    {a.rating > 0 ? (
-                      <><IconStar size={12} /> {a.rating.toFixed(1)}</>
-                    ) : "Новичок"}
+                  <div className="hint">
+                    <Rating value={a.rating} size={12} />
                     {a.district ? ` · ${a.district}` : ""}
                     {a.shiftsTotal > 0
                       ? ` · ${reliabilityText(a.shiftsTotal, a.shiftsAttended, a.employersTotal)}`
@@ -111,7 +113,7 @@ export function ApplicantsPage() {
                     className="tag"
                     style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}
                   >
-                    <IconBolt size={12} /> готов сегодня
+                    <IconBolt size={12} /> может сегодня
                   </span>
                 )}
               </div>
@@ -136,8 +138,14 @@ export function ApplicantsPage() {
               >
                 <IconCalendar size={13} />
                 {STAFF_ROLE_LABELS[a.vacancyRole as StaffRole] ?? a.vacancyRole}
-                {" · "}{fmtDate(a.vacancyDate)}
-                {" · "}{fmtTime(a.vacancyStart)}–{fmtTime(a.vacancyEnd)}
+                {" ·\u00a0"}
+                <span style={{ whiteSpace: "nowrap" }}>
+                  {shiftWhen({
+                    shiftDate: a.vacancyDate,
+                    shiftStart: a.vacancyStart,
+                    shiftEnd: a.vacancyEnd,
+                  })}
+                </span>
               </div>
 
               {a.about && (
@@ -145,12 +153,20 @@ export function ApplicantsPage() {
                   {a.about}
                 </p>
               )}
-              <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+              <div className="hint">
                 Медкнижка: {MED_BOOK_LABELS[a.medBook as MedBookStatus] ?? a.medBook}
-                {a.roles.length > 0 &&
-                  ` · ${a.roles
+                {/* Должность смены уже написана строкой выше крупно и цветом.
+                    Человек откликнулся именно на неё, поэтому в списке его
+                    должностей она — повтор: на карточке официанта, который
+                    откликнулся на смену официанта, слово стояло дважды.
+                    Показываем только ОСТАЛЬНЫЕ его должности. */}
+                {(() => {
+                  const rest = a.roles.filter((r) => r !== a.vacancyRole);
+                  if (!rest.length) return "";
+                  return ` · ещё ${rest
                     .map((r) => STAFF_ROLE_LABELS[r as StaffRole] ?? r)
-                    .join(", ")}`}
+                    .join(", ")}`;
+                })()}
               </div>
 
               <div
@@ -161,7 +177,7 @@ export function ApplicantsPage() {
                 }}
               >
                 <Button onClick={() => answer(a, true)}>
-                  {a.declined ? "Передумал — беру" : "Беру на смену"}
+                  {a.declined ? "Всё-таки беру" : "Беру на смену"}
                 </Button>
                 {!a.declined && (
                   <Button variant="ghost" onClick={() => answer(a, false)}>

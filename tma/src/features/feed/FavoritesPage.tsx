@@ -32,13 +32,13 @@ export function FavoritesPage() {
       // запроса не читали вовсе: чат открывался, а человек об этом не знал
       // и жал «Откликнуться» второй раз.
       if (res.matched && res.matchId) {
-        toast("Готово! Открылся чат — договоритесь о деталях", "success");
+        toast("Взаимно! Открываем чат — договоритесь о деталях", "success");
         nav(`/chat/${res.matchId}`);
         return false;
       }
       return true; // успех → VacancyList покажет тост «Отклик отправлен»
     } catch (e) {
-      toast(apiError(e, "Не удалось отправить отклик"), "error");
+      toast(apiError(e, "Отклик не ушёл. Попробуйте ещё раз"), "error");
       return false;
     }
   }
@@ -46,7 +46,7 @@ export function FavoritesPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 12 }}>Избранные смены</h1>
+        <h1 className="h1">Избранные смены</h1>
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
@@ -54,8 +54,8 @@ export function FavoritesPage() {
             fill
             icon={<IconBookmark size={34} />}
             title="Пока пусто"
-            text="Нажимайте на закладку у смены в списке — она сохранится здесь, чтобы откликнуться позже."
-            action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
+            text="Отмечайте смены закладкой — они соберутся здесь, откликнетесь позже."
+            action={<Button onClick={() => nav("/feed")}>Смотреть смены</Button>}
           />
         )}
         {data && data.length > 0 && (

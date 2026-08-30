@@ -7,7 +7,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StringConstraints, model_validator
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -15,18 +14,27 @@ from ..conflicts import overlapping_shifts
 from ..db import get_db
 from ..models import (
     Commission,
-    Entitlement,
+    Employer,
     Match,
-    Message,
     Report,
+    User,
     Vacancy,
-    WalletTxn,
 )
 from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
-from ..roles import time_ru
 from ..schemas import MatchOut
 from ..security import current_principal, secure_equals
+from ..shift_rules import (
+    accrue_commission,
+    fmt_date,
+    fmt_time,
+    maybe_complete,
+    open_dispute,
+    planned_minutes,
+    shift_is_over,
+    shift_pay,
+    sys_message,
+)
 from ..timeutil import shift_end_utc, shift_start_utc
 from .analytics import _is_admin
 
@@ -60,172 +68,6 @@ class CheckinIn(BaseModel):
 
 class DisputeIn(BaseModel):
     note: str = ""
-
-
-def _sys(db: Session, match_id: str, text: str) -> None:
-    db.add(Message(match_id=match_id, sender_id="system", text=text, is_system=True))
-
-
-def _fmt_time(minutes: int) -> str:
-    return time_ru(minutes)
-
-
-def _fmt_date(iso: str) -> str:
-    """2026-08-09 → 9 августа: в предупреждении человек должен узнать смену."""
-    months = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
-              "августа", "сентября", "октября", "ноября", "декабря")
-    try:
-        y, mth, d = (int(x) for x in iso.split("-"))
-        return f"{d} {months[mth - 1]}"
-    except (ValueError, IndexError):
-        return iso
-
-
-def _planned_minutes(v: Vacancy) -> int:
-    mins = v.end_time - v.start_time
-    if mins <= 0:
-        mins += 1440  # ночная смена через полночь
-    return mins
-
-
-def _shift_pay(v: Vacancy, actual_minutes: int | None = None) -> int:
-    """Оплата смены, ₽ (зеркало estimatedPay в TMA).
-
-    actual_minutes — фактическая длительность, если смена разошлась с
-    объявленной: человек опоздал, ушёл раньше или задержался. Почасовая
-    оплата считается по факту, посменная — нет: там договорились на смену
-    целиком, и часы значения не имеют.
-    """
-    if v.rate_type == "perShift":
-        return v.rate
-    mins = actual_minutes if actual_minutes is not None else _planned_minutes(v)
-    return round(v.rate * mins / 60)
-
-
-def _accrue_commission(db: Session, m: Match) -> None:
-    """Начисляем комиссию за закрытую смену. Идемпотентно — по одной записи
-    на смену. Если у заведения есть денежный баланс (аванс) — списываем сразу;
-    иначе комиссия висит pending и попадает в недельный счёт."""
-    if settings.commission_pct <= 0:
-        return
-    if db.query(Commission).filter(Commission.match_id == m.id).first():
-        return
-    v = db.get(Vacancy, m.vacancy_id)
-    if v is None:
-        return
-    pay = _shift_pay(v, m.actual_minutes)
-    # Округляем половину ВВЕРХ, а не «к чётному», как делает round(): при
-    # комиссии 282.5 ₽ он давал 282, а при 283.5 — 284. Объяснить заведению
-    # такую логику невозможно, а копейки в бухгалтерии всплывают.
-    fee = int(
-        (Decimal(pay) * settings.commission_pct / 100).quantize(
-            Decimal("1"), rounding=ROUND_HALF_UP
-        )
-    )
-    amount = max(settings.commission_min_rub, fee)
-    c = Commission(
-        employer_id=m.employer_id, match_id=m.id, shift_pay=pay, amount=amount,
-    )
-    # Всё начисление — в отдельной «точке отката» (SAVEPOINT).
-    #
-    # Проверка выше («начисление уже есть?») не спасает от гонки: расчёт по
-    # расписанию и кнопка «Смена состоялась» могут сойтись на одной смене в
-    # одну секунду, оба увидят «начисления нет» и оба вставят запись. Вторая
-    # вставка упирается в уникальность match_id — раньше эта ошибка вылетала
-    # наверх: человеку показывалась «Внутренняя ошибка сервера», а ночной
-    # расчёт падал на этой смене целиком и не доходил до остальных.
-    #
-    # С точкой отката проигравший в гонке откатывает только свою вставку
-    # (и своё списание с баланса — двойного списания не будет), а всё, что
-    # сделано до этого, остаётся. Комиссия уже начислена соседом — работа
-    # выполнена, поэтому просто выходим.
-    try:
-        with db.begin_nested():
-            # Атомарный UPDATE с условием «хватает денег» — двойное списание
-            # при гонке невозможно.
-            paid = (
-                db.query(Entitlement)
-                .filter(
-                    Entitlement.owner_id == m.employer_id,
-                    Entitlement.balance_rub >= amount,
-                )
-                .update(
-                    {Entitlement.balance_rub: Entitlement.balance_rub - amount},
-                    synchronize_session=False,
-                )
-            )
-            if paid:
-                c.status = "paid"
-                db.add(WalletTxn(
-                    owner_id=m.employer_id, amount=-amount, kind="commission",
-                    note=f"Комиссия за смену {m.id[:8]}",
-                ))
-                _sys(db, m.id, f"Комиссия {amount} ₽ списана с баланса заведения ✓")
-            db.add(c)
-            db.flush()
-    except IntegrityError:
-        logger.info("комиссия по смене %s уже начислена параллельно", m.id)
-
-
-def _maybe_complete(db: Session, m: Match) -> None:
-    """Обе стороны подтвердили выход — закрываем сразу, не дожидаясь расчёта.
-
-    Но НЕ раньше конца самой смены. Иначе пара аккаунтов набивала себе
-    закрытые смены, рейтинг и бейдж «Платит вовремя» за пару минут: заведение
-    жмёт «человек пришёл», видит собственный код и вводит его за работника —
-    и смена, назначенная на следующую неделю, уже «состоялась».
-    """
-    if (
-        m.status == "confirmed"
-        and m.seeker_checked_in
-        and m.employer_checked_in
-        and not m.disputed
-        and _shift_is_over(db, m)
-    ):
-        m.status = "completed"
-        m.no_show = False
-        _accrue_commission(db, m)
-        _sys(db, m.id, "Обе стороны подтвердили выход ✓ Смена закрыта.")
-
-
-def _shift_is_over(db: Session, m: Match) -> bool:
-    """Смена уже закончилась по времени?
-
-    Одно правило на весь модуль. Без него «закрыть смену» и «отметить неявку»
-    работали в любой момент, в том числе за неделю ДО смены, и это ломало сразу
-    три вещи: работник получал ложную неявку и не мог даже отметиться кодом;
-    пара аккаунтов набивала себе рейтинг и бейдж «Платит вовремя» за минуты, не
-    дожидаясь никаких смен; акт «услуги оказаны полностью и в срок» выдавался
-    на работу, которой ещё не было.
-    """
-    v = db.get(Vacancy, m.vacancy_id)
-    if v is None:
-        return True  # смены нет — блокировать нечего
-    try:
-        return datetime.now(UTC) >= shift_end_utc(
-            v.date, v.start_time, v.end_time, v.city
-        )
-    except (ValueError, TypeError):
-        return True  # битая дата — не мешаем людям работать
-
-
-def _open_dispute(db: Session, m: Match, note: str) -> None:
-    """Пометить смену спорной и завести разбор для оператора.
-
-    Споры, рождавшиеся автоматически (стороны разошлись в показаниях), не
-    создавали жалобу вовсе — единственным сигналом было сообщение админам в
-    Telegram, а оно шлётся «как получится» и молча глотает сбои. В админ-панели
-    таких смен не было видно нигде, а расчёт их не трогает: деньги зависали
-    навсегда, и никто об этом не знал.
-    """
-    if m.disputed:
-        return
-    m.disputed = True
-    db.add(Report(
-        reporter_id="system", target_type="match", target_id=m.id,
-        reason="other", text=note[:1000],
-    ))
-    notify_admins(f"⚠️ Спор по смене {m.id[:8]}: {note[:160]} Админ-панель.")
 
 
 class NotHeldIn(BaseModel):
@@ -268,10 +110,12 @@ def mark_not_held(
     is_seeker = principal["id"] == m.user_id and principal["role"] == "seeker"
     if not (is_employer or is_seeker):
         raise HTTPException(status_code=403, detail="Нет доступа к смене")
-    if m.status != "confirmed":
+    # И про ту, которую подтвердил только работник: за неё тоже начисляется
+    # комиссия (см. settle_shifts), значит и выход из неё должен быть.
+    if m.status not in ("confirmed", "matched"):
         raise HTTPException(
             status_code=400,
-            detail="Так можно сказать только про подтверждённую смену",
+            detail="Так можно сказать только про предстоящую смену",
         )
     # Только про СОСТОЯВШУЮСЯ по времени смену. Иначе заведение могло нажать
     # это в момент начала: смена уходила в «не состоялась» с неявкой на
@@ -303,11 +147,11 @@ def mark_not_held(
         (is_employer and m.seeker_checked_in) or (is_seeker and m.employer_checked_in)
     )
     if contradicted:
-        _open_dispute(
+        open_dispute(
             db, m,
             "Одна сторона заявила «смены не было», вторая уже подтвердила выход.",
         )
-        _sys(db, m.id,
+        sys_message(db, m.id,
              "Стороны расходятся: одна говорит, что смены не было, вторая — "
              "что человек был на месте. Разбирает оператор StaffSwipe.")
     else:
@@ -318,13 +162,13 @@ def mark_not_held(
         if is_employer:
             m.no_show = True
         tail = f" Причина: {body.reason[:200]}" if body.reason else ""
-        _sys(db, m.id, f"Смена отмечена как несостоявшаяся.{tail} "
+        sys_message(db, m.id, f"Смена отмечена как несостоявшаяся.{tail} "
                        "Комиссия не начислена.")
         other = m.user_id if is_employer else m.employer_id
         notify_owner(
             db, other,
-            "Вторая сторона отметила, что смена не состоялась. Комиссия не "
-            "начислена. Если это не так — откройте смену и нажмите «Проблема».",
+            "Смену отметили как несостоявшуюся — комиссию за неё не берём. "
+            "Если это не так, откройте смену и позовите оператора.",
             open_app="Открыть смену", screen="chat", ident=m.id,
         )
     db.commit()
@@ -359,7 +203,7 @@ def mark_attendance(
     # закрытой смене: он приезжал, отработать успевал, а отметиться уже не мог
     # — ручка отвечала «смена не подтверждена». Плюс ложная неявка в профиле.
     # В «Смена не состоялась» эта проверка уже стояла; здесь была вторая дверь.
-    if not body.attended and not _shift_is_over(db, m):
+    if not body.attended and not shift_is_over(db, m):
         raise HTTPException(
             status_code=409,
             detail="Смена ещё не закончилась. Если она не нужна — отмените "
@@ -369,14 +213,14 @@ def mark_attendance(
     if body.attended:
         m.employer_checked_in = True
         m.no_show = False
-        _maybe_complete(db, m)
+        maybe_complete(db, m)
     elif m.seeker_checked_in:
         # Работник говорит «был», заведение — «не вышел». Не решаем сами.
-        _open_dispute(
+        open_dispute(
             db, m,
             "Работник отметился кодом, заведение говорит «не вышел».",
         )
-        _sys(db, m.id, "Спор по выходу — разбирает оператор StaffSwipe.")
+        sys_message(db, m.id, "Спор по выходу — разбирает оператор StaffSwipe.")
     else:
         # Согласованная неявка. Статус тоже обязателен: без него смена
         # оставалась «подтверждённой» и ночной расчёт закрывал её как
@@ -385,20 +229,34 @@ def mark_attendance(
         m.no_show = True
         m.status = "expired"
         m.not_held_by = "employer"
-        _sys(db, m.id, "Заведение отметило неявку. Комиссия не начислена.")
+        sys_message(db, m.id, "Заведение отметило неявку. Комиссия не начислена.")
     db.commit()
     return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
 
 
 def _to_out(
-    db: Session, m: Match, role: str = "", vac: Vacancy | None = None
+    db: Session,
+    m: Match,
+    role: str = "",
+    vac: Vacancy | None = None,
+    emp: Employer | None = None,
+    usr: User | None = None,
 ) -> MatchOut:
     # Код прихода показываем ТОЛЬКО заведению как помощник, пока смена не закрыта.
     show_code = role == "employer" and m.status == "confirmed" and bool(m.checkin_code)
-    # vac передают заранее, когда мэтчей много: иначе на каждую строку списка
-    # уходил отдельный запрос за сменой (25 мэтчей = 27 запросов).
+    # vac/emp/usr передают заранее, когда мэтчей много: иначе на каждую строку
+    # списка уходил отдельный запрос (25 мэтчей = 27 запросов).
     v = vac if vac is not None else db.get(Vacancy, m.vacancy_id)
-    pay = _shift_pay(v, m.actual_minutes) if v is not None else 0
+    e = emp if emp is not None else db.get(Employer, m.employer_id)
+    u = usr if usr is not None else db.get(User, m.user_id)
+    pay = shift_pay(v, m.actual_minutes) if v is not None else 0
+    # Фото заведения: сначала логотип, если его нет — снимок интерьера смены.
+    # Пустая строка тоже валидна: приложение рисует букву названия.
+    photo = ""
+    if e is not None and e.photo_url:
+        photo = e.photo_url
+    elif v is not None:
+        photo = v.interior_photo_url
     return MatchOut(
         id=m.id,
         user_id=m.user_id,
@@ -419,6 +277,10 @@ def _to_out(
         reschedule_date=m.reschedule_date or "",
         reschedule_start=m.reschedule_start,
         reschedule_end=m.reschedule_end,
+        role=v.role if v is not None else "",
+        company_name=e.company_name if e is not None else "",
+        company_photo_url=photo,
+        seeker_name=u.name if u is not None else "",
     )
 
 
@@ -429,15 +291,35 @@ def list_matches(
 ):
     col = Match.user_id if principal["role"] == "seeker" else Match.employer_id
     rows = db.query(Match).filter(col == principal["id"]).all()
-    # Смены подгружаем ОДНИМ запросом на весь список, а не по одному на строку.
+    # Смены, заведения и людей подгружаем ПО ОДНОМУ запросу на весь список, а не
+    # по одному на строку.
     vacs = {
         v.id: v
         for v in db.query(Vacancy).filter(
             Vacancy.id.in_([m.vacancy_id for m in rows] or ["__none__"])
         )
     }
+    emps = {
+        e.id: e
+        for e in db.query(Employer).filter(
+            Employer.id.in_([m.employer_id for m in rows] or ["__none__"])
+        )
+    }
+    usrs = {
+        u.id: u
+        for u in db.query(User).filter(
+            User.id.in_([m.user_id for m in rows] or ["__none__"])
+        )
+    }
     return [
-        _to_out(db, m, principal["role"], vac=vacs.get(m.vacancy_id))
+        _to_out(
+            db,
+            m,
+            principal["role"],
+            vac=vacs.get(m.vacancy_id),
+            emp=emps.get(m.employer_id),
+            usr=usrs.get(m.user_id),
+        )
         for m in rows
     ]
 
@@ -482,8 +364,8 @@ def checkin(
         )
     m.seeker_checked_in = True
     m.checkin_by_code = True
-    _sys(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")
-    _maybe_complete(db, m)
+    sys_message(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")
+    maybe_complete(db, m)
     db.commit()
     db.refresh(m)
     return _to_out(db, m, principal["role"])
@@ -517,9 +399,9 @@ def dispute(
         reporter_id=principal["id"], target_type="match", target_id=m.id,
         reason="other", text=f"Спор по смене ({who}): {note}"[:1000],
     ))
-    _sys(db, m.id, "Открыт спор по смене — разбирает оператор StaffSwipe.")
+    sys_message(db, m.id, "Открыт спор по смене — разбирает оператор StaffSwipe.")
     other = m.employer_id if principal["id"] == m.user_id else m.user_id
-    notify_owner(db, other, "По вашей смене открыт спор — с вами свяжется оператор.")
+    notify_owner(db, other, "По вашей смене позвали оператора — он скоро напишет.")
     notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
     db.commit()
     db.refresh(m)
@@ -575,7 +457,7 @@ def set_actual_hours(
     if v is None:
         raise HTTPException(status_code=404, detail="Смена не найдена")
 
-    planned = _planned_minutes(v)
+    planned = planned_minutes(v)
 
     # Уточнение — про ту смену, что была вчера, а не про любую в истории.
     # Без срока это была ретро-скидка на комиссию: смену 12 ч × 500 ₽ (600 ₽
@@ -611,7 +493,7 @@ def set_actual_hours(
                    "Если смена прошла совсем иначе — напишите оператору.",
         )
     m.actual_minutes = body.minutes
-    new_pay = _shift_pay(v, body.minutes)
+    new_pay = shift_pay(v, body.minutes)
 
     # Пересчитываем комиссию, если она ещё не оплачена: с оплаченной так
     # делать нельзя — деньги уже прошли, это работа оператора.
@@ -628,7 +510,7 @@ def set_actual_hours(
     hours = body.minutes / 60
     word = "меньше" if body.minutes < planned else "больше"
     tail = f" Комментарий: {body.note}" if body.note else ""
-    _sys(
+    sys_message(
         db, m.id,
         f"Заведение указало фактическую длительность: {hours:.1f} ч "
         f"({word} объявленных {planned / 60:.1f} ч). "
@@ -737,16 +619,16 @@ def propose_reschedule(
     m.reschedule_date = body.date
     m.reschedule_start = body.start_time
     m.reschedule_end = body.end_time
-    _sys(
+    sys_message(
         db, m.id,
-        f"Заведение предлагает перенести смену на {_fmt_date(body.date)}, "
-        f"{_fmt_time(body.start_time)}–{_fmt_time(body.end_time)}. "
+        f"Заведение предлагает перенести смену на {fmt_date(body.date)}, "
+        f"{fmt_time(body.start_time)}–{fmt_time(body.end_time)}. "
         "Работник может согласиться или отказаться.",
     )
     notify_owner(
         db, m.user_id,
-        f"Заведение предлагает перенести смену на {_fmt_date(body.date)} "
-        f"({_fmt_time(body.start_time)}–{_fmt_time(body.end_time)}). "
+        f"Заведение предлагает перенести смену на {fmt_date(body.date)} "
+        f"({fmt_time(body.start_time)}–{fmt_time(body.end_time)}). "
         "Откройте чат смены, чтобы согласиться или отказаться.",
         open_app="Открыть смену", screen="chat", ident=m.id,
     )
@@ -799,18 +681,41 @@ def accept_reschedule(
     except (ValueError, TypeError):
         pass
 
+    # И само предложение не должно протухнуть. При отправке дата проверяется
+    # («в прошлое нельзя»), но согласиться можно и через неделю — а тогда
+    # предложенный день уже позади. Смена переезжала во вчера и становилась
+    # «закончившейся» в ту же секунду: заведение могло сразу отметить неявку
+    # человеку, который физически не мог выйти, а расчёт закрывал смену,
+    # которой не было. Обычно это даже не злой умысел: работник открывает чат
+    # через день и жмёт «Согласиться», не глядя на дату.
+    try:
+        if datetime.now(UTC) >= shift_start_utc(
+            m.reschedule_date, m.reschedule_start, v.city
+        ):
+            m.reschedule_date = ""
+            m.reschedule_start = None
+            m.reschedule_end = None
+            db.commit()
+            raise HTTPException(
+                status_code=409,
+                detail="Предложенное время уже прошло. "
+                       "Попросите заведение предложить новый день.",
+            )
+    except (ValueError, TypeError):
+        pass
+
     # Новое время может пересечься с другой сменой человека — предупреждать
     # поздно, он уже согласился, поэтому просто фиксируем это в чате.
     v.date = m.reschedule_date
     v.start_time = m.reschedule_start
     v.end_time = m.reschedule_end
-    _sys(
+    sys_message(
         db, m.id,
         f"Работник согласился на перенос. Новое время смены: "
-        f"{_fmt_date(v.date)}, {_fmt_time(v.start_time)}–{_fmt_time(v.end_time)}.",
+        f"{fmt_date(v.date)}, {fmt_time(v.start_time)}–{fmt_time(v.end_time)}.",
     )
     notify_owner(db, m.employer_id,
-                 f"Работник согласился на перенос смены на {_fmt_date(v.date)}.")
+                 f"Работник согласился на перенос смены на {fmt_date(v.date)}.")
     m.reschedule_date = ""
     m.reschedule_start = None
     m.reschedule_end = None
@@ -841,7 +746,9 @@ def decline_reschedule(
     m.reschedule_date = ""
     m.reschedule_start = None
     m.reschedule_end = None
-    _sys(db, m.id, "Работник отказался от переноса — смена остаётся в прежнее время.")
+    sys_message(
+        db, m.id, "Работник отказался от переноса — смена остаётся в прежнее время."
+    )
     notify_owner(db, m.employer_id,
                  "Работник не может выйти в новое время. Смена остаётся "
                  "в прежнее; если она вам больше не нужна — отмените её.")
@@ -929,7 +836,7 @@ def cancel_shift(
 
     label = "работник" if who == "seeker" else "заведение"
     tail = f" Причина: {reason}" if reason else ""
-    _sys(db, m.id, f"Смена отменена ({label}).{tail}")
+    sys_message(db, m.id, f"Смена отменена ({label}).{tail}")
     other = m.employer_id if who == "seeker" else m.user_id
     notify_owner(
         db, other,
@@ -965,8 +872,8 @@ def resolve_match(
         m.no_show = False
         m.seeker_checked_in = True
         m.employer_checked_in = True
-        _accrue_commission(db, m)
-        _sys(db, m.id, "Оператор закрыл спор: смена засчитана ✓")
+        accrue_commission(db, m)
+        sys_message(db, m.id, "Оператор закрыл спор: смена засчитана ✓")
     elif body.outcome == "no_show":
         m.no_show = True  # засчитывается в надёжность работника
         # Статус обязателен: смена, оставшаяся «подтверждённой», ночью
@@ -975,7 +882,7 @@ def resolve_match(
         # счёт за смену, которой не было, а с работника снималась неявка.
         m.status = "expired"
         m.not_held_by = "employer"
-        _sys(db, m.id, "Оператор закрыл спор: зафиксирована неявка. "
+        sys_message(db, m.id, "Оператор закрыл спор: зафиксирована неявка. "
                        "Комиссия не начислена.")
     else:
         raise HTTPException(status_code=400, detail="outcome: completed|no_show")
@@ -1019,9 +926,9 @@ def confirm(
                     detail={
                         "code": "shift_conflict",
                         "message": (
-                            f"У вас уже есть смена {_fmt_date(other.date)} "
-                            f"{_fmt_time(other.start_time)}–"
-                            f"{_fmt_time(other.end_time)}. Она пересекается "
+                            f"У вас уже есть смена {fmt_date(other.date)} "
+                            f"{fmt_time(other.start_time)}–"
+                            f"{fmt_time(other.end_time)}. Она пересекается "
                             f"с этой. Всё равно берёте?"
                         ),
                     },
@@ -1030,12 +937,27 @@ def confirm(
     else:
         m.confirmed_by_employer = True
 
+    # Работник сказал «выхожу», а заведение ещё молчит. Дальше молчание будет
+    # означать согласие — и за смену начислится комиссия. Человек должен
+    # узнать об этом сейчас, а не из счёта.
+    if (
+        principal["role"] == "seeker"
+        and m.status == "matched"
+        and not m.confirmed_by_employer
+    ):
+        notify_owner(
+            db, m.employer_id,
+            "Работник подтвердил выход на смену. Если смена не нужна — "
+            "отмените её, иначе она считается состоявшейся и за неё будет "
+            "комиссия.",
+            open_app="Открыть смену", screen="chat", ident=m.id,
+        )
     if m.confirmed_by_seeker and m.confirmed_by_employer and m.status == "matched":
         m.status = "confirmed"
         # 6-значный код из криптостойкого генератора (secrets) — 1 000 000
         # комбинаций; при лимите 5/мин перебор занял бы ~138 дней.
         m.checkin_code = f"{secrets.randbelow(1000000):06d}"
-        _sys(db, m.id,
+        sys_message(db, m.id,
              "Смена подтверждена ✓ Дальше ничего нажимать не нужно: через 12 "
              "часов после окончания она закроется сама. Если смена не "
              "состоится — нажмите «Смена не состоялась», и комиссии не будет.")

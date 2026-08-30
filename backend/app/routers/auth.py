@@ -3,13 +3,19 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, PhoneCode, User
-from ..ratelimit import hit, rate_limit_ip
+from ..ratelimit import hit, rate_limit, rate_limit_ip
 from ..schemas import RequestCodeIn, RequestCodeOut, TokenOut, VerifyIn
-from ..security import create_token, secure_equals
+from ..security import (
+    DOC_TOKEN_TTL,
+    create_token,
+    current_principal,
+    secure_equals,
+)
 from ..sms import generate_code, send_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -123,3 +129,33 @@ def verify(body: VerifyIn, db: Session = Depends(get_db)):
     token = create_token(user.id, "seeker", user.token_version)
     db.commit()
     return TokenOut(access_token=token, role="seeker", user_id=user.id)
+
+
+class DocTokenOut(BaseModel):
+    token: str
+
+
+@router.post(
+    "/doc-token",
+    response_model=DocTokenOut,
+    dependencies=[Depends(rate_limit("doctoken", 20, 60))],
+)
+def doc_token(
+    db: Session = Depends(get_db),
+    principal: dict = Depends(current_principal),
+):
+    """Короткий токен для скачивания документа (счёт, акт).
+
+    PDF открывает браузер по прямой ссылке, заголовков он не шлёт, и токен
+    приходится класть в адрес. Раньше туда клался обычный токен — тот, что
+    живёт днями и открывает всё. Адрес оседает в истории браузера и в логах
+    сервера: одна строка из лога давала полный доступ к аккаунту.
+
+    Этот живёт пять минут и, кроме документа, не годен ни на что.
+    """
+    owner = db.get(User, principal["id"]) or db.get(Employer, principal["id"])
+    version = int(getattr(owner, "token_version", 0) or 0)
+    return DocTokenOut(token=create_token(
+        principal["id"], principal["role"], version,
+        scope="doc", ttl=DOC_TOKEN_TTL,
+    ))

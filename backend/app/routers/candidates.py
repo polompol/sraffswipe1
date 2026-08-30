@@ -11,6 +11,7 @@ from ..db import get_db
 from ..models import Employer, Match, Swipe, User
 from ..ratelimit import rate_limit
 from ..security import current_principal
+from ..timeutil import local_today
 
 router = APIRouter(tags=["candidates"])
 
@@ -155,10 +156,13 @@ def list_candidates(
     q = db.query(User).filter(
         User.blocked.is_(False), User.id.notin_(swiped)
     )
+    # «Сегодня» — по календарю самого заведения: лента и так показывает
+    # людей его города.
+    today = local_today(city_f)
     if available_today:
-        q = q.filter(User.available_today.is_(True))
+        q = q.filter(User.available_date == today)
     rows = (
-        q.order_by(User.available_today.desc(), User.rating.desc())
+        q.order_by((User.available_date == today).desc(), User.rating.desc())
         .limit(200)
         .all()
     )
@@ -204,7 +208,7 @@ def list_candidates(
             rating=u.rating,
             photo_urls=_csv(u.photo_urls),
             about=u.about,
-            available_today=u.available_today,
+            available_today=u.available_date == today,
             shifts_total=rel.get(u.id, (0, 0, 0))[0],
             shifts_attended=rel.get(u.id, (0, 0, 0))[1],
             employers_total=rel.get(u.id, (0, 0, 0))[2],

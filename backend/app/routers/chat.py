@@ -45,6 +45,7 @@ def _to_out(m: Message) -> MessageOut:
         sender_id=m.sender_id,
         text=m.text,
         is_system=m.is_system,
+        created_at=m.created_at,
     )
 
 
@@ -54,6 +55,10 @@ def _to_out(m: Message) -> MessageOut:
 # мобильному интернету и заметная пауза перед тем, как чат покажется.
 _PAGE = 100
 _PAGE_MAX = 200
+
+# Потолок одного кадра в сокете. Текст мы всё равно режем до 2000 символов,
+# так что с запасом: 8 КБ хватает любому живому сообщению.
+_WS_FRAME_MAX = 8192
 
 
 @router.get("/matches/{match_id}/messages", response_model=list[MessageOut])
@@ -115,7 +120,9 @@ async def send(
     db.commit()
     db.refresh(msg)
     out = _to_out(msg)
-    await manager.broadcast(match_id, out.model_dump())
+    # mode="json": дата должна уехать строкой — объект даты в JSON не
+    # укладывается, и раздача молча падала бы вместе с сокетом.
+    await manager.broadcast(match_id, out.model_dump(mode="json"))
     # Уведомляем второго участника мэтча в Telegram.
     other = (
         match.employer_id
@@ -253,23 +260,36 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
     await manager.connect(match_id, websocket)
     try:
         while True:
-            data = await websocket.receive_json()
-            # Тот же контроль, что и на REST-пути: обрезаем длину (анти-раздувание
-            # БД) и молча пропускаем пустое. Без этого WS был обходом лимита 2000.
-            raw = data.get("text", "")
-            text = raw.strip()[:2000] if isinstance(raw, str) else ""
-            if not text:
-                continue
-            # Та же частота, что и на REST-пути (30 в минуту). Раньше лимит
-            # стоял только на REST, и через сокет тот же участник мог лить
-            # сообщения без ограничений — точно такой же обход, как когда-то
-            # с длиной текста.
+            frame = await websocket.receive_text()
+            # Считаем КАЖДЫЙ кадр, а не только тот, что дошёл до сохранения.
+            # Лимит стоял после проверок «пусто» и «не строка», поэтому поток
+            # пустых кадров {"text":""} проходил мимо него совсем: соединение
+            # крутилось на полной скорости сети и занимало процесс.
             try:
                 hit(f"msg:{sender}", 30, 60)
             except HTTPException:
                 await websocket.send_json(
                     {"error": "Слишком часто. Подождите немного."}
                 )
+                continue
+            # Размер кадра ограничиваем ДО разбора. Длину текста мы и раньше
+            # резали до 2000, но резали уже после того, как приняли кадр
+            # целиком: один кадр на сотню мегабайт занимал столько же памяти
+            # на сервере, и никакой лимит частоты этого не отменял.
+            if len(frame) > _WS_FRAME_MAX:
+                await websocket.close(code=1009)  # message too big
+                break
+            try:
+                data = json.loads(frame)
+            except ValueError:
+                continue
+            if not isinstance(data, dict):
+                continue
+            # Тот же контроль, что и на REST-пути: обрезаем длину (анти-раздувание
+            # БД) и молча пропускаем пустое. Без этого WS был обходом лимита 2000.
+            raw = data.get("text", "")
+            text = raw.strip()[:2000] if isinstance(raw, str) else ""
+            if not text:
                 continue
             db = SessionLocal()
             try:
@@ -279,17 +299,30 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
                     ensure_token_usable(db, principal)
                 except HTTPException:
                     await websocket.close(code=4403)
-                    return
+                    break
                 msg = Message(match_id=match_id, sender_id=sender, text=text)
                 db.add(msg)
                 db.commit()
                 db.refresh(msg)
-                payload = _to_out(msg).model_dump()
-                # Авто-модерация подозрительных фраз (как на REST-пути).
+                payload = _to_out(msg).model_dump(mode="json")
+                # Авто-модерация подозрительных фраз — ровно как на
+                # REST-пути: жалоба на СМЕНУ, а не на отдельное сообщение.
+                # Здесь стоял тип «message», которого нет в списке
+                # допустимых целей: такая жалоба показывалась оператору без
+                # предмета, а кнопка «Заблокировать» искала пользователя по
+                # id сообщения и отвечала «не найден». То есть мошенник,
+                # писавший через сокет, попадал в жалобу, с которой нельзя
+                # было ничего сделать.
                 from ..moderation import auto_flag
-                auto_flag(db, "message", msg.id, text)
+                auto_flag(db, "match", match_id, text)
             finally:
                 db.close()
             await manager.broadcast(match_id, payload)
     except WebSocketDisconnect:
+        pass
+    finally:
+        # Отписываем сокет ЛЮБЫМ путём выхода, а не только по обрыву связи.
+        # Раньше выход по ошибке (битый JSON, закрытие с нашей стороны)
+        # оставлял мёртвый сокет в комнате навсегда, и каждое следующее
+        # сообщение в этом чате пыталось в него писать.
         manager.disconnect(match_id, websocket)

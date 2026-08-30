@@ -27,7 +27,7 @@ export function FunnelPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>Воронка</h1>
+        <h1 className="h1 tight">Воронка</h1>
         <p className="muted" style={{ marginBottom: 16 }}>
           Путь человека: открыл → свайпнул → взаимный интерес → договорились о смене →
           смена состоялась. Последний шаг и есть заработок сервиса.
@@ -37,7 +37,7 @@ export function FunnelPage() {
         {isError && <ErrorBox onRetry={() => refetch()} />}
 
         {data && (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="stack stack-lg">
             {STEPS.map((s, i) => {
               const value = data[s.key] ?? 0;
               const width = `${Math.round((value / top) * 100)}%`;
@@ -63,7 +63,7 @@ export function FunnelPage() {
                     <div style={{ width, height: "100%", background: "var(--gold)" }} />
                   </div>
                   {i > 0 && (
-                    <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+                    <div className="hint">
                       конверсия из «{STEPS[i - 1].label}»: {conv}
                     </div>
                   )}

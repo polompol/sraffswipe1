@@ -31,6 +31,7 @@ import {
   enableClosingConfirmation,
   disableClosingConfirmation,
 } from "@telegram-apps/sdk-react";
+import { createBackStack } from "@/lib/backStack";
 
 let started = false;
 
@@ -155,21 +156,39 @@ export function haptic(kind: Haptic): void {
 
 // --- Кнопка «Назад» ---
 
+// Порядок обработчиков — в lib/backStack.ts: он чистый и покрыт тестами, а
+// здесь остаётся только разговор с Telegram (в браузере его нет, поэтому
+// каждый вызов обёрнут в try).
+const pushBack = createBackStack({
+  show: () => {
+    try {
+      backButton.show();
+    } catch {
+      /* noop */
+    }
+  },
+  hide: () => {
+    try {
+      backButton.hide();
+    } catch {
+      /* noop */
+    }
+  },
+  onClick: (handler) => {
+    try {
+      return backButton.onClick(handler);
+    } catch {
+      return () => {};
+    }
+  },
+});
+
+/** Показать «Назад» и повесить своё действие. Возвращает уборку.
+ *
+ *  Обработчики складываются стопкой: открытая шторка забирает нажатие себе,
+ *  а закрывшись — возвращает его экрану под собой. */
 export function showBackButton(onClick: () => void): () => void {
-  try {
-    backButton.show();
-    const off = backButton.onClick(onClick);
-    return () => {
-      try {
-        off();
-        backButton.hide();
-      } catch {
-        /* noop */
-      }
-    };
-  } catch {
-    return () => {};
-  }
+  return pushBack(onClick);
 }
 
 // --- Подтверждение действия ---

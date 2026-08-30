@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LS } from "@/lib/storage";
 
 export interface Geo {
   lat: number;
@@ -11,7 +12,7 @@ export interface Geo {
 export function useGeo(enabled = true): Geo | null {
   const [geo, setGeo] = useState<Geo | null>(() => {
     try {
-      const raw = localStorage.getItem("ss_geo");
+      const raw = localStorage.getItem(LS.geo);
       return raw ? (JSON.parse(raw) as Geo) : null;
     } catch {
       return null;
@@ -25,7 +26,7 @@ export function useGeo(enabled = true): Geo | null {
         const g: Geo = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setGeo(g);
         try {
-          localStorage.setItem("ss_geo", JSON.stringify(g));
+          localStorage.setItem(LS.geo, JSON.stringify(g));
         } catch {
           /* приватный режим — не критично */
         }

@@ -13,6 +13,8 @@ import { initSentry } from "./lib/sentry";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Toaster } from "./components/Toast";
 import { App } from "./App";
+import { watchKeyboard } from "@/lib/keyboard";
+import { LS, SS } from "@/lib/storage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -41,7 +43,7 @@ if ("serviceWorker" in navigator && !window.location.hash.includes("tgWebApp")) 
   });
 }
 // Крупный режим (доступность) — применяем до первого рендера, если включён.
-if (localStorage.getItem("ss_large") === "1") {
+if (localStorage.getItem(LS.large) === "1") {
   document.body.dataset.large = "1";
 }
 // Кнопка из уведомления бота открывает приложение с ?go=<экран>. Без этого
@@ -65,7 +67,7 @@ try {
   // подставить произвольный путь в адресе.
   const id = (q.get("id") ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
   const path = go === "chat" && id ? `/chat/${id}` : GO_SCREENS[go];
-  if (path && localStorage.getItem("ss_jwt")) {
+  if (path && localStorage.getItem(LS.jwt)) {
     window.location.hash = `#${path}`;
   }
 } catch {
@@ -73,8 +75,8 @@ try {
 }
 
 // «open» — один раз за сессию, чтобы не раздувать вершину воронки на перезапусках.
-if (!sessionStorage.getItem("ss_open")) {
-  sessionStorage.setItem("ss_open", "1");
+if (!sessionStorage.getItem(SS.opened)) {
+  sessionStorage.setItem(SS.opened, "1");
   track("open");
 }
 
@@ -90,3 +92,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 );
+
+// Клавиатура закрывает низ экрана — панель ввода в чате должна подниматься
+// над ней, а не прятаться под неё.
+watchKeyboard();

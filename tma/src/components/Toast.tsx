@@ -62,7 +62,7 @@ export function Toaster() {
           role="status"
           style={{
             background: COLOR[t.kind],
-            color: "#fff",
+            color: "var(--on-brand)",
             padding: "10px 16px",
             borderRadius: 12,
             fontWeight: 600,

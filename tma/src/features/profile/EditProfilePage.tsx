@@ -4,18 +4,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExperienceTag, StaffRole } from "@/types/domain";
 import {
   EXPERIENCE_TAG_LABELS,
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
   STAFF_ROLE_LABELS,
 } from "@/types/domain";
 import { Button } from "@/components/Button";
+import { RolePicker } from "@/components/RolePicker";
 import { fetchMe, updateMe } from "@/api/endpoints";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { CityPicker } from "@/components/CityPicker";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 import { useSession } from "@/store/session";
 import { apiError } from "@/lib/errors";
+import { ToggleChip } from "@/components/ToggleChip";
 
 // Навыки для выбора (медкнижка/самозанятость задаются отдельными полями).
 const SKILLS: ExperienceTag[] = ["experienced", "english", "cashRegister"];
@@ -130,7 +129,7 @@ export function EditProfilePage() {
       nav(-1);
     } catch (e) {
       haptic("error");
-      setError(apiError(e, "Не удалось сохранить"));
+      setError(apiError(e, "Не удалось сохранить — попробуйте ещё раз"));
     } finally {
       setSaving(false);
     }
@@ -139,8 +138,8 @@ export function EditProfilePage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 16 }}>
-          {isEmployer ? "Заведение" : "Анкета"}
+        <h1 className="h1">
+          {isEmployer ? "Профиль заведения" : "Мой профиль"}
         </h1>
 
         {isEmployer ? (
@@ -165,7 +164,7 @@ export function EditProfilePage() {
             <CityPicker
               value={city}
               onChange={setCity}
-              hint="По нему вам показывают людей, которые рядом."
+              hint="Покажем людей из вашего города."
             />
 
             <label className="form-label" htmlFor="inn">ИНН (необязательно)</label>
@@ -175,13 +174,14 @@ export function EditProfilePage() {
               style={{ marginBottom: 12 }}
               inputMode="numeric"
               maxLength={12}
-              placeholder="Нужен для актов и бейджа «Проверено»"
+              placeholder="12 цифр"
               value={inn}
               onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
             />
             <p className="muted" style={{ marginTop: 0 }}>
-              Название видят работники в ленте. Если поменять название или ИНН,
-              бейдж «Проверено» слетит — его нужно будет получить заново.
+              ИНН нужен для счетов, актов и значка «Проверено». Название видят
+              работники в списке смен. Поменяете название или ИНН — значок
+              «Проверено» придётся получить заново.
             </p>
           </>
         ) : (
@@ -191,70 +191,47 @@ export function EditProfilePage() {
         <label className="form-label" htmlFor="name">Имя</label>
         <input id="name" className="input" style={{ marginBottom: 12 }} value={name} onChange={(e) => setName(e.target.value)} />
 
-        <label className="form-label" htmlFor="bdate">Дата рождения (только 18+)</label>
-        <input id="bdate" className="input" type="date" style={{ marginBottom: 12 }} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+        {/* Пояснения — отдельной строкой, а не в скобках внутри подписи.
+            Скобка посреди заголовка поля читается тяжелее, чем та же мысль
+            строкой ниже, — а таких скобок тут было две подряд. */}
+        <label className="form-label" htmlFor="bdate">Дата рождения</label>
+        <input id="bdate" className="input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+        <p className="hint">
+          Смены — только с 18 лет.
+        </p>
 
         <CityPicker value={city} onChange={setCity} />
 
-        <label className="form-label" htmlFor="district">Район (чтобы звали на смены рядом)</label>
-        <input id="district" className="input" style={{ marginBottom: 12 }} placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
+        <label className="form-label" htmlFor="district">Район</label>
+        <input id="district" className="input" placeholder="например: Басманный" value={district} onChange={(e) => setDistrict(e.target.value)} />
+        <p className="hint">
+          Чтобы звали на смены поближе к дому.
+        </p>
 
         {/* Группировка «Зал/Бар/Кухня/Хозяйство» — как при создании смены.
             Раньше здесь была плоская простыня из 12 чипов, и один и тот же
             выбор в двух местах приложения выглядел по-разному. */}
-        <div className="form-label">Должности</div>
-        <div style={{ margin: "8px 0 16px" }}>
-          {ROLE_FAMILY_ORDER.map((fam) => (
-            <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
-                {ROLE_FAMILY_LABELS[fam]}
-              </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {ROLE_FAMILIES[fam].map((r) => (
-                  <button
-                    key={r}
-                    className="tag"
-                    style={{
-                      cursor: "pointer",
-                      background: roles.includes(r) ? "var(--gold-fill)" : "transparent",
-                      color: roles.includes(r) ? "#fff" : "var(--text)",
-                      borderColor: roles.includes(r) ? "var(--gold-fill)" : "var(--border-strong)",
-                    }}
-                    onClick={() => toggle(r)}
-                  >
-                    {STAFF_ROLE_LABELS[r]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className="form-label">Кем готовы выйти</div>
+        <RolePicker isOn={(r) => roles.includes(r)} onPick={toggle} />
 
         <div className="form-label">Опыт и навыки</div>
         <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
           {SKILLS.map((s) => (
-            <button
+            <ToggleChip
               key={s}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: skills.includes(s) ? "var(--gold-fill)" : "transparent",
-                color: skills.includes(s) ? "#fff" : "var(--text)",
-                borderColor: skills.includes(s) ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={skills.includes(s)}
+              label={EXPERIENCE_TAG_LABELS[s]}
               onClick={() => toggleSkill(s)}
-            >
-              {EXPERIENCE_TAG_LABELS[s]}
-            </button>
+            />
           ))}
         </div>
 
-        <label className="form-label" htmlFor="about">О себе и пожелания по выходу</label>
+        <label className="form-label" htmlFor="about">О себе: когда и где удобно выходить</label>
         <textarea
           id="about"
           className="input"
           style={{ marginBottom: 12, minHeight: 88, resize: "vertical", paddingTop: 12 }}
-          placeholder="Например: официант с опытом, выхожу по вечерам и в выходные, район Центр"
+          placeholder="например: официант с опытом, выхожу по вечерам и в выходные, район Центр"
           maxLength={1000}
           value={about}
           onChange={(e) => setAbout(e.target.value)}
@@ -264,9 +241,11 @@ export function EditProfilePage() {
         </div>
 
         <div className="card" style={{ marginBottom: 16 }}>
-          <label className="row" style={{ cursor: "pointer" }}>
+          {/* minHeight: зона нажатия была около 25 точек, а это единственный
+              способ открыть поле ИНН. И род: анкету заполняют и женщины. */}
+          <label className="row" style={{ cursor: "pointer", minHeight: 44 }}>
             <input type="checkbox" checked={selfEmployed} onChange={(e) => setSelfEmployed(e.target.checked)} />
-            <span>Я самозанятый (плательщик НПД)</span>
+            <span>У меня оформлена самозанятость</span>
           </label>
           {selfEmployed && (
             <>
@@ -285,10 +264,10 @@ export function EditProfilePage() {
                 value={inn}
                 onChange={(e) => setInn(e.target.value.replace(/\D/g, "").slice(0, 12))}
               />
-              <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--text-xs)" }}>
+              <p className="hint">
                 Номер есть в приложении «Мой налог» и в личном кабинете
-                налоговой. Нужен только для акта по смене — заведениям в ленте
-                он не виден.
+                налоговой. Нужен только для акта по смене — заведения его
+                не видят.
               </p>
             </>
           )}

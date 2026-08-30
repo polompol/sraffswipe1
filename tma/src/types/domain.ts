@@ -102,22 +102,24 @@ export const TIPS_LABELS: Record<TipsMode, string> = {
   shared: "Чаевые поровну",
 };
 
-// Короткая подпись для бейджа на карточке (none — не показываем).
+// Подписи для формы публикации: там над ними уже стоит заголовок «Чаевые —
+// их платят гости», и слово «чаевые» повторялось четыре раза подряд.
+export const TIPS_CHOICE: Record<TipsMode, string> = {
+  none: "Не будет",
+  individual: "Себе",
+  shared: "Поровну",
+};
+
+// Короткая подпись для плашки на карточке (none — не показываем).
+// Тире убрано: в колонке шириной в половину карточки оно уводило слово на
+// вторую строку — «Чаевые — / поровну». Смысла тире не добавляло.
 export const TIPS_BADGE: Record<TipsMode, string> = {
   none: "",
-  individual: "Чаевые — вам",
-  shared: "Чаевые — поровну",
+  individual: "Чаевые вам",
+  shared: "Чаевые поровну",
 };
 
 export type MatchStatus = "matched" | "confirmed" | "completed" | "cancelled" | "expired";
-
-export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
-  matched: "Мэтч",
-  confirmed: "Смена подтверждена",
-  completed: "Смена закрыта",
-  cancelled: "Отменена",
-  expired: "Не состоялась",
-};
 
 export type ExperienceTag =
   | "medBook"
@@ -134,13 +136,21 @@ export const EXPERIENCE_TAG_LABELS: Record<ExperienceTag, string> = {
   selfEmployed: "Самозанятый",
 };
 
-export interface AvailabilitySlot {
-  weekday: number; // 1..7
-  start: number; // минуты от полуночи
-  end: number;
+/** Надёжность человека: цифры, которые сервер считает одним запросом.
+ *
+ *  Три числа ходят только вместе (см. `_reliability` на сервере): всего
+ *  подтверждённых смен, из них вышел, и со сколькими РАЗНЫМИ заведениями
+ *  человек работал. Последнее важно не меньше первых двух: двенадцать смен с
+ *  одним и тем же заведением — это не опыт, а один и тот же человек с двух
+ *  сторон.
+ */
+export interface Reliability {
+  shiftsTotal: number;
+  shiftsAttended: number;
+  employersTotal?: number;
 }
 
-export interface Seeker {
+export interface Seeker extends Partial<Reliability> {
   id: string;
   name: string;
   // Возраст числом приходит с сервера. Дату рождения в публичную ленту не
@@ -155,14 +165,12 @@ export interface Seeker {
   selfEmployed: boolean;
   inn?: string | null;
   experienceTags: ExperienceTag[];
-  availableSlots: AvailabilitySlot[];
   rating: number;
   photoUrls: string[];
   about: string;
   availableToday?: boolean;
-  shiftsTotal?: number; // надёжность: всего подтверждённых смен
-  shiftsAttended?: number; // из них вышел
-  employersTotal?: number; // со сколькими РАЗНЫМИ заведениями работал
+  // В ленте кандидатов надёжность может и не прийти (у новичка смен нет),
+  // поэтому здесь те же поля, но необязательные.
 }
 
 export interface Vacancy {
@@ -201,7 +209,6 @@ export interface Vacancy {
 
 export interface MatchModel {
   id: string;
-  seekerId: string;
   employerId: string;
   vacancyId: string;
   status: MatchStatus;
@@ -209,6 +216,10 @@ export interface MatchModel {
   confirmedByEmployer: boolean;
   companyName?: string;
   companyPhotoUrl?: string;
+  /** Имя работника: его показывают ЗАВЕДЕНИЮ. Соискателю в этой же строке
+   *  показывается название заведения — сторона видит того, с кем договорилась,
+   *  а не саму себя. */
+  seekerName?: string;
   role?: StaffRole;
   checkinCode?: string | null; // виден только заведению (помощник)
   checkedIn?: boolean; // смена закрыта (обе стороны подтвердили)
@@ -216,8 +227,6 @@ export interface MatchModel {
   rescheduleDate?: string;
   rescheduleStart?: number | null;
   rescheduleEnd?: number | null;
-  /** Фактическая длительность смены в минутах, если она отличалась. */
-  actualMinutes?: number | null;
   seekerCheckedIn?: boolean;
   employerCheckedIn?: boolean;
   disputed?: boolean;
@@ -230,22 +239,25 @@ export interface MatchModel {
   shiftEnd?: number;
 }
 
+/** Сообщение в чате смены — ровно то, что присылает сервер.
+ *
+ *  Здесь были ещё два поля, которых сервер не шлёт: `chatId` и `timestamp`.
+ *  Читать их никто не читал, но тип обещал строку, а приходило пусто. Опасно
+ *  это тем, что демо-данные их заполняли: на демо всё выглядело правильно, а
+ *  на живом сервере первый же, кто написал бы `msg.timestamp`, получил бы
+ *  пустоту — и без единой ошибки при сборке. Ровно так однажды пропала
+ *  надёжность работников на экране «Мои работники».
+ *
+ *  Времени у сообщения сейчас нет и на сервере. Если оно понадобится на
+ *  экране, начинать надо с сервера, а не с этого файла.
+ */
 export interface Message {
   id: string;
-  chatId: string;
   senderId: string;
   text: string;
   isSystem: boolean;
-  timestamp: string;
+  /** Когда написано. Для спора это главное: «написал в 23:40, что не выйдет»
+   *  без времени — не довод, а слова. */
+  createdAt: string;
 }
 
-// --- Монетизация / entitlements ---
-
-
-export interface PriceItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  priceRub?: number; // ₽ (ЮKassa)
-  badge?: string;
-}

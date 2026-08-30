@@ -3,6 +3,7 @@ import { useSprings, animated, to, type SpringValue } from "@react-spring/web";
 import { useDrag } from "@use-gesture/react";
 import type { SwipeDirection } from "@/types/domain";
 import { haptic } from "@/telegram/sdk";
+import { LS } from "@/lib/storage";
 
 interface Props<T> {
   items: T[];
@@ -11,7 +12,20 @@ interface Props<T> {
   /** Может вернуть промис: если он отклонится, карточка вернётся в колоду. */
   onSwipe: (item: T, dir: SwipeDirection) => void | Promise<unknown>;
   onEmpty?: () => void;
-  controllerRef?: (fn: (dir: SwipeDirection) => void) => void;
+  /** Управление верхней картой снаружи (кнопки «Пропустить/Отклик», шторка
+   *  деталей). expectKey — страховка: смахнуть именно ту карточку, которую
+   *  человек видел, а не ту, что оказалась сверху, пока была открыта шторка. */
+  controllerRef?: (
+    fn: (dir: SwipeDirection, expectKey?: string) => void,
+  ) => void;
+  /** Короткий тап по карточке (не свайп) — «расскажи подробнее».
+   *  Отдельная крупная кнопка деталей на карточке была лишним действием:
+   *  свайп — главное, а подробности человек и так открывает касанием. */
+  onTap?: (item: T) => void;
+  /** Слово на штампе при свайпе вправо. У соискателя «ХОЧУ», у заведения
+   *  «ЗОВУ»: один штамп на обе стороны ложился поперёк лица человека и
+   *  расходился с кнопкой под колодой, которая подписана «Позвать». */
+  likeStamp?: string;
 }
 
 const VISIBLE = 3;
@@ -24,17 +38,28 @@ function dirFrom(mx: number, sx: number): SwipeDirection {
 }
 
 export function SwipeDeck<T>(props: Props<T>) {
-  const { items, renderCard, onSwipe, keyOf } = props;
+  const { items, renderCard, onSwipe, keyOf, likeStamp = "ХОЧУ" } = props;
   // Улетевшие карточки помним ПО НОМЕРУ, но сбрасываем при смене набора.
   // Раньше номера жили вечно: человек свайпал две карточки, менял город — и
   // первые две смены нового города считались уже просмотренными. Он их не
   // видел никогда и не мог понять почему.
   const [gone] = useState(() => new Set<number>());
+  // Карточки, по которым сервер УЖЕ ответил согласием. Отдельно от `gone`:
+  // туда карточка попадает сразу, ещё до ответа, — иначе она бы вернулась под
+  // палец прямо во время анимации. Из-за этой разницы «смены закончились»
+  // могло сработать раньше времени: человек быстро смахивает две последние
+  // карточки, первая проходит, вторая получает отказ — и на момент ответа по
+  // первой в `gone` уже лежат обе. Экран объявлял, что смен нет, а вторая
+  // карточка через мгновение возвращалась в пустую колоду.
+  const [settled] = useState(() => new Set<number>());
+  // Тащили ли карточку в текущем жесте (см. handleClick ниже).
+  const draggedRef = useRef(false);
   const deckKey = items.map((it) => keyOf(it)).join("|");
   const lastDeck = useRef(deckKey);
   if (lastDeck.current !== deckKey) {
     lastDeck.current = deckKey;
     gone.clear();
+    settled.clear();
   }
 
   const [springs, apiRef] = useSprings(items.length, (i) => ({
@@ -64,17 +89,31 @@ export function SwipeDeck<T>(props: Props<T>) {
     // а смена исчезала из колоды — вернуться к ней было нельзя ничем.
     const back = () => {
       gone.delete(index);
+      settled.delete(index);
       apiRef.start((i) => (i === index
         ? { x: 0, y: 0, rot: 0, config: { tension: 220, friction: 26 } }
         : {}));
       restack();
     };
+    // «Смены закончились» объявляем только ПОСЛЕ ответа сервера и только по
+    // тем карточкам, на которые сервер ответил согласием.
+    //
+    // Раньше это делалось сразу, вместе с анимацией. На последней карточке
+    // получалось так: человек смахнул, сервер отказал («место уже заняли»,
+    // «оплатите счёт»), карточка честно вернулась в колоду — а экран уже
+    // сообщил, что смен больше нет, и показал пустое состояние поверх
+    // вернувшейся карточки.
+    const done = () => {
+      settled.add(index);
+      if (settled.size === items.length) props.onEmpty?.();
+    };
     const res = onSwipe(items[index], dir) as unknown;
-    if (res && typeof (res as Promise<unknown>).catch === "function") {
-      (res as Promise<unknown>).catch(back);
+    if (res && typeof (res as Promise<unknown>).then === "function") {
+      (res as Promise<unknown>).then(done, back);
+    } else {
+      done();
     }
     restack();
-    if (gone.size === items.length) props.onEmpty?.();
   }
 
   // Пересобрать стопку: оставшиеся карты подрастают к фронту (живее).
@@ -93,9 +132,11 @@ export function SwipeDeck<T>(props: Props<T>) {
 
   // Кнопки управляют ВЕРХНЕЙ картой (i=0 — самый высокий z-index/фронт).
   if (props.controllerRef) {
-    props.controllerRef((dir) => {
+    props.controllerRef((dir, expectKey) => {
       for (let i = 0; i < items.length; i++) {
         if (!gone.has(i)) {
+          // Ждали конкретную карточку, а сверху уже другая — не трогаем её.
+          if (expectKey !== undefined && keyOf(items[i]) !== expectKey) return;
           fling(i, dir);
           break;
         }
@@ -107,8 +148,8 @@ export function SwipeDeck<T>(props: Props<T>) {
   // возвращается — показывает, что её можно свайпать (удобно для новичков
   // любого возраста). Уважает prefers-reduced-motion (через глобальный CSS).
   useEffect(() => {
-    if (localStorage.getItem("ss_swipe_hinted")) return;
-    localStorage.setItem("ss_swipe_hinted", "1");
+    if (localStorage.getItem(LS.swipeHinted)) return;
+    localStorage.setItem(LS.swipeHinted, "1");
     const nudge = (x: number) =>
       apiRef.start((i) =>
         i === 0 && !gone.has(0)
@@ -125,6 +166,11 @@ export function SwipeDeck<T>(props: Props<T>) {
 
   const bind = useDrag(
     ({ args: [index], active, movement: [mx, my], swipe: [sx], last }) => {
+      // Запоминаем, тащили карточку или только коснулись: по этому потом
+      // отличаем «расскажи подробнее» от неудачного свайпа. Само нажатие
+      // ловим обычным onClick — так предсказуемее, чем распознавание тапа
+      // внутри жеста.
+      if (Math.abs(mx) > 6 || Math.abs(my) > 6) draggedRef.current = true;
       // Триггер: длинный свайп вбок ИЛИ быстрый флик (swipe от use-gesture).
       const trigger = sx !== 0 || Math.abs(mx) > 110;
       if (last && trigger) {
@@ -138,11 +184,20 @@ export function SwipeDeck<T>(props: Props<T>) {
           y: active ? my : 0,
           rot: active ? mx / 18 : 0,
           scale: 1,
-          config: { tension: 350, friction: 32 },
+            config: { tension: 350, friction: 32 },
         };
       });
     },
+    { filterTaps: true },
   );
+
+  /** Нажатие по карточке — «расскажи подробнее». После перетаскивания не
+   *  срабатывает: иначе каждый неудачный свайп открывал бы шторку. */
+  function handleClick(item: T): void {
+    const dragged = draggedRef.current;
+    draggedRef.current = false;
+    if (!dragged) props.onTap?.(item);
+  }
 
   return (
     <div className="deck">
@@ -154,6 +209,7 @@ export function SwipeDeck<T>(props: Props<T>) {
             key={keyOf(item)}
             className="swipe-card"
             {...bind(i)}
+            onClick={() => handleClick(item)}
             style={{
               transform: to(
                 [style.x, style.y, style.yStack, style.rot, style.scale],
@@ -165,7 +221,7 @@ export function SwipeDeck<T>(props: Props<T>) {
           >
             {renderCard(item)}
             <Tint x={style.x} />
-            <Stamps x={style.x} />
+            <Stamps x={style.x} like={likeStamp} />
           </animated.div>
         );
       })}
@@ -195,7 +251,7 @@ function Tint({ x }: { x: SpringValue<number> }) {
   );
 }
 
-function Stamps({ x }: { x: SpringValue<number> }) {
+function Stamps({ x, like }: { x: SpringValue<number>; like: string }) {
   return (
     <>
       <animated.div
@@ -207,7 +263,7 @@ function Stamps({ x }: { x: SpringValue<number> }) {
           opacity: to(x, (v) => Math.max(0, Math.min(1, v / 80))),
         }}
       >
-        ХОЧУ
+        {like}
       </animated.div>
       <animated.div
         className="stamp"

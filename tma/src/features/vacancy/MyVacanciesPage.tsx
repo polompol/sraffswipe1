@@ -28,17 +28,17 @@ export function MyVacanciesPage() {
     queryFn: fetchMyVacancies,
   });
   async function doRemove(id: string, title: string) {
-    if (!(await confirmAction(`Снять смену «${title}» с публикации?`, "Снять"))) return;
+    if (!(await confirmAction(`Убрать смену «${title}» из ленты?`, "Убрать"))) return;
     haptic("warning");
     try {
       await deleteVacancy(id);
-      toast("Смена снята", "success");
+      toast("Смена убрана из ленты", "success");
       qc.invalidateQueries({ queryKey: ["my-vacancies"] });
       qc.invalidateQueries({ queryKey: ["feed"] });
     } catch (e) {
       haptic("error");
       // 409 — по смене уже откликнулись: сервер объясняет, почему нельзя.
-      toast(apiError(e, "Не удалось снять смену"), "error");
+      toast(apiError(e, "Не получилось убрать смену. Попробуйте ещё раз"), "error");
     }
   }
 
@@ -46,15 +46,24 @@ export function MyVacanciesPage() {
     haptic("medium");
     try {
       const n = await urgentPing(id);
-      toast(n > 0 ? `Пингнули ${n} доступных рядом` : "Сейчас рядом нет доступных", "success");
+      // Пустой результат — не успех: зелёный тост «никого нет» читался как
+      // «получилось», хотя ничего хорошего не случилось.
+      if (n > 0) {
+        toast(
+          `Позвали — сообщение ушло ${n} ${plural(n, "человеку", "людям", "людям")} рядом`,
+          "success",
+        );
+      } else {
+        toast("Рядом сейчас никого свободного. Попробуйте позже", "info");
+      }
     } catch {
-      toast("Не удалось отправить", "error");
+      toast("Не получилось позвать. Попробуйте ещё раз", "error");
     }
   }
 
   return (
     <div className="page">
-      <h1 className="h1" style={{ marginBottom: 12 }}>Мои смены</h1>
+      <h1 className="h1">Мои смены</h1>
       {/* Главное действие заведения — отдельной строкой во всю ширину.
           Раньше это была маленькая кнопка, прижатая к правому краю рядом с
           заголовком: самое частое действие выглядело самым второстепенным. */}
@@ -72,15 +81,13 @@ export function MyVacanciesPage() {
         }}
       >
         <button
-          className="tag"
-          style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
+          className="tag tag-nav"
           onClick={() => nav("/applicants")}
         >
           Кто откликнулся
         </button>
         <button
-          className="tag"
-          style={{ cursor: "pointer", borderColor: "var(--border-strong)", color: "var(--text)" }}
+          className="tag tag-nav"
           onClick={() => nav("/workers")}
         >
           Мои работники
@@ -100,16 +107,13 @@ export function MyVacanciesPage() {
           fill
           icon={<IconCalendar size={34} />}
           title="Смен пока нет"
-          text="Разместите первую смену — она появится в ленте у работников рядом, и пойдут отклики."
-          action={
-            <Button block={false} onClick={() => nav("/vacancy/new")}>
-              + Разместить смену
-            </Button>
-          }
+          // Кнопки внутри карточки нет: ровно такая же, слово в слово,
+          // стоит на этом же экране прямо над списком.
+          text="Разместите первую смену — её увидят работники рядом, и пойдут отклики."
         />
       )}
 
-      <div className="stagger" style={{ display: "grid", gap: 12 }}>
+      <div className="stagger stack stack-lg">
         {data?.map((v) => (
           <div key={v.id} className="card">
             <b>{STAFF_ROLE_LABELS[v.role]}</b>
@@ -135,8 +139,15 @@ export function MyVacanciesPage() {
                   }}
                 >
                   {full
-                    ? "Все места закрыты ✓"
-                    : `Набрано ${taken} из ${need} · ищем ещё ${left} ${plural(left, "человека", "человек", "человек")}`}
+                    ? need > 1 ? "Все места заняты ✓" : "Место занято ✓"
+                    : need === 1
+                      // На смену одного человека «ищем 1 человека» — пересказ
+                      // самой смены. А вот «свободно» — состояние: рядом со
+                      // «Место занято ✓» пара читается сразу.
+                      ? "Место свободно"
+                      : taken === 0
+                        ? `Ищем ${need} ${plural(need, "человека", "человека", "человек")}`
+                        : `Набрано ${taken} из ${need}`}
                 </div>
               );
             })()}
@@ -149,30 +160,20 @@ export function MyVacanciesPage() {
             <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
               {(v.slotsLeft ?? v.headcount ?? 1) > 0 ? (
                 <Button variant="secondary" onClick={() => doUrgent(v.id)}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <IconFire size={16} /> Позвать людей на эту смену
+                  <span className="inline">
+                    <IconFire size={16} /> Позвать людей
                   </span>
                 </Button>
               ) : (
                 <Button variant="secondary" onClick={() => nav("/vacancy/new", { state: { prefill: v } })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span className="inline">
                     <IconCalendar size={16} /> Повторить смену
                   </span>
                 </Button>
               )}
               <button
                 onClick={() => setMoreFor(v)}
-                style={{
-                  minHeight: 44,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  color: "var(--muted)",
-                  font: "inherit",
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
+                className={"text-btn"}
               >
                 Ещё
               </button>
@@ -183,7 +184,7 @@ export function MyVacanciesPage() {
 
       {moreFor && (
         <Sheet title={STAFF_ROLE_LABELS[moreFor.role]} onClose={() => setMoreFor(null)}>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="stack">
             <Button
               variant="secondary"
               onClick={() => {
@@ -192,7 +193,7 @@ export function MyVacanciesPage() {
                 nav("/vacancy/new", { state: { prefill: v } });
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span className="inline">
                 <IconCalendar size={16} /> Повторить смену на другой день
               </span>
             </Button>
@@ -206,7 +207,7 @@ export function MyVacanciesPage() {
                 nav("/vacancy/new", { state: { edit: v } });
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span className="inline">
                 <IconEdit size={16} /> Исправить условия
               </span>
             </Button>
@@ -218,8 +219,8 @@ export function MyVacanciesPage() {
                 doRemove(v.id, STAFF_ROLE_LABELS[v.role]);
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <IconWarning size={16} /> Снять с публикации
+              <span className="inline">
+                <IconWarning size={16} /> Убрать из ленты
               </span>
             </Button>
           </div>

@@ -7,8 +7,10 @@
 from datetime import UTC, datetime, timedelta
 
 from app.db import SessionLocal
-from app.models import Commission, Employer, Match, User, Vacancy
+from app.models import Commission, Employer, Match, User
 from app.timeutil import local_today
+
+from .shifttime import age_shift
 
 
 def _auth(client, role):
@@ -47,15 +49,13 @@ def _worked_shift(client, tg_emp, tg_seeker):
     client.post(f"/matches/{mid}/confirm", headers=emp_h)
     _detach(eid, tg_emp)
     _detach(sid, tg_seeker)
-    # Отматываем смену во вчера — человек уже отработал.
-    db = SessionLocal()
-    try:
-        m = db.get(Match, mid)
-        vac = db.get(Vacancy, m.vacancy_id)
-        vac.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        db.commit()
-    finally:
-        db.close()
+    # Доводим смену до конца — человек уже отработал. Именно age_shift, а не
+    # «дата минус сутки»: расчёт считает по местному времени плюс двенадцать
+    # часов ожидания, и в третьем часу ночи «вчерашняя» смена закончилась
+    # всего девять часов назад. Тесты падали каждую ночь при исправном коде.
+    # days=1, а не 0: расчёт по смене ждёт двенадцать часов после её конца,
+    # и «смена только что закончилась» для него ещё рано.
+    age_shift(mid, 1)
     return emp_h, seeker_h, mid
 
 
@@ -281,14 +281,10 @@ def test_old_reschedule_cannot_be_accepted_after_the_shift(client):
     assert client.post(f"/matches/{mid}/reschedule", headers=emp_h, json={
         "date": future, "start_time": 600, "end_time": 1080}).status_code == 200
 
-    # Смена тем временем прошла.
-    db = SessionLocal()
-    try:
-        vac = db.get(Vacancy, db.get(Match, mid).vacancy_id)
-        vac.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        db.commit()
-    finally:
-        db.close()
+    # Смена тем временем прошла (см. age_shift: считаем расстояние до конца
+    # смены, а не календарь — иначе тест зависит от часа запуска). Сутки, а не
+    # ноль: ниже проверяется расчёт, а он ждёт двенадцать часов.
+    age_shift(mid, 1)
 
     r = client.post(f"/matches/{mid}/reschedule/accept", headers=seeker_h)
     assert r.status_code == 409

@@ -150,24 +150,38 @@ def test_a_shift_for_nothing_is_not_a_shift(client):
                     rate_type="perShift").status_code == 201
 
 
-def test_many_reviews_from_one_partner_count_as_one_opinion(client):
+def test_many_reviews_from_one_partner_count_as_one_opinion(client, make_match):
     """Пять пятёрок от одного заведения — это одно мнение, а не пять.
 
     Иначе рейтинг накручивается сговором: своё заведение на второй учётке
     Telegram закрывает смену за сменой и ставит по пятёрке.
     """
+    _, emp_a = _auth(client, "employer")
+    _set_tg(emp_a, 662002)
+    _, emp_b = _auth(client, "employer")
+    _set_tg(emp_b, 662003)
+
     db = SessionLocal()
     try:
         u = User(name="Работник", phone="tg:662001", tg_id=662001)
         db.add(u)
-        db.flush()
+        db.commit()
         uid = u.id
+    finally:
+        db.close()
+
+    # Смены настоящие: отзыв ссылается на смену внешним ключом, и без неё
+    # такого отзыва в бою просто не бывает.
+    mine = [make_match(emp_a, uid) for _ in range(5)]
+    other = make_match(emp_b, uid)
+
+    db = SessionLocal()
+    try:
         # Пять пятёрок от одного и того же заведения…
-        for i in range(5):
-            db.add(Review(match_id=f"m{i}", rater_id="emp-A",
-                          ratee_id=uid, stars=5))
+        for mid in mine:
+            db.add(Review(match_id=mid, rater_id=emp_a, ratee_id=uid, stars=5))
         # …и одна тройка от другого.
-        db.add(Review(match_id="m9", rater_id="emp-B", ratee_id=uid, stars=3))
+        db.add(Review(match_id=other, rater_id=emp_b, ratee_id=uid, stars=3))
         db.commit()
 
         from app.routers.social import _recompute_rating
@@ -219,7 +233,7 @@ def test_venue_sees_how_many_different_places_a_person_worked(client):
         db.close()
 
 
-def test_pays_on_time_means_money_actually_arrived(client):
+def test_pays_on_time_means_money_actually_arrived(client, make_match):
     """Знак «платит вовремя» — про оплаченные комиссии, а не про рейтинг.
 
     Раньше он выдавался за высокий рейтинг и три закрытые смены, то есть
@@ -241,10 +255,11 @@ def test_pays_on_time_means_money_actually_arrived(client):
     mine = [v for v in rows if v["employer_id"] == eid][0]
     assert mine["employer_pays_on_time"] is False, "без оплат знака нет"
 
+    paid = [make_match(eid) for _ in range(2)]
     db = SessionLocal()
     try:
-        for i in range(2):
-            db.add(Commission(employer_id=eid, match_id=f"paid-{i}",
+        for mid in paid:
+            db.add(Commission(employer_id=eid, match_id=mid,
                               shift_pay=3200, amount=320, status="paid"))
         db.commit()
     finally:
@@ -254,7 +269,7 @@ def test_pays_on_time_means_money_actually_arrived(client):
     assert mine["employer_pays_on_time"] is True, "комиссия оплачена — знак есть"
 
 
-def test_unpaid_commission_removes_the_badge_and_the_shift(client):
+def test_unpaid_commission_removes_the_badge_and_the_shift(client, make_match):
     """Просрочка снимает знак доверия — и смену из ленты.
 
     Здесь же проверяется главное: сменить роль или завести вторую учётку,
@@ -267,12 +282,14 @@ def test_unpaid_commission_removes_the_badge_and_the_shift(client):
     _set_tg(eid, 665001)
     _publish(client, emp_h)
 
+    paid = [make_match(eid) for _ in range(2)]
+    overdue = make_match(eid)
     db = SessionLocal()
     try:
-        for i in range(2):
-            db.add(Commission(employer_id=eid, match_id=f"ok-{i}",
+        for mid in paid:
+            db.add(Commission(employer_id=eid, match_id=mid,
                               shift_pay=3200, amount=320, status="paid"))
-        old = Commission(employer_id=eid, match_id="debt", shift_pay=3200,
+        old = Commission(employer_id=eid, match_id=overdue, shift_pay=3200,
                          amount=320, status="pending")
         old.created_at = datetime.now(UTC) - timedelta(days=30)
         db.add(old)
@@ -286,7 +303,7 @@ def test_unpaid_commission_removes_the_badge_and_the_shift(client):
     )
 
 
-def test_debt_survives_when_the_same_person_returns_as_a_worker(client):
+def test_debt_survives_when_the_same_person_returns_as_a_worker(client, make_match):
     """Уйти от долга, войдя другой ролью, нельзя: это другая учётная запись.
 
     Долг остаётся на заведении, а вход соискателем не даёт ни его смен, ни
@@ -297,9 +314,10 @@ def test_debt_survives_when_the_same_person_returns_as_a_worker(client):
     _set_tg(eid, 666001)
     _set_tg(sid, 666001)   # тот же человек
 
+    debt = make_match(eid)
     db = SessionLocal()
     try:
-        db.add(Commission(employer_id=eid, match_id="debt-1",
+        db.add(Commission(employer_id=eid, match_id=debt,
                           shift_pay=3200, amount=320, status="pending"))
         db.commit()
     finally:
@@ -344,3 +362,79 @@ def test_nobody_can_act_inside_someone_elses_shift(client):
         assert db.get(Vacancy, v["id"]).status == "active"
     finally:
         db.close()
+
+
+def test_ban_follows_the_person_and_not_the_role(client):
+    """Бан выписывают человеку, а не роли.
+
+    Вход в Telegram один, а ролей две. Без этой связки заблокированное
+    заведение просто входило соискателем тем же Telegram и продолжало
+    работать — а бан ему выписали как раз за поведение. Долг так не
+    переносится (он на заведении), а бан переносится.
+    """
+    emp_h, eid = _auth(client, "employer")
+    see_h, sid = _auth(client, "seeker")
+    _set_tg(eid, 667001)
+    _set_tg(sid, 667001)          # тот же человек, вторая роль
+
+    admin_h, _ = _auth(client, "employer")   # оператор: tg_id=0 из ADMIN_TG_IDS
+    assert client.post(f"/admin/users/{eid}/block",
+                       headers=admin_h).status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert db.get(Employer, eid).blocked, "заведение заблокировано"
+        assert db.get(User, sid).blocked, "и вторая роль того же человека"
+    finally:
+        db.close()
+
+    # Работать второй ролью больше нельзя (лента смен открыта всем, а вот
+    # личные разделы — уже нет).
+    assert client.get("/me", headers=see_h).status_code in (401, 403)
+
+    # Отмена ошибочного бана снимает блокировку тоже с обеих ролей.
+    assert client.post(f"/admin/users/{eid}/unblock",
+                       headers=admin_h).status_code == 200
+    db = SessionLocal()
+    try:
+        assert not db.get(Employer, eid).blocked
+        assert not db.get(User, sid).blocked
+    finally:
+        db.close()
+
+
+def test_ban_holds_even_if_the_second_role_did_not_exist_yet(client):
+    """Заблокированный не заводит вторую роль тем же Telegram.
+
+    Бан переносится на обе роли человека — но только на те, что уже есть.
+    Если второй роли на момент бана не было, переносить было нечего:
+    заблокированный работник открывал приложение заведением, аккаунт
+    создавался чистым, и человек продолжал работать. Бан обходился в два
+    нажатия.
+    """
+    see_h, sid = _auth(client, "seeker")
+    _set_tg(sid, 668001)
+    admin_h, _ = _auth(client, "employer")     # оператор: tg_id=0
+    assert client.post(f"/admin/users/{sid}/block",
+                       headers=admin_h).status_code == 200
+
+    # Тем же Telegram — но другой ролью, которой ещё не существует.
+    import json
+    import urllib.parse
+
+    user = urllib.parse.quote(json.dumps({"id": 668001, "first_name": "Он же"}))
+    r = client.post("/auth/telegram",
+                    json={"init_data": f"user={user}", "role": "employer"})
+    assert r.status_code == 403, "заведение тем же Telegram заводить нельзя"
+    assert "заблокирован" in r.json()["detail"].lower()
+
+    # И работником войти заново тоже нельзя.
+    r = client.post("/auth/telegram",
+                    json={"init_data": f"user={user}", "role": "seeker"})
+    assert r.status_code == 403
+
+    # А вот ДРУГОЙ Telegram — это другой человек, и его мы не знаем.
+    other = urllib.parse.quote(json.dumps({"id": 668002, "first_name": "Другой"}))
+    r = client.post("/auth/telegram",
+                    json={"init_data": f"user={other}", "role": "seeker"})
+    assert r.status_code == 200, "чужой аккаунт блокировать не за что"

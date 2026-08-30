@@ -129,7 +129,6 @@ const SEEKERS: Seeker[] = [
     selfEmployed: true,
     inn: "771298765432",
     experienceTags: ["medBook", "english", "experienced", "selfEmployed"],
-    availableSlots: [{ weekday: 1, start: 600, end: 1080 }],
     rating: 4.9,
     photoUrls: [photo("photo-1494790108377-be9c29b29330")],
     about: "Опыт в fine dining, английский B2.",
@@ -150,7 +149,6 @@ const SEEKERS: Seeker[] = [
     medBook: "expired",
     selfEmployed: false,
     experienceTags: ["experienced"],
-    availableSlots: [{ weekday: 6, start: 540, end: 1260 }],
     rating: 4.4,
     photoUrls: [photo("photo-1500648767791-00dcc994a43e")],
     about: "Холодный и горячий цех, опыт 2 года.",
@@ -167,7 +165,6 @@ const DEMO_MATCH_ID = "demo-match";
 const matches: MatchModel[] = [
   {
     id: DEMO_MATCH_ID,
-    seekerId: "me",
     employerId: "emp1",
     vacancyId: "vac1",
     status: "confirmed",
@@ -175,6 +172,7 @@ const matches: MatchModel[] = [
     confirmedByEmployer: true,
     companyName: "Кофейня «Дрова»",
     companyPhotoUrl: photo("photo-1554118811-1e0d58224f24"),
+    seekerName: "Мария",
     role: "barista",
     checkinCode: "482915",
     seekerCheckedIn: false,
@@ -188,7 +186,6 @@ const matches: MatchModel[] = [
   // кнопки «Мне не заплатили» — то есть половины экрана «Мои смены».
   {
     id: "demo-match-done",
-    seekerId: "me",
     employerId: "emp2",
     vacancyId: "vac2",
     status: "completed",
@@ -196,6 +193,7 @@ const matches: MatchModel[] = [
     confirmedByEmployer: true,
     companyName: "Бар «Полночь»",
     companyPhotoUrl: photo("photo-1514933651103-005eec06c04b"),
+    seekerName: "Мария",
     role: "bartender",
     checkinCode: null,
     seekerCheckedIn: true,
@@ -207,42 +205,47 @@ const matches: MatchModel[] = [
     shiftEnd: 4 * 60,
   },
 ];
+/** Время демо-сообщения: «столько-то минут назад» от запуска.
+ *
+ *  Демо-данные должны выглядеть как живая переписка, а не как всё написанное
+ *  в одну секунду: время в чате теперь видно.
+ */
+function minutesAgo(n: number): string {
+  return new Date(Date.now() - n * 60_000).toISOString();
+}
+
 const messagesByMatch: Record<string, Message[]> = {
   [DEMO_MATCH_ID]: [
     {
       id: "demo-m1",
-      chatId: DEMO_MATCH_ID,
       senderId: "system",
-      text: "Это мэтч! Смена: Кофейня «Дрова». Договоритесь о деталях.",
+      text: "Взаимно! Смена: Кофейня «Дрова». Договоритесь о деталях.",
       isSystem: true,
-      timestamp: new Date(Date.now() - 7200000).toISOString(),
+      createdAt: minutesAgo(173),
     },
     {
       id: "demo-m2",
-      chatId: DEMO_MATCH_ID,
       senderId: "emp1",
       text: "Здравствуйте! Готовы выйти завтра к 8:00?",
       isSystem: false,
-      timestamp: new Date(Date.now() - 7000000).toISOString(),
+      createdAt: minutesAgo(166),
     },
     {
       id: "demo-m3",
-      chatId: DEMO_MATCH_ID,
       senderId: "me",
       text: "Да, буду. Что взять с собой?",
       isSystem: false,
-      timestamp: new Date(Date.now() - 6800000).toISOString(),
+      createdAt: minutesAgo(159),
     },
     {
       id: "demo-m4",
-      chatId: DEMO_MATCH_ID,
       senderId: "system",
       text:
         "Смена подтверждена ✓ Дальше ничего нажимать не нужно: через 12 часов " +
         "после окончания она закроется сама. Если смена не состоится — нажмите " +
         "«Смена не состоялась», и комиссии не будет.",
       isSystem: true,
-      timestamp: new Date(Date.now() - 6600000).toISOString(),
+      createdAt: minutesAgo(152),
     },
   ],
 };
@@ -302,10 +305,54 @@ export function sendSwipe(
 ): Promise<SwipeResult> {
   if (direction === "dislike") return Promise.resolve({ matched: false });
   const vac = VACANCIES.find((v) => v.id === targetId);
-  if (!vac) return Promise.resolve({ matched: false });
+  if (!vac) {
+    // Заведение позвало кандидата. В демо-режиме встречный лайк считаем
+    // состоявшимся: иначе экран «Взаимно!» со стороны заведения нельзя
+    // увидеть вообще, а это половина сквозного пути продукта.
+    const seeker = SEEKERS.find((x) => x.id === targetId);
+    if (!seeker) return Promise.resolve({ matched: false });
+    // Смену подбираем по должности человека — как это делает сервер. Иначе в
+    // демо получалось «Мария выйдет на смену · Бариста», хотя на её карточке
+    // написано «Официант».
+    const mine =
+      VACANCIES.find((v) => seeker.roles.includes(v.role)) ?? VACANCIES[0];
+    const m: MatchModel = {
+      id: uid(),
+      employerId: mine.employerId,
+      vacancyId: mine.id,
+      status: "matched",
+      confirmedBySeeker: false,
+      confirmedByEmployer: false,
+      companyName: mine.companyName,
+      companyPhotoUrl: mine.companyPhotoUrl,
+      seekerName: seeker.name,
+      role: mine.role,
+      shiftDate: mine.date,
+      shiftStart: mine.startTime,
+      shiftEnd: mine.endTime,
+    };
+    matches.unshift(m);
+    messagesByMatch[m.id] = [
+      {
+        id: uid(),
+        senderId: "system",
+        text: `Взаимно! Смена: ${mine.companyName}. Договоритесь о деталях.`,
+        isSystem: true,
+        createdAt: minutesAgo(145),
+      },
+    ];
+    return Promise.resolve({
+      matched: true,
+      matchId: m.id,
+      vacancyId: mine.id,
+      role: mine.role,
+      shiftDate: mine.date,
+      shiftStart: mine.startTime,
+      shiftEnd: mine.endTime,
+    });
+  }
   const match: MatchModel = {
     id: uid(),
-    seekerId: "me",
     employerId: vac.employerId,
     vacancyId: vac.id,
     status: "matched",
@@ -313,28 +360,38 @@ export function sendSwipe(
     confirmedByEmployer: false,
     companyName: vac.companyName,
     companyPhotoUrl: vac.companyPhotoUrl,
+    seekerName: "Мария",
     role: vac.role,
+    shiftDate: vac.date,
+    shiftStart: vac.startTime,
+    shiftEnd: vac.endTime,
   };
   matches.unshift(match);
   messagesByMatch[match.id] = [
     {
       id: uid(),
-      chatId: match.id,
       senderId: "system",
-      text: `Это мэтч! Смена: ${vac.companyName}. Договоритесь о деталях.`,
+      text: `Взаимно! Смена: ${vac.companyName}. Договоритесь о деталях.`,
       isSystem: true,
-      timestamp: new Date().toISOString(),
+      createdAt: minutesAgo(138),
     },
     {
       id: uid(),
-      chatId: match.id,
       senderId: vac.employerId,
       text: "Здравствуйте! Готовы выйти на смену?",
       isSystem: false,
-      timestamp: new Date().toISOString(),
+      createdAt: minutesAgo(131),
     },
   ];
-  return Promise.resolve({ matched: true, matchId: match.id });
+  return Promise.resolve({
+    matched: true,
+    matchId: match.id,
+    vacancyId: vac.id,
+    role: vac.role,
+    shiftDate: vac.date,
+    shiftStart: vac.startTime,
+    shiftEnd: vac.endTime,
+  });
 }
 
 export function fetchMyVacancies(): Promise<Vacancy[]> {
@@ -352,11 +409,10 @@ export function fetchMessages(matchId: string): Promise<Message[]> {
 export function sendMessage(matchId: string, text: string): Promise<Message> {
   const msg: Message = {
     id: uid(),
-    chatId: matchId,
     senderId: "me",
     text,
     isSystem: false,
-    timestamp: new Date().toISOString(),
+    createdAt: minutesAgo(124),
   };
   (messagesByMatch[matchId] ??= []).push(msg);
   return Promise.resolve(msg);
@@ -370,11 +426,10 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
   m.checkinCode = "123456"; // демо-код прихода
   (messagesByMatch[matchId] ??= []).push({
     id: uid(),
-    chatId: matchId,
     senderId: "system",
     text: "Смена подтверждена ✅. Сформирован акт для самозанятого.",
     isSystem: true,
-    timestamp: new Date().toISOString(),
+    createdAt: minutesAgo(117),
   });
   return Promise.resolve({ ...m });
 }
@@ -383,11 +438,10 @@ export function confirmShift(matchId: string): Promise<MatchModel> {
 function sysMessage(matchId: string, text: string): void {
   (messagesByMatch[matchId] ??= []).push({
     id: uid(),
-    chatId: matchId,
     senderId: "system",
     text,
     isSystem: true,
-    timestamp: new Date().toISOString(),
+    createdAt: minutesAgo(110),
   });
 }
 
@@ -444,10 +498,29 @@ export function answerReschedule(
   return Promise.resolve({ ...m });
 }
 
+/** Заменить мэтч в списке НОВЫМ объектом.
+ *
+ *  Демо-данные раньше правились на месте: `m.status = ...`. TanStack Query
+ *  сравнивает пришедший ответ со своим кэшем вглубь, а это был один и тот же
+ *  объект — то есть «ничего не изменилось», и экран не перерисовывался.
+ *  Заведение жало «Подтвердить выход», карточка не менялась, и было непонятно,
+ *  сработало или нет. На живом сервере такого нет: там каждый ответ новый.
+ */
+function patchMatch(
+  matchId: string,
+  change: (m: MatchModel) => void,
+): MatchModel | null {
+  const i = matches.findIndex((x) => x.id === matchId);
+  if (i < 0) return null;
+  const next = { ...matches[i] };
+  change(next);
+  matches[i] = next;
+  return next;
+}
+
 export function markNotHeld(matchId: string, reason = ""): Promise<MatchModel> {
-  const m = matches.find((x) => x.id === matchId);
+  const m = patchMatch(matchId, (x) => { x.status = "expired"; });
   if (!m) return Promise.reject(new Error("not found"));
-  m.status = "expired";
   sysMessage(
     matchId,
     `Смена отмечена как несостоявшаяся${reason ? `. Причина: ${reason}` : ""}. ` +
@@ -457,40 +530,43 @@ export function markNotHeld(matchId: string, reason = ""): Promise<MatchModel> {
 }
 
 export function markAttendance(matchId: string, attended: boolean): Promise<void> {
-  const m = matches.find((x) => x.id === matchId);
-  if (m) {
+  patchMatch(matchId, (m) => {
     if (attended) {
       m.employerCheckedIn = true;
       if (m.seekerCheckedIn) {
         m.status = "completed";
         m.checkedIn = true;
       }
+      // Молчание = смена состоялась, а явное подтверждение её закрывает:
+      // код прихода после этого не нужен и с карточки уходит.
+      m.checkinCode = null;
     } else if (m.seekerCheckedIn) {
       m.disputed = true; // конфликт
     }
-  }
+  });
   return Promise.resolve();
 }
 export function checkinShift(
   matchId: string,
   body: { code: string },
 ): Promise<MatchModel> {
-  const m = matches.find((x) => x.id === matchId);
-  if (!m) return Promise.reject(new Error("not found"));
-  const byCode = !!body.code && body.code.trim() === (m.checkinCode ?? "123456");
+  const cur = matches.find((x) => x.id === matchId);
+  if (!cur) return Promise.reject(new Error("not found"));
+  const byCode = !!body.code && body.code.trim() === (cur.checkinCode ?? "123456");
   if (!byCode) return Promise.reject(new Error("bad checkin"));
-  m.seekerCheckedIn = true;
-  if (m.employerCheckedIn) {
-    m.status = "completed";
-    m.checkedIn = true;
-  }
-  return Promise.resolve(m);
+  const m = patchMatch(matchId, (x) => {
+    x.seekerCheckedIn = true;
+    if (x.employerCheckedIn) {
+      x.status = "completed";
+      x.checkedIn = true;
+    }
+  });
+  return Promise.resolve(m as MatchModel);
 }
 export function disputeShift(matchId: string, _note: string): Promise<MatchModel> {
   void _note;
-  const m = matches.find((x) => x.id === matchId);
+  const m = patchMatch(matchId, (x) => { x.disputed = true; });
   if (!m) return Promise.reject(new Error("not found"));
-  m.disputed = true;
   return Promise.resolve(m);
 }
 
@@ -674,7 +750,7 @@ const adminReports = [
     dispute: {
       worker: "Мария",
       venue: "Кофейня «Дрова»",
-      shiftWhen: "Бариста · 15 августа, 08:00–16:00",
+      shiftWhen: "Бариста ·\u00a015 августа, 08:00–16:00",
       checkedInByCode: true,
       venueMarkedAttended: false,
       notHeldBy: "",
@@ -704,6 +780,45 @@ export function fetchAdminReports(status = "open") {
     status === "all" ? adminReports : adminReports.filter((r) => r.status === "open");
   return Promise.resolve([...list]);
 }
+/** Демо-переписка по спору — чтобы экран оператора было на чём смотреть. */
+export function fetchDisputeChat(_matchId: string) {
+  return Promise.resolve([
+    {
+      id: "d1", who: "Система", side: "system" as const,
+      text: "Смена подтверждена ✓", at: "16.08 12:04",
+    },
+    {
+      id: "d2", who: "Кофейня «Дрова»", side: "employer" as const,
+      text: "Приходите к десяти, спросите Олю", at: "16.08 18:20",
+    },
+    {
+      id: "d3", who: "Мария", side: "seeker" as const,
+      text: "Поняла, буду", at: "16.08 18:22",
+    },
+    {
+      id: "d4", who: "Мария", side: "seeker" as const,
+      text: "Я на месте, но здесь закрыто и никто не отвечает",
+      at: "17.08 09:58",
+    },
+  ]);
+}
+
+export function fetchNotifyHealth() {
+  return Promise.resolve({
+    sent: 128, failedRow: 0, blocked: 3, lastError: "", broken: false,
+  });
+}
+
+export function fetchJobsHealth() {
+  return Promise.resolve([
+    { id: "reminders", title: "Напоминания о сменах", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+    { id: "aftershift", title: "Вопрос про вчерашние смены", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+    { id: "settle", title: "Закрытие смен и комиссия", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+    { id: "unfilled", title: "Смены без людей", lastRun: "2026-08-28", daysAgo: 1, stale: false },
+    { id: "reconcile", title: "Сверка платежей", lastRun: "2026-08-29", daysAgo: 0, stale: false },
+  ]);
+}
+
 export function fetchRevenue() {
   return Promise.resolve({
     commissionAccruedRub: 12400,
@@ -863,7 +978,7 @@ export function fetchBlocked() {
   return Promise.resolve([...adminBlocked]);
 }
 export function urgentPing(_vacancyId: string): Promise<number> {
-  return Promise.resolve(7); // демо: «пингнули 7 доступных рядом»
+  return Promise.resolve(7); // демо: «позвали 7 свободных рядом»
 }
 
 export function fetchMyWorkers() {

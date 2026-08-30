@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 import { Logo } from "@/components/Logo";
-import { IconChat, IconDoc, IconMoney, IconBolt } from "@/components/Icons";
+import { IconChat, IconDoc, IconBolt } from "@/components/Icons";
 import { currentCampaign } from "@/lib/campaign";
 
 // Пришёл по рекламной ссылке (шортс/ролик) — показываем цепляющий экран под
@@ -24,7 +24,7 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
         }}
       >
         <div className="onb-demo" aria-hidden style={{ marginBottom: 4 }}>
-          <Logo size={88} color="#fff" />
+          <Logo size={88} color="var(--on-brand)" />
           <span className="onb-demo-like">♥</span>
         </div>
         <h1 className="h1" style={{ maxWidth: 340 }}>{camp.title}</h1>
@@ -36,21 +36,15 @@ function CampaignHook({ onStart }: { onStart: () => void }) {
             fontWeight: 700, padding: "8px 14px", gap: 6,
           }}
         >
-          <IconBolt size={15} /> Оплата напрямую · без опыта берут
+          <IconBolt size={15} /> Оплата напрямую · есть смены без опыта
         </span>
-        <p className="muted" style={{ fontSize: "var(--text-xs)" }}>
+        <p className="muted small">
           Новые смены появляются каждый день
         </p>
-        <button
-          className="btn"
-          style={{ maxWidth: 360, marginTop: 8 }}
-          onClick={() => {
-            haptic("light");
-            onStart();
-          }}
-        >
+        {/* haptic здесь больше не вызываем: Button сам даёт лёгкую отдачу. */}
+        <Button style={{ maxWidth: 360, marginTop: 8 }} onClick={onStart}>
           Смотреть смены рядом
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -63,17 +57,19 @@ const SLIDES = [
     // назначает заведение, и человек, зашедший на цифру и увидевший в ленте
     // меньше, перестаёт верить всему остальному.
     title: "Смены рядом с домом — на один день",
-    text: "Кафе и рестораны у дома ищут людей на конкретную смену. Вправо — «хочу», влево — мимо. Платит заведение напрямую — способ и срок написаны в каждой карточке.",
+    text: "Вправо — «хочу», влево — мимо. Платит заведение напрямую: способ и срок — в каждой карточке.",
   },
   {
     Icon: IconChat,
-    title: "Мэтч → чат → смена",
-    text: "Понравились друг другу — открывается чат. Договорились — подтверждаете смену в один тап.",
+    title: "Совпало — открывается чат",
+    text: "Договорились — подтверждаете смену одной кнопкой.",
   },
   {
     Icon: IconDoc,
     title: "Акт для самозанятого",
-    text: "После смены формируется акт в PDF. Чек — в «Мой налог». Всё по-белому.",
+    // «Всё по-белому» звучало как юридическая гарантия от сервиса, хотя
+    // отношения с налоговой у человека свои. Говорим ровно то, что делаем.
+    text: "После смены акт в PDF ждёт в «Моих сменах». Чек — в «Мой налог».",
   },
 ];
 
@@ -111,7 +107,7 @@ export function Onboarding() {
         >
           {i === 0 || !slide.Icon ? (
             <div className="onb-demo" aria-hidden>
-              <Logo size={92} color="#fff" />
+              <Logo size={92} color="var(--on-brand)" />
               <span className="onb-demo-skip">✕</span>
               <span className="onb-demo-like">♥</span>
             </div>
@@ -122,7 +118,7 @@ export function Onboarding() {
                 height: 110,
                 borderRadius: "var(--radius-lg)",
                 background: "var(--grad-brand)",
-                color: "#fff",
+                color: "var(--on-brand)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -135,20 +131,6 @@ export function Onboarding() {
           <p className="muted" style={{ fontSize: "var(--text-base)", maxWidth: 320 }}>
             {slide.text}
           </p>
-          {i === 0 && (
-            <span
-              className="tag"
-              style={{
-                color: "var(--super-text)",
-                borderColor: "var(--super-text)",
-                fontWeight: 700,
-                padding: "8px 14px",
-                gap: 6,
-              }}
-            >
-              <IconMoney size={15} /> Оплата напрямую · без посредников
-            </span>
-          )}
         </div>
         <p className="muted" style={{ textAlign: "center", fontSize: "var(--text-xs)", marginBottom: 12 }}>
           Новые смены появляются каждый день
@@ -167,16 +149,14 @@ export function Onboarding() {
             />
           ))}
         </div>
-        <button
-          className="btn"
+        <Button
           onClick={() => {
-            haptic("light");
             if (last) nav("/role");
             else setI(i + 1);
           }}
         >
           {last ? "Начать" : "Далее"}
-        </button>
+        </Button>
       </div>
     </div>
   );

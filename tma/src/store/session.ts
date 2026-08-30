@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AppRole } from "@/types/domain";
 import { setToken } from "@/api/client";
+import { LS } from "@/lib/storage";
 
 interface SessionState {
   authenticated: boolean;
@@ -11,26 +12,26 @@ interface SessionState {
   logout: () => void;
 }
 
-const savedRole = (localStorage.getItem("ss_role") as AppRole | null) ?? null;
+const savedRole = (localStorage.getItem(LS.role) as AppRole | null) ?? null;
 
 export const useSession = create<SessionState>((set) => ({
-  authenticated: Boolean(localStorage.getItem("ss_jwt")),
+  authenticated: Boolean(localStorage.getItem(LS.jwt)),
   role: savedRole,
-  userId: localStorage.getItem("ss_uid"),
+  userId: localStorage.getItem(LS.uid),
   setAuth: (token, role, userId) => {
     setToken(token);
-    localStorage.setItem("ss_role", role);
-    localStorage.setItem("ss_uid", userId);
+    localStorage.setItem(LS.role, role);
+    localStorage.setItem(LS.uid, userId);
     set({ authenticated: true, role, userId });
   },
   setRole: (role) => {
-    localStorage.setItem("ss_role", role);
+    localStorage.setItem(LS.role, role);
     set({ role });
   },
   logout: () => {
     setToken(null);
-    localStorage.removeItem("ss_role");
-    localStorage.removeItem("ss_uid");
+    localStorage.removeItem(LS.role);
+    localStorage.removeItem(LS.uid);
     set({ authenticated: false, role: null, userId: null });
   },
 }));

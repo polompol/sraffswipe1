@@ -19,7 +19,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class TelegramAuthIn(BaseModel):
     init_data: str
     role: str = "seeker"  # seeker|employer
-    start_param: str = ""  # dev-override реф-кода (в проде берётся из initData)
+    # Реф-метка для разработки. В бою её берут из подписанных данных
+    # Telegram, а это поле игнорируется — подписать его нечем.
+    start_param: str = ""
 
 
 def _owner_exists(db, owner_id: str) -> bool:
@@ -32,6 +34,22 @@ def _owner_exists(db, owner_id: str) -> bool:
 def _owner_tg_id(db, owner_id: str) -> int | None:
     owner = db.get(User, owner_id) or db.get(Employer, owner_id)
     return owner.tg_id if owner is not None else None
+
+
+def _banned_by_tg(db, tg_id: int) -> bool:
+    """Заблокирован ли этот Telegram хоть в одной роли.
+
+    Иначе бан обходится в два нажатия: заблокированный работник открывает
+    приложение заведением, и раз такого аккаунта ещё нет — он создаётся
+    чистым. Оператор блокирует человека, а человек продолжает работать.
+    """
+    if tg_id is None:
+        return False
+    for table in (User, Employer):
+        row = db.query(table).filter(table.tg_id == tg_id).first()
+        if row is not None and row.blocked:
+            return True
+    return False
 
 
 def _apply_referral(db, referred_id: str, code: str) -> None:
@@ -114,7 +132,21 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     # Аватарка из Telegram — фото профиля сразу, без S3. Telegram кладёт
     # photo_url в initData, если у пользователя есть публичное фото.
     tg_photo = tg_user.get("photo_url") or ""
-    ref_code = body.start_param or parse_start_param(body.init_data)
+    # Метку берём ИЗ ПОДПИСАННЫХ данных Telegram. Поле в теле запроса —
+    # только для разработки: initData там подделать нечем, а в бою оно
+    # позволяло приписать себе любой источник и любого пригласившего, то есть
+    # своими руками испортить единственный ответ на вопрос «откуда люди».
+    ref_code = parse_start_param(body.init_data)
+    if not ref_code and settings.allow_insecure_telegram_auth:
+        ref_code = body.start_param
+
+    # Бан выписывают ЧЕЛОВЕКУ, а не роли. Вход в Telegram один, ролей две, и
+    # блокировка второй роли переносится оператором сразу. Но если второй роли
+    # на момент бана ещё НЕ БЫЛО, переносить было нечего: заблокированный
+    # работник заводил заведение тем же Telegram и спокойно входил. Поэтому
+    # смотрим не только свою таблицу, но и соседнюю — по тому же tg_id.
+    if _banned_by_tg(db, tg_id):
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
 
     if body.role == "employer":
         emp = db.query(Employer).filter(Employer.tg_id == tg_id).first()

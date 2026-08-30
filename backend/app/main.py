@@ -13,6 +13,7 @@ from .db import init_db
 from .routers import (
     acts,
     admin,
+    admin_accounts,
     analytics,
     auth,
     billing,
@@ -175,6 +176,8 @@ app.include_router(employer.router)
 app.include_router(uploads.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
+# Вторая половина админки: люди, деньги, аккаунты. Префикс тот же.
+app.include_router(admin_accounts.router)
 app.include_router(favorites.router)
 app.include_router(meta.router)
 

@@ -8,10 +8,11 @@ describe("Button", () => {
   // отрисованные кнопки накапливаются и getByRole находит несколько.
   afterEach(cleanup);
 
-  it("внешний style ДОПОЛНЯЕТ размеры, а не затирает их", () => {
-    // Регрессия: раньше внешний style шёл через {...rest} после внутреннего и
-    // затирал minHeight — кнопка отправки в чате схлопывалась по высоте иконки
-    // и теряла минимальную зону нажатия.
+  it("размер задаётся классом, и внешний style его не уносит", () => {
+    // Регрессия: раньше высота писалась прямо в разметке, и внешний style шёл
+    // после неё — кнопка отправки в чате схлопывалась по высоте иконки и
+    // теряла минимальную зону нажатия. Теперь высота живёт в CSS-классе
+    // (--btn-h-* в theme.css), и потерять её при передаче стилей нельзя.
     render(
       <Button style={{ width: 52, padding: 0 }}>
         <span>ok</span>
@@ -20,7 +21,16 @@ describe("Button", () => {
     const btn = screen.getByRole("button");
     expect(btn.style.width).toBe("52px"); // внешнее применилось
     expect(btn.style.padding).toBe("0px");
-    expect(btn.style.minHeight).toBe("54px"); // внутреннее НЕ потерялось
+    expect(btn.className).toContain("ui-btn--lg"); // размер на месте
+    expect(btn.style.minHeight).toBe(""); // и не продублирован в разметке
+  });
+
+  it("каждый размер ставит свой класс", () => {
+    render(<Button size="sm">маленькая</Button>);
+    expect(screen.getByRole("button").className).toContain("ui-btn--sm");
+    cleanup();
+    render(<Button size="md">средняя</Button>);
+    expect(screen.getByRole("button").className).toContain("ui-btn--md");
   });
 
   it("блокирует повторное нажатие, пока async-обработчик не завершился", async () => {

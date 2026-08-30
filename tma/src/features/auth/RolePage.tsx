@@ -13,6 +13,7 @@ import { apiError } from "@/lib/errors";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
 import { OFFER_URL, PRIVACY_URL } from "@/lib/legal";
 import type { ComponentType } from "react";
+import { LS } from "@/lib/storage";
 
 
 export function RolePage() {
@@ -20,7 +21,7 @@ export function RolePage() {
   const setAuth = useSession((s) => s.setAuth);
   const [busy, setBusy] = useState<AppRole | null>(null);
   const [consent, setConsent] = useState(
-    localStorage.getItem("ss_consent") === "1",
+    localStorage.getItem(LS.consent) === "1",
   );
 
   async function choose(role: AppRole) {
@@ -39,7 +40,7 @@ export function RolePage() {
       // возвращалось как было. В метро это выглядит как «приложение не
       // работает», и на этом знакомство заканчивалось.
       haptic("error");
-      toast(apiError(e, "Не удалось войти — проверьте интернет"), "error");
+      toast(apiError(e, "Не удалось войти. Попробуйте ещё раз через минуту"), "error");
       setBusy(null);
     }
   }
@@ -47,10 +48,10 @@ export function RolePage() {
   function acceptConsent(v: boolean) {
     setConsent(v);
     if (v) {
-      localStorage.setItem("ss_consent", "1");
+      localStorage.setItem(LS.consent, "1");
       track("consent");
     } else {
-      localStorage.removeItem("ss_consent");
+      localStorage.removeItem(LS.consent);
     }
   }
 
@@ -111,7 +112,7 @@ export function RolePage() {
             onChange={(e) => acceptConsent(e.target.checked)}
             style={{ marginTop: 3 }}
           />
-          <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+          <span className="muted small">
             Мне есть 18 лет. Принимаю{" "}
             {/* Через openLink, а не target="_blank": внутри Telegram новое
                 окно молча не открывается. Человек ставил галочку «принимаю
@@ -128,7 +129,7 @@ export function RolePage() {
               href={PRIVACY_URL}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExternal(PRIVACY_URL); }}
             >
-              политику обработки ПДн (152-ФЗ)
+              политику обработки персональных данных
             </a>{" "}
             и даю согласие на обработку персональных данных.
           </span>
@@ -138,7 +139,7 @@ export function RolePage() {
             тап не срабатывает. Теперь причина написана явно. */}
         {!consent && (
           <p className="muted" style={{ marginBottom: 0 }}>
-            Отметьте согласие выше, чтобы выбрать роль
+            Поставьте галочку выше — и выбирайте
           </p>
         )}
 
@@ -187,7 +188,7 @@ function RoleCard(props: {
           height: 56,
           borderRadius: 16,
           background: props.grad,
-          color: "#fff",
+          color: "var(--on-brand)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

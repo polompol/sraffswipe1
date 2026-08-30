@@ -1,10 +1,12 @@
-import { api, baseURL, getToken, postForm } from "./client";
+import { api, baseURL, postForm } from "./client";
 import * as mock from "./mock";
 import type {
   AppRole,
   MatchModel,
   Message,
+  Reliability,
   Seeker,
+  StaffRole,
   SwipeDirection,
   Vacancy,
 } from "@/types/domain";
@@ -75,20 +77,47 @@ export async function fetchInvites(): Promise<Vacancy[]> {
 export interface SwipeResult {
   matched: boolean;
   matchId?: string;
+  /** На какую смену случилось совпадение. Соискатель это и так знает — он
+   *  смахнул конкретную карточку; заведение листает людей, и смену за него
+   *  выбирает сервер, поэтому без этих полей экран «Взаимно!» у заведения не
+   *  мог сказать, на какой день и час оно только что позвало человека. */
+  vacancyId?: string;
+  role?: StaffRole;
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
 }
 
+/**
+ * Свайп. `vacancyId` — на какую смену заведение зовёт человека.
+ *
+ * Без него сервер выбирал смену сам, из тех, что человек лайкнул. На экране
+ * «Кто откликнулся» под каждым написано, на какую именно смену он откликнулся,
+ * — и мэтч должен быть ровно по ней, а не по соседней с другим днём и другой
+ * ставкой.
+ */
 export async function sendSwipe(
   targetId: string,
   targetType: "vacancy" | "user",
   direction: SwipeDirection,
+  vacancyId?: string,
 ): Promise<SwipeResult> {
   if (!USE_BACKEND) return mock.sendSwipe(targetId, direction);
   const { data } = await api.post<SwipeResult>("/swipes", {
     target_id: targetId,
     target_type: targetType,
     direction,
+    ...(vacancyId ? { vacancy_id: vacancyId } : {}),
   });
-  return { matched: Boolean(data.matched), matchId: data.matchId ?? undefined };
+  return {
+    matched: Boolean(data.matched),
+    matchId: data.matchId ?? undefined,
+    vacancyId: data.vacancyId ?? undefined,
+    role: data.role || undefined,
+    shiftDate: data.shiftDate || undefined,
+    shiftStart: data.shiftStart,
+    shiftEnd: data.shiftEnd,
+  };
 }
 
 export async function fetchMatches(): Promise<MatchModel[]> {
@@ -286,10 +315,6 @@ export async function disputeShift(
   return data;
 }
 
-export interface InvoiceLink {
-  link: string;
-}
-
 
 export interface Me {
   id: string;
@@ -378,14 +403,12 @@ export async function urgentPing(vacancyId: string): Promise<number> {
   return data.pinged;
 }
 
-export interface Worker {
+/** Работник, с которым заведение уже работало. */
+export interface Worker extends Reliability {
   id: string;
   name: string;
   rating: number;
   availableToday: boolean;
-  shiftsTotal: number;
-  shiftsAttended: number;
-  employersTotal?: number;
 }
 
 /** Работники, уже выходившие на смены заведения — чтобы позвать снова. */
@@ -412,7 +435,7 @@ export async function inviteWorker(userId: string): Promise<boolean> {
   return data.notified !== false;
 }
 
-export interface Applicant {
+export interface Applicant extends Reliability {
   id: string;
   name: string;
   age?: number | null;
@@ -423,9 +446,6 @@ export interface Applicant {
   photoUrls: string[];
   about: string;
   availableToday: boolean;
-  shiftsTotal: number;
-  shiftsAttended: number;
-  employersTotal?: number;
   /** Заведение уже отказало — но человек остаётся в списке: передумать можно. */
   declined?: boolean;
   vacancyId: string;
@@ -587,6 +607,67 @@ export interface AdminRevenue {
 export async function fetchAdminOverview(): Promise<AdminOverview> {
   if (!USE_BACKEND) return mock.fetchAdminOverview();
   const { data } = await api.get<AdminOverview>("/admin/overview");
+  return data;
+}
+
+/** Одно сообщение переписки — так, как его читает оператор. */
+export interface DisputeMessage {
+  id: string;
+  who: string;    // «Мария», «Кофейня «Дрова»», «Система»
+  side: "seeker" | "employer" | "system";
+  text: string;
+  at: string;     // «16.08 23:40» по времени города смены
+}
+
+/** Переписка по спорной смене.
+ *
+ *  Открывается только там, где на неё пожаловались или идёт спор: это личная
+ *  переписка двух людей, и читать её просто так оператор не должен. Отказ
+ *  приходит как ошибка, а не пустым списком.
+ */
+export async function fetchDisputeChat(matchId: string): Promise<DisputeMessage[]> {
+  if (!USE_BACKEND) return mock.fetchDisputeChat(matchId);
+  const { data } = await api.get<DisputeMessage[]>(
+    `/admin/matches/${matchId}/messages`,
+  );
+  return data;
+}
+
+/** Доходят ли уведомления людям. */
+export interface NotifyHealth {
+  sent: number;
+  failedRow: number;
+  blocked: number;
+  lastError: string;
+  broken: boolean;
+}
+
+/** На сообщениях бота держится вся эскалация — если они не доходят, человек
+ *  не узнает, что смену записали в несостоявшиеся. */
+export async function fetchNotifyHealth(): Promise<NotifyHealth> {
+  if (!USE_BACKEND) return mock.fetchNotifyHealth();
+  const { data } = await api.get<NotifyHealth>("/admin/notifications");
+  return data;
+}
+
+/** Состояние ежедневной задачи планировщика. */
+export interface JobHealth {
+  id: string;
+  title: string;
+  lastRun: string;
+  daysAgo: number;   // 0 — сегодня; -1 — не отрабатывала ни разу
+  stale: boolean;    // пропущена — надо вмешаться
+}
+
+/** Жив ли планировщик.
+ *
+ *  Самая тихая поломка сервиса: процесс перестал запускаться, а на вид не
+ *  сломалось ничего — приложение работает, смены публикуются. Не закрываются
+ *  только смены, а значит не идёт комиссия.
+ */
+export async function fetchJobsHealth(): Promise<JobHealth[]> {
+  if (!USE_BACKEND) return mock.fetchJobsHealth();
+  const { data } = await api.get<JobHealth[]>("/admin/jobs");
   return data;
 }
 
@@ -889,16 +970,32 @@ export async function adminEraseAccount(
   return data.removed;
 }
 
+/** Короткий токен на скачивание документа — живёт пять минут. */
+async function docToken(): Promise<string> {
+  const { data } = await api.post<{ token: string }>("/auth/doc-token", {});
+  return data.token;
+}
+
 /**
  * Ссылка на счёт или акт от сервиса заведению (PDF).
  *
  * Ресторану-юрлицу без этих двух документов не оплатить по безналу и не
  * поставить расход. Токен идёт в адресе: PDF открывает браузер по прямой
  * ссылке, заголовки он не передаёт.
+ *
+ * Поэтому токен здесь ОТДЕЛЬНЫЙ и короткий. Раньше в адрес клался обычный —
+ * тот, что живёт днями и открывает всё. Адрес оседает в истории браузера и в
+ * логах сервера: одной строки из лога хватало, чтобы войти в чужой аккаунт.
  */
-export function billingDocUrl(kind: "invoice" | "act"): string {
-  const token = getToken() ?? "";
+export async function billingDocUrl(kind: "invoice" | "act"): Promise<string> {
+  const token = await docToken();
   return `${baseURL}/billing/${kind}.pdf?token=${encodeURIComponent(token)}`;
+}
+
+/** Ссылка на акт по конкретной смене — тем же коротким токеном. */
+export async function shiftActUrl(matchId: string): Promise<string> {
+  const token = await docToken();
+  return `${baseURL}/matches/${matchId}/act.pdf?token=${encodeURIComponent(token)}`;
 }
 
 /** Оператор зачисляет аванс на баланс заведения (принял СБП/счёт). */

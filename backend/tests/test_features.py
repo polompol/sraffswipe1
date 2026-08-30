@@ -323,22 +323,24 @@ def test_sms_code_is_six_digits(client):
         assert len(c) == 6 and c.isdigit()
 
 
-def test_blocked_user_cannot_pull_act(client):
+def test_blocked_user_cannot_pull_act(client, doc_token):
     from app.db import SessionLocal
     from app.models import Employer
 
     emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
     _close_shift(client, emp_token, seeker_token, match_id)
-    # Токен работодателя валиден, акт доступен...
-    ok = client.get(f"/matches/{match_id}/act.pdf?token={emp_token}")
+    # Ссылку получаем ДО бана — иначе проверялось бы только то, что
+    # заблокированному не выдают новый токен. Здесь важнее другое: уже
+    # выданная ссылка после бана перестаёт работать.
+    link = doc_token(client, emp_token)
+    ok = client.get(f"/matches/{match_id}/act.pdf?token={link}")
     assert ok.status_code == 200
-    # ...но после бана тот же query-токен больше не тянет акт с ИНН.
     db = SessionLocal()
     db.get(Employer, emp_id).blocked = True
     db.commit()
     db.close()
-    banned = client.get(f"/matches/{match_id}/act.pdf?token={emp_token}")
-    assert banned.status_code == 403
+    banned = client.get(f"/matches/{match_id}/act.pdf?token={link}")
+    assert banned.status_code == 403, "акт с ИНН обеих сторон забаненному не отдаём"
 
 
 def _age(match_id: str, days: int = 0) -> None:

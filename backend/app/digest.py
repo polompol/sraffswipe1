@@ -14,6 +14,8 @@ from .cities import normalize
 from .models import Employer, Match, Swipe, User, Vacancy
 from .notify import notify_owner
 from .roles import date_ru, role_ru, time_ru
+from .rubles import plural
+from .shift_rules import accrue_commission, sys_message
 from .timeutil import local_today, shift_end_utc
 
 _log = logging.getLogger("staffswipe")
@@ -103,9 +105,18 @@ def send_digest(db: Session, limit: int = 3) -> int:
 
 
 def build_reminders(db: Session) -> list[tuple[str, str, str]]:
-    """Напоминания о сменах на сегодня: (match_id, user_id, текст).
-    Берём только смены, по которым работник ЕЩЁ НЕ отметился, и по которым
-    сегодня ещё не напоминали."""
+    """Напоминания о сменах на сегодня: (match_id, кому, текст).
+
+    Берём смены, по которым работник ЕЩЁ НЕ отметился и по которым сегодня
+    ещё не напоминали.
+
+    Неподтверждённые смены раньше не напоминались вовсе — а это как раз тот
+    случай, когда напомнить важнее всего. Стороны договорились в чате, кнопку
+    «Подтвердить» никто не нажал, и смена остаётся ничьей: кода прихода нет,
+    акта не будет, спор открыть не по чему, и заведение за неё не платит.
+    Честные люди попадают сюда по забывчивости, поэтому пишем ОБОИМ и прямо
+    говорим, чего не хватает.
+    """
     today = _today()
     # В базе берём с запасом в сутки в обе стороны, а «сегодня» сверяем по
     # городу каждой смены: во Владивостоке новый день наступает на семь часов
@@ -122,7 +133,7 @@ def build_reminders(db: Session) -> list[tuple[str, str, str]]:
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
-            Match.status == "confirmed",
+            Match.status.in_(("confirmed", "matched")),
             Match.seeker_checked_in.is_(False),
             Vacancy.date.in_(span),
         )
@@ -135,14 +146,30 @@ def build_reminders(db: Session) -> list[tuple[str, str, str]]:
         if m.reminded_on == v.date:
             continue
         where = v.address or v.city or ""
-        text = (
-            f"Сегодня смена в {_fmt_time(v.start_time)}"
-            + (f", {where}" if where else "")
-            + ".\n\nКогда придёте — попросите у администратора код и введите "
-            "его в приложении. Это не обязательно, смена закроется и так, но "
-            "код — ваше доказательство, что вы были на месте."
+        when = f"Сегодня смена в {_fmt_time(v.start_time)}" + (
+            f", {where}" if where else ""
         )
-        result.append((m.id, m.user_id, text))
+        if m.status == "confirmed":
+            result.append((m.id, m.user_id, (
+                when
+                + ".\n\nКогда придёте — попросите у администратора код и "
+                "введите его в приложении. Это не обязательно, смена закроется "
+                "и так, но код — ваше доказательство, что вы были на месте."
+            )))
+            continue
+        # Смена сегодня, а подтверждения нет — пишем обеим сторонам.
+        result.append((m.id, m.user_id, (
+            when + ", но заведение ещё не подтвердило её."
+            "\n\nПока смена не подтверждена, у неё нет кода прихода и не будет "
+            "акта. Напишите в чат смены и попросите подтвердить — это одна "
+            "кнопка."
+        )))
+        result.append((m.id, m.employer_id, (
+            f"Смена сегодня в {_fmt_time(v.start_time)} не подтверждена, "
+            "а человек её ждёт.\n\nПодтвердите её в приложении — тогда "
+            "появится код прихода и акт. Если смена не нужна, скажите об этом "
+            "в чате, чтобы человек не приехал зря."
+        )))
     return result
 
 
@@ -155,7 +182,7 @@ def send_reminders(db: Session) -> int:
     reminders = build_reminders(db)
     for match_id, user_id, text in reminders:
         notify_owner(db, user_id, text,
-                     open_app="Я на смене — отметиться", screen="shifts")
+                     open_app="Открыть смену", screen="shifts")
         m = db.get(Match, match_id)
         if m is not None:
             v = db.get(Vacancy, m.vacancy_id)
@@ -231,24 +258,28 @@ def build_unfilled_alerts(db: Session) -> list[tuple[str, str, str]]:
         if got >= need:
             continue
         left = need - got
-        who = "человека" if left == 1 else "человек"
+        # Формы были перепутаны: при двух-четырёх выходило «не хватает
+        # 2 человек» — читается как опечатка.
+        who = plural(left, "человека", "человека", "человек")
         text = (
             f"Завтра смена в {_fmt_time(v.start_time)}"
             + (f", {v.address}" if v.address else "")
             + f" — не хватает {left} {who}.\n\n"
         )
         if waiting:
-            ppl = "человек" if waiting == 1 else "человека"
+            # Творительный падеж: «с 1 человеком», «с 2 людьми».
+            ppl = plural(waiting, "человеком", "людьми", "людьми")
             text += (
-                f"С {waiting} {ppl} вы уже договорились, но смена ещё не "
-                "подтверждена с обеих сторон — напомните им в чате и нажмите "
+                f"С {waiting} {ppl} вы уже договорились, но смену пока "
+                "подтвердила только одна сторона — напомните в чате и нажмите "
                 "«Подтвердить смену». Без этого место считается занятым, а "
                 "выйти человек не обязан.\n\n"
             )
         text += (
-            "Что помогает за день до смены: поднять ставку, нажать «Срочно» "
-            "(разошлём тем, кто готов выйти) или позвать своих через "
-            "«Мои работники»."
+            # Кнопки «Срочно» в приложении больше нет — она называется
+            # «Позвать людей на эту смену». Звать нажать то, чего нет, нельзя.
+            "Что помогает за день до смены: поднять ставку, нажать «Позвать "
+            "людей на эту смену» или позвать своих через «Мои работники»."
         )
         out.append((v.id, v.employer_id, text))
     return out
@@ -297,7 +328,9 @@ def build_aftershift_asks(db: Session) -> list[tuple[str, str]]:
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
-            Match.status == "confirmed",
+            # И по сменам, которые подтвердил только работник: за них тоже
+            # начисляется комиссия, значит спросить надо тем более.
+            Match.status.in_(("confirmed", "matched")),
             Match.disputed.is_(False),
             Match.settle_notified_on != today,
         )
@@ -310,13 +343,32 @@ def build_aftershift_asks(db: Session) -> list[tuple[str, str]]:
                 continue
         except ValueError:
             continue
+        # Смену, которую подтвердил только работник, тоже засчитаем — но
+        # заведение, которое так и не нажало «Подтвердить», об этом может не
+        # догадываться. Говорим прямо, а не общими словами.
+        if m.status == "matched":
+            if not m.confirmed_by_seeker:
+                continue
+            out.append((
+                m.id,
+                f"Смена {date_ru(v.date)} в {_fmt_time(v.start_time)} "
+                "завершилась. Вы её не подтверждали, но работник подтвердил "
+                "выход — значит, засчитаем её как состоявшуюся и начислим "
+                "комиссию.\n\n"
+                "Если смены не было — откройте её, «Что-то пошло не так» → "
+                "«Смена не состоялась», и комиссии не будет.",
+            ))
+            continue
         out.append((
             m.id,
             f"Смена {date_ru(v.date)} в {_fmt_time(v.start_time)} завершилась.\n\n"
             "Если всё прошло как договаривались — делать ничего не нужно, "
             "смена закроется сама.\n"
-            "Если смена не состоялась — откройте её и нажмите "
-            "«Смена не состоялась», иначе она будет засчитана.",
+            # Путь к кнопке называем целиком: сама по себе «Смена не
+            # состоялась» лежит внутри меню «Что-то пошло не так», и человек
+            # искал её на экране, где её нет.
+            "Если смены не было — откройте её, «Что-то пошло не так» → "
+            "«Смена не состоялась». Иначе засчитаем её как состоявшуюся.",
         ))
     return out
 
@@ -358,8 +410,6 @@ def settle_shifts(db: Session) -> int:
     Не трогаем: спорные смены (их решает оператор) и те, по которым уже
     заявили, что смены не было.
     """
-    from .routers.matches import _accrue_commission, _sys
-
     now = datetime.now(UTC)
     deadline = now - timedelta(hours=SETTLE_AFTER_HOURS)
     too_old = now - timedelta(days=SETTLE_MAX_AGE_DAYS)
@@ -367,7 +417,10 @@ def settle_shifts(db: Session) -> int:
         db.query(Match, Vacancy)
         .join(Vacancy, Match.vacancy_id == Vacancy.id)
         .filter(
-            Match.status == "confirmed",
+            # «matched» здесь не случайно, см. ниже про подтверждение одной
+            # стороной: без него заведение не платило, просто не нажимая
+            # кнопку, — а это та же дыра, ради которой всё правило и писалось.
+            Match.status.in_(("confirmed", "matched")),
             Match.disputed.is_(False),
             Match.not_held_by == "",
         )
@@ -381,19 +434,41 @@ def settle_shifts(db: Session) -> int:
             continue
         if ends > deadline:
             continue
+        # СМЕНА, КОТОРУЮ ПОДТВЕРДИЛ РАБОТНИК, МОЛЧАНИЕМ НЕ ОТМЕНИТЬ.
+        #
+        # Правило «молчание = смена состоялась» действовало только на
+        # подтверждённые обеими сторонами смены — и ровно на шаг раньше
+        # оставалась та самая дыра, ради которой оно писалось: заведение не
+        # нажимает «Подтвердить», расчёт такую смену не берёт, комиссии нет
+        # никогда. Сторона, которая должна деньги, снова выигрывала от
+        # бездействия.
+        #
+        # Заведение уже выбрало этого человека на эту смену (взаимный лайк по
+        # конкретной вакансии), а работник сказал «выхожу». Молчание третьим
+        # ответом быть не может. Выйти из смены заведение может двумя
+        # кнопками, и обе уже есть: отменить до смены или «Смена не
+        # состоялась» после. Плюс утром его об этом спрашивают отдельно.
+        #
+        # А смену, которую не подтвердил никто, просто закрываем без денег и
+        # без неявки: договорённости не было, и висеть вечно ей незачем.
+        if m.status == "matched" and not m.confirmed_by_seeker:
+            m.status = "expired"
+            sys_message(db, m.id,
+                 "Смена закрыта: её не подтвердил никто. Комиссии нет.")
+            continue
         if ends < too_old:
             # Слишком старая: счёт задним числом за то, чего никто уже не
             # помнит, — верный способ поссориться с заведением. Закрываем без
             # комиссии, чтобы смена не висела вечно и не держала место.
             m.status = "expired"
-            _sys(db, m.id,
+            sys_message(db, m.id,
                  "Смена закрыта без комиссии: с её окончания прошло слишком "
                  "много времени, чтобы разбираться автоматически.")
             continue
         m.status = "completed"
         m.no_show = False
-        _accrue_commission(db, m)
-        _sys(db, m.id, "Смена закрыта ✓ Возражений не поступило.")
+        accrue_commission(db, m)
+        sys_message(db, m.id, "Смена закрыта ✓ Возражений не поступило.")
         # Коммит на КАЖДУЮ смену, и только потом уведомления. Раньше был один
         # коммит на весь прогон, а сообщения улетали сразу: любой конфликт при
         # записи (например гонка с отметкой кодом, где на комиссию стоит
@@ -408,7 +483,7 @@ def settle_shifts(db: Session) -> int:
             continue
         notify_owner(
             db, m.employer_id,
-            "Смена закрыта — возражений не было. Комиссия начислена.",
+            "Смена закрыта: возражений не было. Комиссия — 10% от смены.",
         )
         notify_owner(
             db, m.user_id,

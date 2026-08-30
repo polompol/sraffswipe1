@@ -2,6 +2,10 @@ import { defineConfig } from "vite";
 import pkg from "./package.json";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
+// Проверка боевой сборки лежит отдельным файлом, чтобы её покрывал тест.
+import { assertNotDemoBuild } from "./src/lib/buildGuard";
+
+assertNotDemoBuild(process.env);
 
 // https://vitejs.dev/config/
 export default defineConfig({

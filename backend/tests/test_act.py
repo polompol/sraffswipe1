@@ -127,12 +127,13 @@ def _confirmed_match(client):
     return mid, seek["access_token"], shift_date
 
 
-def test_act_contains_calculation_and_signatures(client):
+def test_act_contains_calculation_and_signatures(client, doc_token):
     """В акте видно, откуда взялась сумма, и есть где расписаться."""
     pypdf = pytest.importorskip("pypdf")
     mid, token, shift_date = _confirmed_match(client)
 
-    r = client.get(f"/matches/{mid}/act.pdf", params={"token": token})
+    r = client.get(f"/matches/{mid}/act.pdf",
+                   params={"token": doc_token(client, token)})
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
 
@@ -151,7 +152,7 @@ def test_act_contains_calculation_and_signatures(client):
     assert date.fromisoformat(shift_date).strftime("%d.%m.%Y") in text
 
 
-def test_act_shows_the_hours_that_were_actually_worked(client):
+def test_act_shows_the_hours_that_were_actually_worked(client, doc_token):
     """Уточнили часы — акт обязан показать их, а не план.
 
     Акт считал по расписанию смены. Если заведение отметило, что человек ушёл
@@ -174,7 +175,8 @@ def test_act_shows_the_hours_that_were_actually_worked(client):
     finally:
         db.close()
 
-    r = client.get(f"/matches/{mid}/act.pdf", params={"token": token})
+    r = client.get(f"/matches/{mid}/act.pdf",
+                   params={"token": doc_token(client, token)})
     assert r.status_code == 200, r.text
     text = " ".join(
         pypdf.PdfReader(io.BytesIO(r.content)).pages[0].extract_text().split()

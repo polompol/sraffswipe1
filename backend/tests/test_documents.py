@@ -86,13 +86,13 @@ def _employer_with_debt(client):
     return emp["access_token"], emp["user_id"]
 
 
-def test_invoice_has_everything_a_bookkeeper_needs(client, requisites):
+def test_invoice_has_everything_a_bookkeeper_needs(client, requisites, doc_token):
     """В счёте есть реквизиты получателя, плательщик, сумма и прописью."""
     pypdf = pytest.importorskip("pypdf")
     import io
 
     token, _ = _employer_with_debt(client)
-    r = client.get("/billing/invoice.pdf", params={"token": token})
+    r = client.get("/billing/invoice.pdf", params={"token": doc_token(client, token)})
     assert r.status_code == 200, r.text
     assert r.headers["content-type"] == "application/pdf"
 
@@ -112,12 +112,12 @@ def test_invoice_has_everything_a_bookkeeper_needs(client, requisites):
     assert "НДС не облагается" in text
 
 
-def test_act_is_issued_for_the_same_shifts(client, requisites):
+def test_act_is_issued_for_the_same_shifts(client, requisites, doc_token):
     pypdf = pytest.importorskip("pypdf")
     import io
 
     token, _ = _employer_with_debt(client)
-    r = client.get("/billing/act.pdf", params={"token": token})
+    r = client.get("/billing/act.pdf", params={"token": doc_token(client, token)})
     assert r.status_code == 200
     text = " ".join(
         pypdf.PdfReader(io.BytesIO(r.content)).pages[0].extract_text().split()
@@ -127,7 +127,7 @@ def test_act_is_issued_for_the_same_shifts(client, requisites):
     assert "280" in text
 
 
-def test_document_number_is_stable(client, requisites):
+def test_document_number_is_stable(client, requisites, doc_token):
     """Повторное скачивание даёт ТОТ ЖЕ номер: иначе бухгалтерия получит два
     разных документа на одну оплату."""
     import re
@@ -138,45 +138,51 @@ def test_document_number_is_stable(client, requisites):
     token, _ = _employer_with_debt(client)
 
     def number():
-        r = client.get("/billing/invoice.pdf", params={"token": token})
+        r = client.get("/billing/invoice.pdf",
+                       params={"token": doc_token(client, token)})
         text = pypdf.PdfReader(io.BytesIO(r.content)).pages[0].extract_text()
         return re.search(r"№ (\d+)", text).group(1)
 
     assert number() == number()
 
 
-def test_no_documents_without_requisites(client):
+def test_no_documents_without_requisites(client, doc_token):
     """Без реквизитов документ не выдаём: бумага с прочерками бесполезна."""
     token, _ = _employer_with_debt(client)
-    r = client.get("/billing/invoice.pdf", params={"token": token})
+    r = client.get("/billing/invoice.pdf", params={"token": doc_token(client, token)})
     assert r.status_code == 503
     assert "Реквизиты" in r.json()["detail"]
 
 
-def test_no_invoice_without_debt(client, requisites):
+def test_no_invoice_without_debt(client, requisites, doc_token):
     """Нечего выставлять — честный 404, а не пустой документ."""
     emp = client.post("/auth/telegram",
                       json={"init_data": "", "role": "employer"}).json()
     r = client.get("/billing/invoice.pdf",
-                   params={"token": emp["access_token"]})
+                   params={"token": doc_token(client, emp["access_token"])})
     assert r.status_code == 404
 
 
-def test_seeker_cannot_get_an_invoice(client, requisites):
+def test_seeker_cannot_get_an_invoice(client, requisites, doc_token):
     seek = client.post("/auth/telegram",
                        json={"init_data": "", "role": "seeker"}).json()
     r = client.get("/billing/invoice.pdf",
-                   params={"token": seek["access_token"]})
+                   params={"token": doc_token(client, seek["access_token"])})
     assert r.status_code == 403
 
 
-def test_invoice_requires_a_token(client, requisites):
+def test_invoice_requires_a_token(client, requisites, doc_token):
     assert client.get("/billing/invoice.pdf").status_code == 401
     assert client.get("/billing/invoice.pdf",
                       params={"token": "мусор"}).status_code == 401
+    # И обычный, «полный» токен теперь тоже не годится: документ открывает
+    # только короткий (POST /auth/doc-token).
+    full, _eid = _employer_with_debt(client)
+    assert client.get("/billing/invoice.pdf",
+                      params={"token": full}).status_code == 401
 
 
-def test_act_is_issued_for_paid_commission_too(client, requisites):
+def test_act_is_issued_for_paid_commission_too(client, requisites, doc_token):
     """Заведение с балансом получает акт.
 
     Комиссия у такого заведения списывается сразу и помечается оплаченной.
@@ -198,21 +204,64 @@ def test_act_is_issued_for_paid_commission_too(client, requisites):
 
     # Счёт выставлять не за что — всё оплачено.
     assert client.get("/billing/invoice.pdf",
-                      params={"token": token}).status_code == 404
+                      params={"token": doc_token(client, token)}).status_code == 404
     # А акт обязан быть.
-    r = client.get("/billing/act.pdf", params={"token": token})
+    r = client.get("/billing/act.pdf", params={"token": doc_token(client, token)})
     assert r.status_code == 200, "акт не выдан заведению, которое заплатило"
 
 
-def test_act_period_must_be_valid(client, requisites):
+def test_act_period_must_be_valid(client, requisites, doc_token):
     token, _ = _employer_with_debt(client)
     r = client.get("/billing/act.pdf",
-                   params={"token": token, "period": "август"})
+                   params={"token": doc_token(client, token), "period": "август"})
     assert r.status_code == 400
 
 
-def test_act_for_a_month_without_shifts_is_404(client, requisites):
+def test_act_for_a_month_without_shifts_is_404(client, requisites, doc_token):
     token, _ = _employer_with_debt(client)
     r = client.get("/billing/act.pdf",
-                   params={"token": token, "period": "2020-01"})
+                   params={"token": doc_token(client, token), "period": "2020-01"})
     assert r.status_code == 404
+
+
+def test_document_link_is_short_lived_and_useless_elsewhere(
+    client, requisites, doc_token,
+):
+    """Токен из адреса документа не открывает больше ничего.
+
+    PDF браузер тянет по прямой ссылке и заголовков не шлёт, поэтому токен
+    приходится класть в адрес — а адрес оседает в истории браузера и в логах
+    сервера. Раньше туда клался обычный токен: он живёт днями и открывает всё,
+    и одной строки из лога хватало, чтобы войти в чужой аккаунт.
+
+    Теперь для документа выдаётся отдельный токен. Проверяем оба свойства:
+    документ он открывает, а обычные ручки — нет.
+    """
+    token, _eid = _employer_with_debt(client)
+    short = doc_token(client, token)
+    assert short != token, "для документа выдаётся отдельный токен"
+
+    # Документ — открывает.
+    assert client.get(
+        "/billing/invoice.pdf", params={"token": short}
+    ).status_code == 200
+
+    # А обычные ручки — нет, даже свои собственные.
+    head = {"Authorization": f"Bearer {short}"}
+    assert client.get("/me", headers=head).status_code == 401
+    assert client.get("/matches", headers=head).status_code == 401
+    assert client.post("/auth/doc-token", headers=head).status_code == 401, (
+        "и новый токен по нему не выписать — иначе срок жизни продлевался бы "
+        "бесконечно"
+    )
+
+
+def test_full_token_no_longer_opens_documents(client, requisites, doc_token):
+    """Обычный токен в адресе документа больше не принимается.
+
+    Иначе смысл короткого теряется: старые ссылки продолжали бы работать.
+    """
+    token, _eid = _employer_with_debt(client)
+    r = client.get("/billing/invoice.pdf", params={"token": token})
+    assert r.status_code == 401
+    assert "устарел" in r.json()["detail"].lower()

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { fetchMatches } from "@/api/endpoints";
-import { fmtTime, todayISO } from "@/lib/format";
+import { fmtTime, plural, todayISO } from "@/lib/format";
 import { IconCalendar, IconChevronRight } from "@/components/Icons";
 import { useSession } from "@/store/session";
 import { pickTodayShifts } from "./todayShift";
@@ -50,19 +50,19 @@ export function TodayShift() {
       <span style={{ color: "var(--gold)", display: "inline-flex" }}>
         <IconCalendar size={18} />
       </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
+      <span className="grow">
         <b>
           {role === "employer"
             ? shifts.length > 1
-              ? `Сегодня выходят ${shifts.length} чел.`
+              ? `Сегодня к вам выходят ${shifts.length} ${plural(shifts.length, "человек", "человека", "человек")}`
               : "Сегодня к вам выходит человек"
             : "Сегодня ваша смена"}
-          {when ? ` · ${when}` : ""}
+          {when ? (shifts.length > 1 ? ` · первый в ${when}` : ` · ${when}`) : ""}
         </b>
         <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
           {role === "employer"
             ? "Откройте, чтобы назвать код прихода"
-            : `${next.companyName ?? "Заведение"} — откройте за кодом прихода`}
+            : `${next.companyName ?? "Заведение"} — здесь код прихода`}
         </div>
       </span>
       <span style={{ color: "var(--muted)", display: "inline-flex" }}>

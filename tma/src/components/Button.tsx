@@ -19,11 +19,10 @@ interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick">
 // решается быстрым нажатием, человек читает как «не сработало» и жмёт ещё раз.
 // Размер шрифта берётся из общей шкалы (theme.css), поэтому кнопки растут
 // вместе со всем интерфейсом в крупном режиме.
-const SIZE: Record<Size, { minHeight: number; padding: string; font: string }> = {
-  sm: { minHeight: 44, padding: "0 14px", font: "var(--text-sm)" },
-  md: { minHeight: 48, padding: "0 18px", font: "var(--text-base)" },
-  lg: { minHeight: 54, padding: "0 20px", font: "var(--text-md)" },
-};
+// Размеры больше не перечисляются здесь числами: они лежат в CSS-токенах
+// (--btn-h-*, --btn-pad-* в theme.css) и применяются классами .ui-btn--sm/md/lg.
+// Пока числа были в разметке, они расходились с классом .btn, и на экране
+// рядом оказывались две кнопки разной высоты.
 
 /** Единая кнопка: варианты, размеры, loading-спиннер, haptic, мин. 44px тач. */
 export function Button({
@@ -38,7 +37,6 @@ export function Button({
   style,
   ...rest
 }: Props) {
-  const s = SIZE[size];
   // Внутренний «running» — авто-защита от двойных нажатий: пока async-обработчик
   // не завершился, кнопка заблокирована и крутит спиннер (важно для оплаты).
   const [running, setRunning] = useState(false);
@@ -59,20 +57,14 @@ export function Button({
   return (
     <button
       type="button"
-      className={`ui-btn ui-btn--${variant}`}
+      className={`ui-btn ui-btn--${variant} ui-btn--${size}`}
       disabled={isDisabled}
       aria-busy={busy}
       onClick={handle}
       // Внешний style ДОПОЛНЯЕТ размеры, а не заменяет их: раньше он шёл через
       // {...rest} после style и затирал minHeight — кнопка с внешним стилем
       // схлопывалась по высоте иконки и теряла минимальную зону тапа.
-      style={{
-        width: block ? "100%" : "auto",
-        minHeight: s.minHeight,
-        padding: s.padding,
-        fontSize: s.font,
-        ...style,
-      }}
+      style={{ width: block ? "100%" : "auto", ...style }}
       {...rest}
     >
       {busy ? (

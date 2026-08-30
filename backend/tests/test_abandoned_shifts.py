@@ -225,8 +225,12 @@ def test_venue_is_warned_about_tomorrow_without_people(client):
         db.close()
     mine = [a for a in alerts if a[0] == v["id"]]
     assert mine, "заведение не предупредили о смене без людей"
-    assert "не хватает 3" in mine[0][2]
-    assert "Срочно" in mine[0][2], "нужен совет, что делать, а не просто факт"
+    assert "не хватает 3 человека" in mine[0][2], "формы числа перепутаны"
+    # Совет обязан называть кнопку, которая в приложении ЕСТЬ. Раньше здесь
+    # звали нажать «Срочно» — эту кнопку убрали из продукта, а текст остался.
+    assert (
+        "Позвать людей на эту смену" in mine[0][2]
+    ), "нужен совет, что делать, а не просто факт"
 
 
 def _tomorrow_shift_with_match(client, tg_emp, tg_seeker, confirm: bool):
@@ -282,7 +286,8 @@ def test_unconfirmed_match_does_not_count_as_a_filled_slot(client):
     mine = [a for a in alerts if a[0] == v["id"]]
     assert mine, "предупреждение обязано прийти"
     text = mine[0][2]
-    assert "не подтверждена" in text
+    assert "С 1 человеком" in text, "падеж после числа"
+    assert "подтвердила только одна сторона" in text
     assert "Подтвердить смену" in text
 
 

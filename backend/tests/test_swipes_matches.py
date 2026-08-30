@@ -176,11 +176,11 @@ def _close_shift(client, mid: str, emp_h, seeker_h) -> None:
     client.post(f"/matches/{mid}/attendance", headers=emp_h, json={"attended": True})
 
 
-def test_act_blocked_until_confirmed(client):
+def test_act_blocked_until_confirmed(client, doc_token):
     match_id, s_token, e_token = _make_match(client)
     # До подтверждения смены акт недоступен.
     assert client.get(
-        f"/matches/{match_id}/act.pdf?token={s_token}"
+        f"/matches/{match_id}/act.pdf?token={doc_token(client, s_token)}"
     ).status_code == 409
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(s_token))
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(e_token))
@@ -188,7 +188,7 @@ def test_act_blocked_until_confirmed(client):
     _close_shift(client, match_id, _hdr(e_token), _hdr(s_token))
     # После подтверждения — PDF отдаётся.
     assert client.get(
-        f"/matches/{match_id}/act.pdf?token={s_token}"
+        f"/matches/{match_id}/act.pdf?token={doc_token(client, s_token)}"
     ).status_code == 200
 
 

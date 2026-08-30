@@ -5,6 +5,7 @@ import { haptic, showBackButton , openExternal } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 import { IconHelp } from "@/components/Icons";
 import { LEGAL_LINKS } from "@/lib/legal";
+import { LS } from "@/lib/storage";
 
 function Toggle({
   on,
@@ -84,7 +85,7 @@ export function SettingsPage() {
   const [theme, setTheme] = useState(currentTheme());
   const [large, setLarge] = useState(() => document.body.dataset.large === "1");
   const [sound, setSound] = useState(
-    () => localStorage.getItem("ss_sound") !== "off",
+    () => localStorage.getItem(LS.soundOff) !== "off",
   );
 
   return (
@@ -118,10 +119,10 @@ export function SettingsPage() {
           haptic("select");
           if (next) {
             document.body.dataset.large = "1";
-            localStorage.setItem("ss_large", "1");
+            localStorage.setItem(LS.large, "1");
           } else {
             delete document.body.dataset.large;
-            localStorage.removeItem("ss_large");
+            localStorage.removeItem(LS.large);
           }
         }}
       />
@@ -129,27 +130,27 @@ export function SettingsPage() {
       <Toggle
         on={sound}
         label="Звук"
-        sub="Приятный сигнал на мэтч и закрытие смены"
+        sub="Сигнал, когда ответили взаимно или закрылась смена"
         aria="Звук"
         onToggle={() => {
           const next = !sound;
           setSound(next);
           haptic("select");
-          if (next) localStorage.removeItem("ss_sound");
-          else localStorage.setItem("ss_sound", "off");
+          if (next) localStorage.removeItem(LS.soundOff);
+          else localStorage.setItem(LS.soundOff, "off");
         }}
       />
 
       {/* Экран заканчивался тремя переключателями и пустотой. Версия здесь
           не для красоты: её называют в поддержке, чтобы понять, какая
           сборка у человека на телефоне. */}
-      <div className="card" style={{ marginTop: 8 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="row">
           <span className="muted">Версия приложения</span>
           <span className="spacer" />
           <b>{__APP_VERSION__}</b>
         </div>
-        <p className="muted" style={{ margin: "10px 0 0", fontSize: "var(--text-xs)" }}>
+        <p className="hint">
           Если что-то работает не так — напишите в поддержку и назовите эту
           версию, так проблему найдут быстрее.
         </p>
@@ -158,7 +159,7 @@ export function SettingsPage() {
           style={{ marginTop: 12 }}
           onClick={() => nav("/support")}
         >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span className="inline">
             <IconHelp size={18} /> Помощь и поддержка
           </span>
         </Button>
@@ -167,11 +168,11 @@ export function SettingsPage() {
       {/* По 152-ФЗ документы должны быть доступны всегда, а не только галочкой
           при первом входе: человек согласился месяц назад и уже не помнит, на
           что именно. Здесь их можно перечитать в любой момент. */}
-      <div className="card" style={{ marginTop: 8 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="row" style={{ marginBottom: 8 }}>
           <b>Документы</b>
         </div>
-        <div style={{ display: "grid", gap: 10 }}>
+        <div className="stack">
           {LEGAL_LINKS.map((l) => (
             <a
               key={l.href}

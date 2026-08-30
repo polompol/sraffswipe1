@@ -1,7 +1,9 @@
 import { useId } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import type { MatchModel } from "@/types/domain";
+import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
+import { shiftWhen } from "@/lib/format";
+import { Button } from "@/components/Button";
 import { IconTabMatches, IconChat } from "@/components/Icons";
 import { useDialog } from "@/components/Sheet";
 
@@ -17,12 +19,27 @@ const COLORS = [
 export function MatchOverlay({
   match,
   onClose,
+  role,
 }: {
   match: MatchModel;
   onClose: () => void;
+  /** Чью сторону экран обслуживает. От неё зависит и текст, и чьё имя видно. */
+  role?: string | null;
 }) {
   const nav = useNavigate();
   const confetti = Array.from({ length: 36 });
+  // Заведению показываем имя работника, работнику — название заведения:
+  // каждая сторона видит того, с кем совпала, а не саму себя.
+  const isEmployer = role === "employer";
+  const who =
+    (isEmployer ? match.seekerName : match.companyName)?.trim() ||
+    (isEmployer ? "Работник" : "Заведение");
+  const shiftLine = [
+    match.role ? STAFF_ROLE_LABELS[match.role] : "",
+    shiftWhen(match),
+  ]
+    .filter(Boolean)
+    .join(" ·\u00a0");
   const titleId = useId();
   // Оверлей перекрывает весь экран, поэтому ведёт себя как модальное окно:
   // фокус внутрь, Escape закрывает, фон не читается скринридером. Раньше это
@@ -61,6 +78,10 @@ export function MatchOverlay({
           width: 320,
           height: 320,
           borderRadius: "50%",
+          // Свечение — украшение на 320 точек, и оно ложилось поверх кнопок:
+          // «Перейти в чат» на телефоне не нажималась вовсе. Палец должен
+          // проходить сквозь него, как сквозь штамп на карточке.
+          pointerEvents: "none",
           background:
             // Оверлей всегда тёмный независимо от темы, поэтому свечение задаём
             // фиксированным золотом (--super) — надёжнее color-mix в старых вебвью.
@@ -73,14 +94,24 @@ export function MatchOverlay({
           фиксированный. --gold в светлой теме — глубокий багровый, и на почти
           чёрной подложке он давал 2.17:1: самый радостный момент продукта
           выглядел тёмным пятном. */}
+      {/* «Мэтч» — слово из нашего кода, а не из жизни человека. В навигации
+          и на пустых экранах мы его уже убрали; здесь оно оставалось на самом
+          заметном месте продукта. Шрифт — фирменный: это единственный
+          праздничный экран, и он должен выглядеть частью бренда. */}
       <div
         id={titleId}
-        style={{ fontSize: "var(--text-hero)", fontWeight: 900, color: "#e8c268", position: "relative" }}
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--text-hero)",
+          fontWeight: 400,
+          color: "var(--on-dark-gold)",
+          position: "relative",
+        }}
       >
-        Это мэтч!
+        Взаимно!
       </div>
       <div style={{ margin: "12px 0", position: "relative" }}>
-        {match.companyPhotoUrl ? (
+        {!isEmployer && match.companyPhotoUrl ? (
           <img
             className="match-avatar"
             src={match.companyPhotoUrl}
@@ -93,41 +124,67 @@ export function MatchOverlay({
         ) : null}
         <div
           className="match-avatar"
-          hidden={!!match.companyPhotoUrl}
-          style={{ color: "#fff" }}
+          hidden={!isEmployer && !!match.companyPhotoUrl}
+          style={{ color: "var(--on-dark)" }}
         >
           <IconTabMatches size={54} active />
         </div>
       </div>
-      <p style={{ color: "#e6dccd", maxWidth: 300 }}>
-        Вы и «{match.companyName ?? "заведение"}» понравились друг другу
+      {/* Название заведения уже приходит с кавычками — «Кофейня «Дрова»»
+          выглядело опечаткой. И говорим не «понравились друг другу», а что
+          именно случилось: место готово вас взять. */}
+      <p style={{ color: "var(--on-dark-muted)", maxWidth: 300 }}>
+        {/* Двоеточие вместо «готово/готова»: род названия заранее неизвестен
+            («Кофейня» — она, «Бар» — он), и любое согласование где-нибудь да
+            прозвучит безграмотно. */}
+        {who}
+        {isEmployer
+          ? " выйдет на смену. Договоритесь о деталях в чате."
+          : ": вас готовы взять на смену. Договоритесь о деталях в чате."}
       </p>
+      {/* ЧТО ИМЕННО совпало: должность, день и часы.
+          Раньше на самом радостном экране продукта не было написано, о какой
+          смене речь. У человека их может быть несколько за неделю, а заведение
+          в ленте вообще не выбирает смену руками — её подбирает сервер, и без
+          этой строки владелец кофейни не знал, на какой день только что позвал
+          человека. */}
+      {shiftLine && (
+        <p
+          style={{
+            color: "var(--on-dark-gold)",
+            fontWeight: 700,
+            marginTop: 8,
+            maxWidth: 320,
+            position: "relative",
+          }}
+        >
+          {shiftLine}
+        </p>
+      )}
       <div style={{ width: "100%", maxWidth: 340, marginTop: 24, display: "grid", gap: 10 }}>
-        <button
-          className="btn"
+        <Button
+          icon={<IconChat size={18} />}
           onClick={() => {
             onClose();
             nav(`/chat/${match.id}`);
           }}
         >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconChat size={18} /> Перейти в чат
-          </span>
-        </button>
+          Перейти в чат
+        </Button>
         {/* Оверлей всегда тёмный, поэтому вторая кнопка — прозрачная с белым
             текстом. Раньше она была светлой на светлом фоне (контраст ~1.3:1)
             и выглядела пустой плашкой на самом важном экране. */}
-        <button
-          className="btn secondary"
+        <Button
+          variant="secondary"
           style={{
             background: "transparent",
-            color: "#fff",
+            color: "var(--on-dark)",
             borderColor: "rgba(255,255,255,.45)",
           }}
           onClick={onClose}
         >
           Продолжить листать
-        </button>
+        </Button>
       </div>
     </div>,
     document.body,

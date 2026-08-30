@@ -28,9 +28,9 @@ router = APIRouter(prefix="/vacancies", tags=["vacancies"])
 _URGENT_MAX = 200
 
 
-def _check_photo(url: str) -> None:
+def _check_photo(url: str, owner_id: str = "") -> None:
     """Фото интерьера — только своё загруженное (см. app/photos.py)."""
-    if not is_allowed_photo_url(url):
+    if not is_allowed_photo_url(url, owner_id):
         raise HTTPException(
             status_code=400,
             detail="Фото нужно загрузить в приложении — "
@@ -440,7 +440,7 @@ def create_vacancy(
                    "оплатите счёт, чтобы публиковать новые вакансии.",
         )
 
-    _check_photo(body.interior_photo_url)
+    _check_photo(body.interior_photo_url, emp.id)
     data = body.model_dump()
     # Приводим город к каноническому названию: со свободным вводом
     # «Санкт-Петербург», «СПб» и «Питер» становятся тремя разными городами, и
@@ -489,7 +489,7 @@ def update_vacancy(
     """Исправить свою смену (опечатка в ставке, времени, адресе).
     Доступно, пока по ней нет откликов."""
     v = _own_vacancy_or_404(db, vacancy_id, principal)
-    _check_photo(body.interior_photo_url)
+    _check_photo(body.interior_photo_url, v.employer_id)
     taken = taken_counts(db, [v.id]).get(v.id, 0)
     fields = body.model_dump()
     fields["city"] = normalize(fields.get("city", ""))
@@ -591,7 +591,10 @@ def urgent_ping(
     city = (v.city or "").strip().lower()
     seekers = (
         db.query(User)
-        .filter(User.blocked.is_(False), User.available_today.is_(True))
+        .filter(
+            User.blocked.is_(False),
+            User.available_date == local_today(v.city),
+        )
         .all()
     )
     sent = 0

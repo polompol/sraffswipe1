@@ -44,3 +44,9 @@ tma/shots/
 shots/
 playwright-report/
 test-results/
+
+# Сквозные проверки в браузере (e2e/): всё, что создаётся прогоном
+e2e/.tmp/
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/

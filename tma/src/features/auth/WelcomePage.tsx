@@ -21,13 +21,8 @@ import { updateMe, uploadPhoto } from "@/api/endpoints";
 import { useSession } from "@/store/session";
 import { haptic } from "@/telegram/sdk";
 import { toast } from "@/components/Toast";
-import {
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
-  STAFF_ROLE_LABELS,
-} from "@/types/domain";
 import type { StaffRole } from "@/types/domain";
+import { RolePicker } from "@/components/RolePicker";
 
 export function WelcomePage() {
   const nav = useNavigate();
@@ -106,15 +101,16 @@ export function WelcomePage() {
         </h1>
         <p className="muted" style={{ marginTop: 4 }}>
           {isEmployer
-            ? "Название увидят соискатели в ленте смен"
+            ? "Название увидят работники в списке смен"
             : "Пара штрихов — и заведения начнут вас звать"}
         </p>
 
-        <div className="form-label" style={{ marginTop: 20 }}>
-          {isEmployer ? "Название" : "Имя"}
-        </div>
+        {/* Подписи у поля нет: заголовок экрана уже спросил имя, а формат
+            показывает подсказка внутри поля. */}
         <input
           className="input"
+          style={{ marginTop: 20 }}
+          aria-label={isEmployer ? "Название заведения" : "Имя"}
           value={name}
           maxLength={isEmployer ? 120 : 80}
           placeholder={isEmployer ? "Кофейня «Дрова»" : "Анна"}
@@ -126,36 +122,10 @@ export function WelcomePage() {
             <div className="form-label" style={{ marginTop: 20 }}>
               Кем готовы выйти
             </div>
-            <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-xs)" }}>
+            <p className="hint">
               Можно выбрать несколько — смен будет больше
             </p>
-            {ROLE_FAMILY_ORDER.map((fam) => (
-              <div key={fam} style={{ marginBottom: 12 }}>
-                <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
-                  {ROLE_FAMILY_LABELS[fam]}
-                </div>
-                <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                  {ROLE_FAMILIES[fam].map((r) => {
-                    const on = roles.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        className="tag"
-                        style={{
-                          cursor: "pointer",
-                          background: on ? "var(--gold-fill)" : "transparent",
-                          color: on ? "#fff" : "var(--text)",
-                          borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
-                        }}
-                        onClick={() => toggleRole(r)}
-                      >
-                        {STAFF_ROLE_LABELS[r]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+            <RolePicker isOn={(r) => roles.includes(r)} onPick={toggleRole} />
           </>
         )}
 
@@ -164,13 +134,13 @@ export function WelcomePage() {
           onChange={setCity}
           hint={
             isEmployer
-              ? "По городу вам будут показывать людей, которые рядом."
-              : "По городу вам будут показывать смены, которые рядом."
+              ? "Покажем людей из вашего города."
+              : "Покажем смены в вашем городе."
           }
         />
 
         <div className="form-label" style={{ marginTop: 20 }}>
-          Фото {isEmployer ? "заведения" : ""} — по желанию
+          Фото {isEmployer ? "заведения" : "профиля"} — по желанию
         </div>
         <div className="row" style={{ gap: 12, alignItems: "center" }}>
           {photo && (
@@ -202,7 +172,7 @@ export function WelcomePage() {
 
         <div style={{ marginTop: 28, display: "grid", gap: 10 }}>
           <Button block loading={busy} disabled={!canSave} onClick={save}>
-            Готово
+            {isEmployer ? "Сохранить и найти людей" : "Сохранить и смотреть смены"}
           </Button>
           <Button
             variant="ghost"
@@ -212,10 +182,10 @@ export function WelcomePage() {
             Заполню позже
           </Button>
         </div>
-        <p className="muted" style={{ fontSize: "var(--text-xs)", marginTop: 12 }}>
+        <p className="hint">
           {isEmployer
-            ? "Без названия смену опубликовать можно, но откликов будет меньше."
-            : "Анкеты с именем и профессией зовут на смены заметно чаще."}
+            ? "Смену можно разместить и без названия, но откликов будет меньше."
+            : "С именем и профессией на смены зовут заметно чаще."}
         </p>
       </div>
     </div>

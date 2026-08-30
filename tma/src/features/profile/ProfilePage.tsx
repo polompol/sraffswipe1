@@ -25,12 +25,13 @@ import {
   IconCheck,
   IconBookmark,
   IconChevronRight,
-  IconStar,
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
+import { Avatar } from "@/components/Avatar";
+import { Rating } from "@/components/Rating";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
-import { plural } from "@/lib/format";
+import { money, plural } from "@/lib/format";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -49,7 +50,7 @@ function CommissionCard() {
       openExternal(url);
     } catch {
       haptic("error");
-      toast("Не удалось открыть оплату", "error");
+      toast("Оплата не открылась — попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -69,29 +70,27 @@ function CommissionCard() {
         <b>Комиссия сервиса · {bill.pct}%</b>
         <span className="spacer" />
         <b style={{ color: due ? "var(--gold)" : "var(--muted)" }}>
-          {bill.pendingRub.toLocaleString("ru-RU")} ₽
+          {money(bill.pendingRub)}
         </b>
       </div>
       <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-sm)" }}>
         {due
-          ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса ` +
-            `автоматически — пополните его картой ниже.`
-          : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
+          ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса `
+            + (bill.topupAvailable
+              ? "автоматически — пополните его картой ниже."
+              : "автоматически, когда на нём будут деньги.")
+          : "Платите только за смены, которые состоялись."}
       </div>
       {bill.overdue && (
         <div style={{ marginTop: 8, fontSize: "var(--text-sm)", color: "var(--danger)", fontWeight: 700 }}>
-          Баланс закончился — публикация новых смен на паузе. Пополните
-          картой ниже, и всё сразу возобновится.
+          Баланс закончился — новые смены пока не публикуются. Пополните
+          ниже, и всё снова заработает.
         </div>
       )}
       <div className="row" style={{ marginTop: 10 }}>
-        <span className="muted" style={{ fontSize: "var(--text-sm)" }}>Баланс (аванс)</span>
+        <span className="muted" style={{ fontSize: "var(--text-sm)" }}>Баланс</span>
         <span className="spacer" />
-        <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
-      </div>
-      <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
-        Комиссия списывается с баланса сама — пополняйте его заранее, и
-        считать ничего не придётся.
+        <b>{money(bill.balanceRub)}</b>
       </div>
       {/* Документы для бухгалтерии. Ресторан-юрлицо не проведёт оплату по
           безналу без счёта с реквизитами и не поставит расход без акта —
@@ -99,7 +98,7 @@ function CommissionCard() {
           есть за что платить. */}
       {due && bill.docsAvailable !== false && (
         <>
-          <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
+          <div className="hint">
             Документы для бухгалтерии
           </div>
           <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
@@ -109,9 +108,13 @@ function CommissionCard() {
                   key={kind}
                   className="tag"
                   style={{ flex: 1, minWidth: 120, cursor: "pointer" }}
-                  onClick={() => {
+                  onClick={async () => {
                     haptic("light");
-                    openExternal(billingDocUrl(kind));
+                    try {
+                      openExternal(await billingDocUrl(kind));
+                    } catch {
+                      toast("Не удалось открыть документ", "error");
+                    }
                   }}
                 >
                   {label}
@@ -125,42 +128,49 @@ function CommissionCard() {
           кнопки нельзя: заведение упирается в отказ ровно в тот момент,
           когда собралось платить. */}
       {due && bill.docsAvailable === false && (
-        <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
+        <div className="hint">
           Нужен счёт или акт для бухгалтерии? Напишите в поддержку — пришлём.
         </div>
       )}
 
       {bill.topupAvailable ? (
         <>
-          <div className="muted" style={{ marginTop: 12, fontSize: "var(--text-xs)" }}>
+          <div className="hint">
             Пополнить баланс
           </div>
           {/* На чипе оставляем только сумму: «Пополнить 1 000 ₽» в трети
-              ширины экрана переносилось на 3-4 строки и ломало ряд. */}
-          <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+              ширины экрана переносилось на 3-4 строки и ломало ряд.
+
+              Ряд с переносом заменён сеткой из трёх равных долей: на 320
+              точках внутри карточки остаётся 252, а ряду из трёх чипов по 88
+              нужно 280 — третий срывался вниз и растягивался во всю ширину. */}
+          <div style={{
+            marginTop: 6,
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 8,
+          }}>
             {[1000, 3000, 5000].map((a) => (
               <button
                 key={a}
                 className="tag"
                 disabled={busy}
                 style={{
-                  flex: 1,
-                  minWidth: 88,
                   cursor: "pointer",
                   borderColor: "var(--gold)",
                   color: "var(--gold)",
                 }}
                 onClick={() => topup(a)}
               >
-                {a.toLocaleString("ru-RU")} ₽
+                {money(a)}
               </button>
             ))}
           </div>
         </>
       ) : (
-        <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
-          Оплата картой внутри приложения подключается к запуску — тогда
-          баланс можно будет пополнить в один тап.
+        <div className="hint">
+          Оплата картой пока не подключена. Нужно пополнить баланс —
+          напишите в поддержку.
         </div>
       )}
     </div>
@@ -195,9 +205,18 @@ function EmployerVerify() {
           value={inn}
           onChange={(e) => setInn(e.target.value)}
         />
-        <button className="btn" style={{ width: "auto", padding: "0 16px", height: 46 }} disabled={busy || inn.length < 10} onClick={run}>
-          {busy ? "…" : "Проверить"}
-        </button>
+        {/* Кнопка узкая, в один ряд с полем ИНН: block={false}, высота 46 —
+            вровень с input. Свой busy оставлен: он же гасит кнопку по длине
+            ИНН и даёт спиннер до того, как отработает внутренняя защита. */}
+        <Button
+          block={false}
+          style={{ padding: "0 16px", height: 46 }}
+          loading={busy}
+          disabled={busy || inn.length < 10}
+          onClick={run}
+        >
+          Проверить
+        </Button>
       </div>
       {res && (
         <div className="muted" style={{ marginTop: 10 }}>
@@ -239,10 +258,10 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
     haptic("select");
     try {
       await setAvailability(next);
-      toast(next ? "Вы готовы выйти сегодня" : "Статус снят", "success");
+      toast(next ? "Вы готовы выйти сегодня" : "Отметку убрали", "success");
     } catch {
       setOn(!next); // откат при ошибке
-      toast("Не удалось сохранить", "error");
+      toast("Отметка не сохранилась. Попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -262,18 +281,20 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       <span style={{ flex: 1 }}>
         <b style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           {on && <span style={{ color: "var(--gold)", display: "inline-flex" }}><IconBolt size={15} /></span>}
-          {on ? "Готов выйти сегодня" : "Готов выйти сегодня?"}
+          {/* Не «Готов»: половина бариста и официантов — женщины, и мужской
+              род тут читается как чужая подпись. «Вы» рода не имеет. */}
+          {on ? "Вы готовы выйти сегодня" : "Готовы выйти сегодня?"}
         </b>
         <div className="muted">
           {on
-            ? "Ты наверху ленты — на срочные смены зовут первым"
+            ? "Вы наверху списка — на срочные смены позовут первым"
             : "Включите — и срочные смены найдут вас быстрее"}
         </div>
       </span>
       <button
         role="switch"
         aria-checked={on}
-        aria-label="Готов выйти сегодня"
+        aria-label="Готовы выйти сегодня"
         disabled={busy}
         onClick={toggle}
         // Дорожка визуально 52×30, высота кнопки 44px — минимальная зона тапа.
@@ -355,10 +376,10 @@ function ProfileMeter({ pct }: { pct: number }) {
         />
       </div>
       <div className="muted" style={{ margin: "10px 0 12px" }}>
-        Анкеты с фото и опытом зовут на смены заметно чаще.
+        С фото и опытом на смены зовут заметно чаще.
       </div>
       <Button variant="secondary" onClick={() => nav("/profile/edit")}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span className="inline">
           <IconEdit size={18} /> Дополнить профиль
         </span>
       </Button>
@@ -400,36 +421,24 @@ export function ProfilePage() {
             Раньше вместо лица стояла иконка-портфель — та самая, которой на
             экране выбора роли подписано «Я ищу подработку». В своём профиле
             она читается как «вакансия», а не «это я». */}
-        <span style={{
-          width: 56, height: 56, borderRadius: 16, flex: "none",
-          background: "var(--grad-brand)", color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          overflow: "hidden", fontWeight: 800, fontSize: "var(--text-xl)",
-        }}>
-          {me?.photoUrl ? (
-            <img
-              src={me.photoUrl}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          ) : me?.name ? (
-            me.name.trim().charAt(0).toUpperCase()
-          ) : role === "employer" ? (
-            <IconStore size={30} />
-          ) : (
-            <IconBriefcase size={30} />
-          )}
-        </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
+        <Avatar
+          size={56}
+          src={me?.photoUrl}
+          name={me?.name}
+          fallback={role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
+        />
+        <span className="grow">
           <div style={{ fontWeight: 800, fontSize: "var(--text-lg)", overflowWrap: "anywhere" }}>
-            {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
+            {me?.name ?? (role === "employer" ? "Добавьте название" : "Добавьте имя")}
           </div>
-          <div className="muted">
-            {me ? (me.rating > 0 ? (
-              <><IconStar size={13} /> {me.rating.toFixed(1)}</>
-            ) : "Новичок") : "—"}
+          <div className="muted" style={{ overflowWrap: "anywhere" }}>
+            {me ? <Rating value={me.rating} /> : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
-            {me?.shiftsDone
+            {/* У заведения то же число стоит отдельной карточкой «Смен
+                проведено» ниже по экрану: два одинаковых числа в пяти
+                сантиметрах друг от друга заставляют сверять, не разные ли
+                они. В шапке оставляем его только работнику. */}
+            {role === "seeker" && me?.shiftsDone
               ? ` · ${me.shiftsDone} ${plural(me.shiftsDone, "смена", "смены", "смен")}`
               : ""}
           </div>
@@ -450,22 +459,26 @@ export function ProfilePage() {
             marginBottom: 16,
             background:
               "linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill))",
-            color: "#fff",
+            color: "var(--on-brand)",
             border: "none",
             cursor: "pointer",
           }}
         >
+          {/* Одна строка вместо двух: вторая («Посмотреть, кто откликнулся»)
+              пересказывала первую тем же корнем и добавляла только слово
+              «посмотреть». Что плашка нажимается, говорит стрелка справа —
+              так же, как в строках меню ниже. */}
           <b style={{ fontSize: "var(--text-md)", display: "flex", alignItems: "center", gap: 7 }}>
             <IconBolt size={18} />
-            {role === "employer"
-              ? `Новых откликов: ${me.incomingLikes}`
-              : `Вас зовут на смены: ${me.incomingLikes}`}
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {role === "employer"
+                // Число внутри фразы, а не счётчиком через двоеточие: «Новых
+                // откликов: 1» — строка из таблицы, а не новость для человека.
+                ? `${me.incomingLikes} ${plural(me.incomingLikes, "новый отклик", "новых отклика", "новых откликов")}`
+                : `Вас зовут на ${me.incomingLikes} ${plural(me.incomingLikes, "смену", "смены", "смен")}`}
+            </span>
+            <IconChevronRight size={20} />
           </b>
-          <div style={{ fontSize: "var(--text-sm)", marginTop: 2 }}>
-            {role === "employer"
-              ? "нажмите, чтобы увидеть, кто именно, и ответить"
-              : "нажмите, чтобы увидеть, кто зовёт, и ответить в один тап"}
-          </div>
         </button>
       )}
 
@@ -488,8 +501,7 @@ export function ProfilePage() {
         >
           <b style={{ fontSize: "var(--text-md)" }}>Добавьте фото заведения</b>
           <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-sm)" }}>
-            Карточку с фотографией зала листают заметно чаще, чем карточку
-            с одной буквой названия.
+            С фотографией зала на ваши смены откликаются заметно чаще.
           </div>
         </button>
       )}
@@ -501,9 +513,8 @@ export function ProfilePage() {
             <span className="spacer" />
             <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
           </div>
-          <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-xs)" }}>
-            Закрытые смены формируют ваш рейтинг: его видят работники в ленте
-            до того, как откликнуться.
+          <div className="hint">
+            Из закрытых смен складывается рейтинг — его видно ещё до отклика.
           </div>
         </div>
       )}
@@ -526,10 +537,16 @@ export function ProfilePage() {
           {role === "employer"
             ? "Чем больше рядом заведений и людей, тем быстрее закрываются смены у всех."
             : "Чем больше рядом людей, тем чаще заведения ищут именно здесь."}
-          {" "}Уже пришло по вашей ссылке: {ref?.invited ?? 0}.
+          {" "}
+          {/* «Пришло по ссылке: 0» — цифра в хвосте фразы, которую читают на
+              бегу. Ноль лучше сказать словами: он и так самый частый. */}
+          {ref?.invited
+            ? `По вашей ссылке ${plural(ref.invited, "пришёл", "пришли", "пришли")} `
+              + `${ref.invited} ${plural(ref.invited, "человек", "человека", "человек")}.`
+            : "По вашей ссылке пока никто не пришёл."}
         </div>
         <Button onClick={invite}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span className="inline">
             <IconGift size={18} /> Поделиться приглашением
           </span>
         </Button>
@@ -538,9 +555,13 @@ export function ProfilePage() {
       {/* Раньше здесь стоял столбик из 4-5 одинаковых полноширинных кнопок —
           читалось как отладочное меню. Теперь это один список со строками. */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {/* Один экран — одно имя. Пока профиль не заполнен, выше по странице
+            стоит карточка с кнопкой «Дополнить профиль», и она ведёт СЮДА ЖЕ:
+            два входа с разными названиями в одно место, видимые одновременно.
+            В меню называем так же, как называется сам экран. */}
         <MenuRow
           icon={<IconEdit size={18} />}
-          label="Редактировать профиль"
+          label={role === "employer" ? "Профиль заведения" : "Мой профиль"}
           onClick={() => nav("/profile/edit")}
         />
         {role === "seeker" && (

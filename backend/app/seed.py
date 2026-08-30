@@ -89,7 +89,7 @@ def run() -> None:
                     self_employed=True,
                     inn="771298765432",
                     experience_tags="medBook,english,experienced,selfEmployed",
-                    available_today=True,
+                    available_date=local_today(),
                     rating=4.9,
                     photo_urls="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=900&q=80",
                     about="Опыт в fine dining, английский B2.",

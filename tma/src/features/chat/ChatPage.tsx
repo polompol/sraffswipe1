@@ -2,11 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { MESSAGES_PAGE, ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, fetchMessages, sendMessage, track } from "@/api/endpoints";
-import { getToken, useBackend, wsBaseURL } from "@/api/client";
+import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, sendMessage, track } from "@/api/endpoints";
+import { useBackend } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
-import { fmtTime, shiftEnded, shiftStarted, shiftWhen } from "@/lib/format";
+import {
+  fmtTime,
+  msgTime,
+  numRu,
+  shiftDayLabel,
+  shiftEnded,
+  shiftLengthHours,
+  shiftStarted,
+  shiftWhen,
+} from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { useSession } from "@/store/session";
 import { ReportSheet } from "@/components/ReportSheet";
@@ -14,24 +23,33 @@ import { Sheet } from "@/components/Sheet";
 import { Button } from "@/components/Button";
 import { toast } from "@/components/Toast";
 import { ErrorBox, SkeletonList } from "@/components/States";
+import { useChatHistory } from "./useChatHistory";
+import { useChatSocket } from "./useChatSocket";
 import { EmptyState } from "@/components/EmptyState";
-import { IconSend, IconBack, IconWarning, IconCheck, IconChat } from "@/components/Icons";
+import { IconSend, IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
 
-// Быстрые ответы — частые фразы в один тап. У сторон они РАЗНЫЕ: заведению
-// предлагались реплики работника («Готов выйти на смену», «Какой адрес?»),
-// то есть человеку показывали вопросы, ответы на которые он и должен дать.
+// Быстрые ответы — частые фразы одним нажатием. У сторон они РАЗНЫЕ: заведению
+// предлагались реплики работника («Какой адрес?», «Что взять с собой?»), то
+// есть человеку показывали вопросы, ответы на которые он и должен дать.
+// Мужского рода тут тоже быть не должно: половина бариста и официантов —
+// женщины, и подсказка «Готов выйти» им не подходит.
+// Приветствие — первое в списке и первое, что перестаёт быть нужным: после
+// того как человек написал сам, кнопка «Здравствуйте!» под его же репликой
+// выглядит так, будто приложение не заметило разговора. Остальные подсказки
+// — настоящие вопросы, они полезны и на третий день переписки.
+const GREETING = "Здравствуйте!";
 const QUICK_REPLIES_SEEKER = [
-  "Здравствуйте!",
-  "Готов выйти на смену",
+  GREETING,
+  "Выйду на смену",
   "Во сколько выходить?",
   "Какой адрес?",
   "Что взять с собой?",
 ];
 const QUICK_REPLIES_EMPLOYER = [
-  "Здравствуйте!",
-  "Ждём вас на смене",
-  "Подходите к началу смены",
+  GREETING,
+  "Ждём вас к началу смены",
   "Спросите администратора на входе",
+  "Во сколько будете?",
   "Форма: чёрный верх, фартук дадим",
 ];
 
@@ -47,6 +65,7 @@ export function ChatPage() {
   // рабочим, но ничего не получает.
   const [live, setLive] = useState(true);
   const [reportOpen, setReportOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   // Подтверждение смены берём из данных сервера, а не из локального стейта —
   // иначе при переоткрытии чата кнопка снова «Подтвердить», хотя ты уже нажал.
   const [match, setMatchState] = useState<MatchModel | null>(null);
@@ -72,52 +91,58 @@ export function ChatPage() {
 
   // Прокрутка к последнему сообщению при открытии и на каждое новое.
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  // Высота нижней панели — меряем, а не вписываем числом.
+  //
+  // Раньше под списком стоял отступ в 150 точек. Панель внизу собирается из
+  // разного набора: ряд быстрых ответов, «Подтвердить смену», «Изменить
+  // смену», поле ввода — вместе за 230. На экране 320×568 последнее сообщение
+  // наполовину уезжало под неё, и человек не видел, что ему только что
+  // ответили.
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [barH, setBarH] = useState(150);
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
-  const { data: messages, isLoading, isError, refetch } = useQuery({
-    queryKey: ["messages", matchId],
-    queryFn: () => fetchMessages(matchId),
-  });
+  const {
+    messages,
+    isLoading,
+    isError,
+    refetch,
+    hasOlder,
+    olderLoading,
+    loadOlder,
+    appendMessage,
+  } = useChatHistory(matchId);
 
   // К последнему сообщению — при открытии чата и на каждое новое.
   //
   // Следим именно за ПОСЛЕДНИМ сообщением, а не за всем списком: когда
   // догружается старая переписка, список меняется, а прокручивать вниз нельзя
   // — человек только что нажал «показать более ранние» и смотрит наверх.
+  // Что я в этом чате уже отправлял — чтобы не предлагать это снова кнопкой.
+  const mySent = new Set(
+    (messages ?? [])
+      .filter((m: Message) => !m.isSystem && m.senderId === (myId ?? "me"))
+      .map((m: Message) => m.text.trim()),
+  );
+
   const lastId = messages?.length ? messages[messages.length - 1].id : "";
+  // Прокручиваем и когда меняется высота панели: кнопка «Подтвердить смену»
+  // появляется не сразу, и без этого список оставался стоять как был.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [lastId]);
+  }, [lastId, barH]);
 
-  // Догрузка старой переписки. Сервер отдаёт последние 100 сообщений: у смены
-  // с долгой перепиской остальное лежит выше и подтягивается по кнопке.
-  const [olderLoading, setOlderLoading] = useState(false);
-  const [noMoreOlder, setNoMoreOlder] = useState(false);
-  const hasOlder =
-    !noMoreOlder && !!messages && messages.length >= MESSAGES_PAGE;
-
-  async function loadOlder() {
-    if (!messages?.length || olderLoading) return;
-    setOlderLoading(true);
-    try {
-      const older = await fetchMessages(matchId, messages[0].id);
-      if (older.length === 0) {
-        setNoMoreOlder(true);
-      } else {
-        qc.setQueryData<Message[]>(["messages", matchId], (old) => {
-          const list = old ?? [];
-          const known = new Set(list.map((m) => m.id));
-          return [...older.filter((m) => !known.has(m.id)), ...list];
-        });
-        if (older.length < MESSAGES_PAGE) setNoMoreOlder(true);
-      }
-    } catch {
-      toast("Не удалось загрузить старые сообщения", "error");
-    } finally {
-      setOlderLoading(false);
-    }
-  }
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const measure = () => setBarH(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const { data: matches } = useQuery({ queryKey: ["matches"], queryFn: fetchMatches });
   const srvMatch = match ?? matches?.find((m) => m.id === matchId) ?? null;
@@ -145,93 +170,17 @@ export function ChatPage() {
     role === "employer" && alive && !!srvMatch && shiftEnded(srvMatch);
   const canAct = canCancel || canMove || canSetHours;
 
-  // Добавить сообщение в кэш с дедупликацией по id (echo от WS не задвоит).
-  function appendMessage(msg: Message) {
-    qc.setQueryData<Message[]>(["messages", matchId], (old) => {
-      const list = old ?? [];
-      if (list.some((m) => m.id === msg.id)) return list;
-      return [...list, msg];
-    });
-  }
 
-  // Живой чат через WebSocket (только при реальном backend).
-  //
-  // С переподключением. Соединение рвётся постоянно и без всяких поломок:
-  // метро, лифт, переключение с вайфая на мобильный, свёрнутое приложение.
-  // Раньше после обрыва чат молча замолкал навсегда — человек писал в пустоту
-  // и видел ответы только если закрывал и открывал экран заново. Теперь
-  // соединение поднимается само, а на время обрыва история подтягивается
-  // обычным запросом, чтобы ничего не потерялось.
-  useEffect(() => {
-    if (!useBackend || !matchId) return;
-    let closed = false;
-    let attempt = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let ws: WebSocket | null = null;
-
-    const connect = () => {
-      if (closed) return;
-      const token = getToken();
-      ws = new WebSocket(
-        `${wsBaseURL}/ws/chat/${matchId}?token=${token ?? ""}`,
-      );
-      ws.onopen = () => {
-        // Соединение восстановилось — дотягиваем то, что пришло, пока молчали.
-        if (attempt > 0) qc.invalidateQueries({ queryKey: ["messages", matchId] });
-        attempt = 0;
-        setLive(true);
-      };
-      const retry = () => {
-        setLive(false);
-        if (closed) return;
-        // Пауза растёт: 1, 2, 4… до 15 секунд. Так мы не долбим сервер,
-        // когда связи нет совсем, но возвращаемся быстро, если она мигнула.
-        const delay = Math.min(15000, 1000 * 2 ** attempt);
-        attempt += 1;
-        timer = setTimeout(connect, delay);
-      };
-      ws.onclose = retry;
-      ws.onerror = () => ws?.close();
-      ws.onmessage = onFrame;
-    };
-
-    const onFrame = (ev: MessageEvent) => {
-      try {
-        const raw = JSON.parse(ev.data);
-        appendMessage({
-          id: raw.id,
-          chatId: raw.match_id ?? matchId,
-          senderId: raw.sender_id,
-          text: raw.text,
-          isSystem: Boolean(raw.is_system),
-          timestamp: raw.created_at ?? new Date().toISOString(),
-        });
-        // Системные сообщения приходят на смену статуса: вторая сторона
-        // подтвердила, отметилась, перенесла. Без обновления кнопка над
-        // чатом продолжала говорить «Ждём подтверждения второй стороны»,
-        // хотя прямо под ней уже висело «Смена подтверждена».
-        if (raw.is_system) {
-          // Локальную копию мэтча сбрасываем: иначе она навсегда перекрывает
-          // свежие данные сервера (`match ?? matches?.find(...)`).
-          setMatchState(null);
-          qc.invalidateQueries({ queryKey: ["matches"] });
-        }
-      } catch {
-        /* ignore malformed frame */
-      }
-    };
-
-    connect();
-    return () => {
-      closed = true;
-      if (timer) clearTimeout(timer);
-      if (ws) {
-        ws.onclose = null;   // иначе закрытие экрана запустит переподключение
-        ws.close();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId]);
+  useChatSocket(matchId, {
+    onMessage: appendMessage,
+    onSystem: () => {
+      // Локальную копию мэтча сбрасываем: иначе она навсегда перекрывает
+      // свежие данные сервера (`match ?? matches?.find(...)`).
+      setMatchState(null);
+      qc.invalidateQueries({ queryKey: ["matches"] });
+    },
+    onLive: setLive,
+  });
 
   async function deliver(t: string) {
     try {
@@ -268,11 +217,11 @@ export function ChatPage() {
       haptic("success");
       setMatchState(m);
       setHoursOpen(false);
-      toast("Часы уточнены, работник уведомлён", "success");
+      toast("Часы сохранили — работник уже видит", "success");
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
     } catch (e: any) {
       haptic("error");
-      toast(apiError(e, "Не удалось сохранить часы"), "error");
+      toast(apiError(e, "Часы не сохранились — попробуйте ещё раз"), "error");
     }
   }
 
@@ -283,11 +232,11 @@ export function ChatPage() {
       haptic("success");
       setMatchState(m);
       setMoveOpen(false);
-      toast("Предложение отправлено работнику", "success");
+      toast("Предложили перенос — ждём ответа", "success");
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
     } catch (e: any) {
       haptic("error");
-      toast(apiError(e, "Не удалось предложить перенос"), "error");
+      toast(apiError(e, "Перенос не предложился — попробуйте ещё раз"), "error");
     }
   }
 
@@ -296,12 +245,12 @@ export function ChatPage() {
       const m = await answerReschedule(matchId, accept);
       haptic(accept ? "success" : "warning");
       setMatchState(m);
-      toast(accept ? "Перенос принят" : "Отказ отправлен", "success");
+      toast(accept ? "Смена перенесена ✓" : "Ответили: выйти не сможете", "success");
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch {
       haptic("error");
-      toast("Не удалось ответить", "error");
+      toast("Ответ не ушёл — попробуйте ещё раз", "error");
     }
   }
 
@@ -312,13 +261,18 @@ export function ChatPage() {
       setMatchState(m);
       setCancelOpen(false);
       setCancelReason("");
-      toast("Смена отменена. Вторая сторона уведомлена", "success");
+      toast(
+        role === "employer"
+          ? "Смена отменена — работник уже знает"
+          : "Смена отменена — заведение уже знает",
+        "success",
+      );
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
       qc.invalidateQueries({ queryKey: ["matches"] });
     } catch (e: any) {
       haptic("error");
       toast(
-        apiError(e, "Не удалось отменить смену"),
+        apiError(e, "Смена не отменилась — попробуйте ещё раз"),
         "error",
       );
     }
@@ -333,8 +287,10 @@ export function ChatPage() {
       setMatchState(m);
       toast(
         m.confirmedBySeeker && m.confirmedByEmployer
-          ? "Смена подтверждена обеими сторонами ✓"
-          : "Готово! Ждём подтверждения второй стороны",
+          ? "Договорились ✓ Смена подтверждена"
+          : role === "employer"
+            ? "Готово! Ждём, когда работник подтвердит"
+            : "Готово! Ждём, когда заведение подтвердит",
         "success",
       );
       qc.invalidateQueries({ queryKey: ["messages", matchId] });
@@ -348,34 +304,45 @@ export function ChatPage() {
         return;
       }
       haptic("error");
-      toast("Не удалось подтвердить смену. Попробуйте ещё раз", "error");
+      toast("Смена не подтвердилась — попробуйте ещё раз", "error");
     }
   }
 
   return (
     <div className="app">
-      <div className="page" style={{ paddingBottom: 150 }}>
+      <div className="page chat" style={{ paddingBottom: 0 }}>
         <div className="row" style={{ marginBottom: 12 }}>
           <button className="icon-btn" aria-label="Назад" onClick={() => nav(-1)}>
             <IconBack size={22} />
           </button>
           {/* Когда смена — прямо в шапке. Раньше в чате не было ни даты, ни
               времени: человек договорился и потом искал их в переписке. */}
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <b style={{ display: "block" }}>Чат по смене</b>
+          <span className="grow">
+            {/* Тот же класс, что в списке смен: сюда приходит название,
+                которое человек вписал сам. Без него «КофейняНаБольшойДмитровке»
+                наезжало на кнопку жалобы справа, а длинное название с
+                пробелами разворачивало шапку на четыре строки. */}
+            <b className="match-name" style={{ display: "block" }}>
+              {(role === "employer" ? srvMatch?.seekerName : srvMatch?.companyName)
+                || "Чат по смене"}
+            </b>
             {srvMatch && shiftWhen(srvMatch) && (
-              <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
+              <span className="muted small">
                 {shiftWhen(srvMatch)}
               </span>
             )}
           </span>
+          {/* Жалоба ушла под «ещё»: знак предупреждения в шапке чата стоял
+              рядом с именем собеседника и мозолил глаз при каждом сообщении,
+              хотя жалуются редко. Найти её по-прежнему можно за одно
+              нажатие — так же, как в списке смен. */}
           <button
             className="icon-btn"
             style={{ color: "var(--muted)" }}
-            aria-label="Пожаловаться"
-            onClick={() => setReportOpen(true)}
+            aria-label="Ещё действия"
+            onClick={() => setMoreOpen(true)}
           >
-            <IconWarning size={20} />
+            <IconMore size={20} />
           </button>
         </div>
 
@@ -403,25 +370,16 @@ export function ChatPage() {
           />
         )}
 
+        {/* Лента переписки прижата к низу — см. .chat-list в index.css. */}
+        <div className="chat-list">
         {hasOlder && (
           <button
             onClick={loadOlder}
             disabled={olderLoading}
-            style={{
-              display: "block",
-              margin: "0 auto 10px",
-              // 44px — минимальная зона, в которую уверенно попадает палец.
-              minHeight: 44,
-              padding: "0 14px",
-              background: "none",
-              border: "none",
-              color: "var(--muted)",
-              fontSize: "var(--text-sm)",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            className="text-btn"
+            style={{ display: "block", margin: "0 auto 10px", padding: "0 14px" }}
           >
-            {olderLoading ? "Загружаем…" : "Показать более ранние"}
+            {olderLoading ? "Загружаем…" : "Показать старые сообщения"}
           </button>
         )}
 
@@ -431,19 +389,32 @@ export function ChatPage() {
           return (
             <div key={m.id} className={`bubble ${mine ? "mine" : "theirs"}`}>
               {m.text}
+              <span className="bubble-at">{msgTime(m.createdAt)}</span>
             </div>
           );
         })}
-        {/* Якорь для прокрутки. Без него чат открывался на самом первом
-            сообщении: свежие оставались ниже экрана, за панелью ввода. Человек
-            отправлял сообщение, не видел его и жал «отправить» ещё раз. */}
-        <div ref={bottomRef} />
+        </div>
+        {/* Якорь для прокрутки и одновременно распорка под нижнюю панель.
+            Без него чат открывался на самом первом сообщении: свежие
+            оставались ниже экрана, за панелью ввода. Человек отправлял
+            сообщение, не видел его и жал «отправить» ещё раз.
+
+            Высота у распорки — измеренная высота панели, а не число. Раньше
+            под списком стоял отступ в 150 точек, а панель на узком экране
+            вырастала за 230: последнее сообщение уезжало под неё наполовину.
+            Распоркой это чинится само — прокрутка ставит её низ на низ
+            экрана, и последний пузырь оказывается ровно над панелью. */}
+        <div ref={bottomRef} style={{ height: barH + 12 }} />
       </div>
 
       <div
+        ref={barRef}
         style={{
           position: "fixed",
-          bottom: 0,
+          // --kb — сколько экрана закрыла клавиатура (см. lib/keyboard.ts).
+          // Без этого на айфоне поле ввода и кнопка «Отправить» оказывались
+          // ПОД клавиатурой: человек печатал вслепую.
+          bottom: "var(--kb, 0px)",
           left: 0,
           right: 0,
           maxWidth: 520,
@@ -468,11 +439,19 @@ export function ChatPage() {
             marginBottom: 2,
           }}
         >
-          {(role === "employer" ? QUICK_REPLIES_EMPLOYER : QUICK_REPLIES_SEEKER).map((q) => (
+          {/* Уже сказанное не предлагаем во второй раз. Заведение писало
+              «Ждём вас к началу смены», эта же фраза висела кнопкой прямо под
+              перепиской — человек видел свою реплику и предложение повторить
+              её. Сравниваем по своим отправленным сообщениям. */}
+          {(role === "employer" ? QUICK_REPLIES_EMPLOYER : QUICK_REPLIES_SEEKER)
+            .filter((q) => !mySent.has(q))
+            // Здороваться предлагаем только пока человек молчит.
+            .filter((q) => q !== GREETING || mySent.size === 0)
+            .map((q) => (
             <button
               key={q}
               className="tag"
-              style={{ cursor: "pointer", whiteSpace: "nowrap", flex: "none", borderColor: "var(--border)" }}
+              style={{ cursor: "pointer", whiteSpace: "nowrap", flex: "none", borderColor: "var(--border-strong)" }}
               onClick={() => quickReply(q)}
             >
               {q}
@@ -487,14 +466,16 @@ export function ChatPage() {
             disabled={iConfirmed}
             onClick={() => doConfirm()}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span className="inline">
               <IconCheck size={17} />
               {/* Без второй галочки в тексте: слева уже стоит иконка, и
                   вместе получалось «✓ Смена подтверждена ✓». */}
               {bothConfirmed
                 ? "Смена подтверждена"
                 : iConfirmed
-                  ? "Ждём подтверждения второй стороны"
+                  ? role === "employer"
+                    ? "Ждём ответа работника"
+                    : "Ждём ответа заведения"
                   : "Подтвердить смену"}
             </span>
           </Button>
@@ -504,19 +485,10 @@ export function ChatPage() {
           {canAct && (
             <button
               onClick={() => setTroubleOpen(true)}
-              style={{
-                marginTop: 8,
-                width: "100%",
-                minHeight: 44,
-                background: "none",
-                border: "none",
-                color: "var(--muted)",
-                fontSize: "var(--text-sm)",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              className="text-btn"
+              style={{ marginTop: 8, width: "100%" }}
             >
-              Что-то пошло не так
+              Изменить смену
             </button>
           )}
 
@@ -531,12 +503,12 @@ export function ChatPage() {
                 Заведение предлагает перенос
               </div>
               <p className="muted" style={{ margin: "0 0 10px", fontSize: "var(--text-sm)" }}>
-                {srvMatch.rescheduleDate}
+                {shiftDayLabel(srvMatch.rescheduleDate)}
                 {srvMatch.rescheduleStart != null &&
                   ` · ${fmtTime(srvMatch.rescheduleStart)}–${fmtTime(srvMatch.rescheduleEnd ?? 0)}`}
               </p>
               <div className="row" style={{ gap: 8 }}>
-                <Button onClick={() => answerMove(true)}>Согласен</Button>
+                <Button onClick={() => answerMove(true)}>Подходит</Button>
                 <Button variant="ghost" onClick={() => answerMove(false)}>
                   Не смогу
                 </Button>
@@ -566,22 +538,29 @@ export function ChatPage() {
       </div>
 
       {troubleOpen && (
-        <Sheet title="Что-то пошло не так" onClose={() => setTroubleOpen(false)}>
-            <p className="muted" style={{ marginBottom: 12 }}>
-              Планы меняются — это нормально. Главное, чтобы вторая сторона
-              узнала об этом заранее, а не в последний момент.
-            </p>
-            <div style={{ display: "grid", gap: 10 }}>
+        <Sheet title="Изменить смену" onClose={() => setTroubleOpen(false)}>
+            {/* Совет про «предупредить заранее» имеет смысл, только пока
+                смену ещё можно перенести или отменить. После её окончания в
+                шторке остаётся одна кнопка — уточнить часы, — и предупреждать
+                уже не о чем. */}
+            {(canMove || canCancel) && (
+              <p className="muted" style={{ marginBottom: 12 }}>
+                Планы меняются — это нормально. Главное предупредить заранее,
+                а не в последний момент.
+              </p>
+            )}
+            <div className="stack">
               {canSetHours && (
                 <Button
                   variant="secondary"
                   block
                   onClick={() => {
                     setTroubleOpen(false);
+                    if (srvMatch) setHoursValue(numRu(shiftLengthHours(srvMatch)));
                     setHoursOpen(true);
                   }}
                 >
-                  Смена прошла не по времени
+                  Смена вышла короче или длиннее
                 </Button>
               )}
               {canMove && (
@@ -590,6 +569,12 @@ export function ChatPage() {
                   block
                   onClick={() => {
                     setTroubleOpen(false);
+                    if (srvMatch?.shiftStart != null) {
+                      setMoveStart(fmtTime(srvMatch.shiftStart));
+                    }
+                    if (srvMatch?.shiftEnd != null) {
+                      setMoveEnd(fmtTime(srvMatch.shiftEnd));
+                    }
                     setMoveOpen(true);
                   }}
                 >
@@ -605,7 +590,7 @@ export function ChatPage() {
                     setCancelOpen(true);
                   }}
                 >
-                  {role === "employer" ? "Смена не состоится" : "Не смогу выйти"}
+                  {role === "employer" ? "Отменить смену" : "Не смогу выйти"}
                 </Button>
               )}
               <Button variant="ghost" block onClick={() => setTroubleOpen(false)}>
@@ -618,7 +603,7 @@ export function ChatPage() {
       {hoursOpen && (
         <Sheet title="Сколько часов вышло" onClose={() => setHoursOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Опоздал, ушёл раньше или задержался — оплата и комиссия
+              Смена вышла короче или длиннее, чем договаривались, — оплата и комиссия
               пересчитаются по факту. Работник увидит это в чате.
             </p>
             <div className="form-label">Часов</div>
@@ -640,7 +625,7 @@ export function ChatPage() {
               onChange={(e) => setHoursNote(e.target.value)}
             />
             <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-              <Button block onClick={saveHours}>Сохранить</Button>
+              <Button block onClick={saveHours}>Сохранить часы</Button>
               <Button variant="ghost" block onClick={() => setHoursOpen(false)}>
                 Отмена
               </Button>
@@ -651,8 +636,8 @@ export function ChatPage() {
       {moveOpen && (
         <Sheet title="Перенести смену" onClose={() => setMoveOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Человек уже согласился на прежние условия, поэтому перенос — это
-              предложение: он может не смочь в новое время.
+              Человек согласился на этот день. Перенос — просьба: в новое
+              время он может не выйти.
             </p>
             <div className="form-label">Новая дата</div>
             <input
@@ -695,14 +680,15 @@ export function ChatPage() {
       {cancelOpen && (
         <Sheet title="Отменить смену?" onClose={() => setCancelOpen(false)}>
             <p className="muted" style={{ marginBottom: 12 }}>
-              Вторая сторона получит уведомление сразу. Чем раньше
-              предупредите, тем лучше: заранее отменённая смена не влияет на
-              надёжность профиля, за несколько часов до начала — влияет.
+              {role === "employer" ? "Работник узнает сразу." : "Заведение узнает сразу."}{" "}
+              Отменить заранее — не страшно, а за пару часов до начала ударит
+              по надёжности профиля.
             </p>
+            <div className="form-label">Причина — по желанию</div>
             <input
               className="input"
               aria-label="Причина отмены смены"
-              placeholder="Причина (по желанию)"
+              placeholder="например, заболел администратор"
               maxLength={200}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
@@ -721,7 +707,7 @@ export function ChatPage() {
       {conflict && (
         <Sheet title="Смены пересекаются" onClose={() => setConflict(null)}>
             <p className="muted" style={{ marginBottom: 16 }}>{conflict}</p>
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="stack">
               <Button
                 block
                 onClick={() => {
@@ -731,10 +717,29 @@ export function ChatPage() {
               >
                 Всё равно беру
               </Button>
+              {/* Не «Отменить»: рядом стоит «Всё равно беру», и человек читал
+                  это как «отменить смену» — ценой была потерянная подработка. */}
               <Button variant="ghost" block onClick={() => setConflict(null)}>
-                Отменить
+                Не сейчас
               </Button>
             </div>
+        </Sheet>
+      )}
+
+      {moreOpen && (
+        <Sheet title="Что сделать" onClose={() => setMoreOpen(false)}>
+          <div className="stack">
+            <Button
+              variant="secondary"
+              icon={<IconWarning size={16} />}
+              onClick={() => {
+                setMoreOpen(false);
+                setReportOpen(true);
+              }}
+            >
+              Пожаловаться
+            </Button>
+          </div>
         </Sheet>
       )}
 

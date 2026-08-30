@@ -3,6 +3,8 @@ from datetime import date, timedelta
 
 from app.timeutil import local_today
 
+from .shifttime import age_shift
+
 
 def _d(days: int) -> str:
     """Дата смены относительно «сегодня» — по местному времени, как её
@@ -206,29 +208,32 @@ def _code_of(client, emp, mid):
 
 def test_shift_settles_itself_after_the_waiting_window(client):
     """Смена закончилась, никто не возразил — закрывается сама с комиссией."""
-    from datetime import UTC, datetime, timedelta
-
     from app.db import SessionLocal
     from app.digest import settle_shifts
-    from app.models import Match, Vacancy
+    from app.models import Match
 
     emp, seeker, mid = _match_ready_for_checkin(client)
     code = _code_of(client, emp, mid)
     assert client.post(f"/matches/{mid}/checkin", headers=seeker,
                        json={"code": code}).status_code == 200
 
+    # Смена ещё не закончилась — закрывать рано.
     db = SessionLocal()
     try:
-        # Смена ещё не закончилась — закрывать рано.
         assert settle_shifts(db) == 0
-        # Отматываем смену во вчера, чтобы срок ожидания истёк.
-        m = db.get(Match, mid)
-        v = db.get(Vacancy, m.vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        db.commit()
+    finally:
+        db.close()
 
+    # Доводим смену до конца, чтобы срок ожидания истёк. Именно age_shift, а
+    # не «дата минус сутки»: расчёт ждёт двенадцать часов после конца смены, и
+    # в третьем часу ночи «вчерашняя» смена закончилась всего девять часов
+    # назад — тест падал каждую ночь при исправном коде.
+    age_shift(mid, 1)
+
+    db = SessionLocal()
+    try:
         assert settle_shifts(db) == 1
-        db.refresh(m)
+        m = db.get(Match, mid)
         assert m.status == "completed"
         assert m.no_show is False
         # Повторный запуск ничего не делает — смена уже закрыта.

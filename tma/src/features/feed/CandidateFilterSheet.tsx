@@ -1,13 +1,9 @@
 import { useState } from "react";
-import {
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
-  STAFF_ROLE_LABELS,
-} from "@/types/domain";
 import type { FeedFilters } from "@/api/endpoints";
+import { Button } from "@/components/Button";
+import { RolePicker } from "@/components/RolePicker";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Sheet } from "@/components/Sheet";
-import { haptic } from "@/telegram/sdk";
 
 /** Фильтры ленты кандидатов (сторона заведения): роль, район, «готов сегодня»,
  *  «надёжные без неявок». Зеркалит стиль фильтров соискателя. */
@@ -23,61 +19,24 @@ export function CandidateFilterSheet({
   const [f, setF] = useState<FeedFilters>({ ...value });
   const set = (patch: Partial<FeedFilters>) => setF((cur) => ({ ...cur, ...patch }));
 
-  function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
-    return (
-      <button
-        className="tag"
-        style={{
-          cursor: "pointer",
-          background: on ? "var(--gold-fill)" : "transparent",
-          color: on ? "#fff" : "var(--text)",
-          borderColor: on ? "var(--gold-fill)" : "var(--border-strong)",
-        }}
-        onClick={() => {
-          haptic("select");
-          onClick();
-        }}
-      >
-        {label}
-      </button>
-    );
-  }
-
   return (
     <Sheet
       title="Кто нужен"
       onClose={onClose}
       footer={
         <>
-          <button className="btn secondary" onClick={() => onApply({})}>
+          <Button variant="secondary" onClick={() => onApply({})}>
             Сбросить
-          </button>
-          <button className="btn" onClick={() => onApply(f)}>
-            Показать
-          </button>
+          </Button>
+          <Button onClick={() => onApply(f)}>Показать людей</Button>
         </>
       }
     >
       <div className="form-label">Должность</div>
-      <div style={{ margin: "8px 0 16px" }}>
-        {ROLE_FAMILY_ORDER.map((fam) => (
-          <div key={fam} style={{ marginBottom: 10 }}>
-            <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
-              {ROLE_FAMILY_LABELS[fam]}
-            </div>
-            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-              {ROLE_FAMILIES[fam].map((r) => (
-                <Chip
-                  key={r}
-                  on={f.role === r}
-                  label={STAFF_ROLE_LABELS[r]}
-                  onClick={() => set({ role: f.role === r ? undefined : r })}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <RolePicker
+        isOn={(r) => f.role === r}
+        onPick={(r) => set({ role: f.role === r ? undefined : r })}
+      />
 
       <label className="form-label" htmlFor="district">Район</label>
       <input
@@ -89,16 +48,16 @@ export function CandidateFilterSheet({
         onChange={(e) => set({ district: e.target.value || undefined })}
       />
 
-      <div className="form-label">Показать</div>
+      <div className="form-label">Кого показывать</div>
       <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 18px" }}>
-        <Chip
+        <ToggleChip
           on={!!f.available_today}
-          label="Готов сегодня"
+          label="Может сегодня"
           onClick={() => set({ available_today: !f.available_today })}
         />
-        <Chip
+        <ToggleChip
           on={!!f.reliable_only}
-          label="Надёжные (без неявок)"
+          label="Кто ни разу не подводил"
           onClick={() => set({ reliable_only: !f.reliable_only })}
         />
       </div>

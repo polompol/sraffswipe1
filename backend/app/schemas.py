@@ -1,4 +1,5 @@
 """Pydantic-схемы запросов/ответов."""
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
@@ -162,12 +163,30 @@ class SwipeIn(BaseModel):
     target_id: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     target_type: Literal["vacancy", "user"]
     direction: Literal["like", "dislike"]
+    # На КАКУЮ смену заведение зовёт человека. Без этого поля сервер выбирал
+    # смену сам — первую попавшуюся из тех, что человек лайкнул. На экране
+    # «Кто откликнулся» под карточкой прямо написано «Бариста · 19 августа»,
+    # заведение жало «Беру на смену» — и мэтч мог оказаться на другую свою
+    # смену. Для свайпа по вакансии поле не нужно: там смена и есть цель.
+    vacancy_id: Annotated[
+        str, StringConstraints(min_length=1, max_length=64)
+    ] | None = None
 
 
 class SwipeOut(BaseModel):
     recorded: bool
     matched: bool
     match_id: str | None = None
+    # НА КАКУЮ смену получилось совпадение. Соискатель это и так видит — он
+    # смахнул конкретную карточку. А заведение листает людей, смену там выбрать
+    # негде, и сервер подбирает ближайшую сам: без этих полей экран «Взаимно!»
+    # у заведения не мог сказать, на какой день и час оно только что позвало
+    # человека. Заполняются только когда matched=true.
+    vacancy_id: str | None = None
+    role: str = ""
+    shift_date: str = ""
+    shift_start: int = 0
+    shift_end: int = 0
 
 
 class MatchOut(BaseModel):
@@ -200,6 +219,16 @@ class MatchOut(BaseModel):
     reschedule_date: str = ""
     reschedule_start: int | None = None
     reschedule_end: int | None = None
+    # С КЕМ и НА ЧТО договорились. Этих полей в ответе не было вовсе: приложение
+    # рисовало их из демо-данных, поэтому на разработческой сборке всё выглядело
+    # правильно, а на живом сервере каждая строка «Моих смен» превращалась в
+    # безымянное «Заведение» без должности, и то же самое видел работодатель —
+    # список людей без имён. Отдаём только участникам мэтча: они уже договорились
+    # работать вместе. Телефона и ИНН здесь нет.
+    role: str = ""            # должность на смене
+    company_name: str = ""    # название заведения (видит соискатель)
+    company_photo_url: str = ""
+    seeker_name: str = ""     # имя работника (видит заведение)
 
 
 # ---- chat ----
@@ -223,3 +252,8 @@ class MessageOut(BaseModel):
     sender_id: str
     text: str
     is_system: bool
+    # Время написания. Его не отдавали вовсе, и в чате не было ни одной даты.
+    # Для спора это главное: «написал в 23:40, что не выйдет» без времени —
+    # не довод, а слова. Оператор разбирает спор по переписке, и порядок
+    # событий в ней должен быть виден.
+    created_at: datetime

@@ -26,3 +26,25 @@ export function useLargeMode(): boolean {
   }, []);
   return large;
 }
+
+/**
+ * Низкий экран (iPhone SE, дешёвые андроиды — до 700 точек в высоту).
+ *
+ * На таком телефоне карточке достаётся около 366 точек, и крупная сумма
+ * поверх фото съедает адрес и строку «как платят»: ради них человек и решает,
+ * ехать ли. Сумма при этом не теряется — она возвращается обычной строкой в
+ * теле карточки, вместе со всем остальным.
+ */
+export function useShortScreen(): boolean {
+  const query = "(max-height: 700px)";
+  const [short, setShort] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setShort(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return short;
+}

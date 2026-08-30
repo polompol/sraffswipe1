@@ -24,6 +24,7 @@ import logging
 import queue
 import threading
 import time
+import urllib.error
 import urllib.request
 
 from sqlalchemy.orm import Session
@@ -48,6 +49,46 @@ _started = False
 _pace_lock = threading.Lock()
 _last_sent = 0.0
 _dropped = 0
+
+# СОСТОЯНИЕ ДОСТАВКИ.
+#
+# Раньше отправка молча глотала любую ошибку: `except: pass`, ни строчки в
+# лог. А на этих сообщениях держится вся эскалация — «смену отметили как
+# несостоявшуюся, откройте и позовите оператора». Протух токен бота или
+# Telegram недоступен — человек просто не узнает, что потерял деньги, и
+# ничего не сломается на вид.
+#
+# Считаем отказы отдельно от «человек заблокировал бота»: первое — поломка
+# сервиса, второе — обычное дело и лечению не подлежит.
+_health_lock = threading.Lock()
+_health = {
+    "sent": 0,            # доставлено с последнего запуска
+    "failed_row": 0,      # отказов подряд (сбрасывается любой удачей)
+    "blocked": 0,         # человек заблокировал бота — это не поломка
+    "last_error": "",
+}
+
+
+def _mark_sent() -> None:
+    with _health_lock:
+        _health["sent"] += 1
+        _health["failed_row"] = 0
+        _health["last_error"] = ""
+
+
+def _mark_failed(err: str, blocked: bool = False) -> None:
+    with _health_lock:
+        if blocked:
+            _health["blocked"] += 1
+            return
+        _health["failed_row"] += 1
+        _health["last_error"] = err[:200]
+
+
+def delivery_health() -> dict:
+    """Что с доставкой уведомлений — для админ-панели."""
+    with _health_lock:
+        return dict(_health)
 
 
 def _pace() -> None:
@@ -163,8 +204,20 @@ def _send(
             headers={"Content-Type": "application/json"},
         )
         urllib.request.urlopen(req, timeout=5)  # noqa: S310
-    except Exception:  # noqa: BLE001
-        pass
+        _mark_sent()
+    except urllib.error.HTTPError as e:  # noqa: PERF203
+        # 403 — человек заблокировал бота или не начинал с ним разговор. Это
+        # не поломка сервиса и чинится только самим человеком.
+        blocked = e.code == 403
+        if not blocked:
+            logger.warning("Telegram отказал (%s) при отправке %s: %s",
+                           e.code, tg, e.reason)
+        _mark_failed(f"HTTP {e.code}: {e.reason}", blocked=blocked)
+    except Exception as e:  # noqa: BLE001
+        # Сеть, таймаут, что угодно. Молчать здесь нельзя: на этих
+        # сообщениях держится вся эскалация.
+        logger.warning("Уведомление %s не доставлено: %s", tg, e)
+        _mark_failed(str(e))
 
 
 def notify_owner(

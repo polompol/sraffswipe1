@@ -4,12 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/domain";
 import { MIN_RATE_PER_HOUR, MIN_RATE_PER_SHIFT } from "@/types/domain";
 import {
-  PAY_METHOD_LABELS,
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
+  PAY_METHOD_SHORT,
   STAFF_ROLE_LABELS,
-  TIPS_LABELS,
+  TIPS_CHOICE,
 } from "@/types/domain";
 import {
   createVacancy,
@@ -19,12 +16,15 @@ import {
   type AddressSuggestion,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { dateLong, shiftWhen } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
+import { RolePicker } from "@/components/RolePicker";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { CityPicker } from "@/components/CityPicker";
-import { IconPin } from "@/components/Icons";
+import { IconCheck, IconPin } from "@/components/Icons";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
+import { ToggleChip } from "@/components/ToggleChip";
 
 const toMinutes = (t: string): number => {
   const [h, m] = t.split(":").map(Number);
@@ -79,14 +79,24 @@ export function CreateVacancyPage() {
     !HEADCOUNT_PRESETS.includes(pre?.headcount ?? 1),
   );
   const [busy, setBusy] = useState(false);
+  // Экран «опубликовано» вместо возврата назад: после публикации у заведения
+  // должно быть куда нажать, а не только куда вернуться.
+  const [published, setPublished] = useState(false);
 
-  useEffect(() => showBackButton(() => nav(-1)), [nav]);
+  // Кнопка «назад» Telegram. После публикации она ведёт к списку смен: назад
+  // в только что отправленную форму возвращаться незачем.
+  useEffect(
+    () => showBackButton(() => (published ? nav("/vacancy/my") : nav(-1))),
+    [nav, published],
+  );
 
   // Форма длинная: дата, время, ставка, адрес с подсказками, описание — три
   // минуты работы. Задел крестик или смахнул вниз — всё пропадало без
   // единого вопроса. Пока в форме есть несохранённое, Telegram спрашивает
   // подтверждение при закрытии.
-  const dirty = !!date || !!desc || address !== (pre?.address ?? "");
+  // После публикации спрашивать «точно уйти?» уже не за что: форма сохранена.
+  const dirty =
+    !published && (!!date || !!desc || address !== (pre?.address ?? ""));
   useEffect(() => {
     guardClosing(dirty);
     return () => guardClosing(false);
@@ -139,15 +149,21 @@ export function CreateVacancyPage() {
       if (editing) {
         await updateVacancy(editing.id, payload);
         toast("Смена обновлена", "success");
-      } else {
-        await createVacancy(payload);
-        track("vacancy_publish", { role });
-        toast("Смена опубликована", "success");
+        haptic("success");
+        qc.invalidateQueries({ queryKey: ["feed"] });
+        qc.invalidateQueries({ queryKey: ["my-vacancies"] });
+        nav(-1);
+        return;
       }
+      await createVacancy(payload);
+      track("vacancy_publish", { role });
       haptic("success");
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["my-vacancies"] });
-      nav(-1);
+      // Не возвращаем назад молча. Раньше публикация заканчивалась всплывашкой
+      // и прыжком на предыдущий экран: смена опубликована — и что дальше?
+      // Заведение ждало откликов, хотя быстрее позвать людей самому.
+      setPublished(true);
     } catch (e) {
       haptic("error");
       // Сервер объясняет причину сам: и почему нельзя менять смену с
@@ -158,8 +174,8 @@ export function CreateVacancyPage() {
         apiError(
           e,
           editing
-            ? "Не удалось сохранить. Проверьте поля."
-            : "Не удалось опубликовать. Проверьте поля.",
+            ? "Не получилось сохранить. Проверьте дату, время и ставку."
+            : "Не получилось разместить. Проверьте дату, время и ставку.",
         ),
         "error",
       );
@@ -191,11 +207,59 @@ export function CreateVacancyPage() {
     return () => clearTimeout(t);
   }, [address]);
 
+  if (published) {
+    return (
+      <div className="app">
+        <div className="page">
+          {/* Тот же кружок, что у пустых состояний: одна форма на весь
+              продукт, отдельный стиль тут не нужен. */}
+          <div
+            aria-hidden
+            style={{
+              width: 72,
+              height: 72,
+              margin: "8px 0 16px",
+              borderRadius: "50%",
+              background: "var(--gold-tint)",
+              color: "var(--gold)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <IconCheck size={34} />
+          </div>
+          <h1 className="h1 tight">
+            Смена размещена
+          </h1>
+          <p className="muted" style={{ marginBottom: 4 }}>
+            {STAFF_ROLE_LABELS[role]} ·{" "}
+            {shiftWhen({
+              shiftDate: date,
+              shiftStart: toMinutes(start),
+              shiftEnd: toMinutes(end),
+            })}
+          </p>
+          <p className="muted" style={{ marginBottom: 24 }}>
+            Её уже видят работники рядом. Можно не ждать откликов: позовите
+            тех, кто подходит — так быстрее.
+          </p>
+          <div className="stack">
+            <Button onClick={() => nav("/feed")}>Посмотреть, кто свободен</Button>
+            <Button variant="secondary" onClick={() => nav("/vacancy/my")}>
+              К моим сменам
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>
-          {editing ? "Исправить смену" : pre ? "Повторить смену" : "Новая смена"}
+        <h1 className="h1 tight">
+          {editing ? "Исправить условия" : pre ? "Повторить смену" : "Новая смена"}
         </h1>
         {editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
@@ -210,35 +274,16 @@ export function CreateVacancyPage() {
         )}
 
         <div className="form-label">Должность</div>
-        <div style={{ margin: "8px 0 16px" }}>
-          {ROLE_FAMILY_ORDER.map((fam) => (
-            <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: "var(--text-xs)", marginBottom: 6 }}>
-                {ROLE_FAMILY_LABELS[fam]}
-              </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {ROLE_FAMILIES[fam].map((r) => (
-                  <button
-                    key={r}
-                    className="tag"
-                    style={{
-                      cursor: "pointer",
-                      background: role === r ? "var(--gold-fill)" : "transparent",
-                      color: role === r ? "#fff" : "var(--text)",
-                      borderColor: role === r ? "var(--gold-fill)" : "var(--border-strong)",
-                    }}
-                    onClick={() => setRole(r)}
-                  >
-                    {STAFF_ROLE_LABELS[r]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <RolePicker isOn={(r) => role === r} onPick={setRole} />
 
         <div className="form-label">Дата смены</div>
-        <input className="input" type="date" style={{ marginBottom: 12 }} value={date} onChange={(e) => setDate(e.target.value)} />
+        <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        {/* Поле даты рисует сама система телефона, и формат у неё свой: на
+            английском телефоне это «08/29/2026». Спутать 08/29 и 29/08 легко,
+            а цена ошибки — смена в другой день. Повторяем выбранное словами. */}
+        <p className="hint">
+          {date ? dateLong(date) : "Выберите день смены"}
+        </p>
 
         <div className="row" style={{ marginBottom: 12 }}>
           <span style={{ flex: 1 }}>
@@ -263,7 +308,7 @@ export function CreateVacancyPage() {
           />
           <button
             className="tag"
-            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border)" }}
+            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border-strong)" }}
             onClick={() => setRateType(rateType === "perHour" ? "perShift" : "perHour")}
           >
             {rateType === "perHour" ? "₽/час" : "₽/смена"}
@@ -280,21 +325,13 @@ export function CreateVacancyPage() {
           }}
         >
           {HEADCOUNT_PRESETS.map((n) => (
-            <button
+            <ToggleChip
               key={n}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                minWidth: 52,
-                justifyContent: "center",
-                background: headcount === n ? "var(--gold-fill)" : "transparent",
-                color: headcount === n ? "#fff" : "var(--text)",
-                borderColor: headcount === n ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={headcount === n}
+              label={n}
+              wide
               onClick={() => setHeadcount(n)}
-            >
-              {n}
-            </button>
+            />
           ))}
         </div>
         {/* Поле для своего числа показываем только по запросу. Раньше оно
@@ -305,7 +342,7 @@ export function CreateVacancyPage() {
         {custom ? (
           <>
             <label className="form-label" htmlFor="headcount">
-              Сколько именно человек
+              Впишите своё число
             </label>
             <input
               id="headcount"
@@ -325,47 +362,35 @@ export function CreateVacancyPage() {
           <button
             type="button"
             onClick={() => setCustom(true)}
-            style={{
-              background: "none",
-              border: "none",
-              // Ссылка-кнопка была высотой около 30px: по ней промахивались.
-              minHeight: 44,
-              padding: "4px 0 12px",
-              color: "var(--link)",
-              font: "inherit",
-              fontSize: "var(--text-sm)",
-              textDecoration: "underline",
-              cursor: "pointer",
-            }}
+            /* Не ссылка с подчёркиванием: багровый подчёркнутый текст в ряду
+               кнопок читался как сообщение об ошибке, хотя это обычный способ
+               вписать своё число. */
+            className="text-btn text-btn--gold"
+            style={{ padding: "4px 0 12px" }}
           >
             Нужно другое число
           </button>
         )}
-        <p className="muted" style={{ margin: "-8px 0 16px", fontSize: "var(--text-xs)" }}>
-          Одна смена на всех — не нужно публиковать несколько одинаковых.
-          Когда наберётся столько людей, смена уйдёт из ленты сама.
-        </p>
+        {headcount > 1 && (
+          <p className="hint">
+            Одной смены хватит на всех — одинаковые размещать не нужно.
+            Наберёте нужных людей — она уйдёт из ленты сама.
+          </p>
+        )}
 
         <div className="form-label">Как и когда платите</div>
         <div style={{ display: "grid", gap: 8, margin: "8px 0 16px" }}>
-          {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((p) => (
-            <button
+          {(Object.keys(PAY_METHOD_SHORT) as PayMethod[]).map((p) => (
+            <ToggleChip
               key={p}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: payMethod === p ? "var(--gold-fill)" : "transparent",
-                color: payMethod === p ? "#fff" : "var(--text)",
-                borderColor: payMethod === p ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={payMethod === p}
+              label={PAY_METHOD_SHORT[p]}
               onClick={() => setPayMethod(p)}
-            >
-              {PAY_METHOD_LABELS[p]}
-            </button>
+            />
           ))}
         </div>
 
-        <div className="form-label">Чаевые (платят гости)</div>
+        <div className="form-label">Чаевые — их платят гости</div>
         <div
           style={{
             display: "grid",
@@ -374,33 +399,27 @@ export function CreateVacancyPage() {
             margin: "8px 0 16px",
           }}
         >
-          {(Object.keys(TIPS_LABELS) as TipsMode[]).map((t) => (
-            <button
+          {(Object.keys(TIPS_CHOICE) as TipsMode[]).map((t) => (
+            <ToggleChip
               key={t}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: tips === t ? "var(--gold-fill)" : "transparent",
-                color: tips === t ? "#fff" : "var(--text)",
-                borderColor: tips === t ? "var(--gold-fill)" : "var(--border-strong)",
-              }}
+              on={tips === t}
+              label={TIPS_CHOICE[t]}
               onClick={() => setTips(t)}
-            >
-              {TIPS_LABELS[t]}
-            </button>
+            />
           ))}
         </div>
 
         <CityPicker
           value={city}
           onChange={setCity}
-          hint="Смену увидят люди из этого города. Время смены тоже считается по нему."
+          hint="Смену увидят люди из этого города. Время — местное."
         />
 
         <label className="form-label" htmlFor="addr">Адрес</label>
         <input
           id="addr"
           className="input"
+          placeholder="например, Баумана, 12"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
@@ -412,7 +431,7 @@ export function CreateVacancyPage() {
                 // Подсказки адреса стояли плотным списком высотой ~35px.
                 // Промах здесь дороже прочих: смена уезжает на соседнюю улицу,
                 // а человек приходит не туда.
-                style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", minHeight: 44, padding: "0 10px", cursor: "pointer", color: "var(--text)" }}
+                style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", minHeight: 44, padding: "0 10px", cursor: "pointer", color: "var(--text)", font: "inherit", fontSize: "var(--text-base)" }}
                 onClick={() => {
                   chosenAddress.current = s.value;
                   setAddress(s.value);
@@ -422,7 +441,7 @@ export function CreateVacancyPage() {
                   setSuggests([]);
                 }}
               >
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span className="inline">
                   <IconPin size={15} /> {s.value}
                 </span>
               </button>
@@ -450,7 +469,7 @@ export function CreateVacancyPage() {
             фотографию смене было нельзя ничем. Именно фото решает, листнут
             карточку дальше или остановятся. */}
         <PhotoUpload
-          label="Фото места (необязательно, но с ним откликаются заметно чаще)"
+          label="Фото места — по желанию, но с ним откликаются чаще"
           value={interiorPhoto}
           onChange={setInteriorPhoto}
         />
@@ -465,7 +484,7 @@ export function CreateVacancyPage() {
         />
 
         <Button loading={busy} onClick={publish}>
-          {editing ? "Сохранить изменения" : "Опубликовать смену"}
+          {editing ? "Сохранить изменения" : "Разместить смену"}
         </Button>
       </div>
     </div>

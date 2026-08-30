@@ -1,8 +1,9 @@
+import { LS } from "./storage";
 import { onTelegramThemeChange, paintChrome, telegramDark } from "@/telegram/sdk";
 
 export type ThemeMode = "light" | "dark";
 
-const KEY = "ss_theme";
+const KEY = LS.theme;
 
 function setDataTheme(mode: ThemeMode): void {
   document.documentElement.dataset.theme = mode === "dark" ? "dark" : "";

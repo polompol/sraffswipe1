@@ -1,9 +1,15 @@
 import { useRef, useState } from "react";
 import { uploadPhoto } from "@/api/endpoints";
 import { haptic } from "@/telegram/sdk";
+import { Button } from "@/components/Button";
 import { IconCamera } from "./Icons";
 
-/** Выбор и загрузка фото. При недоступном S3 — мягкая деградация к вводу URL. */
+/** Выбор и загрузка фото.
+ *
+ *  Поля «вставьте ссылку» здесь нет и не будет. Чужой адрес картинки даёт
+ *  владельцу того сервера список всех, кто открыл карточку (IP и устройство),
+ *  и возможность подменить картинку уже после модерации — сервер такие адреса
+ *  и не примет. Не загрузилось — карточка обойдётся буквой названия. */
 export function PhotoUpload({
   label = "Фото",
   value,
@@ -26,7 +32,13 @@ export function PhotoUpload({
       haptic("success");
     } catch {
       haptic("error");
-      setError("Загрузка недоступна — вставьте ссылку на фото вручную.");
+      // Не предлагаем «вставьте ссылку»: сервер принимает только фото,
+      // загруженные через приложение (чужая ссылка даёт её владельцу список
+      // всех, кто открыл карточку, и возможность подменить картинку).
+      setError(
+        "Фото не загрузилось. Попробуйте ещё раз или оставьте так — "
+        + "в карточке будет буква названия.",
+      );
     } finally {
       setBusy(false);
     }
@@ -54,14 +66,17 @@ export function PhotoUpload({
         >
           {!value && <IconCamera size={24} />}
         </div>
-        <button
-          className="btn secondary"
-          style={{ width: "auto", padding: "0 16px", height: 46 }}
+        {/* Спиннер компонента тут не нужен: загрузка идёт уже после выбора
+            файла, а её показывает сама подпись кнопки. */}
+        <Button
+          variant="secondary"
+          block={false}
+          style={{ padding: "0 16px", height: 46 }}
           disabled={busy}
           onClick={() => inputRef.current?.click()}
         >
-          {busy ? "Загрузка…" : "Выбрать фото"}
-        </button>
+          {busy ? "Загружаем фото…" : "Выбрать фото"}
+        </Button>
         <input
           ref={inputRef}
           type="file"
@@ -74,17 +89,12 @@ export function PhotoUpload({
         />
       </div>
       {error && (
-        <>
-          <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>{error}</div>
-          <input
-            className="input"
-            style={{ marginTop: 6 }}
-            aria-label="Ссылка на фото"
-            placeholder="https://… ссылка на фото"
-            defaultValue={value}
-            onBlur={(e) => e.target.value && onChange(e.target.value)}
-          />
-        </>
+        <div
+          className="hint"
+          role="status"
+        >
+          {error}
+        </div>
       )}
     </div>
   );

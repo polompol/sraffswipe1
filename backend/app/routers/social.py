@@ -13,6 +13,7 @@ from ..models import Employer, Match, Referral, Review, User, Vacancy
 from ..ratelimit import rate_limit
 from ..schemas import ExperienceTag, PhotoUrl, StaffRole
 from ..security import current_principal
+from ..timeutil import local_today
 
 router = APIRouter(tags=["social"])
 
@@ -144,35 +145,68 @@ class MeOut(BaseModel):
 
 
 def _incoming_likes(db: Session, principal: dict) -> int:
-    """Сколько входящих лайков: соискателю — от заведений на него; заведению —
-    отклики соискателей на его вакансии. Крючок «тебя хотят»."""
+    """Сколько входящих откликов, на которые ЕЩЁ МОЖНО ответить.
+
+    Раньше считались все лайки за всё время: и те, где мэтч давно создан, и
+    по снятым сменам, и по прошедшим. Кнопка обещала «Вас зовут на смены: 4»,
+    человек нажимал — а в списке одна. Списки-то фильтруют правильно, врал
+    только счётчик, и это ровно та мелочь, после которой перестают верить
+    цифрам вообще.
+
+    Поэтому здесь те же условия, что и в списках: живая смена, дата не в
+    прошлом, ответа ещё не было.
+    """
     from ..models import Swipe, Vacancy
 
+    me = principal["id"]
     if principal["role"] == "employer":
-        vac_ids = [
-            v.id for v in db.query(Vacancy.id)
-            .filter(Vacancy.employer_id == principal["id"]).all()
+        # Отклики на мои смены, которым я ещё не ответил (зеркало /applicants).
+        vacs = [
+            v for v in db.query(Vacancy).filter(
+                Vacancy.employer_id == me, Vacancy.status == "active",
+            ).all()
+            if v.date >= local_today(v.city)
         ]
-        if not vac_ids:
+        if not vacs:
             return 0
-        return (
-            db.query(Swipe)
-            .filter(
-                Swipe.target_type == "vacancy",
-                Swipe.target_id.in_(vac_ids),
+        answered = {
+            uid for (uid,) in db.query(Swipe.target_id).filter(
+                Swipe.swiper_id == me, Swipe.target_type == "user",
                 Swipe.direction == "like",
             )
-            .count()
-        )
-    return (
-        db.query(Swipe)
-        .filter(
-            Swipe.target_type == "user",
-            Swipe.target_id == principal["id"],
-            Swipe.direction == "like",
-        )
-        .count()
-    )
+        }
+        likers = {
+            uid for (uid,) in db.query(Swipe.swiper_id).filter(
+                Swipe.target_type == "vacancy",
+                Swipe.target_id.in_([v.id for v in vacs]),
+                Swipe.direction == "like",
+            )
+        }
+        blocked = {
+            uid for (uid,) in db.query(User.id).filter(
+                User.id.in_(likers or ["__none__"]), User.blocked.is_(True),
+            )
+        }
+        # Считаем ЛЮДЕЙ, а не лайки: один человек, откликнувшийся на три смены,
+        # — это один ответ, а не три.
+        return len(likers - answered - blocked)
+
+    # Соискателю: смены заведений, которые его позвали, и которые он ещё не
+    # смотрел (зеркало /vacancies/invites).
+    liked_me = db.query(Swipe.swiper_id).filter(
+        Swipe.target_id == me,
+        Swipe.target_type == "user",
+        Swipe.direction == "like",
+    ).scalar_subquery()
+    swiped = db.query(Swipe.target_id).filter(
+        Swipe.swiper_id == me, Swipe.target_type == "vacancy",
+    ).scalar_subquery()
+    rows = db.query(Vacancy).filter(
+        Vacancy.employer_id.in_(liked_me),
+        Vacancy.status == "active",
+        Vacancy.id.notin_(swiped),
+    ).all()
+    return sum(1 for v in rows if v.date >= local_today(v.city))
 
 
 def _shift_pay(rate: int, rate_type: str, start: int, end: int) -> int:
@@ -252,7 +286,7 @@ def me(
         city=u.city, district=u.district,
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
-        availableToday=u.available_today,
+        availableToday=u.available_date == local_today(u.city),
         profileCompletion=_profile_completion(u),
         birthDate=u.birth_date or "", roles=roles,
         selfEmployed=u.self_employed, inn=u.inn,
@@ -280,9 +314,11 @@ def set_available(
     u = db.get(User, principal["id"])
     if u is None:
         raise HTTPException(status_code=404, detail="Не найдено")
-    u.available_today = body.available
+    # Пишем дату по часам ГОРОДА человека: в Владивостоке «сегодня» наступает
+    # на семь часов раньше московского, и отметка гасла бы не в ту полночь.
+    u.available_date = local_today(u.city) if body.available else ""
     db.commit()
-    return {"availableToday": u.available_today}
+    return {"availableToday": u.available_date == local_today(u.city)}
 
 
 def _age_from_iso(iso: str) -> int | None:
@@ -299,11 +335,11 @@ def _age_from_iso(iso: str) -> int | None:
     )
 
 
-def _check_photo(url: str) -> None:
+def _check_photo(url: str, owner_id: str = "") -> None:
     """Фото — только своё загруженное (или аватарка из Telegram)."""
     from ..photos import is_allowed_photo_url
 
-    if not is_allowed_photo_url(url):
+    if not is_allowed_photo_url(url, owner_id):
         raise HTTPException(
             status_code=400,
             detail="Фото нужно загрузить в приложении — "
@@ -383,7 +419,7 @@ def update_me(
         # свайпом за секунду, карточка без фото — это карточка, которую
         # пролистывают.
         if body.photo_url is not None:
-            _check_photo(body.photo_url)
+            _check_photo(body.photo_url, e.id)
             e.photo_url = body.photo_url
         # Город заведения. По нему показывается лента кандидатов — без него
         # заведение в другом городе листало бы москвичей.
@@ -423,7 +459,7 @@ def update_me(
     if body.experience_tags is not None:
         u.experience_tags = ",".join(body.experience_tags)
     if body.photo_url is not None:
-        _check_photo(body.photo_url)
+        _check_photo(body.photo_url, u.id)
         u.photo_urls = body.photo_url
     db.commit()
     # «О себе» и имя видит каждое заведение в ленте — это такой же публичный

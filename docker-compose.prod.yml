@@ -92,7 +92,7 @@ services:
       # Прод-режим: строгая проверка подписи Telegram, без dev-лазеек.
       DEV_MODE: "false"
       ALLOW_INSECURE_TELEGRAM_AUTH: "false"
-      MINI_APP_URL: https://${DOMAIN}
+      MINI_APP_URL: https://${DOMAIN:?set DOMAIN in .env}
       ALLOWED_ORIGINS: https://${DOMAIN}
       # Опциональное (можно оставить пустым на пилоте).
       ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
@@ -170,7 +170,7 @@ services:
       BOT_USERNAME: ${BOT_USERNAME:?set BOT_USERNAME in .env}
       DEV_MODE: "false"
       ALLOW_INSECURE_TELEGRAM_AUTH: "false"
-      MINI_APP_URL: https://${DOMAIN}
+      MINI_APP_URL: https://${DOMAIN:?set DOMAIN in .env}
       BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
       # Кому писать, если ночная задача захочет позвать оператора. Сегодня
       # она молчит, но пустая строка здесь означала бы, что первое же такое
@@ -200,7 +200,7 @@ services:
       # обрабатывает (единственный рельс — ЮKassa на стороне API), а
       # уведомления шлёт сам API.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
-      MINI_APP_URL: https://${DOMAIN}
+      MINI_APP_URL: https://${DOMAIN:?set DOMAIN in .env}
       # Эффект «печатает…» + плавное раскрытие текста бота (1 — включить).
       BOT_TYPEWRITER: ${BOT_TYPEWRITER:-0}
 
@@ -214,8 +214,15 @@ services:
       context: .
       dockerfile: tma/Dockerfile
       args:
+        # Метка боевой сборки: приложение не соберётся на демо-данных.
+        PROD_BUILD: "1"
         VITE_USE_BACKEND: "true"
-        VITE_API_BASE_URL: https://${DOMAIN}/api
+        # Именно здесь домен обязателен явно. Caddy требует его первым (см.
+        # выше) и падает сам, но args образа считаются раньше сервисов: с
+        # пустым DOMAIN сюда попадал адрес «https:///api», и приложение
+        # уезжало на сервер, стучась в несуществующий домен. Сборка теперь не
+        # начнётся — и предохранитель в самой сборке страхует второй раз.
+        VITE_API_BASE_URL: https://${DOMAIN:?set DOMAIN in .env}/api
         VITE_OFFER_URL: ${VITE_OFFER_URL:-}
         VITE_PRIVACY_URL: ${VITE_PRIVACY_URL:-}
         VITE_SUPPORT_URL: ${VITE_SUPPORT_URL:-}
