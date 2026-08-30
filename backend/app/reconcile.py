@@ -70,7 +70,11 @@ def reconcile(db: Session, hours: int = 48) -> dict:
     """Сверить платежи за последние `hours` часов и дозачислить пропущенные.
 
     Возвращает сводку для оператора: сколько проверено, сколько не хватало,
-    сколько денег дозачислено, что не удалось разобрать.
+    сколько денег дозачислено. Текст исключения наружу НЕ отдаём. Дыры тут нет
+    — эндпоинт админский, — но текст ошибки писала не мы: его составляет
+    библиотека, и что в нём окажется, мы не выбираем (адрес прокси, имя узла,
+    внутренние подробности). Оператору это ничего не объясняет, а починить
+    сверку помогает лог, куда исключение уходит целиком, со стеком.
     """
     if not settings.yookassa_ready:
         return {"skipped": "ЮKassa не подключена"}
@@ -78,9 +82,9 @@ def reconcile(db: Session, hours: int = 48) -> dict:
     since = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
     try:
         items = _fetch_payments(since)
-    except Exception as exc:  # noqa: BLE001 — сверка не должна ронять крон
-        _log.error("Сверка с ЮKassa не удалась: %s", exc)
-        return {"error": str(exc)[:200]}
+    except Exception:  # noqa: BLE001 — сверка не должна ронять крон
+        _log.exception("Сверка с ЮKassa не удалась")
+        return {"error": "Не удалось получить платежи ЮKassa"}
 
     from .routers.billing import credit_wallet
 
