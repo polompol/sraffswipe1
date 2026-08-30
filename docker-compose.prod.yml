@@ -92,7 +92,7 @@ services:
       # Прод-режим: строгая проверка подписи Telegram, без dev-лазеек.
       DEV_MODE: "false"
       ALLOW_INSECURE_TELEGRAM_AUTH: "false"
-      MINI_APP_URL: https://${DOMAIN}
+      MINI_APP_URL: https://${DOMAIN:?set DOMAIN in .env}
       ALLOWED_ORIGINS: https://${DOMAIN}
       # Опциональное (можно оставить пустым на пилоте).
       ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
@@ -170,7 +170,7 @@ services:
       BOT_USERNAME: ${BOT_USERNAME:?set BOT_USERNAME in .env}
       DEV_MODE: "false"
       ALLOW_INSECURE_TELEGRAM_AUTH: "false"
-      MINI_APP_URL: https://${DOMAIN}
+      MINI_APP_URL: https://${DOMAIN:?set DOMAIN in .env}
       BUSINESS_TZ: ${BUSINESS_TZ:-Europe/Moscow}
       # Кому писать, если ночная задача захочет позвать оператора. Сегодня
       # она молчит, но пустая строка здесь означала бы, что первое же такое
@@ -200,7 +200,7 @@ services:
       # обрабатывает (единственный рельс — ЮKassa на стороне API), а
       # уведомления шлёт сам API.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
-      MINI_APP_URL: https://${DOMAIN}
+      MINI_APP_URL: https://${DOMAIN:?set DOMAIN in .env}
       # Эффект «печатает…» + плавное раскрытие текста бота (1 — включить).
       BOT_TYPEWRITER: ${BOT_TYPEWRITER:-0}
 

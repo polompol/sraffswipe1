@@ -22,6 +22,41 @@ from aiogram.types import (
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://example.com")
+
+
+def check_app_url(url: str) -> str | None:
+    """Что не так с адресом приложения. None — всё в порядке.
+
+    Кнопка «Открыть StaffSwipe» — единственная дверь в сервис: и в /start, и
+    в меню слева от поля ввода, и в ответе на любое сообщение. Если адрес
+    неверный, бот выглядит совершенно рабочим — приходит текст, появляется
+    кнопка, — а по нажатию открывается чужой сайт или пустота. Человек решит,
+    что сломан сервис, и уйдёт.
+
+    Значение по умолчанию здесь — заглушка example.com, удобная при разработке
+    и катастрофическая на сервере. Поэтому в бою проверяем.
+    """
+    from urllib.parse import urlparse
+
+    raw = (url or "").strip()
+    if not raw:
+        return "адрес не задан"
+    try:
+        u = urlparse(raw)
+    except ValueError:
+        return "это не адрес"
+    if u.scheme != "https":
+        return "нужен https — Telegram открывает Mini App только по нему"
+    host = (u.hostname or "").lower()
+    if not host:
+        return "в адресе нет домена — проверьте, заполнен ли DOMAIN"
+    if host == "example.com" or host.endswith(".example.com"):
+        return "это адрес-заглушка, а не ваш домен"
+    if host in ("localhost", "127.0.0.1") or host.endswith(".local"):
+        return "это адрес вашей машины, а не сервера"
+    if "." not in host:
+        return "это не похоже на домен — проверьте, заполнен ли DOMAIN"
+    return None
 # «Печатающий» эффект: индикатор «печатает…» + плавное раскрытие текста.
 # ВЫКЛЮЧЕН по умолчанию: ради анимации бот правит одно сообщение десять раз
 # подряд. Человек ждёт несколько секунд, чтобы прочитать /start, а при росте
@@ -169,6 +204,14 @@ async def setup(bot: Bot) -> None:
 async def main() -> None:
     if not BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN не задан")
+    # Молчать про неверный адрес нельзя: бот будет выглядеть рабочим, а
+    # единственная кнопка внутрь сервиса поведёт в никуда.
+    problem = check_app_url(MINI_APP_URL)
+    if problem and os.environ.get("DEV_MODE", "").lower() != "true":
+        raise SystemExit(
+            f"MINI_APP_URL=«{MINI_APP_URL}» — {problem}. "
+            "Проверьте DOMAIN в .env: по этой ссылке люди открывают сервис."
+        )
     bot = Bot(BOT_TOKEN)
     await setup(bot)
     await dp.start_polling(bot)
