@@ -25,11 +25,10 @@ import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
 import { CandidateFilterSheet } from "./CandidateFilterSheet";
-import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
-import { CandidateDetailsSheet } from "./CandidateDetailsSheet";
+import { CardBack } from "./CardBack";
+import { ShiftDetailsBody, CandidateDetailsBody } from "./DetailsBody";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
-import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
 import {
   IconSkip,
@@ -46,10 +45,10 @@ export function FeedPage() {
   const qc = useQueryClient();
   // Свайп и его последствия — отдельным хуком (useSwipeAction).
   const { swipe: handleSwipe, match, setMatch } = useSwipeAction(isSeeker);
-  const [details, setDetails] = useState<Vacancy | null>(null);
-  // Своя шторка у каждой роли: заведение смотрит человека, работник — смену.
-  const [candidate, setCandidate] = useState<Seeker | null>(null);
   const [empty, setEmpty] = useState(false);
+  // Перевёрнута ли карточка. Кнопки под колодой лежат поверх неё и живут вне
+  // колоды, а их подписи белые — на светлой изнанке они исчезали.
+  const [backOpen, setBackOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe, enabled: isSeeker });
 
@@ -211,27 +210,6 @@ export function FeedPage() {
    *  так же, как от пальца — человек видит привычный ответ, а не пустоту.
    *  Ключ карточки передаём явно: пока шторка была открыта, сверху могла
    *  оказаться другая смена, и смахнуть надо именно ту, которую читали. */
-  async function likeFromDetails(v: Vacancy) {
-    setDetails(null);
-    if (deckMode && controller.current) {
-      controller.current("like", v.id);
-      return;
-    }
-    if (await handleSwipe(v, "like")) toast("Отклик отправлен", "success");
-  }
-
-  // То же самое со стороны заведения. Отдельная функция, а не общая с
-  // likeFromDetails: подпись в тосте другая («позвали», а не «откликнулись»),
-  // и сводить их в одну ради двух строк — экономия, за которую потом платят
-  // распутыванием, кто из двух ролей сюда пришёл.
-  async function callFromDetails(s: Seeker) {
-    setCandidate(null);
-    if (deckMode && controller.current) {
-      controller.current("like", s.id);
-      return;
-    }
-    if (await handleSwipe(s, "like")) toast("Приглашение отправлено", "success");
-  }
 
   // Экран с колодой живёт по своим правилам: он не прокручивается, а карточка
   // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
@@ -241,7 +219,11 @@ export function FeedPage() {
     && !(isSeeker && view === "list");
 
   return (
-    <div className={deckMode ? "page feed-deck" : "page"}>
+    <div
+      className={
+        deckMode ? (backOpen ? "page feed-deck back-open" : "page feed-deck") : "page"
+      }
+    >
       <FeedHeader
         isSeeker={isSeeker}
         view={view}
@@ -321,7 +303,12 @@ export function FeedPage() {
               keyOf={(v) => v.id}
               renderCard={(v) => <VacancyCardContent v={v} />}
               onSwipe={handleSwipe}
-              onTap={setDetails}
+              onFlipChange={setBackOpen}
+              renderBack={(v) => (
+                <CardBack title={v.companyName}>
+                  <ShiftDetailsBody v={v} />
+                </CardBack>
+              )}
               onEmpty={() => setEmpty(true)}
               controllerRef={(fn) => (controller.current = fn)}
             />
@@ -335,7 +322,12 @@ export function FeedPage() {
               // «ХОЧУ» поперёк чужого лица читался двусмысленно и расходился
               // с кнопкой под колодой, которая подписана «Позвать».
               likeStamp="ЗОВУ"
-              onTap={setCandidate}
+              onFlipChange={setBackOpen}
+              renderBack={(c) => (
+                <CardBack title={`${c.name}${c.age != null ? `, ${c.age}` : ""}`}>
+                  <CandidateDetailsBody s={c} />
+                </CardBack>
+              )}
               onEmpty={() => setEmpty(true)}
               controllerRef={(fn) => (controller.current = fn)}
             />
@@ -372,20 +364,6 @@ export function FeedPage() {
           match={match}
           role={isSeeker ? "seeker" : "employer"}
           onClose={() => setMatch(null)}
-        />
-      )}
-      {details && (
-        <ShiftDetailsSheet
-          v={details}
-          onClose={() => setDetails(null)}
-          onLike={likeFromDetails}
-        />
-      )}
-      {candidate && (
-        <CandidateDetailsSheet
-          s={candidate}
-          onClose={() => setCandidate(null)}
-          onCall={callFromDetails}
         />
       )}
       {filterOpen && isSeeker && (

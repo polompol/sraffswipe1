@@ -2058,3 +2058,121 @@ span.tag {
   font-size: var(--text-sm);
   opacity: 0.72;
 }
+
+/* ── Перевёртыш карточки ──────────────────────────────────────────────────
+   Подробности показывает не шторка поверх экрана, а вторая сторона самой
+   карточки. Шторка уводила карточку под себя, и связь «это та же смена»
+   держалась только на памяти; переворот её показывает.
+
+   Поворот живёт на ВНУТРЕННЕЙ обёртке, а не на самой карточке: у карточки
+   transform уже занят — им её двигает свайп, и одно свойство не может делать
+   два дела сразу. */
+.flip {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.flip-face {
+  position: absolute;
+  inset: 0;
+  /* Без этого сквозь изнанку просвечивает лицевая сторона задом наперёд. */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* backface-visibility прячет обратную сторону только НА ГЛАЗ. Для всего
+     остального она остаётся обычным содержимым: её читает вслух скринридер,
+     по ней попадает палец, и замер контраста видит её текст на чужом фоне —
+     наша проверка читаемости из-за этого падала на обычной ленте, находя
+     тёмные буквы изнанки поверх багровой лицевой стороны.
+
+     Поэтому невидимую сторону скрываем по-настоящему. Переключение отложено
+     на середину переворота: скрой мы сразу — сторона исчезала бы в начале
+     движения, и вместо переворота человек видел бы моргание. */
+  visibility: hidden;
+  transition: visibility 0s linear 0.22s;
+}
+.swipe-card:not(.is-flipped) .flip-front,
+.swipe-card.is-flipped .flip-back {
+  visibility: visible;
+}
+.flip-back {
+  transform: rotateY(180deg);
+  background: var(--surface);
+  color: var(--text);
+}
+/* Пока карточка перевёрнута, штамп ХОЧУ/НЕТ и подсветка не нужны: тащить её
+   нельзя, а полупрозрачные слои поверх текста мешают читать. */
+.swipe-card.is-flipped .swipe-tint,
+.swipe-card.is-flipped .stamp {
+  display: none;
+}
+
+.card-back-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Снизу отступаем ровно на зону кнопок «Пропустить/Отклик»: они лежат ПОВЕРХ
+     карточки, и без этого накрывали подсказку «коснитесь, чтобы вернуться».
+     Берём ту же переменную, которой отступает лицевая сторона (см. padding у
+     .page.feed-deck .swipe-body), а не своё число: в крупном режиме кнопки
+     больше, на низком экране меньше, и подобранное на глаз значение разъехалось
+     бы ровно там, где проверить труднее всего. */
+  padding: 18px 20px var(--act-space, 92px);
+  min-height: 0;
+}
+.card-back-head {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  margin-bottom: 4px;
+  flex: none;
+}
+/* Прокручивается ТОЛЬКО середина: заголовок и подсказка «коснитесь, чтобы
+   вернуться» остаются на месте. Описание смены — свободный текст любой длины,
+   и без прокрутки оно обрезало бы оговорку про деньги внизу, а она там самая
+   важная. */
+.card-back-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.card-back-hint {
+  flex: none;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+  opacity: 0.72;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Кому важнее покой, чем движение: переворот происходит мгновенно. Правило
+   отдельное, а не общий `* { transition: none }` — тот гасит и подсветку
+   нажатий, по которой видно, что кнопка сработала. */
+@media (prefers-reduced-motion: reduce) {
+  .flip {
+    transition: none;
+  }
+  /* Переворота нет — значит и ждать его середины незачем. */
+  .flip-face {
+    transition: none;
+  }
+}
+
+/* Карточка перевёрнута — под кнопками теперь светлая изнанка, а не тёмный
+   градиент. Белые подписи «Пропустить/Отклик» на ней исчезали совсем: тот же
+   текст, который на лицевой стороне читается, на изнанке пропадал. Возвращаем
+   обычный цвет текста и убираем тень — она нужна была против фотографии. */
+.page.feed-deck.back-open .act-label {
+  color: var(--text);
+  text-shadow: none;
+}
+.page.feed-deck.back-open .act-label-skip {
+  color: var(--muted);
+}

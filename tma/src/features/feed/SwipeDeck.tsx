@@ -22,6 +22,15 @@ interface Props<T> {
    *  Отдельная крупная кнопка деталей на карточке была лишним действием:
    *  свайп — главное, а подробности человек и так открывает касанием. */
   onTap?: (item: T) => void;
+  /** Изнанка карточки. Если задана, касание переворачивает карточку, а не
+   *  зовёт onTap: два способа показать одно и то же — это выбор, которого у
+   *  человека быть не должно. */
+  renderBack?: (item: T) => React.ReactNode;
+  /** Перевёрнута ли сейчас какая-нибудь карточка. Нужно наружу, потому что
+   *  кнопки «Пропустить/Отклик» лежат ПОВЕРХ карточки, но живут вне колоды:
+   *  их белые подписи рассчитаны на тёмную лицевую сторону и на светлой
+   *  изнанке пропадали совсем. */
+  onFlipChange?: (flipped: boolean) => void;
   /** Слово на штампе при свайпе вправо. У соискателя «ХОЧУ», у заведения
    *  «ЗОВУ»: один штамп на обе стороны ложился поперёк лица человека и
    *  расходился с кнопкой под колодой, которая подписана «Позвать». */
@@ -54,12 +63,22 @@ export function SwipeDeck<T>(props: Props<T>) {
   const [settled] = useState(() => new Set<number>());
   // Тащили ли карточку в текущем жесте (см. handleClick ниже).
   const draggedRef = useRef(false);
+  // Какая карточка перевёрнута — по ключу, а не по номеру. Номер сдвигается,
+  // когда соседняя карточка улетает, и перевёрнутой оказалась бы следующая.
+  const [flipped, setFlipped] = useState<string | null>(null);
+  const onFlipChange = props.onFlipChange;
+  useEffect(() => {
+    onFlipChange?.(flipped !== null);
+  }, [flipped, onFlipChange]);
   const deckKey = items.map((it) => keyOf(it)).join("|");
   const lastDeck = useRef(deckKey);
   if (lastDeck.current !== deckKey) {
     lastDeck.current = deckKey;
     gone.clear();
     settled.clear();
+    // Перевёрнутой карточки в новой колоде нет: иначе первая же карточка
+    // другого города открывалась бы изнанкой.
+    if (flipped !== null) setFlipped(null);
   }
 
   const [springs, apiRef] = useSprings(items.length, (i) => ({
@@ -72,6 +91,9 @@ export function SwipeDeck<T>(props: Props<T>) {
 
   function fling(index: number, dir: SwipeDirection) {
     if (gone.has(index)) return;
+    // Решение принято — карточка улетает лицом, а не изнанкой. Иначе
+    // следующая за ней встречала бы человека перевёрнутой.
+    if (flipped === keyOf(items[index])) setFlipped(null);
     gone.add(index);
     haptic(dir === "dislike" ? "light" : "medium");
     const dx = dir === "dislike" ? -1 : 1;
@@ -166,6 +188,10 @@ export function SwipeDeck<T>(props: Props<T>) {
 
   const bind = useDrag(
     ({ args: [index], active, movement: [mx, my], swipe: [sx], last }) => {
+      // Перевёрнутую карточку не тащим. На изнанке текст прокручивается, и
+      // тот же жест не может значить одновременно «читаю дальше» и «смахиваю».
+      // Решить можно и с изнанки — кнопками под колодой, они работают всегда.
+      if (flipped !== null && flipped === keyOf(items[index as number])) return;
       // Запоминаем, тащили карточку или только коснулись: по этому потом
       // отличаем «расскажи подробнее» от неудачного свайпа. Само нажатие
       // ловим обычным onClick — так предсказуемее, чем распознавание тапа
@@ -196,7 +222,14 @@ export function SwipeDeck<T>(props: Props<T>) {
   function handleClick(item: T): void {
     const dragged = draggedRef.current;
     draggedRef.current = false;
-    if (!dragged) props.onTap?.(item);
+    if (dragged) return;
+    if (props.renderBack) {
+      const key = keyOf(item);
+      setFlipped((cur) => (cur === key ? null : key));
+      haptic("light");
+      return;
+    }
+    props.onTap?.(item);
   }
 
   return (
@@ -204,10 +237,11 @@ export function SwipeDeck<T>(props: Props<T>) {
       {springs.map((style, i) => {
         if (gone.has(i)) return null;
         const item = items[i];
+        const isFlipped = flipped === keyOf(item);
         return (
           <animated.div
             key={keyOf(item)}
-            className="swipe-card"
+            className={isFlipped ? "swipe-card is-flipped" : "swipe-card"}
             {...bind(i)}
             onClick={() => handleClick(item)}
             style={{
@@ -219,7 +253,26 @@ export function SwipeDeck<T>(props: Props<T>) {
               zIndex: items.length - i,
             }}
           >
-            {renderCard(item)}
+            {props.renderBack ? (
+              <div
+                className="flip"
+                style={{
+                  transform: `rotateY(${isFlipped ? 180 : 0}deg)`,
+                }}
+              >
+                {/* aria-hidden на невидимой стороне обязателен: без него
+                    незрячий человек слышит обе стороны подряд как один
+                    сплошной текст и не понимает, где он находится. */}
+                <div className="flip-face flip-front" aria-hidden={isFlipped}>
+                  {renderCard(item)}
+                </div>
+                <div className="flip-face flip-back" aria-hidden={!isFlipped}>
+                  {props.renderBack(item)}
+                </div>
+              </div>
+            ) : (
+              renderCard(item)
+            )}
             <Tint x={style.x} />
             <Stamps x={style.x} like={likeStamp} />
           </animated.div>

@@ -224,15 +224,25 @@ test("шторки и чат читаются так же, как экраны",
   await page.goto("/#/feed");
   await waitForStableLayout(page, ".page");
 
-  // Подробности смены — касанием карточки.
+  // Подробности смены — на изнанке карточки, касанием. Проверять её отдельно
+  // важнее, чем прежнюю шторку: изнанка светлая, а кнопки «Пропустить/Отклик»
+  // лежат ПОВЕРХ неё и живут вне карточки — их белые подписи рассчитаны на
+  // тёмную лицевую сторону и на светлой изнанке пропадали совсем.
   await page.locator(".swipe-card").first().click({ position: { x: 40, y: 60 } });
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".swipe-card.is-flipped")).toBeVisible();
+  await page.waitForTimeout(600); // переворот длится 0,45 с
   const details = await sweep(page);
-  expect(details.checked, "в шторке должен быть текст").toBeGreaterThan(8);
-  expect(details.contrast, `шторка смены:\n${report(details.contrast)}`).toEqual([]);
-  expect(details.overflowX, "шторка не должна ездить вбок").toBe(0);
+  expect(details.checked, "на изнанке должен быть текст").toBeGreaterThan(8);
+  expect(details.contrast, `изнанка карточки:\n${report(details.contrast)}`).toEqual([]);
+  expect(details.overflowX, "изнанка не должна ездить вбок").toBe(0);
   expect(details.tiny, `мелкие зоны нажатия ${details.tinyWhere}`).toBe(0);
-  await page.keyboard.press("Escape");
+  // Возвращаем карточку лицом — дальше проверяются фильтры поверх ленты.
+  // Ждать обязательно: невидимая сторона гаснет на СЕРЕДИНЕ переворота, и без
+  // паузы следующий замер успевает застать её ещё видимой и посчитать её
+  // текст на чужом фоне.
+  await page.locator(".swipe-card").first().click({ position: { x: 40, y: 60 } });
+  await expect(page.locator(".swipe-card.is-flipped")).toHaveCount(0);
+  await page.waitForTimeout(600);
 
   // Фильтры.
   await page.getByRole("button", { name: /^Фильтры/ }).click();

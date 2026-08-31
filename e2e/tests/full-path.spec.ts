@@ -60,13 +60,17 @@ test.describe("весь путь целиком", () => {
     const card = page.locator(".swipe-card").first();
     await expect(card).toBeVisible();
     await waitForStableLayout(page, ".deck");
-    await expect(card).toContainText("Кофейня «Дрова»");
-    await expect(card, "видно, сколько заплатят").toContainText(
+    // Смотрим ИМЕННО лицевую сторону: у карточки теперь есть изнанка, и она
+    // лежит в той же разметке — проверка по всей карточке нашла бы адрес там
+    // и прошла бы, ничего не проверив.
+    const front = card.locator(".flip-front");
+    await expect(front).toContainText("Кофейня «Дрова»");
+    await expect(front, "видно, сколько заплатят").toContainText(
       `${SHIFT.pay.toLocaleString("ru-RU")}`,
     );
-    // Адрес переехал в шторку — на лицевой стороне его быть не должно.
+    // Адрес переехал на изнанку — на лицевой стороне его быть не должно.
     // Что он там есть, проверяет seeker.spec.ts на том же сценарии.
-    await expect(card, "адрес — на касание, а не на лицевой стороне")
+    await expect(front, "адрес — на касание, а не на лицевой стороне")
       .not.toContainText("ул. Льва Толстого, 16");
 
     // ── 3. Фильтр: «Сегодня» сужает ленту и снимается обратно ───────────
