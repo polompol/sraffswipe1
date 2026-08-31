@@ -3,7 +3,6 @@ import { useLargeMode, useShortScreen } from "@/lib/large";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
-  EXPERIENCE_TAG_LABELS,
   MED_BOOK_LABELS,
   PAY_METHOD_SHORT,
   STAFF_ROLE_LABELS,
@@ -353,13 +352,6 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
   const allTags = s.experienceTags ?? [];
   // «Опытный» — по указанному опыту работника (мы не проверяем документы).
   const experienced = allTags.includes("experienced");
-  // Из общего списка убираем то, что УЖЕ показано отдельно: опыт вынесен в
-  // чип «Опытный», медкнижка — в свою строку, самозанятость — в свой чип.
-  // Без этой чистки карточка писала одно и то же по два раза: «Опытный» и
-  // «Опыт > 2 лет», «Медкнижка: Есть» и «Медкнижка» в перечислении.
-  const tags = allTags.filter(
-    (t) => t !== "experienced" && t !== "medBook" && t !== "selfEmployed",
-  );
   const [heroShown, setHeroShown] = useState(!hasPhoto);
   const large = useLargeMode();
   const short = useShortScreen();
@@ -421,11 +413,10 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
               Опытный
             </span>
           )}
-          {s.selfEmployed && (
-            <span className="tag tag-super">
-              Самозанятый
-            </span>
-          )}
+          {/* «Самозанятый» ушёл в шторку, к медкнижке. На карточке он вставал
+              третьей плашкой в строке с именем, не помещался и переносился на
+              отдельную строку — а решает заведение не этим. Как платить
+              самозанятому, важно ПОСЛЕ выбора человека, а не вместо. */}
         </div>
         {/* Должность из заголовка карточки не повторяем — только остальные,
             которыми человек тоже готов выйти.
@@ -443,15 +434,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
             ))}
           </div>
         )}
-        {s.about && (
-          // swipe-desc — тот же класс, что и у описания смены: при нехватке
-          // места ужимается ИМЕННО рассказ о себе, а не район, медкнижка и
-          // надёжность. На узком экране (320 точек) без этого обрезался низ
-          // карточки, где как раз и написано, можно ли человеку доверять.
-          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.95 }}>
-            {s.about}
-          </div>
-        )}
+
         <div className="card-meta">
           {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
@@ -467,10 +450,17 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           <div>
             <IconMedBook size={15} /> Медкнижка: {MED_BOOK_LABELS[s.medBook]}
           </div>
-          {tags.length > 0 && (
-            <div style={{ opacity: 0.9 }}>{tags.slice(0, 3).map((t) => EXPERIENCE_TAG_LABELS[t]).join(" · ")}</div>
-          )}
         </div>
+
+        {/* Рассказ о себе и перечень умений ушли в шторку — она открывается
+            касанием карточки. На лицевой стороне остаётся то, чем выбирают:
+            кто это, кем готов выйти, можно ли положиться, есть ли медкнижка и
+            откуда поедет. Рассказ о себе — свободный текст любой длины, и
+            именно он превращал карточку в стену.
+
+            Подсказка обязательна: снаружи не видно, что у карточки есть
+            изнанка. Ровно та же строка, что и на карточке смены. */}
+        <div className="swipe-more" aria-hidden="true">Подробнее — коснитесь карточки</div>
       </div>
     </>
   );

@@ -26,6 +26,7 @@ import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
 import { CandidateFilterSheet } from "./CandidateFilterSheet";
 import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
+import { CandidateDetailsSheet } from "./CandidateDetailsSheet";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { toast } from "@/components/Toast";
@@ -46,6 +47,8 @@ export function FeedPage() {
   // Свайп и его последствия — отдельным хуком (useSwipeAction).
   const { swipe: handleSwipe, match, setMatch } = useSwipeAction(isSeeker);
   const [details, setDetails] = useState<Vacancy | null>(null);
+  // Своя шторка у каждой роли: заведение смотрит человека, работник — смену.
+  const [candidate, setCandidate] = useState<Seeker | null>(null);
   const [empty, setEmpty] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe, enabled: isSeeker });
@@ -217,6 +220,19 @@ export function FeedPage() {
     if (await handleSwipe(v, "like")) toast("Отклик отправлен", "success");
   }
 
+  // То же самое со стороны заведения. Отдельная функция, а не общая с
+  // likeFromDetails: подпись в тосте другая («позвали», а не «откликнулись»),
+  // и сводить их в одну ради двух строк — экономия, за которую потом платят
+  // распутыванием, кто из двух ролей сюда пришёл.
+  async function callFromDetails(s: Seeker) {
+    setCandidate(null);
+    if (deckMode && controller.current) {
+      controller.current("like", s.id);
+      return;
+    }
+    if (await handleSwipe(s, "like")) toast("Приглашение отправлено", "success");
+  }
+
   // Экран с колодой живёт по своим правилам: он не прокручивается, а карточка
   // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
   // см. `.page.feed-deck` в index.css.
@@ -319,6 +335,7 @@ export function FeedPage() {
               // «ХОЧУ» поперёк чужого лица читался двусмысленно и расходился
               // с кнопкой под колодой, которая подписана «Позвать».
               likeStamp="ЗОВУ"
+              onTap={setCandidate}
               onEmpty={() => setEmpty(true)}
               controllerRef={(fn) => (controller.current = fn)}
             />
@@ -362,6 +379,13 @@ export function FeedPage() {
           v={details}
           onClose={() => setDetails(null)}
           onLike={likeFromDetails}
+        />
+      )}
+      {candidate && (
+        <CandidateDetailsSheet
+          s={candidate}
+          onClose={() => setCandidate(null)}
+          onCall={callFromDetails}
         />
       )}
       {filterOpen && isSeeker && (
