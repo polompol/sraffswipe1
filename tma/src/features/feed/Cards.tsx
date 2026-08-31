@@ -7,7 +7,6 @@ import {
   MED_BOOK_LABELS,
   PAY_METHOD_SHORT,
   STAFF_ROLE_LABELS,
-  TIPS_BADGE,
 } from "@/types/domain";
 import {
   dec1,
@@ -276,10 +275,6 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           <div>
             <IconCalendar size={15} /> {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
           </div>
-          <div>
-            <IconPin size={15} />
-            <span style={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.address}</span>
-          </div>
           {(v.employerShiftsDone || v.employerRating) ? (
             // Отдельный класс: на самом маленьком экране в крупном режиме эта
             // строка уходит первой. Рейтинг заведения полезен, но адрес, часы
@@ -301,15 +296,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           ) : null}
         </div>
 
-        {v.description && (
-          // Класс, а не только стиль: при нехватке места ужимается ИМЕННО
-          // описание — оно наименее важное на карточке. Иначе обрезался низ, а
-          // там способ оплаты и «медкнижка» — то, из-за чего человек зря
-          // приедет на смену.
-          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.92, fontSize: "var(--text-base)", lineHeight: 1.45 }}>
-            {v.description}
-          </div>
-        )}
+
 
         {/* Две ровные колонки вместо ряда с переносом. Раньше плашки были
             разной ширины и вставали по-разному на каждой карточке: у одной
@@ -321,14 +308,9 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
               <PayGlyph size={16} /> {PAY_METHOD_SHORT[v.payMethod]}
             </span>
           )}
-          {v.tips && v.tips !== "none" && (
-            // Отдельный класс: на 320×568 с крупным текстом строка уходит.
-            // Чаевые платят гости, а не заведение, — это приятная подробность,
-            // а не то, из-за чего человек решает ехать.
-            <span className="cond-tips" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
-              <IconMoney size={16} /> {TIPS_BADGE[v.tips]}
-            </span>
-          )}
+          {/* Чаевые ушли в шторку: их платят гости, а не заведение, и на
+              решение «ехать или нет» они не влияют. Способ оплаты остался —
+              «когда деньги» решает. */}
           {v.requireMedBook && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, opacity: 0.9 }}>
               <IconMedBook size={15} /> Медкнижка
@@ -345,6 +327,18 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             </span>
           )}
         </div>
+
+        {/* Адрес, описание и чаевые с лицевой стороны убраны — они дословно
+            повторялись в шторке деталей, которая открывается по касанию. Пока
+            шторки не было, карточка оставалась единственным местом, и держать
+            всё на ней было правильно. Теперь это семь строк текста там, где
+            решение принимают за три секунды: сколько платят, кем, когда и где
+            примерно. Остальное — на касание.
+
+            Строка-подсказка нужна ровно потому, что снаружи не видно: у
+            карточки есть изнанка. Без неё человек не узнает, что адрес и
+            описание вообще существуют. */}
+        <div className="swipe-more" aria-hidden="true">Подробнее — коснитесь карточки</div>
 
       </div>
     </>
@@ -434,11 +428,16 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           )}
         </div>
         {/* Должность из заголовка карточки не повторяем — только остальные,
-            которыми человек тоже готов выйти. */}
+            которыми человек тоже готов выйти.
+
+            Заливкой их красить нельзя: крупно написано «Бариста», а под ним
+            такой же яркой плашкой «Официант» — и заведение видит две должности
+            одного веса, не понимая, кто перед ним. Дополнительные должности —
+            тихой плашкой без заливки: главная остаётся одна. */}
         {(heroShown ? roles.slice(1) : roles).length > 0 && (
           <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
             {(heroShown ? roles.slice(1) : roles).map((r) => (
-              <span key={r} className="tag tag-gold-fill">
+              <span key={r} className={heroShown ? "tag" : "tag tag-gold-fill"}>
                 {STAFF_ROLE_LABELS[r]}
               </span>
             ))}

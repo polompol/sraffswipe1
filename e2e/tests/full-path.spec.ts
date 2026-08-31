@@ -61,10 +61,13 @@ test.describe("весь путь целиком", () => {
     await expect(card).toBeVisible();
     await waitForStableLayout(page, ".deck");
     await expect(card).toContainText("Кофейня «Дрова»");
-    await expect(card).toContainText("ул. Льва Толстого, 16");
     await expect(card, "видно, сколько заплатят").toContainText(
       `${SHIFT.pay.toLocaleString("ru-RU")}`,
     );
+    // Адрес переехал в шторку — на лицевой стороне его быть не должно.
+    // Что он там есть, проверяет seeker.spec.ts на том же сценарии.
+    await expect(card, "адрес — на касание, а не на лицевой стороне")
+      .not.toContainText("ул. Льва Толстого, 16");
 
     // ── 3. Фильтр: «Сегодня» сужает ленту и снимается обратно ───────────
     const cityChip = page.locator(".chip").first();

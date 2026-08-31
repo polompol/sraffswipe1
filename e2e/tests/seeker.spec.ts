@@ -54,8 +54,12 @@ test.describe("человек находит смену и доходит до �
     const card = page.locator(".swipe-card").first();
     await expect(card).toBeVisible();
     await expect(card).toContainText("Кофейня «Дрова»");
-    await expect(card).toContainText("ул. Льва Толстого, 16");
     await expect(card).toContainText(`${SHIFT.pay.toLocaleString("ru-RU")}`);
+    // Адреса на лицевой стороне БОЛЬШЕ НЕТ — он в шторке, вместе с описанием
+    // и чаевыми. Раньше карточка дословно повторяла шторку, и на экране, где
+    // решение принимают за три секунды, стояло семь строк текста. Проверяем
+    // именно отсутствие: иначе адрес вернётся обратно незамеченным.
+    await expect(card).not.toContainText("ул. Льва Толстого, 16");
 
     // 2. Подробности открываются касанием самой карточки. Отдельной кнопки
     //    больше нет: свайп — главное действие, и крупная кнопка рядом с ним
@@ -66,6 +70,9 @@ test.describe("человек находит смену и доходит до �
     await expect(sheet).toBeVisible();
     await expect(sheet).toContainText("Сколько заплатят");
     await expect(sheet).toContainText("Что взять с собой");
+    // Адрес не пропал из продукта — он на касание. Эта проверка и проверка
+    // выше держат правило с двух сторон: на лицевой стороне нет, внутри есть.
+    await expect(sheet).toContainText("ул. Льва Толстого, 16");
 
     // 3. Откликнуться можно прямо из шторки, не закрывая её руками.
     await sheet.getByRole("button", { name: /Откликнуться/ }).click();
