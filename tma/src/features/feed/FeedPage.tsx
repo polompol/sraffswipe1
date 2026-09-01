@@ -310,13 +310,7 @@ export function FeedPage() {
               onSwipe={handleSwipe}
               onFlipChange={setBackOpen}
               renderBack={(v, c) => (
-                <CardBack
-                  title={v.companyName}
-                  note={<ShiftNote />}
-                  primary="Откликнуться"
-                  onPrimary={c.like}
-                  onBack={c.close}
-                >
+                <CardBack title={v.companyName} note={<ShiftNote />} onBack={c.close}>
                   <ShiftDetailsBody v={v} />
                 </CardBack>
               )}
@@ -338,8 +332,6 @@ export function FeedPage() {
                 <CardBack
                   title={`${person.name}${person.age != null ? `, ${person.age}` : ""}`}
                   note={<CandidateNote />}
-                  primary="Позвать"
-                  onPrimary={c.like}
                   onBack={c.close}
                 >
                   <CandidateDetailsBody s={person} />

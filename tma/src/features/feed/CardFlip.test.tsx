@@ -77,6 +77,35 @@ describe("перевёртыш", () => {
     expect(cards[1].classList.contains("is-flipped")).toBe(true);
   });
 
+  it("кнопка на изнанке не отменяет сама себя", () => {
+    // Нажатие внутри изнанки всплывает до карточки, а касание карточки её
+    // переворачивает. «Назад» срабатывал — и карточка тут же переворачивалась
+    // обратно. По коду обе половины верны, поймать можно только вместе.
+    const { container } = render(
+      <SwipeDeck<Card>
+        items={[{ id: "one" }]}
+        keyOf={(c) => c.id}
+        onSwipe={() => Promise.resolve(true)}
+        renderCard={(c) => <div>лицо {c.id}</div>}
+        renderBack={(c, ctl) => (
+          <div>
+            изнанка {c.id}
+            <div onClick={(e) => e.stopPropagation()}>
+              <button onClick={ctl.close}>Назад</button>
+            </div>
+          </div>
+        )}
+      />,
+    );
+    const card = container.querySelector(".swipe-card")!;
+    fireEvent.click(card);
+    expect(card.classList.contains("is-flipped")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Назад" }));
+
+    expect(card.classList.contains("is-flipped")).toBe(false);
+  });
+
   it("улетевшая карточка не оставляет следующую перевёрнутой", async () => {
     let fire: ((dir: "like" | "dislike") => void) | null = null;
     const { container } = render(

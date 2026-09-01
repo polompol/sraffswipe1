@@ -2199,9 +2199,8 @@ span.tag {
 .card-back-foot {
   flex: none;
   display: flex;
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--border);
 }
 
@@ -2249,14 +2248,5 @@ span.tag {
   .card-back-foot {
     margin-top: 8px;
     padding-top: 8px;
-  }
-}
-
-/* На узком экране слово «Назад» уступает место главной кнопке: замер на 320
-   точках показал, что «Откликнуться» обрезалось на середине слова. Стрелка
-   остаётся, имя кнопки для чтения вслух — тоже (aria-label в разметке). */
-@media (max-width: 360px) {
-  .card-back-foot .foot-word {
-    display: none;
   }
 }
