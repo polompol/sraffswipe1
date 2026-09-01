@@ -110,9 +110,18 @@ export function ShiftDetailsBody({ v }: { v: Vacancy }) {
           {v.rateType === "perHour"
             ? `${money(v.rate)}/час × ${numRu(hours)} ч ≈ ${money(estimatedPay(v))}`
             : `${money(v.rate)} за смену`}
-          {v.payMethod ? ` · ${PAY_METHOD_LABELS[v.payMethod]}` : ""}
-          {v.tips && v.tips !== "none" ? ` · ${TIPS_LABELS[v.tips]}` : ""}
         </div>
+        {/* Каждое условие оплаты — своей строкой, БЕЗ разделителя. Пока они
+            шли через « · » одной строкой, точка при переносе повисала: то в
+            начале следующей строки, то в конце предыдущей — и читалась как
+            опечатка. Своя строка убирает эту заботу совсем, а фразы короткие,
+            и места это почти не стоит. */}
+        {v.payMethod && (
+          <div className="muted" style={{ marginTop: 2 }}>{PAY_METHOD_LABELS[v.payMethod]}</div>
+        )}
+        {v.tips && v.tips !== "none" && (
+          <div className="muted" style={{ marginTop: 2 }}>{TIPS_LABELS[v.tips]}</div>
+        )}
       </Row>
 
       <Row icon={<IconPin size={18} />}>
