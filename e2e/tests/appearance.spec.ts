@@ -268,3 +268,64 @@ test("шторки и чат читаются так же, как экраны",
 
   await context.close();
 });
+
+/**
+ * ИЗНАНКА КАРТОЧКИ — во всех темах и режимах, у обеих сторон рынка.
+ *
+ * Отдельно от проверки экранов, потому что фон у изнанки свой: она светлая
+ * там, где лицевая сторона тёмная, и цвета, выверенные для багрового
+ * градиента, на ней ведут себя иначе. Один раз это уже стоило дефекта —
+ * белые подписи кнопок на светлой изнанке пропадали совсем.
+ *
+ * До этой проверки изнанку мерили только в тёмной теме, и светлая со
+ * старым крупным режимом оставались без присмотра.
+ */
+const BACK_CASES: Array<[string, { width: number; height: number }, Record<string, string>]> = [
+  ["светлая тема", { width: 390, height: 844 }, {}],
+  ["тёмная тема", { width: 390, height: 844 }, { ss_theme: "dark" }],
+  ["крупный шрифт", { width: 390, height: 844 }, { ss_large: "1" }],
+  ["крупный и тёмная", { width: 390, height: 844 }, { ss_large: "1", ss_theme: "dark" }],
+  ["дешёвый андроид", { width: 320, height: 568 }, {}],
+  ["дешёвый андроид, тёмная", { width: 320, height: 568 }, { ss_theme: "dark" }],
+];
+
+for (const [name, size, extra] of BACK_CASES) {
+  test(`изнанка карточки читается — ${name}`, async ({ browser, request }) => {
+    const seed = 847_000 + size.width + Object.keys(extra).length * 7;
+    const emp = await login(request, "employer", seed, "Дрова");
+    await fillProfile(request, emp, {
+      company_name: "Кофейня «Дрова»",
+      city: "Москва",
+      address: "ул. Льва Толстого, 16",
+      contact_phone: `+799900${seed % 100000}`,
+    });
+    await publishShift(request, emp);
+    const seeker = await login(request, "seeker", seed + 1, "Мария");
+    await fillProfile(request, seeker, {
+      name: "Мария", city: "Москва", district: "Хамовники",
+      roles: ["barista", "waiter"], birth_date: "1998-04-12", med_book: "yes",
+      self_employed: true, about: "Работала в сетевой кофейне два года.",
+      experience_tags: ["experienced", "cashRegister"],
+    });
+
+    // Обе стороны: у работника изнанка смены, у заведения — человека. Содержимое
+    // разное, и цвета на них проверять надо порознь.
+    for (const [who, кто] of [[seeker, "работник"], [emp, "заведение"]] as const) {
+      const { context, page } = await openApp(browser, who, extra);
+      await page.setViewportSize(size);
+      await page.goto("/#/feed");
+      await waitForStableLayout(page, ".page");
+      await page.locator(".swipe-card").first().click({ position: { x: 60, y: 120 } });
+      await expect(page.locator(".swipe-card.is-flipped")).toBeVisible();
+      // Переворот 0,45 с; мерить надо по неподвижной картинке.
+      await page.waitForTimeout(700);
+
+      const p = await sweep(page);
+      expect(p.checked, `${кто}: на изнанке должен быть текст`).toBeGreaterThan(6);
+      expect(p.contrast, `${кто}, изнанка (${name}):\n${report(p.contrast)}`).toEqual([]);
+      expect(p.overflowX, `${кто}: изнанка не должна ездить вбок`).toBe(0);
+      expect(p.tiny, `${кто}: мелкие зоны нажатия ${p.tinyWhere}`).toBe(0);
+      await context.close();
+    }
+  });
+}
