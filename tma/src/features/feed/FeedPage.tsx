@@ -309,8 +309,14 @@ export function FeedPage() {
               renderCard={(v) => <VacancyCardContent v={v} />}
               onSwipe={handleSwipe}
               onFlipChange={setBackOpen}
-              renderBack={(v) => (
-                <CardBack title={v.companyName} note={<ShiftNote />}>
+              renderBack={(v, c) => (
+                <CardBack
+                  title={v.companyName}
+                  note={<ShiftNote />}
+                  primary="Откликнуться"
+                  onPrimary={c.like}
+                  onBack={c.close}
+                >
                   <ShiftDetailsBody v={v} />
                 </CardBack>
               )}
@@ -328,12 +334,15 @@ export function FeedPage() {
               // с кнопкой под колодой, которая подписана «Позвать».
               likeStamp="ЗОВУ"
               onFlipChange={setBackOpen}
-              renderBack={(c) => (
+              renderBack={(person, c) => (
                 <CardBack
-                  title={`${c.name}${c.age != null ? `, ${c.age}` : ""}`}
+                  title={`${person.name}${person.age != null ? `, ${person.age}` : ""}`}
                   note={<CandidateNote />}
+                  primary="Позвать"
+                  onPrimary={c.like}
+                  onBack={c.close}
                 >
-                  <CandidateDetailsBody s={c} />
+                  <CandidateDetailsBody s={person} />
                 </CardBack>
               )}
               onEmpty={() => setEmpty(true)}
