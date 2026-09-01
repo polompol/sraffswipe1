@@ -16,15 +16,21 @@ import { IconBack } from "@/components/Icons";
  */
 export function CardBack({
   title,
+  note,
   children,
 }: {
   title: string;
+  /** Оговорка, которую человек обязан увидеть. Стоит ВНЕ прокрутки: пока она
+   *  была последней строкой содержимого, длинное описание уводило её под сгиб
+   *  вместе с предупреждением про деньги вперёд. */
+  note?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="card-back-inner">
       <div className="card-back-head">{title}</div>
       <div className="card-back-scroll">{children}</div>
+      {note && <div className="card-back-note">{note}</div>}
       <div className="card-back-hint">
         <IconBack size={15} /> Коснитесь, чтобы вернуться
       </div>

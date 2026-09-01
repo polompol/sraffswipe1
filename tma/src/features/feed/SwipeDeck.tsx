@@ -18,14 +18,12 @@ interface Props<T> {
   controllerRef?: (
     fn: (dir: SwipeDirection, expectKey?: string) => void,
   ) => void;
-  /** Короткий тап по карточке (не свайп) — «расскажи подробнее».
-   *  Отдельная крупная кнопка деталей на карточке была лишним действием:
-   *  свайп — главное, а подробности человек и так открывает касанием. */
-  onTap?: (item: T) => void;
-  /** Изнанка карточки. Если задана, касание переворачивает карточку, а не
-   *  зовёт onTap: два способа показать одно и то же — это выбор, которого у
-   *  человека быть не должно. */
-  renderBack?: (item: T) => React.ReactNode;
+  /** Изнанка карточки — «расскажи подробнее». Касание переворачивает.
+   *
+   *  Раньше здесь был вход onTap, которым открывали шторку снизу. Шторок
+   *  больше нет, и вход остался бы мёртвым: его не звал никто, кроме
+   *  собственного теста. */
+  renderBack: (item: T) => React.ReactNode;
   /** Перевёрнута ли сейчас какая-нибудь карточка. Нужно наружу, потому что
    *  кнопки «Пропустить/Отклик» лежат ПОВЕРХ карточки, но живут вне колоды:
    *  их белые подписи рассчитаны на тёмную лицевую сторону и на светлой
@@ -66,6 +64,10 @@ export function SwipeDeck<T>(props: Props<T>) {
   // Какая карточка перевёрнута — по ключу, а не по номеру. Номер сдвигается,
   // когда соседняя карточка улетает, и перевёрнутой оказалась бы следующая.
   const [flipped, setFlipped] = useState<string | null>(null);
+  // Тот же переворот, но доступный из таймеров подсказки: они заведены один
+  // раз при появлении колоды и внутри видели бы состояние первого кадра.
+  const flippedRef = useRef<string | null>(null);
+  flippedRef.current = flipped;
   const onFlipChange = props.onFlipChange;
   useEffect(() => {
     onFlipChange?.(flipped !== null);
@@ -174,7 +176,9 @@ export function SwipeDeck<T>(props: Props<T>) {
     localStorage.setItem(LS.swipeHinted, "1");
     const nudge = (x: number) =>
       apiRef.start((i) =>
-        i === 0 && !gone.has(0)
+        // Перевёрнутую карточку не качаем: подсказка показывает жест свайпа,
+        // а с изнанки свайп запрещён — кивок обещал бы то, чего нельзя.
+        i === 0 && !gone.has(0) && flippedRef.current === null
           ? { x, rot: x / 18, config: { tension: 180, friction: 18 } }
           : {},
       );
@@ -187,7 +191,13 @@ export function SwipeDeck<T>(props: Props<T>) {
   }, [apiRef, gone]);
 
   const bind = useDrag(
-    ({ args: [index], active, movement: [mx, my], swipe: [sx], last }) => {
+    ({ args: [index], active, movement: [mx, my], swipe: [sx], first, last }) => {
+      // Сбрасываем в НАЧАЛЕ жеста, а не только в handleClick. Флаг «тащили»
+      // гасит следующее касание, чтобы неудачный свайп не считался тапом. Но
+      // снимался он лишь по клику, а браузер после длинного перетаскивания
+      // клик не всегда шлёт — флаг оставался поднятым, и следующее настоящее
+      // касание карточка глотала молча.
+      if (first) draggedRef.current = false;
       // Перевёрнутую карточку не тащим. На изнанке текст прокручивается, и
       // тот же жест не может значить одновременно «читаю дальше» и «смахиваю».
       // Решить можно и с изнанки — кнопками под колодой, они работают всегда.
@@ -223,13 +233,9 @@ export function SwipeDeck<T>(props: Props<T>) {
     const dragged = draggedRef.current;
     draggedRef.current = false;
     if (dragged) return;
-    if (props.renderBack) {
-      const key = keyOf(item);
-      setFlipped((cur) => (cur === key ? null : key));
-      haptic("light");
-      return;
-    }
-    props.onTap?.(item);
+    const key = keyOf(item);
+    setFlipped((cur) => (cur === key ? null : key));
+    haptic("light");
   }
 
   return (
@@ -253,26 +259,20 @@ export function SwipeDeck<T>(props: Props<T>) {
               zIndex: items.length - i,
             }}
           >
-            {props.renderBack ? (
-              <div
-                className="flip"
-                style={{
-                  transform: `rotateY(${isFlipped ? 180 : 0}deg)`,
-                }}
-              >
+            <div
+              className="flip"
+              style={{ transform: `rotateY(${isFlipped ? 180 : 0}deg)` }}
+            >
                 {/* aria-hidden на невидимой стороне обязателен: без него
                     незрячий человек слышит обе стороны подряд как один
                     сплошной текст и не понимает, где он находится. */}
-                <div className="flip-face flip-front" aria-hidden={isFlipped}>
-                  {renderCard(item)}
-                </div>
-                <div className="flip-face flip-back" aria-hidden={!isFlipped}>
-                  {props.renderBack(item)}
-                </div>
+              <div className="flip-face flip-front" aria-hidden={isFlipped}>
+                {renderCard(item)}
               </div>
-            ) : (
-              renderCard(item)
-            )}
+              <div className="flip-face flip-back" aria-hidden={!isFlipped}>
+                {props.renderBack(item)}
+              </div>
+            </div>
             <Tint x={style.x} />
             <Stamps x={style.x} like={likeStamp} />
           </animated.div>

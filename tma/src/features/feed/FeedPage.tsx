@@ -26,7 +26,12 @@ import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
 import { CandidateFilterSheet } from "./CandidateFilterSheet";
 import { CardBack } from "./CardBack";
-import { ShiftDetailsBody, CandidateDetailsBody } from "./DetailsBody";
+import {
+  CandidateDetailsBody,
+  CandidateNote,
+  ShiftDetailsBody,
+  ShiftNote,
+} from "./DetailsBody";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
 import { Button } from "@/components/Button";
@@ -305,7 +310,7 @@ export function FeedPage() {
               onSwipe={handleSwipe}
               onFlipChange={setBackOpen}
               renderBack={(v) => (
-                <CardBack title={v.companyName}>
+                <CardBack title={v.companyName} note={<ShiftNote />}>
                   <ShiftDetailsBody v={v} />
                 </CardBack>
               )}
@@ -324,7 +329,10 @@ export function FeedPage() {
               likeStamp="ЗОВУ"
               onFlipChange={setBackOpen}
               renderBack={(c) => (
-                <CardBack title={`${c.name}${c.age != null ? `, ${c.age}` : ""}`}>
+                <CardBack
+                  title={`${c.name}${c.age != null ? `, ${c.age}` : ""}`}
+                  note={<CandidateNote />}
+                >
                   <CandidateDetailsBody s={c} />
                 </CardBack>
               )}

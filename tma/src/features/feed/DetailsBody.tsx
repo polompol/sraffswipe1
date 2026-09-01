@@ -39,15 +39,35 @@ function Row({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   );
 }
 
-/** Честная оговорка внизу подробностей — своя у каждой стороны. */
+/** Честная оговорка внизу подробностей — своя у каждой стороны.
+ *
+ *  Выведена ОТДЕЛЬНО от тела и закреплена вне прокрутки (см. CardBack). Пока
+ *  она лежала последней в прокручиваемой части, длинное описание смены уводило
+ *  её под сгиб — и самую важную строку («просят деньги вперёд — это обман»)
+ *  видел только тот, кто догадался прокрутить. */
 function Note({ children }: { children: ReactNode }) {
   return (
-    <div className="card" style={{ marginTop: 16, background: "var(--gold-tint)", borderColor: "var(--gold)" }}>
+    <div className="card" style={{ background: "var(--gold-tint)", borderColor: "var(--gold)" }}>
       <div className="row" style={{ gap: 8 }}>
         <span style={{ color: "var(--gold)", display: "inline-flex" }}><IconCheck size={16} /></span>
         <span className="muted">{children}</span>
       </div>
     </div>
+  );
+}
+
+/** Предупреждение работнику — единственная защита от «заплатите за смену». */
+export function ShiftNote() {
+  return <Note>Заведение платит вам напрямую. Просят деньги вперёд — это обман.</Note>;
+}
+
+/** Предупреждение заведению: статусы человек ставит сам, мы их не проверяем. */
+export function CandidateNote() {
+  return (
+    <Note>
+      Медкнижку и опыт человек указывает сам — документы мы не храним.
+      Попросите показать их на смене.
+    </Note>
   );
 }
 
@@ -112,8 +132,6 @@ export function ShiftDetailsBody({ v }: { v: Vacancy }) {
       {v.description && (
         <div className="muted" style={{ marginTop: 14, lineHeight: 1.5 }}>{v.description}</div>
       )}
-
-      <Note>Заведение платит вам напрямую. Просят деньги вперёд — это обман.</Note>
     </>
   );
 }
@@ -169,14 +187,6 @@ export function CandidateDetailsBody({ s }: { s: Seeker }) {
       {s.about && (
         <div className="muted" style={{ marginTop: 14, lineHeight: 1.5 }}>{s.about}</div>
       )}
-
-      {/* Честная оговорка вместо ложной уверенности: документы мы не храним и
-          не проверяем принципиально (152-ФЗ). Всё, что здесь про медкнижку и
-          опыт, человек указал сам, и заведение должно знать это до смены. */}
-      <Note>
-        Медкнижку и опыт человек указывает сам — документы мы не храним.
-        Попросите показать их на смене.
-      </Note>
     </>
   );
 }

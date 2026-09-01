@@ -11,7 +11,7 @@
  * 3. Перевёрнутой оказывается ИМЕННО та карточка, которой коснулись.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { SwipeDeck } from "./SwipeDeck";
 
 type Card = { id: string };
@@ -78,14 +78,12 @@ describe("перевёртыш", () => {
   });
 
   it("улетевшая карточка не оставляет следующую перевёрнутой", async () => {
-    const onEmpty = vi.fn();
     let fire: ((dir: "like" | "dislike") => void) | null = null;
     const { container } = render(
       <SwipeDeck<Card>
         items={[{ id: "one" }, { id: "two" }]}
         keyOf={(c) => c.id}
         onSwipe={() => Promise.resolve(true)}
-        onEmpty={onEmpty}
         controllerRef={(fn) => (fire = fn)}
         renderCard={(c) => <div>лицо {c.id}</div>}
         renderBack={(c) => <div>изнанка {c.id}</div>}
@@ -110,21 +108,4 @@ describe("перевёртыш", () => {
     });
   });
 
-  it("без изнанки карточка ведёт себя как раньше", () => {
-    const onTap = vi.fn();
-    const { container } = render(
-      <SwipeDeck<Card>
-        items={[{ id: "one" }]}
-        keyOf={(c) => c.id}
-        onSwipe={() => Promise.resolve(true)}
-        onTap={onTap}
-        renderCard={(c) => <div>лицо {c.id}</div>}
-      />,
-    );
-    const card = container.querySelector(".swipe-card")!;
-    fireEvent.click(card);
-
-    expect(onTap).toHaveBeenCalledTimes(1);
-    expect(card.classList.contains("is-flipped")).toBe(false);
-  });
 });

@@ -10,7 +10,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Seeker, Vacancy } from "@/types/domain";
-import { CandidateDetailsBody, ShiftDetailsBody } from "./DetailsBody";
+import {
+  CandidateDetailsBody,
+  CandidateNote,
+  ShiftDetailsBody,
+  ShiftNote,
+} from "./DetailsBody";
 
 const VAC: Vacancy = {
   id: "vac-1",
@@ -77,8 +82,10 @@ describe("подробности смены", () => {
   });
 
   it("предупреждает про деньги вперёд", () => {
-    render(<ShiftDetailsBody v={VAC} />);
-    // Самая важная строка для работника: по ней он отличает обман.
+    // Оговорка вынесена из тела намеренно: на изнанке она закреплена ВНЕ
+    // прокрутки, иначе длинное описание уводило её под сгиб — а это
+    // единственная защита работника от самого частого обмана.
+    render(<ShiftNote />);
     expect(screen.getByText(/Просят деньги вперёд/)).toBeTruthy();
   });
 });
@@ -114,8 +121,9 @@ describe("подробности человека", () => {
   });
 
   it("честно говорит, что документы не проверены", () => {
-    render(<CandidateDetailsBody s={MARIA} />);
-    // Заведение видит «Медкнижка: Есть» и думает, что мы проверили. Нет.
+    // Тоже закреплена вне прокрутки: заведение видит «Медкнижка: Есть» и
+    // думает, что мы проверили. Не проверили.
+    render(<CandidateNote />);
     expect(screen.getByText(/документы мы не храним/)).toBeTruthy();
   });
 });
