@@ -3,11 +3,9 @@ import { useLargeMode, useShortScreen } from "@/lib/large";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
 import {
-  EXPERIENCE_TAG_LABELS,
   MED_BOOK_LABELS,
   PAY_METHOD_SHORT,
   STAFF_ROLE_LABELS,
-  TIPS_BADGE,
 } from "@/types/domain";
 import {
   dec1,
@@ -276,10 +274,6 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           <div>
             <IconCalendar size={15} /> {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
           </div>
-          <div>
-            <IconPin size={15} />
-            <span style={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.address}</span>
-          </div>
           {(v.employerShiftsDone || v.employerRating) ? (
             // Отдельный класс: на самом маленьком экране в крупном режиме эта
             // строка уходит первой. Рейтинг заведения полезен, но адрес, часы
@@ -301,15 +295,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           ) : null}
         </div>
 
-        {v.description && (
-          // Класс, а не только стиль: при нехватке места ужимается ИМЕННО
-          // описание — оно наименее важное на карточке. Иначе обрезался низ, а
-          // там способ оплаты и «медкнижка» — то, из-за чего человек зря
-          // приедет на смену.
-          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.92, fontSize: "var(--text-base)", lineHeight: 1.45 }}>
-            {v.description}
-          </div>
-        )}
+
 
         {/* Две ровные колонки вместо ряда с переносом. Раньше плашки были
             разной ширины и вставали по-разному на каждой карточке: у одной
@@ -321,14 +307,9 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
               <PayGlyph size={16} /> {PAY_METHOD_SHORT[v.payMethod]}
             </span>
           )}
-          {v.tips && v.tips !== "none" && (
-            // Отдельный класс: на 320×568 с крупным текстом строка уходит.
-            // Чаевые платят гости, а не заведение, — это приятная подробность,
-            // а не то, из-за чего человек решает ехать.
-            <span className="cond-tips" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
-              <IconMoney size={16} /> {TIPS_BADGE[v.tips]}
-            </span>
-          )}
+          {/* Чаевые ушли в шторку: их платят гости, а не заведение, и на
+              решение «ехать или нет» они не влияют. Способ оплаты остался —
+              «когда деньги» решает. */}
           {v.requireMedBook && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, opacity: 0.9 }}>
               <IconMedBook size={15} /> Медкнижка
@@ -346,6 +327,18 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
           )}
         </div>
 
+        {/* Адрес, описание и чаевые с лицевой стороны убраны — они дословно
+            повторялись в шторке деталей, которая открывается по касанию. Пока
+            шторки не было, карточка оставалась единственным местом, и держать
+            всё на ней было правильно. Теперь это семь строк текста там, где
+            решение принимают за три секунды: сколько платят, кем, когда и где
+            примерно. Остальное — на касание.
+
+            Строка-подсказка нужна ровно потому, что снаружи не видно: у
+            карточки есть изнанка. Без неё человек не узнает, что адрес и
+            описание вообще существуют. */}
+        <div className="swipe-more" aria-hidden="true">Подробнее — коснитесь карточки</div>
+
       </div>
     </>
   );
@@ -359,13 +352,6 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
   const allTags = s.experienceTags ?? [];
   // «Опытный» — по указанному опыту работника (мы не проверяем документы).
   const experienced = allTags.includes("experienced");
-  // Из общего списка убираем то, что УЖЕ показано отдельно: опыт вынесен в
-  // чип «Опытный», медкнижка — в свою строку, самозанятость — в свой чип.
-  // Без этой чистки карточка писала одно и то же по два раза: «Опытный» и
-  // «Опыт > 2 лет», «Медкнижка: Есть» и «Медкнижка» в перечислении.
-  const tags = allTags.filter(
-    (t) => t !== "experienced" && t !== "medBook" && t !== "selfEmployed",
-  );
   const [heroShown, setHeroShown] = useState(!hasPhoto);
   const large = useLargeMode();
   const short = useShortScreen();
@@ -427,32 +413,28 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
               Опытный
             </span>
           )}
-          {s.selfEmployed && (
-            <span className="tag tag-super">
-              Самозанятый
-            </span>
-          )}
+          {/* «Самозанятый» ушёл в шторку, к медкнижке. На карточке он вставал
+              третьей плашкой в строке с именем, не помещался и переносился на
+              отдельную строку — а решает заведение не этим. Как платить
+              самозанятому, важно ПОСЛЕ выбора человека, а не вместо. */}
         </div>
         {/* Должность из заголовка карточки не повторяем — только остальные,
-            которыми человек тоже готов выйти. */}
+            которыми человек тоже готов выйти.
+
+            Заливкой их красить нельзя: крупно написано «Бариста», а под ним
+            такой же яркой плашкой «Официант» — и заведение видит две должности
+            одного веса, не понимая, кто перед ним. Дополнительные должности —
+            тихой плашкой без заливки: главная остаётся одна. */}
         {(heroShown ? roles.slice(1) : roles).length > 0 && (
           <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: "wrap" }}>
             {(heroShown ? roles.slice(1) : roles).map((r) => (
-              <span key={r} className="tag tag-gold-fill">
+              <span key={r} className={heroShown ? "tag" : "tag tag-gold-fill"}>
                 {STAFF_ROLE_LABELS[r]}
               </span>
             ))}
           </div>
         )}
-        {s.about && (
-          // swipe-desc — тот же класс, что и у описания смены: при нехватке
-          // места ужимается ИМЕННО рассказ о себе, а не район, медкнижка и
-          // надёжность. На узком экране (320 точек) без этого обрезался низ
-          // карточки, где как раз и написано, можно ли человеку доверять.
-          <div className="swipe-desc" style={{ marginTop: 8, opacity: 0.95 }}>
-            {s.about}
-          </div>
-        )}
+
         <div className="card-meta">
           {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
             <div style={{ color: "var(--super)", fontWeight: 700 }}>
@@ -468,10 +450,17 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
           <div>
             <IconMedBook size={15} /> Медкнижка: {MED_BOOK_LABELS[s.medBook]}
           </div>
-          {tags.length > 0 && (
-            <div style={{ opacity: 0.9 }}>{tags.slice(0, 3).map((t) => EXPERIENCE_TAG_LABELS[t]).join(" · ")}</div>
-          )}
         </div>
+
+        {/* Рассказ о себе и перечень умений ушли в шторку — она открывается
+            касанием карточки. На лицевой стороне остаётся то, чем выбирают:
+            кто это, кем готов выйти, можно ли положиться, есть ли медкнижка и
+            откуда поедет. Рассказ о себе — свободный текст любой длины, и
+            именно он превращал карточку в стену.
+
+            Подсказка обязательна: снаружи не видно, что у карточки есть
+            изнанка. Ровно та же строка, что и на карточке смены. */}
+        <div className="swipe-more" aria-hidden="true">Подробнее — коснитесь карточки</div>
       </div>
     </>
   );

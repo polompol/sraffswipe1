@@ -25,6 +25,8 @@ export interface Paint {
   // Текст на фотографии или на градиенте: цвет фона там из стилей не достать,
   // поэтому такие куски считаем отдельно, а не молча пропускаем.
   onImage: number;
+  /** Пропущено, потому что закрыто другим слоем — человек этого не видит. */
+  covered: number;
 }
 
 /** Снять замеры с открытой страницы. */
@@ -83,18 +85,52 @@ export async function measure(page: Page): Promise<Paint> {
       el: Element,
       x: number,
       y: number,
-    ): { color: [number, number, number, number]; unknown: boolean } => {
+    ): {
+      color: [number, number, number, number];
+      unknown: boolean;
+      covered: boolean;
+    } => {
       const stack = document.elementsFromPoint(x, y);
       const from = stack.indexOf(el);
+      // Элемента нет в стопке — два совершенно разных случая, и путать их
+      // нельзя.
+      //
+      // Первый: у него (или у родителя) pointer-events: none. Так помечена,
+      // например, крупная сумма на карточке — чтобы жест свайпа не упирался
+      // в надпись. Такой текст человек прекрасно видит, и мерить его надо.
+      //
+      // Второй: его закрывает другой элемент. В колоде лежат три карточки
+      // одна на другой, и у нижних тот же текст на том же месте. Человек их
+      // не видит вовсе, а замер брал фон ВЕРХНЕЙ карточки и сравнивал с ним
+      // белые буквы нижней: «белое по кремовому, 1.02» — при том, что на
+      // экране этого нет. Ровно так проверка изнанки и падала: перевёрнутая
+      // карточка светлая, а под ней лежала обычная с белой суммой.
+      //
+      // Отличаем по тому, лежит ли элемент ВНУТРИ первого непрозрачного узла
+      // стопки: если да — он просто прозрачен для нажатий; если нет — он под
+      // чужим непрозрачным слоем, и его не видно.
+      if (from < 0) {
+        for (const node of stack) {
+          const cs = getComputedStyle(node);
+          const opaque =
+            (cs.backgroundImage && cs.backgroundImage !== "none") ||
+            rgb(cs.backgroundColor)[3] > 0.95;
+          if (!opaque) continue;
+          if (!node.contains(el)) {
+            return { color: [255, 255, 255, 1], unknown: true, covered: true };
+          }
+          break;
+        }
+      }
       const under = from >= 0 ? stack.slice(from) : [el, ...stack];
       for (const node of under) {
         const cs = getComputedStyle(node);
         // Градиент или картинка — цвет из пикселя честно не достать.
         if (cs.backgroundImage && cs.backgroundImage !== "none") {
-          return { color: [255, 255, 255, 1], unknown: true };
+          return { color: [255, 255, 255, 1], unknown: true, covered: false };
         }
         const c = rgb(cs.backgroundColor);
-        if (c[3] > 0.95) return { color: c, unknown: false };
+        if (c[3] > 0.95) return { color: c, unknown: false, covered: false };
       }
       // Ничего непрозрачного в стопке — значит, красит холст. Браузер берёт
       // фон у <html>, а если у того его нет — переносит на холст фон <body>.
@@ -103,15 +139,16 @@ export async function measure(page: Page): Promise<Paint> {
       // на экране есть. В тёмной теме это давало ложные «нечитаемо».
       for (const node of [document.documentElement, document.body]) {
         const c = rgb(getComputedStyle(node).backgroundColor);
-        if (c[3] > 0.95) return { color: c, unknown: false };
+        if (c[3] > 0.95) return { color: c, unknown: false, covered: false };
       }
       // Не выдумываем: не смогли определить — не проверяем.
-      return { color: [255, 255, 255, 1], unknown: true };
+      return { color: [255, 255, 255, 1], unknown: true, covered: false };
     };
 
     const violations: Violation[] = [];
     let checked = 0;
     let onImage = 0;
+    let covered = 0;
     for (const el of Array.from(document.body.querySelectorAll("*"))) {
       const own = Array.from(el.childNodes).some(
         (n) => n.nodeType === Node.TEXT_NODE && (n.textContent || "").trim(),
@@ -131,6 +168,13 @@ export async function measure(page: Page): Promise<Paint> {
       if (x < 1 || x > window.innerWidth - 1) continue;
       if (y < 1 || y > window.innerHeight - 1) continue;
       const bg = backdrop(el, x, y);
+      // Закрыт другим слоем — человек его не видит, мерить нечего. Считаем
+      // отдельно от «текста на картинке»: это разные причины пропуска, и
+      // складывать их в одну цифру значит потерять из виду обе.
+      if (bg.covered) {
+        covered += 1;
+        continue;
+      }
       if (bg.unknown) {
         onImage += 1;
         continue;
@@ -181,6 +225,7 @@ export async function measure(page: Page): Promise<Paint> {
       contrast: violations,
       checked,
       onImage,
+      covered,
     };
   });
 }
@@ -199,6 +244,7 @@ export async function sweep(page: Page): Promise<Paint> {
     contrast: [],
     checked: 0,
     onImage: 0,
+    covered: 0,
   };
   const seen = new Set<string>();
   const height = await page.evaluate(() => window.innerHeight);
@@ -210,6 +256,7 @@ export async function sweep(page: Page): Promise<Paint> {
     all.overflowX = Math.max(all.overflowX, m.overflowX);
     all.checked += m.checked;
     all.onImage += m.onImage;
+    all.covered += m.covered;
     for (const w of m.tinyWhere) {
       if (!seen.has(`t:${w}`)) {
         seen.add(`t:${w}`);
