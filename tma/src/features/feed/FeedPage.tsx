@@ -25,10 +25,15 @@ import { SeekerCardContent, VacancyCardContent } from "./Cards";
 import { MatchOverlay } from "./MatchOverlay";
 import { FilterSheet } from "./FilterSheet";
 import { CandidateFilterSheet } from "./CandidateFilterSheet";
-import { ShiftDetailsSheet } from "./ShiftDetailsSheet";
+import { CardBack } from "./CardBack";
+import {
+  CandidateDetailsBody,
+  CandidateNote,
+  ShiftDetailsBody,
+  ShiftNote,
+} from "./DetailsBody";
 import { VacancyList } from "./VacancyList";
 import { ErrorBox, SkeletonCard } from "@/components/States";
-import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
 import {
   IconSkip,
@@ -45,8 +50,10 @@ export function FeedPage() {
   const qc = useQueryClient();
   // Свайп и его последствия — отдельным хуком (useSwipeAction).
   const { swipe: handleSwipe, match, setMatch } = useSwipeAction(isSeeker);
-  const [details, setDetails] = useState<Vacancy | null>(null);
   const [empty, setEmpty] = useState(false);
+  // Перевёрнута ли карточка. Кнопки под колодой лежат поверх неё и живут вне
+  // колоды, а их подписи белые — на светлой изнанке они исчезали.
+  const [backOpen, setBackOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe, enabled: isSeeker });
 
@@ -208,14 +215,6 @@ export function FeedPage() {
    *  так же, как от пальца — человек видит привычный ответ, а не пустоту.
    *  Ключ карточки передаём явно: пока шторка была открыта, сверху могла
    *  оказаться другая смена, и смахнуть надо именно ту, которую читали. */
-  async function likeFromDetails(v: Vacancy) {
-    setDetails(null);
-    if (deckMode && controller.current) {
-      controller.current("like", v.id);
-      return;
-    }
-    if (await handleSwipe(v, "like")) toast("Отклик отправлен", "success");
-  }
 
   // Экран с колодой живёт по своим правилам: он не прокручивается, а карточка
   // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
@@ -225,7 +224,11 @@ export function FeedPage() {
     && !(isSeeker && view === "list");
 
   return (
-    <div className={deckMode ? "page feed-deck" : "page"}>
+    <div
+      className={
+        deckMode ? (backOpen ? "page feed-deck back-open" : "page feed-deck") : "page"
+      }
+    >
       <FeedHeader
         isSeeker={isSeeker}
         view={view}
@@ -303,9 +306,14 @@ export function FeedPage() {
             <SwipeDeck<Vacancy>
               items={data as Vacancy[]}
               keyOf={(v) => v.id}
-              renderCard={(v) => <VacancyCardContent v={v} />}
+              renderCard={(v, c) => <VacancyCardContent v={v} onDetails={c.open} top={c.top} />}
               onSwipe={handleSwipe}
-              onTap={setDetails}
+              onFlipChange={setBackOpen}
+              renderBack={(v, c) => (
+                <CardBack title={v.companyName} note={<ShiftNote />} onBack={c.close}>
+                  <ShiftDetailsBody v={v} />
+                </CardBack>
+              )}
               onEmpty={() => setEmpty(true)}
               controllerRef={(fn) => (controller.current = fn)}
             />
@@ -313,12 +321,22 @@ export function FeedPage() {
             <SwipeDeck<Seeker>
               items={data as Seeker[]}
               keyOf={(s) => s.id}
-              renderCard={(s) => <SeekerCardContent s={s} />}
+              renderCard={(person, c) => <SeekerCardContent s={person} onDetails={c.open} top={c.top} />}
               onSwipe={handleSwipe}
               // Заведение не «хочет» человека, а зовёт его на смену: штамп
               // «ХОЧУ» поперёк чужого лица читался двусмысленно и расходился
               // с кнопкой под колодой, которая подписана «Позвать».
               likeStamp="ЗОВУ"
+              onFlipChange={setBackOpen}
+              renderBack={(person, c) => (
+                <CardBack
+                  title={`${person.name}${person.age != null ? `, ${person.age}` : ""}`}
+                  note={<CandidateNote />}
+                  onBack={c.close}
+                >
+                  <CandidateDetailsBody s={person} />
+                </CardBack>
+              )}
               onEmpty={() => setEmpty(true)}
               controllerRef={(fn) => (controller.current = fn)}
             />
@@ -355,13 +373,6 @@ export function FeedPage() {
           match={match}
           role={isSeeker ? "seeker" : "employer"}
           onClose={() => setMatch(null)}
-        />
-      )}
-      {details && (
-        <ShiftDetailsSheet
-          v={details}
-          onClose={() => setDetails(null)}
-          onLike={likeFromDetails}
         />
       )}
       {filterOpen && isSeeker && (

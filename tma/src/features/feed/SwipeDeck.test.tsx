@@ -24,6 +24,7 @@ function setup(onSwipe: (item: Card) => Promise<boolean>) {
       onEmpty={onEmpty}
       controllerRef={(fn) => (fire = fn)}
       renderCard={(c) => <div>{c.id}</div>}
+      renderBack={(c) => <div>изнанка {c.id}</div>}
     />,
   );
   return { onEmpty, swipe: () => fire?.("like") };
@@ -44,6 +45,7 @@ function setupMany(
       onEmpty={onEmpty}
       controllerRef={(fn) => (fire = fn)}
       renderCard={(c) => <div>{c.id}</div>}
+      renderBack={(c) => <div>изнанка {c.id}</div>}
     />,
   );
   return { onEmpty, swipe: () => fire?.("like") };

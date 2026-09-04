@@ -436,3 +436,99 @@ test.describe("главные фильтры на экране", () => {
     await b.context.close();
   });
 });
+
+test.describe("изнанка карточки", () => {
+  /**
+   * Изнанка живёт в жёстких рамках: её высота — это высота карточки, а не
+   * экрана, и внутри лежат закреплённый заголовок, закреплённая оговорка про
+   * деньги, свои кнопки и прокручиваемая середина. Каждая из этих частей уже
+   * ломала соседей, и все поломки были найдены замером, а не глазом:
+   *
+   *   • круглые кнопки колоды лежали ПОВЕРХ карточки и отнимали 96 точек. На
+   *     320×568 от подробностей оставалось 79 точек — две строки;
+   *   • нижняя строка изнанки заходила этим кнопкам под край;
+   *   • «Откликнуться» обрезалось на середине слова: «Назад» занимало 114
+   *     точек и не сжималось, главной кнопке оставалось 132.
+   */
+  const CASES: Array<[string, { width: number; height: number }]> = [
+    ["дешёвый андроид", { width: 320, height: 568 }],
+    ["обычный телефон", { width: 390, height: 844 }],
+  ];
+
+  for (const [name, size] of CASES) {
+    test(`ничего не накрывает друг друга — ${name}`, async ({ browser, request }) => {
+      const emp = await login(request, "employer", 846_100 + size.width, "Дрова");
+      await fillProfile(request, emp, {
+        company_name: "Ресторан-бар «Старый город на Пятницкой у Новокузнецкой»",
+        city: "Москва",
+        address: "Пятницкая улица, дом 25, строение 1",
+        contact_phone: `+7999084${size.width}`,
+      });
+      await publishShift(request, emp);
+      const seeker = await login(request, "seeker", 846_200 + size.width, "Мария");
+      await fillProfile(request, seeker, {
+        name: "Мария", city: "Москва", roles: ["barista"],
+        birth_date: "1998-04-12", med_book: "yes",
+      });
+
+      const { context, page } = await openApp(browser, seeker);
+      await page.setViewportSize(size);
+      await page.goto("/#/feed");
+      await waitForStableLayout(page, ".page");
+      await page.locator(".swipe-card").first().click({ position: { x: 60, y: 120 } });
+      await expect(page.locator(".swipe-card.is-flipped")).toBeVisible();
+      // Переворот длится 0,45 с; замерять надо по неподвижной картинке.
+      await page.waitForTimeout(700);
+
+      const m = await page.evaluate(() => {
+        const q = (s: string) => document.querySelector(s) as HTMLElement | null;
+        // Скрытый элемент продолжает занимать место в раскладке, и по одним
+        // только прямоугольникам круглые кнопки колоды «накрывали» изнанку,
+        // хотя их не видно. Считаем пересечения только видимого.
+        const r = (e: HTMLElement | null) => {
+          if (!e) return null;
+          const st = getComputedStyle(e);
+          if (st.visibility === "hidden" || st.display === "none" || +st.opacity === 0) {
+            return null;
+          }
+          return e.getBoundingClientRect();
+        };
+        const cross = (a: DOMRect | null, b: DOMRect | null) =>
+          !a || !b ? 0 :
+          Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)) *
+          Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+        const scroll = q(".card-back-scroll");
+        const note = q(".card-back-note");
+        const foot = q(".card-back-foot");
+        const acts = q(".actions");
+        const card = q(".swipe-card");
+        const btns = [...(foot?.querySelectorAll("button") ?? [])] as HTMLElement[];
+        return {
+          textVsNote: Math.round(cross(r(scroll), r(note))),
+          noteVsFoot: Math.round(cross(r(note), r(foot))),
+          footVsDeckButtons: Math.round(cross(r(foot), r(acts))),
+          spillsOutside: Math.round(
+            Math.max(0, (r(foot)?.bottom ?? 0) - (r(card)?.bottom ?? 0)),
+          ),
+          noteVisible: !!note && (r(note)?.height ?? 0) > 0,
+          clipped: btns.filter((b) => b.scrollWidth > b.clientWidth + 1)
+            .map((b) => b.getAttribute("aria-label") || (b.textContent || "").trim()),
+          readable: Math.round(r(scroll)?.height ?? 0),
+        };
+      });
+
+      expect(m.textVsNote, "текст наезжает на оговорку").toBe(0);
+      expect(m.noteVsFoot, "оговорка наезжает на кнопки").toBe(0);
+      expect(m.footVsDeckButtons, "кнопки изнанки под круглыми кнопками колоды").toBe(0);
+      expect(m.spillsOutside, "низ изнанки вылез за карточку").toBe(0);
+      expect(m.noteVisible, "оговорка про деньги вперёд обязана быть видна").toBe(true);
+      expect(m.clipped, `обрезаны подписи кнопок: ${m.clipped.join(", ")}`).toEqual([]);
+      // Порог низкий намеренно: это защита от «осталось две строки», а не
+      // требование к красоте. На 320×568 больше и не выжать честно.
+      expect(m.readable, "под текст подробностей почти не осталось места")
+        .toBeGreaterThan(120);
+
+      await context.close();
+    });
+  }
+});
