@@ -96,7 +96,7 @@ function SwipePhoto({ src, initial, hasHero, onHero }: {
 
 /** Кнопка-закладка прямо на свайп-карточке. stopPropagation на pointerdown —
  *  чтобы тап по закладке не запускал жест свайпа. */
-function CardFavButton({ id }: { id: string }) {
+function CardFavButton({ id, top = true }: { id: string; top?: boolean }) {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["fav-ids"], queryFn: listFavoriteIds });
   const saved = (data ?? []).includes(id);
@@ -117,6 +117,10 @@ function CardFavButton({ id }: { id: string }) {
     <button
       aria-label={saved ? "Убрать из избранного" : "В избранное"}
       aria-pressed={saved}
+      // Закладка нижней карточки — тоже вне порядка обхода: сохранять смену,
+      // которую не видишь, незачем.
+      tabIndex={top ? 0 : -1}
+      aria-hidden={!top}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={toggle}
       // Подложка — из класса .glass, как у соседних плашек «350 ₽/час» и
@@ -170,7 +174,51 @@ function VerifiedDot({ size = 20, title }: { size?: number; title: string }) {
   );
 }
 
-export function VacancyCardContent({ v }: { v: Vacancy }) {
+/** «Подробнее» — настоящая кнопка, а не подпись.
+ *
+ *  Раньше здесь стояла подпись «коснитесь карточки», спрятанная от чтения
+ *  вслух: она объясняла жест зрячему и ничего не давала остальным. Переворот
+ *  висел только на нажатии по карточке, а карточка — div без роли и без места
+ *  в порядке табуляции. Человек с клавиатурой или экранным диктором не мог
+ *  открыть подробности вовсе, хотя именно там адрес, разбивка оплаты и
+ *  предупреждение про деньги вперёд.
+ *
+ *  stopPropagation обязателен: нажатие всплывает до карточки, а та по нажатию
+ *  переворачивается — кнопка сработала бы и тут же отменила сама себя. Ровно
+ *  на этом уже спотыкалась кнопка «Назад» на изнанке.
+ */
+function DetailsButton({ label, onOpen, top = true }: {
+  label: string;
+  onOpen?: () => void;
+  /** Верхняя ли карточка. У нижних кнопка остаётся на месте — их край видно, —
+   *  но из порядка обхода уходит: клавишей нельзя попасть в карточку, которой
+   *  не видишь. */
+  top?: boolean;
+}) {
+  if (!onOpen) return null;
+  return (
+    <button
+      type="button"
+      className="swipe-more"
+      aria-label={label}
+      tabIndex={top ? 0 : -1}
+      aria-hidden={!top}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+    >
+      Подробнее
+    </button>
+  );
+}
+
+export function VacancyCardContent({ v, onDetails, top = true }: {
+  v: Vacancy;
+  onDetails?: () => void;
+  top?: boolean;
+}) {
   const urgent = isUrgentShift(v.date);
   const hasPhoto = !!v.interiorPhotoUrl;
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
@@ -217,7 +265,7 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             Круглая кнопка «Детали смены» отсюда убрана: подробности
             открываются касанием самой карточки. Свайп — главное действие, и
             всё, что стоит рядом с ним крупной кнопкой, с ним соперничает. */}
-        <CardFavButton id={v.id} />
+        <CardFavButton id={v.id} top={top} />
         <span className="spacer" />
         {urgent ? (
           <span className="glass pulse" style={{ background: "var(--gold-fill)" }}>
@@ -337,14 +385,18 @@ export function VacancyCardContent({ v }: { v: Vacancy }) {
             Строка-подсказка нужна ровно потому, что снаружи не видно: у
             карточки есть изнанка. Без неё человек не узнает, что адрес и
             описание вообще существуют. */}
-        <div className="swipe-more" aria-hidden="true">Подробнее — коснитесь карточки</div>
+        <DetailsButton label="Подробнее о смене" onOpen={onDetails} top={top} />
 
       </div>
     </>
   );
 }
 
-export function SeekerCardContent({ s }: { s: Seeker }) {
+export function SeekerCardContent({ s, onDetails, top = true }: {
+  s: Seeker;
+  onDetails?: () => void;
+  top?: boolean;
+}) {
   const age = s.age ?? null;
   const roles = s.roles ?? [];
   const photos = s.photoUrls ?? [];
@@ -460,7 +512,7 @@ export function SeekerCardContent({ s }: { s: Seeker }) {
 
             Подсказка обязательна: снаружи не видно, что у карточки есть
             изнанка. Ровно та же строка, что и на карточке смены. */}
-        <div className="swipe-more" aria-hidden="true">Подробнее — коснитесь карточки</div>
+        <DetailsButton label="Подробнее о человеке" onOpen={onDetails} top={top} />
       </div>
     </>
   );

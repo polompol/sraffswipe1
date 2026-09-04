@@ -306,7 +306,7 @@ export function FeedPage() {
             <SwipeDeck<Vacancy>
               items={data as Vacancy[]}
               keyOf={(v) => v.id}
-              renderCard={(v) => <VacancyCardContent v={v} />}
+              renderCard={(v, c) => <VacancyCardContent v={v} onDetails={c.open} top={c.top} />}
               onSwipe={handleSwipe}
               onFlipChange={setBackOpen}
               renderBack={(v, c) => (
@@ -321,7 +321,7 @@ export function FeedPage() {
             <SwipeDeck<Seeker>
               items={data as Seeker[]}
               keyOf={(s) => s.id}
-              renderCard={(s) => <SeekerCardContent s={s} />}
+              renderCard={(person, c) => <SeekerCardContent s={person} onDetails={c.open} top={c.top} />}
               onSwipe={handleSwipe}
               // Заведение не «хочет» человека, а зовёт его на смену: штамп
               // «ХОЧУ» поперёк чужого лица читался двусмысленно и расходился
