@@ -80,6 +80,31 @@ def collect() -> dict[str, list[tuple[str, int, str]]]:
             if len(text) > 15 and re.search(r"[А-Яа-яЁё]", text):
                 line = src[:m.start()].count("\n") + 1
                 groups["Что человек видит вместо отказа"].append((rel, line, text))
+
+        # Отказ, вынесенный в константу, — тоже отказ.
+        #
+        # Сборщик читал только те тексты, что написаны прямо в detail=. Стоило
+        # одну фразу вынести в модульную константу (а выносят её именно тогда,
+        # когда она нужна В НЕСКОЛЬКИХ местах, то есть встречается человеку
+        # чаще прочих) — и она исчезала из каталога. Каталог при этом
+        # оставался зелёным: он не знает, что чего-то не увидел.
+        consts = dict(
+            re.findall(
+                r'^(_[A-Z][A-Z0-9_]*)\s*=\s*\(\s*\n((?:\s*"(?:[^"\\]|\\.)*"\s*\n)+)\s*\)',
+                src, re.M,
+            )
+        )
+        consts.update(
+            re.findall(r'^(_[A-Z][A-Z0-9_]*)\s*=\s*("(?:[^"\\]|\\.)*")\s*$', src, re.M)
+        )
+        for m in re.finditer(r"detail=(_[A-Z][A-Z0-9_]*)", src):
+            raw = consts.get(m.group(1))
+            if raw is None:
+                continue
+            text = "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', raw)).strip()
+            if len(text) > 15 and re.search(r"[А-Яа-яЁё]", text):
+                line = src[:m.start()].count("\n") + 1
+                groups["Что человек видит вместо отказа"].append((rel, line, text))
     return groups
 
 
