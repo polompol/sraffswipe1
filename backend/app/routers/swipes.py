@@ -54,7 +54,13 @@ def _claim_slot(db: Session, vacancy_id: str) -> None:
     vac = q.first()
     if vac is None:
         raise SlotsFull
-    taken = (
+    if _taken(db, vacancy_id) >= (vac.headcount or 1):
+        raise SlotsFull
+
+
+def _taken(db: Session, vacancy_id: str) -> int:
+    """Сколько мест на смене уже занято."""
+    return (
         db.query(func.count(Match.id))
         .filter(
             Match.vacancy_id == vacancy_id,
@@ -63,7 +69,31 @@ def _claim_slot(db: Session, vacancy_id: str) -> None:
         )
         .scalar()
     ) or 0
-    if taken >= (vac.headcount or 1):
+
+
+def _verify_slot(db: Session, vacancy_id: str) -> None:
+    """Пересчитать места ПОСЛЕ вставки — и откатиться, если перебор.
+
+    Проверки перед вставкой мало. Она читает базу, а чтение не выстраивается в
+    очередь: два потока успевают увидеть «место свободно» ДО того, как хоть
+    один запишет. Найдено настоящей гонкой на двух потоках, а не рассуждением
+    — на SQLite оба забирали последнее место, и в базе оказывалось два мэтча.
+
+    Комментарий здесь раньше утверждал обратное: «на SQLite запись и так идёт
+    по одному writer'у». Про запись верно, но проверка мест — это ЧТЕНИЕ, а
+    его единственный писатель не сериализует.
+
+    После flush строка уже вставлена и транзакция держит замок: пересчёт видит
+    и себя, и всех, кто успел зафиксироваться раньше. Проигравший в гонке
+    откатывается и получает обычный отказ «мест нет» — тот же, что и все.
+
+    На PostgreSQL это подстраховка (там очередь создаёт FOR UPDATE), на SQLite
+    — единственная настоящая защита.
+    """
+    vac = db.get(Vacancy, vacancy_id)
+    if vac is None:
+        raise SlotsFull
+    if _taken(db, vacancy_id) > (vac.headcount or 1):
         raise SlotsFull
 
 
@@ -108,6 +138,7 @@ def _ensure_match(
     try:
         db.add(match)
         db.flush()
+        _verify_slot(db, vacancy_id)
         db.add(
             Message(
                 match_id=match.id,
@@ -127,6 +158,11 @@ def _ensure_match(
         )
         if existing:
             return existing, False
+        raise
+    except SlotsFull:
+        # Мэтч уже во flush — без отката он уедет в базу вместе со следующим
+        # commit этой сессии.
+        db.rollback()
         raise
     db.refresh(match)
     return match, True
