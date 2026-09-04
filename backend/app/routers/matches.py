@@ -46,6 +46,47 @@ router = APIRouter(prefix="/matches", tags=["matches"])
 _HOURS_EDIT_WINDOW_H = 24
 
 
+# НЕ СМОГЛИ ПРОВЕРИТЬ — ЗАПРЕЩАЕМ. Здесь это правило, а не оборот речи.
+#
+# Раньше каждая проверка времени стояла в try, а на разборе даты висело
+# `except (ValueError, TypeError): pass`. HTTPException такой except не ловит
+# (она не ValueError), поэтому выглядело безобидно — но глоталось САМО
+# ВЫЧИСЛЕНИЕ времени, и вместе с ним пропадала вся защита ниже. Одна битая
+# дата в вакансии выключала разом:
+#
+#   • «смена ещё не закончилась» → «смены не было» можно нажать ДО смены;
+#   • «часы уточняют после смены» → заведение режет объявленные часы вдвое
+#     заранее, то есть выдаёт себе скидку 50% на комиссию;
+#   • «переносить начавшуюся поздно» → отработанная смена уезжает в будущее
+#     и уходит из-под расчёта;
+#   • «отменять начавшуюся нельзя» → та самая универсальная кнопка «не
+#     платить».
+#
+# Битая дата — состояние неизвестности, а не разрешение. Отказ здесь не
+# страшен: он бьёт по действию, которое всё равно нельзя было бы посчитать
+# честно, и ведёт человека к оператору.
+_TIME_UNREADABLE = (
+    "Не получилось разобрать время смены, поэтому действие заблокировано. "
+    "Напишите оператору — он поправит."
+)
+
+
+def _starts_at(date: str, start: int | None, city: str) -> datetime:
+    """Начало смены в UTC. Не разобрали — 409, а не «разрешаем»."""
+    try:
+        return shift_start_utc(date, start, city)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=409, detail=_TIME_UNREADABLE) from exc
+
+
+def _ends_at(date: str, start: int | None, end: int | None, city: str) -> datetime:
+    """Конец смены в UTC. Не разобрали — 409, а не «разрешаем»."""
+    try:
+        return shift_end_utc(date, start, end, city)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=409, detail=_TIME_UNREADABLE) from exc
+
+
 class AttendanceIn(BaseModel):
     attended: bool
 
@@ -125,18 +166,15 @@ def mark_not_held(
     # отмена, она честнее: вторая сторона успевает найти замену.
     v_now = db.get(Vacancy, m.vacancy_id)
     if v_now is not None:
-        try:
-            if datetime.now(UTC) < shift_end_utc(
-                v_now.date, v_now.start_time, v_now.end_time, v_now.city
-            ):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Смена ещё не закончилась. Если она не нужна — "
-                           "отмените её, так вторая сторона успеет "
-                           "перестроиться.",
-                )
-        except (ValueError, TypeError):
-            pass
+        if datetime.now(UTC) < _ends_at(
+            v_now.date, v_now.start_time, v_now.end_time, v_now.city
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Смена ещё не закончилась. Если она не нужна — "
+                       "отмените её, так вторая сторона успеет "
+                       "перестроиться.",
+            )
 
     who = "employer" if is_employer else "seeker"
     m.not_held_by = who
@@ -464,25 +502,22 @@ def set_actual_hours(
     # комиссии) можно было «уточнить» до 30 минут и платить 25 ₽. Прогнать так
     # весь месяц перед счётом — платить около 4% от долга. Заодно у работника
     # усыхал заработок и сумма в акте.
-    try:
-        ends = shift_end_utc(v.date, v.start_time, v.end_time, v.city)
-        # Нижняя граница окна. Её не было, и «уточнить часы» работало ЗА НЕДЕЛЮ
-        # до смены: заведение сразу после подтверждения урезало объявленные
-        # часы вдвое — то есть выдавало себе скидку 50% на комиссию по каждой
-        # смене, без согласия работника.
-        if datetime.now(UTC) < ends:
-            raise HTTPException(
-                status_code=409,
-                detail="Часы уточняют после смены, а не до неё.",
-            )
-        if (datetime.now(UTC) - ends).total_seconds() > _HOURS_EDIT_WINDOW_H * 3600:
-            raise HTTPException(
-                status_code=409,
-                detail="Уточнить часы можно в течение суток после смены. "
-                       "Позже — только через оператора.",
-            )
-    except (ValueError, TypeError):
-        pass
+    ends = _ends_at(v.date, v.start_time, v.end_time, v.city)
+    # Нижняя граница окна. Её не было, и «уточнить часы» работало ЗА НЕДЕЛЮ
+    # до смены: заведение сразу после подтверждения урезало объявленные
+    # часы вдвое — то есть выдавало себе скидку 50% на комиссию по каждой
+    # смене, без согласия работника.
+    if datetime.now(UTC) < ends:
+        raise HTTPException(
+            status_code=409,
+            detail="Часы уточняют после смены, а не до неё.",
+        )
+    if (datetime.now(UTC) - ends).total_seconds() > _HOURS_EDIT_WINDOW_H * 3600:
+        raise HTTPException(
+            status_code=409,
+            detail="Уточнить часы можно в течение суток после смены. "
+                   "Позже — только через оператора.",
+        )
 
     # И не больше чем вдвое в любую сторону от объявленного: «12 часов
     # превратились в 30 минут» — это не уточнение, это другая договорённость.
@@ -586,17 +621,14 @@ def propose_reschedule(
     # неделю») — и комиссия откладывалась на неопределённый срок.
     _vac = db.get(Vacancy, m.vacancy_id)
     if _vac is not None:
-        try:
-            if datetime.now(UTC) >= shift_start_utc(
-                _vac.date, _vac.start_time, _vac.city
-            ):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Смена уже началась — переносить поздно. "
-                           "Договоритесь в чате о новой смене.",
-                )
-        except (ValueError, TypeError):
-            pass
+        if datetime.now(UTC) >= _starts_at(
+            _vac.date, _vac.start_time, _vac.city
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Смена уже началась — переносить поздно. "
+                       "Договоритесь в чате о новой смене.",
+            )
 
     # Переносим саму смену, поэтому на ней не должно быть других людей:
     # иначе перенос ударил бы по тем, кто ни о чём не договаривался.
@@ -667,19 +699,16 @@ def accept_reschedule(
     # Для честного работника это ловушка: ему приходит «откройте чат, чтобы
     # согласиться», он жмёт на следующий день, думая, что речь о новой смене,
     # — и своими руками стирает отработанную.
-    try:
-        if datetime.now(UTC) >= shift_start_utc(v.date, v.start_time, v.city):
-            m.reschedule_date = ""
-            m.reschedule_start = None
-            m.reschedule_end = None
-            db.commit()
-            raise HTTPException(
-                status_code=409,
-                detail="Смена уже началась — переносить поздно. "
-                       "Договоритесь в чате о новой смене.",
-            )
-    except (ValueError, TypeError):
-        pass
+    if datetime.now(UTC) >= _starts_at(v.date, v.start_time, v.city):
+        m.reschedule_date = ""
+        m.reschedule_start = None
+        m.reschedule_end = None
+        db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail="Смена уже началась — переносить поздно. "
+                   "Договоритесь в чате о новой смене.",
+        )
 
     # И само предложение не должно протухнуть. При отправке дата проверяется
     # («в прошлое нельзя»), но согласиться можно и через неделю — а тогда
@@ -688,21 +717,18 @@ def accept_reschedule(
     # человеку, который физически не мог выйти, а расчёт закрывал смену,
     # которой не было. Обычно это даже не злой умысел: работник открывает чат
     # через день и жмёт «Согласиться», не глядя на дату.
-    try:
-        if datetime.now(UTC) >= shift_start_utc(
-            m.reschedule_date, m.reschedule_start, v.city
-        ):
-            m.reschedule_date = ""
-            m.reschedule_start = None
-            m.reschedule_end = None
-            db.commit()
-            raise HTTPException(
-                status_code=409,
-                detail="Предложенное время уже прошло. "
-                       "Попросите заведение предложить новый день.",
-            )
-    except (ValueError, TypeError):
-        pass
+    if datetime.now(UTC) >= _starts_at(
+        m.reschedule_date, m.reschedule_start, v.city
+    ):
+        m.reschedule_date = ""
+        m.reschedule_start = None
+        m.reschedule_end = None
+        db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail="Предложенное время уже прошло. "
+                   "Попросите заведение предложить новый день.",
+        )
 
     # Новое время может пересечься с другой сменой человека — предупреждать
     # поздно, он уже согласился, поэтому просто фиксируем это в чате.
@@ -809,25 +835,22 @@ def cancel_shift(
     late = False
     v = db.get(Vacancy, m.vacancy_id)
     if v is not None:
-        try:
-            start = shift_start_utc(v.date, v.start_time, v.city)
-            # Отмена — про БУДУЩУЮ смену. Отменять начавшуюся нельзя: это была
-            # универсальная кнопка «не платить». Заведение просто не называло
-            # код, не жало «человек пришёл», а наутро отменяло смену — статус
-            # уходил в «отменена», расчёт её больше не видел, и работа
-            # получалась бесплатной. Двумя тапами, не через API.
-            if datetime.now(UTC) >= start:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Смена уже началась — отменить её нельзя. "
-                           "Если она не состоялась, нажмите «Смена не "
-                           "состоялась»; если состоялась, но что-то не так — "
-                           "«Проблема», разберёт оператор.",
-                )
-            hours_left = (start - datetime.now(UTC)).total_seconds() / 3600
-            late = hours_left < settings.late_cancel_hours
-        except (ValueError, TypeError):
-            late = False
+        start = _starts_at(v.date, v.start_time, v.city)
+        # Отмена — про БУДУЩУЮ смену. Отменять начавшуюся нельзя: это была
+        # универсальная кнопка «не платить». Заведение просто не называло
+        # код, не жало «человек пришёл», а наутро отменяло смену — статус
+        # уходил в «отменена», расчёт её больше не видел, и работа
+        # получалась бесплатной. Двумя тапами, не через API.
+        if datetime.now(UTC) >= start:
+            raise HTTPException(
+                status_code=409,
+                detail="Смена уже началась — отменить её нельзя. "
+                       "Если она не состоялась, нажмите «Смена не "
+                       "состоялась»; если состоялась, но что-то не так — "
+                       "«Проблема», разберёт оператор.",
+            )
+        hours_left = (start - datetime.now(UTC)).total_seconds() / 3600
+        late = hours_left < settings.late_cancel_hours
 
     m.status = "cancelled"
     m.cancelled_by = who
