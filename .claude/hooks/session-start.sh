@@ -10,16 +10,18 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR"
 
-echo "[hook] Backend: pip install (requirements + ruff + pytest)"
+echo "[hook] Backend: pip install (requirements + бот + инструменты тестов)"
 # Fallback --ignore-installed: в контейнере часть пакетов может стоять через
 # apt (debian), и pip не может их обновить обычным способом. После fallback
 # принудительно возвращаем зафиксированные версии (--force-reinstall --no-deps),
 # чтобы не разъехались fastapi/pydantic.
 python3 -m pip install -q --disable-pip-version-check \
-  -r backend/requirements.txt ruff pytest \
+  -r backend/requirements.txt -r backend/bot/requirements.txt \
+  ruff pytest pypdf fakeredis moto \
   || {
     python3 -m pip install -q --disable-pip-version-check --ignore-installed \
-      -r backend/requirements.txt ruff pytest
+      -r backend/requirements.txt -r backend/bot/requirements.txt \
+      ruff pytest pypdf fakeredis moto
     python3 -m pip install -q --disable-pip-version-check \
       --force-reinstall --no-deps -r backend/requirements.txt
   }
