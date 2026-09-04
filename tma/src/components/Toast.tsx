@@ -46,7 +46,7 @@ export function Toaster() {
         position: "fixed",
         left: 0,
         right: 0,
-        bottom: 92,
+        bottom: "calc(92px + env(safe-area-inset-bottom))",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -62,11 +62,11 @@ export function Toaster() {
           role="status"
           style={{
             background: COLOR[t.kind],
-            color: "#fff",
+            color: "var(--on-brand)",
             padding: "10px 16px",
             borderRadius: 12,
             fontWeight: 600,
-            fontSize: 14,
+            fontSize: "var(--text-sm)",
             maxWidth: "88%",
             boxShadow: "var(--elev-3)",
           }}

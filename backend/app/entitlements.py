@@ -1,51 +1,50 @@
-"""Общие помощники по правам/тарифам: план, boost-вакансии, баланс."""
-from datetime import UTC, datetime
-
+"""Общие помощники по правам пользователя (денежный баланс, флаги)."""
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .models import Boost, Entitlement, Subscription, Vacancy
+from .models import Entitlement
 
 
-def get_or_create(db: Session, owner_id: str) -> Entitlement:
+def ensure(db: Session, owner_id: str) -> Entitlement:
+    """Гарантировать строку прав БЕЗ коммита.
+
+    Отдельно от get_or_create, потому что коммит в середине денежной операции
+    фиксирует всё, что висит в сессии, — и разрывает её на две части. Именно
+    так терялись пополнения: запись «оплачено» успевала зафиксироваться, а
+    зачисление на баланс — нет. Здесь только flush: строка появляется в
+    транзакции, но фиксируется вместе со всем остальным.
+    """
     ent = db.get(Entitlement, owner_id)
     if ent is None:
         ent = Entitlement(owner_id=owner_id)
         db.add(ent)
-        db.commit()
+        db.flush()
+    return ent
+
+
+def get_or_create(db: Session, owner_id: str) -> Entitlement:
+    """То же, но с коммитом. Для обычных чтений, вне денежных транзакций."""
+    ent = db.get(Entitlement, owner_id)
+    if ent is None:
+        ent = Entitlement(owner_id=owner_id)
+        db.add(ent)
+        try:
+            db.commit()
+        except IntegrityError:
+            # Два одновременных запроса от одного человека (открыл приложение
+            # и сразу нажал что-то) оба видели «строки нет» и оба пытались её
+            # создать. Второй падал на первичном ключе — и человек получал
+            # 500 на ровном месте, при первом же входе. Значит строку уже
+            # создал сосед: откатываемся и берём её.
+            db.rollback()
+            ent = db.get(Entitlement, owner_id)
+            if ent is None:
+                raise
+            return ent
         db.refresh(ent)
     return ent
 
 
-def plan_of(db: Session, owner_id: str) -> str:
-    sub = (
-        db.query(Subscription)
-        .filter(Subscription.owner_id == owner_id)
-        .first()
-    )
-    return sub.plan if sub and sub.active else "free"
-
-
-def active_boost_vacancy_ids(db: Session) -> set[str]:
-    """ID вакансий с не истёкшим boost."""
-    now = datetime.now(UTC).isoformat()
-    rows = db.query(Boost).filter(Boost.expires_at > now).all()
-    return {b.vacancy_id for b in rows}
-
-
-def active_vacancy_count(db: Session, employer_id: str) -> int:
-    return (
-        db.query(Vacancy)
-        .filter(Vacancy.employer_id == employer_id, Vacancy.status == "active")
-        .count()
-    )
-
-
-# Лимиты тарифа: число активных вакансий (None = безлимит).
-# Модель — комиссия с закрытой смены, а не подписка. Значит нам ВЫГОДНО, чтобы
-# заведение вешало как можно больше смен (больше смен → больше закрытых →
-# больше комиссии). Поэтому лимита нет ни у кого — публикация бесплатна.
-PLAN_VACANCY_LIMIT: dict[str, int | None] = {
-    "free": None,
-    "pro": None,
-    "business": None,
-}
+# Тарифов и лимитов на число вакансий нет и не планируется: модель — комиссия
+# с закрытой смены. Значит сервису ВЫГОДНО, чтобы заведение вешало как можно
+# больше смен, и ограничивать публикацию было бы стрельбой себе в ногу.

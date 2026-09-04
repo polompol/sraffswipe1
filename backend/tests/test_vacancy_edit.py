@@ -3,6 +3,8 @@ from datetime import date, timedelta
 
 from app.timeutil import local_today
 
+from .shifttime import age_shift
+
 
 def _d(days: int) -> str:
     """Дата смены относительно «сегодня» — по местному времени, как её
@@ -119,11 +121,24 @@ def test_cannot_remove_shift_with_response(client):
 
 
 def test_past_shift_disappears_from_feed(client):
-    """Вчерашняя смена не показывается: раньше отсечка работала только при
-    явном фильтре по датам, и прошедшие смены висели в ленте вечно."""
+    """Смена, дата которой прошла, уходит из ленты, но остаётся в истории.
+
+    Опубликовать смену задним числом теперь нельзя, поэтому «прошедшую»
+    делаем так, как она появляется в жизни: смену завели на будущее, а потом
+    этот день наступил и прошёл.
+    """
+    from app.db import SessionLocal
+    from app.models import Vacancy
+
     h = _hdr(_auth(client))
-    past = _make(client, h, date=_d(-1))
-    future = _make(client, h, date=_d(2))
+    past = _make(client, h, date=_d(2))
+    future = _make(client, h, date=_d(3))
+    db = SessionLocal()
+    try:
+        db.get(Vacancy, past["id"]).date = _d(-1)
+        db.commit()
+    finally:
+        db.close()
 
     ids = {x["id"] for x in client.get("/vacancies").json()}
     assert past["id"] not in ids
@@ -131,6 +146,23 @@ def test_past_shift_disappears_from_feed(client):
 
     # В своих вакансиях заведение прошедшую смену по-прежнему видит (история).
     assert past["id"] in {x["id"] for x in _mine(client, h)}
+
+
+def test_shift_in_the_past_is_rejected(client):
+    """Смену на вчера публиковать нельзя.
+
+    Раньше сервер принимал её молча, а лента прошедшие смены не показывает:
+    заведение видело смену у себя в списке и ждало откликов, которых не могло
+    быть. В календаре телефона соседние числа стоят вплотную — ошибиться легко.
+    """
+    h = _hdr(_auth(client))
+    r = client.post("/vacancies", headers=h, json={
+        "role": "waiter", "date": _d(-1), "start_time": 600, "end_time": 1080,
+        "rate": 400, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Никольская, 10",
+    })
+    assert r.status_code == 422
+    assert "прошлом" in r.text
 
 
 def test_admin_can_send_reminders_without_duplicates(client):
@@ -174,66 +206,56 @@ def _code_of(client, emp, mid):
     return [m for m in rows if m["id"] == mid][0]["checkin_code"]
 
 
-def test_shift_with_code_checkin_auto_closes_when_venue_silent(client):
-    """Работник отметился кодом, заведение молчит — смена закрывается сама.
-    Раньше это был самый частый спор: правило разбора однозначное, но
-    исполнял его оператор вручную."""
-    from datetime import UTC, datetime, timedelta
-
+def test_shift_settles_itself_after_the_waiting_window(client):
+    """Смена закончилась, никто не возразил — закрывается сама с комиссией."""
     from app.db import SessionLocal
-    from app.digest import auto_close_shifts
-    from app.models import Match, Vacancy
+    from app.digest import settle_shifts
+    from app.models import Match
 
     emp, seeker, mid = _match_ready_for_checkin(client)
     code = _code_of(client, emp, mid)
     assert client.post(f"/matches/{mid}/checkin", headers=seeker,
                        json={"code": code}).status_code == 200
 
+    # Смена ещё не закончилась — закрывать рано.
     db = SessionLocal()
     try:
-        # Смена ещё не закончилась — закрывать рано.
-        assert auto_close_shifts(db) == 0
-        # Отматываем смену во вчера, чтобы срок ожидания истёк.
-        m = db.get(Match, mid)
-        v = db.get(Vacancy, m.vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        db.commit()
+        assert settle_shifts(db) == 0
+    finally:
+        db.close()
 
-        assert auto_close_shifts(db) == 1
-        db.refresh(m)
+    # Доводим смену до конца, чтобы срок ожидания истёк. Именно age_shift, а
+    # не «дата минус сутки»: расчёт ждёт двенадцать часов после конца смены, и
+    # в третьем часу ночи «вчерашняя» смена закончилась всего девять часов
+    # назад — тест падал каждую ночь при исправном коде.
+    age_shift(mid, 1)
+
+    db = SessionLocal()
+    try:
+        assert settle_shifts(db) == 1
+        m = db.get(Match, mid)
         assert m.status == "completed"
         assert m.no_show is False
         # Повторный запуск ничего не делает — смена уже закрыта.
-        assert auto_close_shifts(db) == 0
+        assert settle_shifts(db) == 0
     finally:
         db.close()
 
 
-def test_geo_checkin_never_auto_closes(client):
-    """По гео смена сама НЕ закрывается: рядом с кафе можно оказаться и не
-    работая, это слабое доказательство — такие случаи решает оператор."""
-    from datetime import UTC, datetime, timedelta
+def test_wrong_code_is_rejected(client):
+    """Отметиться можно только настоящим кодом заведения.
 
-    from app.db import SessionLocal
-    from app.digest import auto_close_shifts
-    from app.models import Match, Vacancy
-
+    Геолокацию убрали совсем: она просила разрешение, не работала в подвалах
+    и ничего не доказывала — рядом с кафе можно оказаться и не работая.
+    """
     emp, seeker, mid = _match_ready_for_checkin(client)
-    r = client.post(f"/matches/{mid}/checkin", headers=seeker,
-                    json={"lat": 55.75, "lng": 37.61})
-    assert r.status_code == 200
-
-    db = SessionLocal()
-    try:
-        m = db.get(Match, mid)
-        v = db.get(Vacancy, m.vacancy_id)
-        v.date = (datetime.now(UTC) - timedelta(days=2)).strftime("%Y-%m-%d")
-        db.commit()
-        assert auto_close_shifts(db) == 0
-        db.refresh(m)
-        assert m.status == "confirmed"
-    finally:
-        db.close()
+    bad = client.post(f"/matches/{mid}/checkin", headers=seeker,
+                      json={"code": "000000"})
+    assert bad.status_code == 400
+    # Координаты больше не принимаются как способ отметки.
+    geo = client.post(f"/matches/{mid}/checkin", headers=seeker,
+                      json={"lat": 55.75, "lng": 37.61})
+    assert geo.status_code == 400
 
 
 def test_auto_close_endpoint_available_to_operator(client):

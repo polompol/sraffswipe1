@@ -1,9 +1,10 @@
+import { LS } from "@/lib/storage";
 // Короткие приятные звуки через WebAudio (без файлов). Дофамин на радостных
 // моментах: мэтч, закрытая смена. Уважает выключатель «Звук» в профиле.
 let ctx: AudioContext | null = null;
 
 function audio(): AudioContext | null {
-  if (localStorage.getItem("ss_sound") === "off") return null;
+  if (localStorage.getItem(LS.soundOff) === "off") return null;
   try {
     const Ctor =
       window.AudioContext ||

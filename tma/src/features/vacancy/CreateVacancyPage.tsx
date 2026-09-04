@@ -1,14 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/domain";
+import { MIN_RATE_PER_HOUR, MIN_RATE_PER_SHIFT } from "@/types/domain";
 import {
-  PAY_METHOD_LABELS,
-  ROLE_FAMILIES,
-  ROLE_FAMILY_LABELS,
-  ROLE_FAMILY_ORDER,
+  PAY_METHOD_SHORT,
   STAFF_ROLE_LABELS,
-  TIPS_LABELS,
+  TIPS_CHOICE,
 } from "@/types/domain";
 import {
   createVacancy,
@@ -18,9 +16,15 @@ import {
   type AddressSuggestion,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { dateLong, shiftWhen } from "@/lib/format";
+import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
-import { IconPin, IconCheck } from "@/components/Icons";
-import { showBackButton, haptic } from "@/telegram/sdk";
+import { RolePicker } from "@/components/RolePicker";
+import { PhotoUpload } from "@/components/PhotoUpload";
+import { CityPicker } from "@/components/CityPicker";
+import { IconCheck, IconPin } from "@/components/Icons";
+import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
+import { ToggleChip } from "@/components/ToggleChip";
 
 const toMinutes = (t: string): number => {
   const [h, m] = t.split(":").map(Number);
@@ -29,6 +33,9 @@ const toMinutes = (t: string): number => {
 
 const fromMinutes = (m: number): string =>
   `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+// Частые варианты. Всё остальное — через «Нужно другое число».
+const HEADCOUNT_PRESETS = [1, 2, 3, 5, 10];
 
 export function CreateVacancyPage() {
   const nav = useNavigate();
@@ -46,18 +53,54 @@ export function CreateVacancyPage() {
   const [start, setStart] = useState(pre ? fromMinutes(pre.startTime) : "10:00");
   const [end, setEnd] = useState(pre ? fromMinutes(pre.endTime) : "22:00");
   const [rate, setRate] = useState(pre ? String(pre.rate) : "350");
+  const [interiorPhoto, setInteriorPhoto] = useState(pre?.interiorPhotoUrl ?? "");
   const [rateType, setRateType] = useState<RateType>(pre?.rateType ?? "perHour");
   const [payMethod, setPayMethod] = useState<PayMethod>(pre?.payMethod ?? "cash");
   const [tips, setTips] = useState<TipsMode>(pre?.tips ?? "none");
-  const [city, setCity] = useState(pre?.city || "Москва");
-  const [address, setAddress] = useState(pre?.address || "Москва, ул. Льва Толстого, 16");
+  // Без «Москвы» по умолчанию: заведение в Казани не заметило бы подстановку
+  // и опубликовало смену в чужом городе — там её никто не увидит.
+  const [city, setCity] = useState(pre?.city || "");
+  // Пусто, а не московская улица. Подстановку легко не заметить: заведение в
+  // Казани заполняло дату и ставку, адрес не трогало — и публиковало смену по
+  // московскому адресу. Он потом уходит и в напоминание работнику, и в акт.
+  const [address, setAddress] = useState(pre?.address || "");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
+  // Последний адрес, выбранный из списка (или подставленный при входе): для
+  // него подсказки не запрашиваем.
+  const chosenAddress = useRef<string>(pre?.address || "");
   const [desc, setDesc] = useState(pre?.description ?? "");
   const [medBook, setMedBook] = useState(pre?.requireMedBook ?? true);
+  // Сколько человек нужно: на банкет и выходные почти никогда не один.
+  const [headcount, setHeadcount] = useState(pre?.headcount ?? 1);
+  // Правим смену, где стояло число не из быстрых кнопок (например 4) —
+  // сразу открываем поле, иначе выбранное значение негде увидеть.
+  const [custom, setCustom] = useState(
+    !HEADCOUNT_PRESETS.includes(pre?.headcount ?? 1),
+  );
   const [busy, setBusy] = useState(false);
+  // Экран «опубликовано» вместо возврата назад: после публикации у заведения
+  // должно быть куда нажать, а не только куда вернуться.
+  const [published, setPublished] = useState(false);
 
-  useEffect(() => showBackButton(() => nav(-1)), [nav]);
+  // Кнопка «назад» Telegram. После публикации она ведёт к списку смен: назад
+  // в только что отправленную форму возвращаться незачем.
+  useEffect(
+    () => showBackButton(() => (published ? nav("/vacancy/my") : nav(-1))),
+    [nav, published],
+  );
+
+  // Форма длинная: дата, время, ставка, адрес с подсказками, описание — три
+  // минуты работы. Задел крестик или смахнул вниз — всё пропадало без
+  // единого вопроса. Пока в форме есть несохранённое, Telegram спрашивает
+  // подтверждение при закрытии.
+  // После публикации спрашивать «точно уйти?» уже не за что: форма сохранена.
+  const dirty =
+    !published && (!!date || !!desc || address !== (pre?.address ?? ""));
+  useEffect(() => {
+    guardClosing(dirty);
+    return () => guardClosing(false);
+  }, [dirty]);
 
   async function publish() {
     if (!date) {
@@ -66,6 +109,21 @@ export function CreateVacancyPage() {
     }
     if (!city.trim()) {
       toast("Укажите город", "error");
+      return;
+    }
+    // Нижняя граница оплаты. Сервер такую смену не примет, и без проверки
+    // здесь человек получил бы отказ уже после нажатия «Опубликовать» —
+    // с длинной формой это самый обидный момент. Заодно ловится случайный
+    // ноль (стёр ставку, забыл вписать заново).
+    const rateNum = Number(rate) || 0;
+    const minRate = rateType === "perHour" ? MIN_RATE_PER_HOUR : MIN_RATE_PER_SHIFT;
+    if (rateNum < minRate) {
+      toast(
+        rateType === "perHour"
+          ? `Ставка не может быть ниже ${minRate} ₽ в час`
+          : `Оплата за смену не может быть ниже ${minRate} ₽`,
+        "error",
+      );
       return;
     }
     setBusy(true);
@@ -81,6 +139,8 @@ export function CreateVacancyPage() {
         tips,
         description: desc,
         require_med_book: medBook,
+        headcount,
+        interior_photo_url: interiorPhoto || undefined,
         address,
         city: city.trim(),
         lat: coords?.lat,
@@ -89,27 +149,34 @@ export function CreateVacancyPage() {
       if (editing) {
         await updateVacancy(editing.id, payload);
         toast("Смена обновлена", "success");
-      } else {
-        await createVacancy(payload);
-        track("vacancy_publish", { role });
-        toast("Вакансия опубликована", "success");
+        haptic("success");
+        qc.invalidateQueries({ queryKey: ["feed"] });
+        qc.invalidateQueries({ queryKey: ["my-vacancies"] });
+        nav(-1);
+        return;
       }
+      await createVacancy(payload);
+      track("vacancy_publish", { role });
       haptic("success");
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["my-vacancies"] });
-      nav(-1);
+      // Не возвращаем назад молча. Раньше публикация заканчивалась всплывашкой
+      // и прыжком на предыдущий экран: смена опубликована — и что дальше?
+      // Заведение ждало откликов, хотя быстрее позвать людей самому.
+      setPublished(true);
     } catch (e) {
       haptic("error");
-      // 409 — по смене уже откликнулись: сервер объясняет причину, покажем её.
-      const status = (e as { response?: { status?: number } })?.response?.status;
-      const detail = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
+      // Сервер объясняет причину сам: и почему нельзя менять смену с
+      // откликом (409), и что не так с полями — например «Смена не может
+      // быть в прошлом» (422). Раньше проверка полей терялась и человек
+      // видел общее «Проверьте поля», не понимая какое.
       toast(
-        status === 409 && detail
-          ? detail
-          : editing
-            ? "Не удалось сохранить. Проверьте поля."
-            : "Не удалось опубликовать. Проверьте поля.",
+        apiError(
+          e,
+          editing
+            ? "Не получилось сохранить. Проверьте дату, время и ставку."
+            : "Не получилось разместить. Проверьте дату, время и ставку.",
+        ),
         "error",
       );
     } finally {
@@ -118,7 +185,18 @@ export function CreateVacancyPage() {
   }
 
   // Подсказки адреса DaData с дебаунсом.
+  //
+  // Не спрашиваем подсказки для адреса, который человек только что ВЫБРАЛ из
+  // списка. Иначе получалась петля: клик по подсказке менял адрес → эффект
+  // срабатывал заново → через 300 мс тот же список выпрыгивал обратно поверх
+  // формы и закрывал тумблер «Нужна медкнижка». А поскольку адрес
+  // предзаполнен, список открывался сам при входе на экран, без единого
+  // нажатия.
   useEffect(() => {
+    if (address === chosenAddress.current) {
+      setSuggests([]);
+      return;
+    }
     const t = setTimeout(async () => {
       try {
         setSuggests(await suggestAddress(address));
@@ -129,11 +207,59 @@ export function CreateVacancyPage() {
     return () => clearTimeout(t);
   }, [address]);
 
+  if (published) {
+    return (
+      <div className="app">
+        <div className="page">
+          {/* Тот же кружок, что у пустых состояний: одна форма на весь
+              продукт, отдельный стиль тут не нужен. */}
+          <div
+            aria-hidden
+            style={{
+              width: 72,
+              height: 72,
+              margin: "8px 0 16px",
+              borderRadius: "50%",
+              background: "var(--gold-tint)",
+              color: "var(--gold)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <IconCheck size={34} />
+          </div>
+          <h1 className="h1 tight">
+            Смена размещена
+          </h1>
+          <p className="muted" style={{ marginBottom: 4 }}>
+            {STAFF_ROLE_LABELS[role]} ·{" "}
+            {shiftWhen({
+              shiftDate: date,
+              shiftStart: toMinutes(start),
+              shiftEnd: toMinutes(end),
+            })}
+          </p>
+          <p className="muted" style={{ marginBottom: 24 }}>
+            Её уже видят работники рядом. Можно не ждать откликов: позовите
+            тех, кто подходит — так быстрее.
+          </p>
+          <div className="stack">
+            <Button onClick={() => nav("/feed")}>Посмотреть, кто свободен</Button>
+            <Button variant="secondary" onClick={() => nav("/vacancy/my")}>
+              К моим сменам
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>
-          {editing ? "Исправить смену" : pre ? "Повторить смену" : "Новая вакансия"}
+        <h1 className="h1 tight">
+          {editing ? "Исправить условия" : pre ? "Повторить смену" : "Новая смена"}
         </h1>
         {editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
@@ -148,35 +274,16 @@ export function CreateVacancyPage() {
         )}
 
         <div className="form-label">Должность</div>
-        <div style={{ margin: "8px 0 16px" }}>
-          {ROLE_FAMILY_ORDER.map((fam) => (
-            <div key={fam} style={{ marginBottom: 10 }}>
-              <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>
-                {ROLE_FAMILY_LABELS[fam]}
-              </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {ROLE_FAMILIES[fam].map((r) => (
-                  <button
-                    key={r}
-                    className="tag"
-                    style={{
-                      cursor: "pointer",
-                      background: role === r ? "var(--gold)" : "transparent",
-                      color: role === r ? "#fff" : "var(--text)",
-                      borderColor: role === r ? "var(--gold)" : "var(--border)",
-                    }}
-                    onClick={() => setRole(r)}
-                  >
-                    {STAFF_ROLE_LABELS[r]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <RolePicker isOn={(r) => role === r} onPick={setRole} />
 
         <div className="form-label">Дата смены</div>
-        <input className="input" type="date" style={{ marginBottom: 12 }} value={date} onChange={(e) => setDate(e.target.value)} />
+        <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        {/* Поле даты рисует сама система телефона, и формат у неё свой: на
+            английском телефоне это «08/29/2026». Спутать 08/29 и 29/08 легко,
+            а цена ошибки — смена в другой день. Повторяем выбранное словами. */}
+        <p className="hint">
+          {date ? dateLong(date) : "Выберите день смены"}
+        </p>
 
         <div className="row" style={{ marginBottom: 12 }}>
           <span style={{ flex: 1 }}>
@@ -191,68 +298,128 @@ export function CreateVacancyPage() {
 
         <div className="form-label">Ставка</div>
         <div className="row" style={{ marginBottom: 12 }}>
-          <input className="input" type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
+          <input
+            className="input"
+            type="number"
+            inputMode="numeric"
+            min={rateType === "perHour" ? MIN_RATE_PER_HOUR : MIN_RATE_PER_SHIFT}
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
           <button
             className="tag"
-            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border)" }}
+            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border-strong)" }}
             onClick={() => setRateType(rateType === "perHour" ? "perShift" : "perHour")}
           >
             {rateType === "perHour" ? "₽/час" : "₽/смена"}
           </button>
         </div>
 
+        <div className="form-label">Сколько человек нужно</div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+            gap: 8,
+            marginBottom: 8,
+          }}
+        >
+          {HEADCOUNT_PRESETS.map((n) => (
+            <ToggleChip
+              key={n}
+              on={headcount === n}
+              label={n}
+              wide
+              onClick={() => setHeadcount(n)}
+            />
+          ))}
+        </div>
+        {/* Поле для своего числа показываем только по запросу. Раньше оно
+            стояло всегда и повторяло выбранный чип: под нажатой «1» висела
+            безымянная строка с той же единицей, и человек не понимал, что это
+            и почему их два. Подсказка «другое число» в нём не появлялась
+            никогда — поле не бывает пустым. */}
+        {custom ? (
+          <>
+            <label className="form-label" htmlFor="headcount">
+              Впишите своё число
+            </label>
+            <input
+              id="headcount"
+              className="input"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={20}
+              style={{ marginBottom: 16 }}
+              value={headcount}
+              onChange={(e) =>
+                setHeadcount(Math.min(20, Math.max(1, Number(e.target.value) || 1)))
+              }
+            />
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCustom(true)}
+            /* Не ссылка с подчёркиванием: багровый подчёркнутый текст в ряду
+               кнопок читался как сообщение об ошибке, хотя это обычный способ
+               вписать своё число. */
+            className="text-btn text-btn--gold"
+            style={{ padding: "4px 0 12px" }}
+          >
+            Нужно другое число
+          </button>
+        )}
+        {headcount > 1 && (
+          <p className="hint">
+            Одной смены хватит на всех — одинаковые размещать не нужно.
+            Наберёте нужных людей — она уйдёт из ленты сама.
+          </p>
+        )}
+
         <div className="form-label">Как и когда платите</div>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-          {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((p) => (
-            <button
+        <div style={{ display: "grid", gap: 8, margin: "8px 0 16px" }}>
+          {(Object.keys(PAY_METHOD_SHORT) as PayMethod[]).map((p) => (
+            <ToggleChip
               key={p}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: payMethod === p ? "var(--gold)" : "transparent",
-                color: payMethod === p ? "#fff" : "var(--text)",
-                borderColor: payMethod === p ? "var(--gold)" : "var(--border)",
-              }}
+              on={payMethod === p}
+              label={PAY_METHOD_SHORT[p]}
               onClick={() => setPayMethod(p)}
-            >
-              {PAY_METHOD_LABELS[p]}
-            </button>
+            />
           ))}
         </div>
 
-        <div className="form-label">Чаевые (платят гости)</div>
-        <div className="row" style={{ flexWrap: "wrap", margin: "8px 0 16px" }}>
-          {(Object.keys(TIPS_LABELS) as TipsMode[]).map((t) => (
-            <button
+        <div className="form-label">Чаевые — их платят гости</div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+            gap: 8,
+            margin: "8px 0 16px",
+          }}
+        >
+          {(Object.keys(TIPS_CHOICE) as TipsMode[]).map((t) => (
+            <ToggleChip
               key={t}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: tips === t ? "var(--gold)" : "transparent",
-                color: tips === t ? "#fff" : "var(--text)",
-                borderColor: tips === t ? "var(--gold)" : "var(--border)",
-              }}
+              on={tips === t}
+              label={TIPS_CHOICE[t]}
               onClick={() => setTips(t)}
-            >
-              {TIPS_LABELS[t]}
-            </button>
+            />
           ))}
         </div>
 
-        <label className="form-label" htmlFor="city">Город</label>
-        <input
-          id="city"
-          className="input"
-          style={{ marginBottom: 12 }}
-          placeholder="например, Москва"
+        <CityPicker
           value={city}
-          onChange={(e) => setCity(e.target.value)}
+          onChange={setCity}
+          hint="Смену увидят люди из этого города. Время — местное."
         />
 
         <label className="form-label" htmlFor="addr">Адрес</label>
         <input
           id="addr"
           className="input"
+          placeholder="например, Баумана, 12"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
@@ -261,8 +428,12 @@ export function CreateVacancyPage() {
             {suggests.map((s) => (
               <button
                 key={s.value}
-                style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 10px", cursor: "pointer", color: "var(--text)" }}
+                // Подсказки адреса стояли плотным списком высотой ~35px.
+                // Промах здесь дороже прочих: смена уезжает на соседнюю улицу,
+                // а человек приходит не туда.
+                style={{ display: "flex", alignItems: "center", width: "100%", textAlign: "left", background: "none", border: "none", minHeight: 44, padding: "0 10px", cursor: "pointer", color: "var(--text)", font: "inherit", fontSize: "var(--text-base)" }}
                 onClick={() => {
+                  chosenAddress.current = s.value;
                   setAddress(s.value);
                   if (s.lat != null && s.lng != null) {
                     setCoords({ lat: s.lat, lng: s.lng });
@@ -270,7 +441,7 @@ export function CreateVacancyPage() {
                   setSuggests([]);
                 }}
               >
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span className="inline">
                   <IconPin size={15} /> {s.value}
                 </span>
               </button>
@@ -279,21 +450,29 @@ export function CreateVacancyPage() {
         )}
         {suggests.length === 0 && <div style={{ marginBottom: 12 }} />}
 
-        <div className="card row" style={{ marginBottom: 12, cursor: "pointer" }} onClick={() => setMedBook(!medBook)}>
+        {/* Настоящий чекбокс внутри label. Был div с onClick: требование
+            медкнижки нельзя было ни переключить с клавиатуры, ни услышать в
+            озвучке — для человека без мыши и тача поле просто не существовало.
+            В анкете работника такой же переключатель уже сделан правильно. */}
+        <label className="card row" style={{ marginBottom: 12, cursor: "pointer" }}>
           <span style={{ flex: 1 }}>Нужна медкнижка</span>
-          <span
-            aria-hidden
-            style={{
-              width: 26, height: 26, borderRadius: 8,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              background: medBook ? "var(--gold)" : "transparent",
-              border: medBook ? "none" : "2px solid var(--border)",
-              color: "#fff",
-            }}
-          >
-            {medBook && <IconCheck size={16} />}
-          </span>
-        </div>
+          <input
+            type="checkbox"
+            checked={medBook}
+            onChange={(e) => setMedBook(e.target.checked)}
+            style={{ marginLeft: 8 }}
+          />
+        </label>
+
+        {/* Фото места. Сервер это поле принимал и отдавал, карточка в ленте
+            на него рассчитана — а в форме его не было вовсе, и поставить
+            фотографию смене было нельзя ничем. Именно фото решает, листнут
+            карточку дальше или остановятся. */}
+        <PhotoUpload
+          label="Фото места — по желанию, но с ним откликаются чаще"
+          value={interiorPhoto}
+          onChange={setInteriorPhoto}
+        />
 
         <div className="form-label">Описание</div>
         <textarea
@@ -305,7 +484,7 @@ export function CreateVacancyPage() {
         />
 
         <Button loading={busy} onClick={publish}>
-          {editing ? "Сохранить изменения" : "Опубликовать вакансию"}
+          {editing ? "Сохранить изменения" : "Разместить смену"}
         </Button>
       </div>
     </div>

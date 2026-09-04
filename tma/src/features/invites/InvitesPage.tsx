@@ -37,7 +37,6 @@ export function InvitesPage() {
         pop();
         setMatch({
           id: res.matchId,
-          seekerId: "me",
           employerId: v.employerId,
           vacancyId: v.id,
           status: "matched",
@@ -52,17 +51,17 @@ export function InvitesPage() {
       // Успешный отклик без мэтча → VacancyList покажет тост (не дублируем).
       return dir !== "dislike";
     } catch {
-      toast("Не удалось. Попробуйте ещё раз", "error");
+      toast("Отклик не ушёл. Попробуйте ещё раз", "error");
       return false;
     }
   }
 
   return (
-    <div className="page">
+    // Обёртка .app даёт ширину 520 и центрирование, как у остальных экранов
+    // этой части приложения (Настройки, Помощь, Анкета).
+    <div className="app">
+      <div className="page">
       <h1 className="h1">Кто меня зовёт</h1>
-      <p className="muted" style={{ marginTop: -6 }}>
-        Заведения, которые уже лайкнули тебя. Откликнись — и сразу мэтч.
-      </p>
 
       {/* Единый стиль состояний со всеми остальными экранами: раньше здесь
           были текстовая «Загрузка…» и самодельное пустое состояние. */}
@@ -71,18 +70,27 @@ export function InvitesPage() {
 
       {!isLoading && !isError && data && data.length === 0 && (
         <EmptyState
+          fill
           icon={<IconBolt size={34} />}
           title="Пока никто не позвал"
-          text="Листай ленту и откликайся — заведения начнут звать в ответ."
-          action={<Button onClick={() => nav("/feed")}>Открыть ленту</Button>}
+          text="Листайте смены и откликайтесь — заведения начнут звать в ответ."
+          action={<Button onClick={() => nav("/feed")}>Смотреть смены</Button>}
         />
       )}
 
       {!isLoading && !isError && data && data.length > 0 && (
-        <VacancyList items={data} onAct={act} />
+        <>
+          {/* Подпись — только над настоящим списком: над пустым экраном она
+              велела отвечать там, где отвечать некому. */}
+          <p className="muted" style={{ marginTop: -6 }}>
+            Ответьте — и сразу откроется чат.
+          </p>
+          <VacancyList items={data} onAct={act} />
+        </>
       )}
 
       {match && <MatchOverlay match={match} onClose={() => setMatch(null)} />}
+      </div>
     </div>
   );
 }

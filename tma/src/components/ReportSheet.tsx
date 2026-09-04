@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import {
   reportTarget,
   type ReportReason,
@@ -8,12 +7,13 @@ import {
 import { toast } from "@/components/Toast";
 import { haptic } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
+import { Sheet } from "@/components/Sheet";
 
 const REASONS: { id: ReportReason; label: string }[] = [
-  { id: "fake", label: "Фейковая вакансия" },
+  { id: "fake", label: "Смена ненастоящая" },
   { id: "scam", label: "Обман / мошенничество" },
   { id: "spam", label: "Спам" },
-  { id: "abuse", label: "Оскорбления / абьюз" },
+  { id: "abuse", label: "Оскорбления и грубость" },
   { id: "other", label: "Другое" },
 ];
 
@@ -41,75 +41,67 @@ export function ReportSheet({
       onClose();
     } catch {
       haptic("error");
-      toast("Не удалось отправить жалобу", "error");
+      toast("Жалоба не ушла — попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
   }
 
-  // Портал в body: иначе панель наследует анимацию и задержку
-  // родительского списка (.stagger) и всплывает с запозданием.
-  return createPortal(
-    <div className="sheet-backdrop" onClick={onClose}>
-      {/* Структура как у остальных панелей: прокручиваемое тело + закреплённый
-          низ. Без этого на невысоком экране кнопка «Отправить» уезжала за
-          нижнюю кромку листа, и жалобу нельзя было отправить вообще. */}
-      <div
-        className="fade-up sheet"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sheet-body">
-        <h2 className="h2">Пожаловаться</h2>
-        <p className="muted" style={{ marginTop: 4 }}>
-          Что не так? Мы проверим и примем меры.
-        </p>
-        <div
-          role="radiogroup"
-          aria-label="Причина жалобы"
-          style={{ display: "grid", gap: 8, margin: "12px 0 14px" }}
-        >
-          {REASONS.map((r) => (
-            <button
-              key={r.id}
-              className="card"
-              role="radio"
-              aria-checked={reason === r.id}
-              style={{
-                textAlign: "left",
-                cursor: "pointer",
-                minHeight: 48,
-                borderColor: reason === r.id ? "var(--gold)" : "var(--border-strong)",
-                color: reason === r.id ? "var(--gold)" : "var(--text)",
-              }}
-              onClick={() => {
-                haptic("select");
-                setReason(r.id);
-              }}
-            >
-              {reason === r.id ? "● " : "○ "}
-              {r.label}
-            </button>
-          ))}
-        </div>
-        <textarea
-          className="input"
-          style={{ marginBottom: 14, minHeight: 70 }}
-          placeholder="Опишите подробнее (необязательно)"
-          value={text}
-          maxLength={1000}
-          onChange={(e) => setText(e.target.value)}
-        />
-        </div>
-        <div className="sheet-foot">
+  return (
+    <Sheet
+      title="Пожаловаться"
+      onClose={onClose}
+      footer={
+        <>
           <Button variant="secondary" onClick={onClose}>
             Отмена
           </Button>
           <Button loading={busy} disabled={!reason} onClick={submit}>
-            Отправить
+            Отправить жалобу
           </Button>
-        </div>
+        </>
+      }
+    >
+      <p className="muted" style={{ marginTop: 4 }}>
+        Что не так? Мы проверим и примем меры.
+      </p>
+      <div
+        role="radiogroup"
+        aria-label="Причина жалобы"
+        style={{ display: "grid", gap: 8, margin: "12px 0 14px" }}
+      >
+        {REASONS.map((r) => (
+          <button
+            key={r.id}
+            className="card"
+            role="radio"
+            aria-checked={reason === r.id}
+            style={{
+              textAlign: "left",
+              cursor: "pointer",
+              minHeight: 48,
+              borderColor: reason === r.id ? "var(--gold-fill)" : "var(--border-strong)",
+              color: reason === r.id ? "var(--gold)" : "var(--text)",
+            }}
+            onClick={() => {
+              haptic("select");
+              setReason(r.id);
+            }}
+          >
+            {reason === r.id ? "● " : "○ "}
+            {r.label}
+          </button>
+        ))}
       </div>
-    </div>,
-    document.body,
+      <textarea
+        className="input"
+        style={{ marginBottom: 14, minHeight: 70 }}
+        aria-label="Что случилось"
+        placeholder="Опишите подробнее (необязательно)"
+        value={text}
+        maxLength={1000}
+        onChange={(e) => setText(e.target.value)}
+      />
+    </Sheet>
   );
 }
