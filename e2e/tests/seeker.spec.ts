@@ -54,22 +54,38 @@ test.describe("человек находит смену и доходит до �
     const card = page.locator(".swipe-card").first();
     await expect(card).toBeVisible();
     await expect(card).toContainText("Кофейня «Дрова»");
-    await expect(card).toContainText("ул. Льва Толстого, 16");
     await expect(card).toContainText(`${SHIFT.pay.toLocaleString("ru-RU")}`);
+    // Адреса на ЛИЦЕВОЙ стороне больше нет — он на изнанке, вместе с описанием
+    // и чаевыми. Раньше карточка дословно повторяла подробности, и на экране,
+    // где решение принимают за три секунды, стояло семь строк текста.
+    // Проверяем именно отсутствие: иначе адрес вернётся назад незамеченным.
+    const front = card.locator(".flip-front");
+    await expect(front).not.toContainText("ул. Льва Толстого, 16");
 
-    // 2. Подробности открываются касанием самой карточки. Отдельной кнопки
-    //    больше нет: свайп — главное действие, и крупная кнопка рядом с ним
-    //    соперничала за внимание. Раньше эту кнопку вдобавок накрывал
-    //    невидимый штамп ХОЧУ/НЕТ, и она не нажималась вовсе.
+    // 2. Подробности — на изнанке карточки, касанием. Не шторка поверх экрана:
+    //    шторка уводила карточку под себя, и связь «это та же смена» держалась
+    //    только на памяти. Переворот её показывает.
     await card.click({ position: { x: 40, y: 60 } });
-    const sheet = page.getByRole("dialog");
-    await expect(sheet).toBeVisible();
-    await expect(sheet).toContainText("Сколько заплатят");
-    await expect(sheet).toContainText("Что взять с собой");
+    await expect(card).toHaveClass(/is-flipped/);
+    const back = card.locator(".flip-back");
+    await expect(back).toBeVisible();
+    await expect(back).toContainText("Сколько заплатят");
+    await expect(back).toContainText("Что взять с собой");
+    // Адрес не пропал из продукта — он на касание. Эта проверка и проверка
+    // выше держат правило с двух сторон: на лицевой стороне нет, внутри есть.
+    await expect(back).toContainText("ул. Льва Толстого, 16");
 
-    // 3. Откликнуться можно прямо из шторки, не закрывая её руками.
-    await sheet.getByRole("button", { name: /Откликнуться/ }).click();
-    await expect(sheet).toBeHidden();
+    // 3. Решают на ЛИЦЕВОЙ стороне — там оба ответа сразу. На изнанке
+    //    главного действия нет намеренно: была кривая пара, где согласиться
+    //    можно, а отказаться нельзя, хотя подробности читают ровно затем,
+    //    чтобы решить, и половина решений будет «не моё».
+    await expect(
+      page.getByRole("button", { name: "Отклик" }),
+      "с изнанки решать нечем — сначала вернуться",
+    ).toBeHidden();
+    await page.getByRole("button", { name: /Назад к карточке/ }).click();
+    await expect(page.locator(".swipe-card.is-flipped")).toHaveCount(0);
+    await page.getByRole("button", { name: "Отклик" }).click();
 
     // Отклик дошёл до сервера — мэтча пока нет, заведение не отвечало.
     await expect

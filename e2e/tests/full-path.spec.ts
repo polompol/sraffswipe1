@@ -60,11 +60,18 @@ test.describe("весь путь целиком", () => {
     const card = page.locator(".swipe-card").first();
     await expect(card).toBeVisible();
     await waitForStableLayout(page, ".deck");
-    await expect(card).toContainText("Кофейня «Дрова»");
-    await expect(card).toContainText("ул. Льва Толстого, 16");
-    await expect(card, "видно, сколько заплатят").toContainText(
+    // Смотрим ИМЕННО лицевую сторону: у карточки теперь есть изнанка, и она
+    // лежит в той же разметке — проверка по всей карточке нашла бы адрес там
+    // и прошла бы, ничего не проверив.
+    const front = card.locator(".flip-front");
+    await expect(front).toContainText("Кофейня «Дрова»");
+    await expect(front, "видно, сколько заплатят").toContainText(
       `${SHIFT.pay.toLocaleString("ru-RU")}`,
     );
+    // Адрес переехал на изнанку — на лицевой стороне его быть не должно.
+    // Что он там есть, проверяет seeker.spec.ts на том же сценарии.
+    await expect(front, "адрес — на касание, а не на лицевой стороне")
+      .not.toContainText("ул. Льва Толстого, 16");
 
     // ── 3. Фильтр: «Сегодня» сужает ленту и снимается обратно ───────────
     const cityChip = page.locator(".chip").first();
@@ -201,10 +208,20 @@ test.describe("весь путь целиком", () => {
     test.setTimeout(180_000);
 
     // ── Сцена: свободный работник ───────────────────────────────────────
+    //
+    // Город у этого теста СВОЙ, и это не прихоть. Лента кандидатов показывает
+    // всех свободных людей города, а тесты идут парами параллельно и заводят
+    // своих работников. В общей Москве наверху колоды иногда оказывался чужой
+    // человек — и проверка «в карточке Пётр» падала через раз, а «Позвать»
+    // звало не того. Свой город даёт ленту, в которой лежит ровно один
+    // кандидат — тот, которого завёл этот тест.
+    //
+    // Города не закрытый список (см. backend/app/cities.py): незнакомый
+    // работает по поясу по умолчанию, и для теста этого достаточно.
     const seeker = await login(request, "seeker", 900_011, "Пётр");
     await fillProfile(request, seeker, {
       name: "Пётр",
-      city: "Москва",
+      city: "Кострома",
       district: "Хамовники",
       roles: ["waiter"],
       birth_date: "1995-06-06",
@@ -220,7 +237,7 @@ test.describe("весь путь целиком", () => {
     const emp = await login(request, "employer", 900_012, "Полночь");
     await fillProfile(request, emp, {
       company_name: "Бар «Полночь»",
-      city: "Москва",
+      city: "Кострома",
       address: "Покровка, 12",
       contact_phone: "+79990000102",
     });
@@ -234,7 +251,7 @@ test.describe("весь путь целиком", () => {
     const inDays = (n: number) =>
       new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
     await page.locator('input[type="date"]').fill(inDays(2));
-    await page.locator("#city-picker").fill("Москва");
+    await page.locator("#city-picker").fill("Кострома");
     await page.locator('input[inputmode="numeric"]').first().fill("400");
     await expect(
       page.locator(".hint", { hasText: /августа|января|февраля|марта|апреля|мая|июня|июля|сентября|октября|ноября|декабря/ }),

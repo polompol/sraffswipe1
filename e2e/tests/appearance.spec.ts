@@ -224,15 +224,25 @@ test("шторки и чат читаются так же, как экраны",
   await page.goto("/#/feed");
   await waitForStableLayout(page, ".page");
 
-  // Подробности смены — касанием карточки.
+  // Подробности смены — на изнанке карточки, касанием. Проверять её отдельно
+  // важнее, чем прежнюю шторку: изнанка светлая, а кнопки «Пропустить/Отклик»
+  // лежат ПОВЕРХ неё и живут вне карточки — их белые подписи рассчитаны на
+  // тёмную лицевую сторону и на светлой изнанке пропадали совсем.
   await page.locator(".swipe-card").first().click({ position: { x: 40, y: 60 } });
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".swipe-card.is-flipped")).toBeVisible();
+  await page.waitForTimeout(600); // переворот длится 0,45 с
   const details = await sweep(page);
-  expect(details.checked, "в шторке должен быть текст").toBeGreaterThan(8);
-  expect(details.contrast, `шторка смены:\n${report(details.contrast)}`).toEqual([]);
-  expect(details.overflowX, "шторка не должна ездить вбок").toBe(0);
+  expect(details.checked, "на изнанке должен быть текст").toBeGreaterThan(8);
+  expect(details.contrast, `изнанка карточки:\n${report(details.contrast)}`).toEqual([]);
+  expect(details.overflowX, "изнанка не должна ездить вбок").toBe(0);
   expect(details.tiny, `мелкие зоны нажатия ${details.tinyWhere}`).toBe(0);
-  await page.keyboard.press("Escape");
+  // Возвращаем карточку лицом — дальше проверяются фильтры поверх ленты.
+  // Ждать обязательно: невидимая сторона гаснет на СЕРЕДИНЕ переворота, и без
+  // паузы следующий замер успевает застать её ещё видимой и посчитать её
+  // текст на чужом фоне.
+  await page.locator(".swipe-card").first().click({ position: { x: 40, y: 60 } });
+  await expect(page.locator(".swipe-card.is-flipped")).toHaveCount(0);
+  await page.waitForTimeout(600);
 
   // Фильтры.
   await page.getByRole("button", { name: /^Фильтры/ }).click();
@@ -258,3 +268,64 @@ test("шторки и чат читаются так же, как экраны",
 
   await context.close();
 });
+
+/**
+ * ИЗНАНКА КАРТОЧКИ — во всех темах и режимах, у обеих сторон рынка.
+ *
+ * Отдельно от проверки экранов, потому что фон у изнанки свой: она светлая
+ * там, где лицевая сторона тёмная, и цвета, выверенные для багрового
+ * градиента, на ней ведут себя иначе. Один раз это уже стоило дефекта —
+ * белые подписи кнопок на светлой изнанке пропадали совсем.
+ *
+ * До этой проверки изнанку мерили только в тёмной теме, и светлая со
+ * старым крупным режимом оставались без присмотра.
+ */
+const BACK_CASES: Array<[string, { width: number; height: number }, Record<string, string>]> = [
+  ["светлая тема", { width: 390, height: 844 }, {}],
+  ["тёмная тема", { width: 390, height: 844 }, { ss_theme: "dark" }],
+  ["крупный шрифт", { width: 390, height: 844 }, { ss_large: "1" }],
+  ["крупный и тёмная", { width: 390, height: 844 }, { ss_large: "1", ss_theme: "dark" }],
+  ["дешёвый андроид", { width: 320, height: 568 }, {}],
+  ["дешёвый андроид, тёмная", { width: 320, height: 568 }, { ss_theme: "dark" }],
+];
+
+for (const [name, size, extra] of BACK_CASES) {
+  test(`изнанка карточки читается — ${name}`, async ({ browser, request }) => {
+    const seed = 847_000 + size.width + Object.keys(extra).length * 7;
+    const emp = await login(request, "employer", seed, "Дрова");
+    await fillProfile(request, emp, {
+      company_name: "Кофейня «Дрова»",
+      city: "Москва",
+      address: "ул. Льва Толстого, 16",
+      contact_phone: `+799900${seed % 100000}`,
+    });
+    await publishShift(request, emp);
+    const seeker = await login(request, "seeker", seed + 1, "Мария");
+    await fillProfile(request, seeker, {
+      name: "Мария", city: "Москва", district: "Хамовники",
+      roles: ["barista", "waiter"], birth_date: "1998-04-12", med_book: "yes",
+      self_employed: true, about: "Работала в сетевой кофейне два года.",
+      experience_tags: ["experienced", "cashRegister"],
+    });
+
+    // Обе стороны: у работника изнанка смены, у заведения — человека. Содержимое
+    // разное, и цвета на них проверять надо порознь.
+    for (const [who, кто] of [[seeker, "работник"], [emp, "заведение"]] as const) {
+      const { context, page } = await openApp(browser, who, extra);
+      await page.setViewportSize(size);
+      await page.goto("/#/feed");
+      await waitForStableLayout(page, ".page");
+      await page.locator(".swipe-card").first().click({ position: { x: 60, y: 120 } });
+      await expect(page.locator(".swipe-card.is-flipped")).toBeVisible();
+      // Переворот 0,45 с; мерить надо по неподвижной картинке.
+      await page.waitForTimeout(700);
+
+      const p = await sweep(page);
+      expect(p.checked, `${кто}: на изнанке должен быть текст`).toBeGreaterThan(6);
+      expect(p.contrast, `${кто}, изнанка (${name}):\n${report(p.contrast)}`).toEqual([]);
+      expect(p.overflowX, `${кто}: изнанка не должна ездить вбок`).toBe(0);
+      expect(p.tiny, `${кто}: мелкие зоны нажатия ${p.tinyWhere}`).toBe(0);
+      await context.close();
+    }
+  });
+}
