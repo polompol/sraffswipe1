@@ -42,6 +42,36 @@ def test_broken_timezone_name_still_gives_moscow_offset(monkeypatch):
     assert end == datetime(2026, 8, 8, 15, 0, tzinfo=UTC)
 
 
+_next_tg_id = 900_000   # счётчик, а не hash(): нужен предсказуемый, без совпадений
+
+
+def _detach(*owner_ids: str) -> None:
+    """Отвязать участников от tg_id=0, чтобы следующая пара была НОВОЙ.
+
+    В тестах insecure-логин выдаёт всем tg_id=0, поэтому второй вызов
+    «создай пару» молча переиспользовал ту же самую пару: свайп заведения
+    по тому же соискателю — дубль, нового мэтча не появлялось, и обе
+    проверки в тесте работали с одной и той же сменой.
+    """
+    from app.db import SessionLocal
+    from app.models import Employer, User
+
+    global _next_tg_id
+    db = SessionLocal()
+    try:
+        for oid in owner_ids:
+            obj = db.get(User, oid) or db.get(Employer, oid)
+            if obj is None:
+                continue
+            _next_tg_id += 1
+            obj.tg_id = _next_tg_id
+            if (obj.phone or "").startswith("tg:"):
+                obj.phone = f"tg:{obj.tg_id}"
+        db.commit()
+    finally:
+        db.close()
+
+
 def _confirmed_code_checkin(client, hours_ago: int):
     """Смена, которая закончилась `hours_ago` часов назад по МЕСТНОМУ времени,
     и работник отметился кодом."""
@@ -78,6 +108,7 @@ def _confirmed_code_checkin(client, hours_ago: int):
     db = SessionLocal()
     try:
         m = db.get(Match, mid)
+        employer_id = m.employer_id   # читаем ДО закрытия сессии
         vac = db.get(Vacancy, m.vacancy_id)
         vac.date = end_local.date().isoformat()
         vac.start_time = 0
@@ -87,25 +118,27 @@ def _confirmed_code_checkin(client, hours_ago: int):
         db.commit()
     finally:
         db.close()
+    # Освобождаем tg_id=0, чтобы следующий вызов создал НОВУЮ пару.
+    _detach(me["id"], employer_id)
     return mid
 
 
-def test_auto_close_waits_twelve_hours_of_local_time(client):
+def test_settlement_waits_twelve_hours_of_local_time(client):
     """Через 10 часов смену не закрываем, через 14 — закрываем.
 
     Раньше время смены считалось как UTC, и смена, закончившаяся 14 часов
-    назад, выглядела закончившейся 11 часов назад — авто-закрытие молчало,
-    хотя в оферте обещаны 12 часов. Берём запас по два часа с каждой стороны,
-    чтобы тест не зависел от того, в какую минуту его запустили.
+    назад, выглядела закончившейся 11 часов назад — расчёт молчал, хотя в
+    оферте обещаны 12 часов. Берём запас по два часа с каждой стороны, чтобы
+    тест не зависел от того, в какую минуту его запустили.
     """
     from app.db import SessionLocal
-    from app.digest import auto_close_shifts
+    from app.digest import settle_shifts
     from app.models import Match
 
     early = _confirmed_code_checkin(client, hours_ago=10)
     db = SessionLocal()
     try:
-        assert auto_close_shifts(db) == 0
+        assert settle_shifts(db) == 0
         assert db.get(Match, early).status == "confirmed"
     finally:
         db.close()
@@ -113,7 +146,7 @@ def test_auto_close_waits_twelve_hours_of_local_time(client):
     late = _confirmed_code_checkin(client, hours_ago=14)
     db = SessionLocal()
     try:
-        assert auto_close_shifts(db) == 1
+        assert settle_shifts(db) == 1
         assert db.get(Match, late).status == "completed"
         assert db.get(Match, early).status == "confirmed"   # эту не тронули
     finally:

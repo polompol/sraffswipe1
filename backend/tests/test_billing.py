@@ -48,19 +48,20 @@ def test_validate_init_data_signature():
     assert validate_init_data(stale, token) is False
 
 
-def test_telegram_login_creates_user_and_entitlements(client):
+def test_telegram_login_creates_working_account(client):
+    """Вход создаёт аккаунт, которым сразу можно пользоваться.
+
+    Тарифов у аккаунта нет: единственная модель заработка — комиссия с
+    закрытой смены, поэтому и ручки «мои права/тариф» больше не существует.
+    """
     # insecure-режим включён по умолчанию → пустой initData принимается в dev.
     r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     assert r.status_code == 200
     token = r.json()["access_token"]
+    h = {"Authorization": f"Bearer {token}"}
 
-    ent = client.get(
-        "/billing/entitlements", headers={"Authorization": f"Bearer {token}"}
-    )
-    assert ent.status_code == 200
-    body = ent.json()
-    assert body["plan"] == "free"
-    assert body["superlikeBalance"] >= 1
+    assert client.get("/me", headers=h).status_code == 200
+    assert client.get("/billing/entitlements", headers=h).status_code == 404
 
 
 def test_yookassa_webhook_verifies_amount(client):
@@ -131,46 +132,35 @@ def test_vacancy_publishing_is_unlimited(client):
         assert _new_vacancy(client, headers).status_code == 201
 
 
-def test_boost_moves_vacancy_to_top(client):
+def test_feed_order_is_not_for_sale(client):
+    """Место в ленте не продаётся: порядок задаёт только сортировка.
+
+    Раньше вакансию можно было поднять в топ за буст. Теперь такой ручки нет
+    вовсе — проверяем, что она не отвечает.
+    """
     r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
-    token = r.json()["access_token"]
-    owner = r.json()["user_id"]
-    headers = {"Authorization": f"Bearer {token}"}
-    # Буст в пилоте выдаёт оператор (платного каталога больше нет).
-    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
-    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
-    client.post("/admin/grant", headers=ah, json={"owner_id": owner, "boost": 1})
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
     _new_vacancy(client, headers, role="waiter")
     second = _new_vacancy(client, headers, role="bartender").json()
 
-    boost = client.post(f"/vacancies/{second['id']}/boost", headers=headers)
-    assert boost.status_code == 200
-
-    feed = client.get("/vacancies").json()
-    assert feed[0]["id"] == second["id"]
-    assert feed[0]["boosted"] is True
+    assert client.post(
+        f"/vacancies/{second['id']}/boost", headers=headers
+    ).status_code == 404
+    assert "boosted" not in client.get("/vacancies").json()[0]
 
 
-def test_superlike_consumes_balance(client):
-    # Pro-работодатель публикует две вакансии — две разные цели супер-лайка.
+def test_superlike_is_rejected(client):
+    """Супер-лайка «Срочно» больше нет: сервер принимает только like/dislike."""
     e = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     eh = {"Authorization": f"Bearer {e.json()['access_token']}"}
-    vac1 = _new_vacancy(client, eh, role="waiter").json()
-    vac2 = _new_vacancy(client, eh, role="bartender").json()
+    vac = _new_vacancy(client, eh, role="waiter").json()
 
     r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
-
-    def sup(vid):
-        return {"target_id": vid, "target_type": "vacancy", "direction": "superlike"}
-
-    # Стартовый баланс = 1: первый супер-лайк проходит, второй (др. цель) — 402.
-    assert client.post(
-        "/swipes", json=sup(vac1["id"]), headers=headers
-    ).status_code == 200
-    assert client.post(
-        "/swipes", json=sup(vac2["id"]), headers=headers
-    ).status_code == 402
+    assert client.post("/swipes", headers=headers, json={
+        "target_id": vac["id"], "target_type": "vacancy",
+        "direction": "superlike",
+    }).status_code == 422
 
 
 def test_act_pdf_requires_ownership(client):

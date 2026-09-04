@@ -8,9 +8,9 @@ import { showBackButton } from "@/telegram/sdk";
 const STEPS: { key: string; label: string }[] = [
   { key: "open", label: "Открыли" },
   { key: "swipe", label: "Свайпнули" },
-  { key: "match", label: "Мэтч" },
+  { key: "match", label: "Взаимный интерес" },
   { key: "confirm", label: "Подтвердили смену" },
-  { key: "purchase", label: "Покупка" },
+  { key: "done", label: "Смена закрыта" },
 ];
 
 export function FunnelPage() {
@@ -27,21 +27,23 @@ export function FunnelPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 4 }}>Воронка</h1>
+        <h1 className="h1 tight">Воронка</h1>
         <p className="muted" style={{ marginBottom: 16 }}>
-          Путь пользователя: открытие → свайп → мэтч → смена → покупка.
+          Путь человека: открыл → свайпнул → взаимный интерес → договорились о смене →
+          смена состоялась. Последний шаг и есть заработок сервиса.
         </p>
 
         {isLoading && <Loading />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
 
         {data && (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="stack stack-lg">
             {STEPS.map((s, i) => {
               const value = data[s.key] ?? 0;
               const width = `${Math.round((value / top) * 100)}%`;
               const prev = i > 0 ? data[STEPS[i - 1].key] ?? 0 : value;
-              const conv = prev > 0 ? Math.round((value / prev) * 100) : 100;
+              // Ноль из нуля — это не «100%», а «считать пока не из чего».
+              const conv = prev > 0 ? `${Math.round((value / prev) * 100)}%` : "—";
               return (
                 <div key={s.key} className="card">
                   <div className="row">
@@ -61,8 +63,8 @@ export function FunnelPage() {
                     <div style={{ width, height: "100%", background: "var(--gold)" }} />
                   </div>
                   {i > 0 && (
-                    <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                      конверсия из «{STEPS[i - 1].label}»: {conv}%
+                    <div className="hint">
+                      конверсия из «{STEPS[i - 1].label}»: {conv}
                     </div>
                   )}
                 </div>
