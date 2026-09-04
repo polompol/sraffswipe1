@@ -1,13 +1,18 @@
 """Сохранённые поиски + алерты о новых подходящих сменах."""
 import json
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
+from ..cities import normalize, same_city
 from ..db import get_db
 from ..models import SavedSearch, Vacancy
 from ..notify import notify_owner
+from ..ratelimit import rate_limit
+from ..roles import date_ru, role_ru
+from ..schemas import StaffRole
 from ..security import current_principal
 
 router = APIRouter(prefix="/saved-searches", tags=["saved-searches"])
@@ -19,9 +24,30 @@ _MAX_SEARCHES = 25
 _MAX_FILTERS_CHARS = 2000
 
 
+class SearchFilters(BaseModel):
+    """Фильтры сохранённого поиска — со строгими типами.
+
+    Раньше сюда принимался любой словарь, и `int(flt["min_rate"])` при
+    значении "abc" бросал ValueError прямо посреди фоновой рассылки. Тот цикл
+    ловил только ошибки разбора JSON, поэтому обрывался целиком: ВСЕ владельцы
+    поисков, чья строка шла после отравленной, переставали получать
+    уведомления о новых сменах — навсегда, пока запись не удалят руками.
+    Достаточно было одного запроса от одного человека.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    city: Annotated[str, StringConstraints(max_length=80)] | None = None
+    role: StaffRole | None = None
+    min_rate: Annotated[int, Field(ge=0, le=1_000_000)] | None = None
+    rate_type: Literal["perHour", "perShift"] | None = None
+    no_med_book: bool | None = None
+    no_experience: bool | None = None
+
+
 class SavedSearchIn(BaseModel):
     title: str = "Мой поиск"
-    filters: dict = {}
+    filters: SearchFilters = SearchFilters()
     notify: bool = True
 
 
@@ -53,7 +79,12 @@ def list_searches(
     return [_to_out(s) for s in rows]
 
 
-@router.post("", response_model=SavedSearchOut, status_code=201)
+@router.post(
+    "",
+    response_model=SavedSearchOut,
+    status_code=201,
+    dependencies=[Depends(rate_limit("saved-search", 20, 60))],
+)
 def create_search(
     body: SavedSearchIn,
     db: Session = Depends(get_db),
@@ -69,7 +100,14 @@ def create_search(
             status_code=400,
             detail=f"Слишком много сохранённых поисков (максимум {_MAX_SEARCHES})",
         )
-    filters_json = json.dumps(body.filters, ensure_ascii=False)
+    # Город приводим к каноническому написанию при СОХРАНЕНИИ: иначе подписка
+    # хранит «спб» и не совпадает ни с одной сменой.
+    _flt = body.filters.model_dump(exclude_none=True)
+    if _flt.get("city"):
+        _flt["city"] = normalize(str(_flt["city"]))
+    filters_json = json.dumps(
+        _flt, ensure_ascii=False
+    )
     if len(filters_json) > _MAX_FILTERS_CHARS:
         raise HTTPException(status_code=400, detail="Слишком большой фильтр")
     s = SavedSearch(
@@ -100,9 +138,9 @@ def delete_search(
 
 def _matches(flt: dict, v: Vacancy) -> bool:
     # Город — главный фильтр: алерт о смене не в своём городе бесполезен.
-    if flt.get("city") and (v.city or "").strip().lower() != str(
-        flt["city"]
-    ).strip().lower():
+    # Сравниваем через справочник, а не строкой: подписка на «Питер» не
+    # сработала бы никогда — смены в базе приводятся к «Санкт-Петербург».
+    if flt.get("city") and not same_city(str(flt["city"]), v.city or ""):
         return False
     if flt.get("role") and v.role != flt["role"]:
         return False
@@ -139,14 +177,19 @@ def notify_matching_searches(vacancy_id: str, max_notify: int = 200) -> int:
                 break
             try:
                 flt = json.loads(s.filters)
-            except json.JSONDecodeError:
+                matched = _matches(flt, vacancy)
+            except Exception:  # noqa: BLE001 — одна битая запись не должна
+                # обрывать рассылку остальным: раньше исключение здесь
+                # прекращало цикл, и все, кто дальше по списку, переставали
+                # получать уведомления вообще.
                 continue
-            if _matches(flt, vacancy):
+            if matched:
                 notify_owner(
                     db,
                     s.owner_id,
                     f"🔔 Новая смена по вашему поиску «{s.title}»: "
-                    f"{vacancy.role}, {vacancy.rate} ₽. Откройте StaffSwipe.",
+                    f"{role_ru(vacancy.role)}, {vacancy.rate} ₽ "
+                    f"({date_ru(vacancy.date)}). Откройте StaffSwipe.",
                 )
                 sent += 1
         return sent

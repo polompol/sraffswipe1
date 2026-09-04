@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { leaveReview } from "@/api/endpoints";
 import { haptic } from "@/telegram/sdk";
+import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 
 /** Звезда: залитая золотом или пустой контур. */
 function Star({ filled, size = 34 }: { filled: boolean; size?: number }) {
@@ -41,9 +43,12 @@ export function ReviewStars({ matchId }: { matchId: string }) {
     try {
       await leaveReview(matchId, stars, "");
       setDone(true);
-    } catch {
+    } catch (e) {
+      // Звёзды загорались и гасли без объяснения — человек жал ещё раз и
+      // получал отказ «отзыв уже оставлен».
       haptic("error");
       setPicked(0);
+      toast(apiError(e, "Оценка не ушла — попробуйте ещё раз"), "error");
     }
   }
 
@@ -52,8 +57,11 @@ export function ReviewStars({ matchId }: { matchId: string }) {
       <div className="muted" style={{ marginBottom: 8 }}>
         Как прошла смена? Нажмите на звёзды
       </div>
+      {/* Класс: на экране 320 пять звёзд с зазорами занимают ровно ширину
+          карточки, и по краям не остаётся ни точки поля. */}
       <div
-        style={{ display: "inline-flex", gap: 6 }}
+        className="stars-row"
+        style={{ display: "inline-flex" }}
         onMouseLeave={() => setHover(0)}
       >
         {[1, 2, 3, 4, 5].map((s) => (
@@ -66,7 +74,9 @@ export function ReviewStars({ matchId }: { matchId: string }) {
               background: "none",
               border: "none",
               cursor: "pointer",
-              padding: 4,
+              // Звезда 34px + padding 4 давали кнопку 42px — чуть меньше
+              // минимальных 44px, и по крайним звёздам промахивались.
+              padding: 6,
               lineHeight: 0,
             }}
           >

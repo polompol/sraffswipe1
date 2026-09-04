@@ -1,13 +1,15 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { listFavorites, sendSwipe } from "@/api/endpoints";
 import { showBackButton } from "@/telegram/sdk";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/Button";
 import { IconBookmark } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { apiError } from "@/lib/errors";
 import { VacancyList } from "./VacancyList";
 
 /** Избранные (сохранённые) смены — вернуться и откликнуться позже. */
@@ -19,13 +21,24 @@ export function FavoritesPage() {
     queryFn: listFavorites,
   });
 
+  const qc = useQueryClient();
+
   async function onAct(v: Vacancy, dir: SwipeDirection): Promise<boolean> {
     if (dir === "dislike") return false;
     try {
-      await sendSwipe(v.id, "vacancy", dir);
+      const res = await sendSwipe(v.id, "vacancy", dir);
+      qc.invalidateQueries({ queryKey: ["favorites"] });
+      // Заведение уже звало — отклик даёт мэтч сразу. Раньше результат
+      // запроса не читали вовсе: чат открывался, а человек об этом не знал
+      // и жал «Откликнуться» второй раз.
+      if (res.matched && res.matchId) {
+        toast("Взаимно! Открываем чат — договоритесь о деталях", "success");
+        nav(`/chat/${res.matchId}`);
+        return false;
+      }
       return true; // успех → VacancyList покажет тост «Отклик отправлен»
-    } catch {
-      toast("Не удалось отправить отклик", "error");
+    } catch (e) {
+      toast(apiError(e, "Отклик не ушёл. Попробуйте ещё раз"), "error");
       return false;
     }
   }
@@ -33,14 +46,16 @@ export function FavoritesPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 12 }}>Избранные смены</h1>
+        <h1 className="h1">Избранные смены</h1>
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (
           <EmptyState
+            fill
             icon={<IconBookmark size={34} />}
             title="Пока пусто"
-            text="Нажимайте на закладку у смены в списке — она сохранится здесь, чтобы откликнуться позже."
+            text="Отмечайте смены закладкой — они соберутся здесь, откликнетесь позже."
+            action={<Button onClick={() => nav("/feed")}>Смотреть смены</Button>}
           />
         )}
         {data && data.length > 0 && (
