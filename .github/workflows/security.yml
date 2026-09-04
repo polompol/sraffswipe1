@@ -155,29 +155,51 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          # ИМЕННО ЭТА ВЕТКА, а не основная.
+          #
+          # Первая версия спрашивала находки без ref — то есть про основную
+          # ветку. Она честно ответила «0», проверка позеленела, а собственная
+          # проверка GitHub в тот же момент показала «1 high, внесена этим
+          # запросом». Находки запроса живут на refs/pull/N/merge, и без ref
+          # сторож смотрел мимо того, что сам должен ловить: он проходил не
+          # потому, что чисто, а потому, что спрашивал не про то место.
+          REF: ${{ github.ref }}
         run: |
           set -uo pipefail
+          ask() {
+            gh api "repos/$REPO/code-scanning/alerts?state=open&per_page=100&ref=$1" \
+              > "$2" 2>err.txt
+          }
+          # Находки доезжают до API не мгновенно: работа выше только что их
+          # загрузила. Без ожидания сторож иногда видел бы пустой список сразу
+          # после анализа — и это опять был бы зелёный цвет по неверной причине.
+          ok=1
+          for attempt in 1 2 3 4 5; do
+            if ask "$REF" alerts.json; then ok=0; break; fi
+            echo "Попытка $attempt: находки ещё не доступны, жду 20 с"
+            sleep 20
+          done
           # Отделяем «находок нет» от «проверка не состоялась». Второе бывает
           # у приватного репозитория без GitHub Advanced Security: API отвечает
           # 403/404, и молча зеленеть в этом случае — то же самое враньё, от
           # которого мы уходим.
-          code=$(gh api "repos/$REPO/code-scanning/alerts?state=open&per_page=100" \
-                   --jq '.' > alerts.json 2>err.txt; echo $?)
-          if [ "$code" -ne 0 ]; then
+          if [ "$ok" -ne 0 ]; then
             echo "::notice::Разбор находок не состоялся — код-сканирование недоступно"
             echo "Ответ GitHub:"; cat err.txt
             echo "Это НЕ значит «находок нет». Для приватного репозитория"
             echo "код-сканирование требует GitHub Advanced Security."
             exit 0
           fi
+
+          total=$(jq 'length' alerts.json)
+          echo "Открытых находок на $REF: $total"
+          jq -r '.[] | "  · \(.rule.security_severity_level // "—"): \(.rule.description) — \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"' alerts.json
+
           bad=$(jq '[.[] | select(.rule.security_severity_level == "critical"
                                   or .rule.security_severity_level == "high")]' alerts.json)
           n=$(echo "$bad" | jq 'length')
           if [ "$n" -gt 0 ]; then
-            echo "Критических и высоких находок: $n"
-            echo "$bad" | jq -r '.[] | "  • \(.rule.security_severity_level | ascii_upcase): \(.rule.description) — \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
             echo "::error::CodeQL нашёл $n критических/высоких проблем"
             exit 1
           fi
-          total=$(jq 'length' alerts.json)
-          echo "Открытых находок всего: $total, критических и высоких: 0"
+          echo "Критических и высоких: 0"
