@@ -71,21 +71,43 @@ jobs:
       # что произошло: «сервис недоступен», а не «найдена уязвимость».
       - name: npm audit (прод-зависимости)
         run: |
-          for attempt in 1 2 3; do
+          # Потолок на КАЖДУЮ попытку, а не на проверку целиком. Сама команда
+          # при сбое реестра висит около семи минут, и три попытки в общий
+          # десятиминутный потолок просто не помещались — задание отменялось
+          # на середине второй, без внятного сообщения.
+          attempt=1
+          while [ "$attempt" -le 3 ]; do
             echo "── попытка $attempt из 3"
-            out=$(npm audit --omit=dev --audit-level=moderate 2>&1) && {
-              echo "$out"
+            set +e
+            out=$(timeout 120 npm audit --omit=dev --audit-level=moderate 2>&1)
+            code=$?
+            set -e
+            echo "$out"
+
+            if [ "$code" -eq 0 ]; then
               echo "✅ Уязвимостей уровня moderate и выше нет."
               exit 0
-            }
-            echo "$out"
-            if echo "$out" | grep -qiE "audit endpoint returned an error|service unavailable|ENOTFOUND|ETIMEDOUT|socket hang up"; then
-              echo "⚠️  Реестр npm не ответил. Это не находка — проверка не состоялась."
-              [ "$attempt" -lt 3 ] && sleep $((attempt * 15)) && continue
+            fi
+
+            # Сетевой сбой на чужой стороне: перебираем. Список узкий
+            # намеренно. Раньше сюда попадала любая строка «audit endpoint
+            # returned an error», а её выдаёт и ответ 400 «Invalid package
+            # tree» — то есть рассинхрон package-lock.json. Это НАША поломка,
+            # и повторять её три раза, а потом объявить сбоем реестра, значит
+            # спрятать настоящую причину.
+            if [ "$code" -eq 124 ] || echo "$out" | grep -qiE "503|Service Unavailable|ENOTFOUND|ETIMEDOUT|ECONNRESET|socket hang up"; then
+              [ "$code" -eq 124 ] && echo "⚠️  Реестр npm не ответил за 120 секунд."
+              echo "⚠️  Сбой на стороне реестра. Это не находка — проверка не состоялась."
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 15))
+                attempt=$((attempt + 1))
+                continue
+              fi
               echo "::error::Проверка уязвимостей НЕ СОСТОЯЛАСЬ: реестр npm недоступен после трёх попыток. Это не значит, что уязвимость есть — значит, её не искали. Перезапустите проверку позже."
               exit 1
             fi
-            echo "::error::Найдены уязвимости в прод-зависимостях — смотрите список выше."
+
+            echo "::error::Проверка не прошла. Если выше список пакетов — найдены уязвимости в прод-зависимостях. Если «Invalid package tree» — рассинхрон package-lock.json, нужен npm install."
             exit 1
           done
 
