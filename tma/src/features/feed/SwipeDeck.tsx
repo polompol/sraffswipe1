@@ -8,7 +8,25 @@ import { LS } from "@/lib/storage";
 interface Props<T> {
   items: T[];
   keyOf: (item: T) => string;
-  renderCard: (item: T) => React.ReactNode;
+  /** Лицевая сторона. Получает `open` — открыть подробности.
+   *
+   *  Ручка нужна ради тех, кто не может коснуться экрана. Переворот висел
+   *  только на нажатии по самой карточке, а карточка — это div: у неё нет ни
+   *  роли кнопки, ни места в порядке табуляции. Человек с клавиатурой или
+   *  переключателем не мог открыть подробности вовсе — а там адрес, разбивка
+   *  оплаты и предупреждение про деньги вперёд. */
+  renderCard: (
+    item: T,
+    controls: {
+      open: () => void;
+      /** Верхняя ли это карточка. Под ней лежат ещё две — их видно краем, но
+       *  действовать можно только с верхней: и свайп, и круглые кнопки берут
+       *  её. Кнопки нижних карточек надо убирать из порядка обхода, иначе
+       *  клавишей человек уходит в карточку, которой не видит, и открывает
+       *  подробности неизвестно чего. */
+      top: boolean;
+    },
+  ) => React.ReactNode;
   /** Может вернуть промис: если он отклонится, карточка вернётся в колоду. */
   onSwipe: (item: T, dir: SwipeDirection) => void | Promise<unknown>;
   onEmpty?: () => void;
@@ -241,9 +259,13 @@ export function SwipeDeck<T>(props: Props<T>) {
     haptic("light");
   }
 
+  const topIndex = items.findIndex((_, i) => !gone.has(i));
+
   return (
     <div className="deck">
       {springs.map((style, i) => {
+        // Верхняя — первая неулетевшая. Именно её берут кнопки под колодой,
+        // и только её содержимое должно попадать под клавишу Tab.
         if (gone.has(i)) return null;
         const item = items[i];
         const isFlipped = flipped === keyOf(item);
@@ -270,7 +292,10 @@ export function SwipeDeck<T>(props: Props<T>) {
                     незрячий человек слышит обе стороны подряд как один
                     сплошной текст и не понимает, где он находится. */}
               <div className="flip-face flip-front" aria-hidden={isFlipped}>
-                {renderCard(item)}
+                {renderCard(item, {
+                  open: () => setFlipped(keyOf(item)),
+                  top: i === topIndex,
+                })}
               </div>
               <div className="flip-face flip-back" aria-hidden={!isFlipped}>
                 {props.renderBack(item, { close: () => setFlipped(null) })}
