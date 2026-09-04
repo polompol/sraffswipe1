@@ -13,6 +13,7 @@ import {
 // Стартовый путь грузим сразу, остальное — по требованию (code-splitting).
 import { Onboarding } from "@/features/onboarding/Onboarding";
 import { RolePage } from "@/features/auth/RolePage";
+import { WelcomePage } from "@/features/auth/WelcomePage";
 import { FeedPage } from "@/features/feed/FeedPage";
 
 const MatchesPage = lazy(() =>
@@ -33,12 +34,6 @@ const CreateVacancyPage = lazy(() =>
 const MyVacanciesPage = lazy(() =>
   import("@/features/vacancy/MyVacanciesPage").then((m) => ({ default: m.MyVacanciesPage })),
 );
-const ShiftsPage = lazy(() =>
-  import("@/features/shifts/ShiftsPage").then((m) => ({ default: m.ShiftsPage })),
-);
-const PricingPage = lazy(() =>
-  import("@/features/billing/PricingPage").then((m) => ({ default: m.PricingPage })),
-);
 const FunnelPage = lazy(() =>
   import("@/features/analytics/FunnelPage").then((m) => ({ default: m.FunnelPage })),
 );
@@ -54,8 +49,8 @@ const FavoritesPage = lazy(() =>
 const WorkersPage = lazy(() =>
   import("@/features/vacancy/WorkersPage").then((m) => ({ default: m.WorkersPage })),
 );
-const ShareEarningsPage = lazy(() =>
-  import("@/features/share/ShareEarningsPage").then((m) => ({ default: m.ShareEarningsPage })),
+const ApplicantsPage = lazy(() =>
+  import("@/features/vacancy/ApplicantsPage").then((m) => ({ default: m.ApplicantsPage })),
 );
 const InvitesPage = lazy(() =>
   import("@/features/invites/InvitesPage").then((m) => ({ default: m.InvitesPage })),
@@ -70,14 +65,28 @@ function TabBar() {
   const loc = useLocation();
   const isEmployer = role === "employer";
 
-  const tabs = [
-    { path: "/feed", Icon: IconTabFeed, label: "Лента" },
-    { path: "/matches", Icon: IconTabMatches, label: "Мэтчи" },
-    isEmployer
-      ? { path: "/vacancy/my", Icon: IconTabVacancies, label: "Вакансии" }
-      : { path: "/shifts", Icon: IconTabShifts, label: "Смены" },
-    { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
-  ];
+  // У работника «Мэтчи» и «Мои смены» показывали одну и ту же смену в двух
+  // местах с разными кнопками: в одном — код прихода, в другом — акт. Человеку
+  // приходилось помнить, где что лежит. Теперь у него один раздел со всеми
+  // сменами — от «договариваемся» до закрытых.
+  //
+  // У заведения это РАЗНЫЕ вещи и остаются раздельными: «Люди» — те, с кем
+  // договорились и кто выйдет на смену, «Смены» — собственные объявления.
+  //
+  // Слово «Мэтчи» ушло: это жаргон, и оно стояло вплотную к «Сменам» — два
+  // похожих слова про разное. Владелец кафе читает такое первый раз в жизни.
+  const tabs = isEmployer
+    ? [
+        { path: "/feed", Icon: IconTabFeed, label: "Лента" },
+        { path: "/matches", Icon: IconTabMatches, label: "Люди" },
+        { path: "/vacancy/my", Icon: IconTabVacancies, label: "Смены" },
+        { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
+      ]
+    : [
+        { path: "/feed", Icon: IconTabFeed, label: "Лента" },
+        { path: "/matches", Icon: IconTabShifts, label: "Мои смены" },
+        { path: "/profile", Icon: IconTabProfile, label: "Профиль" },
+      ];
 
   return (
     <nav className="tabbar">
@@ -124,6 +133,10 @@ export function App() {
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/role" element={<RolePage />} />
+      <Route
+        path="/welcome"
+        element={ready ? <WelcomePage /> : <Navigate to="/onboarding" />}
+      />
 
       <Route
         path="/feed"
@@ -135,7 +148,11 @@ export function App() {
       />
       <Route
         path="/shifts"
-        element={ready ? <Shell><ShiftsPage /></Shell> : <Navigate to="/onboarding" />}
+        // Отдельного экрана «Мои смены» у работника больше нет — он слился с
+        // «Мэтчами». Адрес оставляем: по нему приходят кнопки из уведомлений
+        // бота («Я на смене — отметиться», «Открыть смены»), и ссылки из уже
+        // отправленных сообщений должны продолжать работать.
+        element={<Navigate to="/matches" replace />}
       />
       <Route
         path="/vacancy/my"
@@ -149,13 +166,12 @@ export function App() {
       <Route path="/profile/edit" element={ready ? <EditProfilePage /> : <Navigate to="/onboarding" />} />
       <Route path="/vacancy/new" element={ready ? <CreateVacancyPage /> : <Navigate to="/onboarding" />} />
       <Route path="/chat/:matchId" element={ready ? <ChatPage /> : <Navigate to="/onboarding" />} />
-      <Route path="/pricing" element={ready ? <PricingPage /> : <Navigate to="/onboarding" />} />
       <Route path="/funnel" element={ready ? <FunnelPage /> : <Navigate to="/onboarding" />} />
       <Route path="/admin" element={ready ? <AdminPage /> : <Navigate to="/onboarding" />} />
       <Route path="/support" element={ready ? <SupportPage /> : <Navigate to="/onboarding" />} />
       <Route path="/favorites" element={ready ? <FavoritesPage /> : <Navigate to="/onboarding" />} />
       <Route path="/workers" element={ready ? <WorkersPage /> : <Navigate to="/onboarding" />} />
-      <Route path="/share" element={ready ? <ShareEarningsPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/applicants" element={ready ? <ApplicantsPage /> : <Navigate to="/onboarding" />} />
       <Route path="/invites" element={ready ? <InvitesPage /> : <Navigate to="/onboarding" />} />
       <Route path="/settings" element={ready ? <SettingsPage /> : <Navigate to="/onboarding" />} />
 

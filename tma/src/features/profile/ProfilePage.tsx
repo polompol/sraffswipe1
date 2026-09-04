@@ -1,23 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/store/session";
 import {
+  billingDocUrl,
   fetchAdminOverview,
-  fetchEntitlements,
   fetchMe,
   fetchMyCommission,
   fetchReferral,
-  walletTopup,
   setAvailability,
-  verifyEmployer,
-  type Me,
   type VerifyResult,
+  verifyEmployer,
+  walletTopup,
 } from "@/api/endpoints";
-import { share, haptic } from "@/telegram/sdk";
+import { share, haptic, confirmAction, openExternal } from "@/telegram/sdk";
 import {
   IconBolt,
-  IconFire,
   IconGift,
   IconEdit,
   IconHelp,
@@ -26,9 +24,14 @@ import {
   IconBriefcase,
   IconCheck,
   IconBookmark,
+  IconChevronRight,
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
+import { Avatar } from "@/components/Avatar";
+import { Rating } from "@/components/Rating";
 import { toast } from "@/components/Toast";
+import { PILOT_MODE } from "@/lib/flags";
+import { money, plural } from "@/lib/format";
 
 function CommissionCard() {
   const { data: bill } = useQuery({
@@ -44,10 +47,10 @@ function CommissionCard() {
     try {
       const { url } = await walletTopup(amount);
       haptic("light");
-      window.open(url, "_blank");
+      openExternal(url);
     } catch {
       haptic("error");
-      toast("Не удалось открыть оплату", "error");
+      toast("Оплата не открылась — попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -59,7 +62,7 @@ function CommissionCard() {
       style={{
         marginBottom: 16,
         ...(bill.overdue
-          ? { border: "1.5px solid var(--dislike)" }
+          ? { border: "1.5px solid var(--danger)" }
           : null),
       }}
     >
@@ -67,47 +70,107 @@ function CommissionCard() {
         <b>Комиссия сервиса · {bill.pct}%</b>
         <span className="spacer" />
         <b style={{ color: due ? "var(--gold)" : "var(--muted)" }}>
-          {bill.pendingRub.toLocaleString("ru-RU")} ₽
+          {money(bill.pendingRub)}
         </b>
       </div>
-      <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
+      <div className="muted" style={{ marginTop: 6, fontSize: "var(--text-sm)" }}>
         {due
-          ? `Смен к оплате: ${bill.pendingShifts}. Оплата по счёту или СБП — ` +
-            `реквизиты пришлёт оператор. Срок: ${bill.dueDays} дней.`
-          : "Начисляется только за фактически закрытые смены. Сейчас к оплате: 0 ₽."}
+          ? `Смен к оплате: ${bill.pendingShifts}. Спишется с баланса `
+            + (bill.topupAvailable
+              ? "автоматически — пополните его картой ниже."
+              : "автоматически, когда на нём будут деньги.")
+          : "Платите только за смены, которые состоялись."}
       </div>
       {bill.overdue && (
-        <div style={{ marginTop: 8, fontSize: 14, color: "var(--dislike)", fontWeight: 700 }}>
-          Счёт просрочен — публикация новых смен приостановлена до оплаты.
-          Напишите в поддержку, если уже оплатили.
+        <div style={{ marginTop: 8, fontSize: "var(--text-sm)", color: "var(--danger)", fontWeight: 700 }}>
+          Баланс закончился — новые смены пока не публикуются. Пополните
+          ниже, и всё снова заработает.
         </div>
       )}
       <div className="row" style={{ marginTop: 10 }}>
-        <span className="muted" style={{ fontSize: 14 }}>Баланс (аванс)</span>
+        <span className="muted" style={{ fontSize: "var(--text-sm)" }}>Баланс</span>
         <span className="spacer" />
-        <b>{bill.balanceRub.toLocaleString("ru-RU")} ₽</b>
+        <b>{money(bill.balanceRub)}</b>
       </div>
-      <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-        С баланса комиссия списывается сама — без счетов и напоминаний.
-      </div>
-      {bill.topupAvailable ? (
-        <div className="row" style={{ marginTop: 8, gap: 8 }}>
-          {[1000, 3000, 5000].map((a) => (
-            <button
-              key={a}
-              className="tag"
-              disabled={busy}
-              style={{ flex: 1, cursor: "pointer" }}
-              onClick={() => topup(a)}
-            >
-              +{a.toLocaleString("ru-RU")} ₽
-            </button>
-          ))}
+      {/* Документы для бухгалтерии. Ресторан-юрлицо не проведёт оплату по
+          безналу без счёта с реквизитами и не поставит расход без акта —
+          «оплатите картой» для него не ответ. Кнопки показываем только когда
+          есть за что платить. */}
+      {due && bill.docsAvailable !== false && (
+        <>
+          <div className="hint">
+            Документы для бухгалтерии
+          </div>
+          <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: "wrap" }}>
+            {([["invoice", "Счёт на оплату"], ["act", "Акт услуг"]] as const).map(
+              ([kind, label]) => (
+                <button
+                  key={kind}
+                  className="tag"
+                  style={{ flex: 1, minWidth: 120, cursor: "pointer" }}
+                  onClick={async () => {
+                    haptic("light");
+                    try {
+                      openExternal(await billingDocUrl(kind));
+                    } catch {
+                      toast("Не удалось открыть документ", "error");
+                    }
+                  }}
+                >
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
+        </>
+      )}
+      {/* Реквизиты ещё не заполнены — документы не выдаются. Молча рисовать
+          кнопки нельзя: заведение упирается в отказ ровно в тот момент,
+          когда собралось платить. */}
+      {due && bill.docsAvailable === false && (
+        <div className="hint">
+          Нужен счёт или акт для бухгалтерии? Напишите в поддержку — пришлём.
         </div>
+      )}
+
+      {bill.topupAvailable ? (
+        <>
+          <div className="hint">
+            Пополнить баланс
+          </div>
+          {/* На чипе оставляем только сумму: «Пополнить 1 000 ₽» в трети
+              ширины экрана переносилось на 3-4 строки и ломало ряд.
+
+              Ряд с переносом заменён сеткой из трёх равных долей: на 320
+              точках внутри карточки остаётся 252, а ряду из трёх чипов по 88
+              нужно 280 — третий срывался вниз и растягивался во всю ширину. */}
+          <div style={{
+            marginTop: 6,
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 8,
+          }}>
+            {[1000, 3000, 5000].map((a) => (
+              <button
+                key={a}
+                className="tag"
+                disabled={busy}
+                style={{
+                  cursor: "pointer",
+                  borderColor: "var(--gold)",
+                  color: "var(--gold)",
+                }}
+                onClick={() => topup(a)}
+              >
+                {money(a)}
+              </button>
+            ))}
+          </div>
+        </>
       ) : (
-        <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-          Пополнить: переводом СБП оператору (кнопка «Поддержка») —
-          зачислим на баланс. Оплата картой — скоро.
+        <div className="hint">
+          Оплата картой пока не подключена. Нужно пополнить баланс —
+          напишите в поддержку.
         </div>
       )}
     </div>
@@ -133,7 +196,7 @@ function EmployerVerify() {
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <b>Подтвердить компанию (DaData)</b>
+      <b>Подтвердить компанию по ИНН</b>
       <div className="row" style={{ marginTop: 10, gap: 8 }}>
         <input
           className="input"
@@ -142,16 +205,25 @@ function EmployerVerify() {
           value={inn}
           onChange={(e) => setInn(e.target.value)}
         />
-        <button className="btn" style={{ width: "auto", padding: "0 16px", height: 46 }} disabled={busy || inn.length < 10} onClick={run}>
-          {busy ? "…" : "Проверить"}
-        </button>
+        {/* Кнопка узкая, в один ряд с полем ИНН: block={false}, высота 46 —
+            вровень с input. Свой busy оставлен: он же гасит кнопку по длине
+            ИНН и даёт спиннер до того, как отработает внутренняя защита. */}
+        <Button
+          block={false}
+          style={{ padding: "0 16px", height: 46 }}
+          loading={busy}
+          disabled={busy || inn.length < 10}
+          onClick={run}
+        >
+          Проверить
+        </Button>
       </div>
       {res && (
         <div className="muted" style={{ marginTop: 10 }}>
           {res.found ? (
             <>
               {res.verified && (
-                <span style={{ color: "var(--super)", display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}>
+                <span style={{ color: "var(--super-text)", display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}>
                   <IconCheck size={15} />
                 </span>
               )}
@@ -167,17 +239,17 @@ function EmployerVerify() {
   );
 }
 
-const PLAN_LABEL: Record<string, string> = {
-  free: "Free",
-  pro: "Pro",
-  business: "Business",
-};
 
 // «Готов выйти сегодня» — тумблер доступности. Заведения со срочной сменой
 // видят такого человека первым в ленте кандидатов.
 function AvailabilityCard({ initial }: { initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
+
+  // Профиль приходит с сервера уже после первой отрисовки, и без этой
+  // синхронизации тумблер навсегда оставался выключенным: человек включал
+  // доступность, возвращался в профиль — и видел «выключено».
+  useEffect(() => setOn(initial), [initial]);
 
   async function toggle() {
     const next = !on;
@@ -186,10 +258,10 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
     haptic("select");
     try {
       await setAvailability(next);
-      toast(next ? "Вы готовы выйти сегодня" : "Статус снят", "success");
+      toast(next ? "Вы готовы выйти сегодня" : "Отметку убрали", "success");
     } catch {
       setOn(!next); // откат при ошибке
-      toast("Не удалось сохранить", "error");
+      toast("Отметка не сохранилась. Попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -201,46 +273,67 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
       style={{
         marginBottom: 16,
         border: on ? "1px solid var(--gold)" : undefined,
-        background: on ? "rgba(165,28,48,.06)" : undefined,
+        // --gold-tint: в тёмной теме прежние 6% багрового на тёмной карточке
+        // были неотличимы от выключенного состояния.
+        background: on ? "var(--gold-tint)" : undefined,
       }}
     >
       <span style={{ flex: 1 }}>
         <b style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           {on && <span style={{ color: "var(--gold)", display: "inline-flex" }}><IconBolt size={15} /></span>}
-          {on ? "Готов выйти сегодня" : "Готов выйти сегодня?"}
+          {/* Не «Готов»: половина бариста и официантов — женщины, и мужской
+              род тут читается как чужая подпись. «Вы» рода не имеет. */}
+          {on ? "Вы готовы выйти сегодня" : "Готовы выйти сегодня?"}
         </b>
         <div className="muted">
           {on
-            ? "Вы наверху ленты — заведения зовут вас на срочные смены первыми"
+            ? "Вы наверху списка — на срочные смены позовут первым"
             : "Включите — и срочные смены найдут вас быстрее"}
         </div>
       </span>
       <button
         role="switch"
         aria-checked={on}
-        aria-label="Готов выйти сегодня"
+        aria-label="Готовы выйти сегодня"
         disabled={busy}
         onClick={toggle}
+        // Дорожка визуально 52×30, высота кнопки 44px — минимальная зона тапа.
         style={{
           width: 52,
-          height: 30,
+          height: 44,
+          padding: 0,
           borderRadius: 999,
           border: "none",
+          background: "none",
           cursor: "pointer",
-          background: on ? "var(--gold)" : "var(--border)",
           position: "relative",
-          transition: "background 0.2s",
+          flex: "none",
         }}
       >
         <span
+          aria-hidden
           style={{
             position: "absolute",
-            top: 3,
+            top: 7,
+            left: 0,
+            width: 52,
+            height: 30,
+            borderRadius: 999,
+            transition: "background 0.2s",
+            background: on ? "var(--gold-fill)" : "var(--border-strong)",
+          }}
+        />
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 10,
             left: on ? 25 : 3,
             width: 24,
             height: 24,
             borderRadius: "50%",
-            background: "#fff",
+            background: "var(--surface)",
+            boxShadow: "0 1px 3px rgba(60,20,25,.35)",
             transition: "left 0.2s",
           }}
         />
@@ -249,132 +342,8 @@ function AvailabilityCard({ initial }: { initial: boolean }) {
   );
 }
 
-// Доход через сервис — мотивация деньгами, а не «зашёл N дней подряд».
-function EarningsCard({ me }: { me: Me }) {
-  const nav = useNavigate();
-  const earned = me.earnedRub ?? 0;
-  const shifts = me.shiftsDone ?? 0;
-  if (!earned && !shifts) return null;
-  return (
-    <div
-      className="card"
-      style={{
-        marginBottom: 16,
-        background: "linear-gradient(135deg, var(--crimson-dark), var(--super))",
-        color: "#fff",
-        border: "none",
-      }}
-    >
-      <div style={{ opacity: 0.9, fontSize: 14 }}>Заработано через StaffSwipe</div>
-      <div style={{ fontWeight: 800, fontSize: 28, marginTop: 2 }}>
-        {earned.toLocaleString("ru-RU")} ₽
-      </div>
-      <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
-        {shifts} {shifts === 1 ? "смена закрыта" : "смен закрыто"} · так держать
-        <IconFire size={13} />
-      </div>
-      <button
-        onClick={() => nav("/share")}
-        style={{
-          marginTop: 12,
-          width: "100%",
-          minHeight: 44,
-          borderRadius: 12,
-          border: "1.5px solid rgba(255,255,255,.7)",
-          background: "rgba(255,255,255,.16)",
-          color: "#fff",
-          fontWeight: 700,
-          fontSize: 15,
-          cursor: "pointer",
-        }}
-      >
-        Поделиться в сторис
-      </button>
-    </div>
-  );
-}
-
 // Доступность: крупные кнопки и текст. Состояние — на <body data-large>,
 // сохраняется в localStorage и применяется при старте (main.tsx).
-// Цель заработка + кольцо прогресса (психология незавершённого действия —
-// люди возвращаются «дозакрыть кольцо», как в Apple Watch). Цель — локально.
-const GOAL_PRESETS = [20000, 30000, 50000, 100000];
-
-function GoalCard({ earned }: { earned: number }) {
-  const [goal, setGoal] = useState(
-    () => Number(localStorage.getItem("ss_goal")) || 30000,
-  );
-  const [editing, setEditing] = useState(false);
-  const pct = Math.max(0, Math.min(1, goal > 0 ? earned / goal : 0));
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const left = Math.max(0, goal - earned);
-
-  function pick(g: number) {
-    setGoal(g);
-    localStorage.setItem("ss_goal", String(g));
-    setEditing(false);
-    haptic("select");
-  }
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="row" style={{ gap: 16, alignItems: "center" }}>
-        <svg width="124" height="124" viewBox="0 0 124 124" style={{ flex: "none" }}>
-          <circle cx="62" cy="62" r={R} fill="none" stroke="var(--border)" strokeWidth="11" />
-          <circle
-            cx="62" cy="62" r={R} fill="none"
-            stroke="var(--gold)" strokeWidth="11" strokeLinecap="round"
-            strokeDasharray={C}
-            strokeDashoffset={C * (1 - pct)}
-            transform="rotate(-90 62 62)"
-            style={{ transition: "stroke-dashoffset 1s ease" }}
-          />
-          <text x="62" y="58" textAnchor="middle" fontSize="22" fontWeight="800" fill="var(--text)">
-            {Math.round(pct * 100)}%
-          </text>
-          <text x="62" y="80" textAnchor="middle" fontSize="12" fill="var(--muted)">
-            цель
-          </text>
-        </svg>
-        <span style={{ flex: 1 }}>
-          <b>Цель на месяц: {goal.toLocaleString("ru-RU")} ₽</b>
-          <div className="muted" style={{ marginTop: 4 }}>
-            {left > 0
-              ? `Осталось ${left.toLocaleString("ru-RU")} ₽ — лови ещё смены`
-              : "Цель достигнута! 🔥 Поставь новую"}
-          </div>
-          <button
-            onClick={() => setEditing((v) => !v)}
-            style={{ marginTop: 8, background: "none", border: "none", color: "var(--gold)", fontWeight: 700, cursor: "pointer", padding: 0 }}
-          >
-            Изменить цель
-          </button>
-        </span>
-      </div>
-      {editing && (
-        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-          {GOAL_PRESETS.map((g) => (
-            <button
-              key={g}
-              className="tag"
-              style={{
-                cursor: "pointer",
-                background: goal === g ? "var(--gold)" : "transparent",
-                color: goal === g ? "#fff" : "var(--text)",
-                borderColor: goal === g ? "var(--gold)" : "var(--border)",
-              }}
-              onClick={() => pick(g)}
-            >
-              {g.toLocaleString("ru-RU")} ₽
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Заполненность анкеты. С фото и опытом зовут заметно чаще — показываем
 // прогресс и мягко подталкиваем дополнить недостающее.
 function ProfileMeter({ pct }: { pct: number }) {
@@ -382,13 +351,12 @@ function ProfileMeter({ pct }: { pct: number }) {
   if (pct >= 100) return null;
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="row" style={{ marginBottom: 8 }}>
-        <b>Профиль готов на {pct}%</b>
-        <span className="spacer" />
-        <span className="muted" style={{ fontSize: 13 }}>
-          {pct >= 80 ? "почти всё" : "заполни до конца"}
-        </span>
-      </div>
+      {/* Подпись под заголовком, а не сбоку от него: на узком экране она
+          втискивалась в остаток строки и рвалась пополам («заполните до /
+          конца»), а заголовок при этом тоже ломался. */}
+      <b style={{ display: "block", marginBottom: 8 }}>
+        Профиль готов на {pct}%
+      </b>
       <div
         style={{
           height: 8,
@@ -408,10 +376,10 @@ function ProfileMeter({ pct }: { pct: number }) {
         />
       </div>
       <div className="muted" style={{ margin: "10px 0 12px" }}>
-        Анкеты с фото и опытом зовут на смены заметно чаще.
+        С фото и опытом на смены зовут заметно чаще.
       </div>
       <Button variant="secondary" onClick={() => nav("/profile/edit")}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span className="inline">
           <IconEdit size={18} /> Дополнить профиль
         </span>
       </Button>
@@ -423,10 +391,6 @@ export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
-  const { data: ent } = useQuery({
-    queryKey: ["entitlements"],
-    queryFn: fetchEntitlements,
-  });
   const { data: ref } = useQuery({
     queryKey: ["referral"],
     queryFn: fetchReferral,
@@ -446,154 +410,242 @@ export function ProfilePage() {
 
   return (
     <div className="page">
+      {/* «Выйти» переехал в конец списка внизу: деструктивное действие не
+          должно быть самым заметным элементом шапки. */}
       <div className="row" style={{ marginBottom: 16 }}>
         <h1 className="h1" style={{ margin: 0 }}>Профиль</h1>
-        <span className="spacer" />
-        <button
-          className="tab"
-          style={{ flex: "none", width: "auto", color: "var(--muted)" }}
-          onClick={() => {
-            logout();
-            nav("/onboarding", { replace: true });
-          }}
-        >
-          Выйти
-        </button>
       </div>
 
       <div className="card row" style={{ gap: 14, marginBottom: 16 }}>
-        <span style={{
-          width: 56, height: 56, borderRadius: 16, flex: "none",
-          background: "var(--grad-brand)", color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
-        </span>
-        <span style={{ flex: 1 }}>
-          <div style={{ fontWeight: 800, fontSize: 20 }}>
-            {me?.name ?? (role === "employer" ? "Моё заведение" : "Профиль")}
+        {/* Фото из Telegram, если оно есть; иначе первая буква имени.
+            Раньше вместо лица стояла иконка-портфель — та самая, которой на
+            экране выбора роли подписано «Я ищу подработку». В своём профиле
+            она читается как «вакансия», а не «это я». */}
+        <Avatar
+          size={56}
+          src={me?.photoUrl}
+          name={me?.name}
+          fallback={role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
+        />
+        <span className="grow">
+          <div style={{ fontWeight: 800, fontSize: "var(--text-lg)", overflowWrap: "anywhere" }}>
+            {me?.name ?? (role === "employer" ? "Добавьте название" : "Добавьте имя")}
           </div>
-          <div className="muted">
-            {me ? `★ ${me.rating.toFixed(1)}` : "—"}
+          <div className="muted" style={{ overflowWrap: "anywhere" }}>
+            {me ? <Rating value={me.rating} /> : "—"}
             {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
-            {me?.shiftsDone ? ` · ${me.shiftsDone} смен` : ""}
+            {/* У заведения то же число стоит отдельной карточкой «Смен
+                проведено» ниже по экрану: два одинаковых числа в пяти
+                сантиметрах друг от друга заставляют сверять, не разные ли
+                они. В шапке оставляем его только работнику. */}
+            {role === "seeker" && me?.shiftsDone
+              ? ` · ${me.shiftsDone} ${plural(me.shiftsDone, "смена", "смены", "смен")}`
+              : ""}
           </div>
         </span>
       </div>
 
-      {me && <EarningsCard me={me} />}
+      {!!me?.incomingLikes && me.incomingLikes > 0 && (
+        // Кнопка, а не div с onClick: это единственный вход на самый ценный
+        // экран, и клавиатурой в него было не попасть, а озвучка читала его
+        // как обычный текст. Заливка — из токенов заливки: в тёмной теме
+        // прежний градиент давал под белым текстом 3.2:1.
+        <button
+          className="card"
+          onClick={() => nav(role === "seeker" ? "/invites" : "/applicants")}
+          style={{
+            width: "100%",
+            textAlign: "left",
+            marginBottom: 16,
+            background:
+              "linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill))",
+            color: "var(--on-brand)",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          {/* Одна строка вместо двух: вторая («Посмотреть, кто откликнулся»)
+              пересказывала первую тем же корнем и добавляла только слово
+              «посмотреть». Что плашка нажимается, говорит стрелка справа —
+              так же, как в строках меню ниже. */}
+          <b style={{ fontSize: "var(--text-md)", display: "flex", alignItems: "center", gap: 7 }}>
+            <IconBolt size={18} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {role === "employer"
+                // Число внутри фразы, а не счётчиком через двоеточие: «Новых
+                // откликов: 1» — строка из таблицы, а не новость для человека.
+                ? `${me.incomingLikes} ${plural(me.incomingLikes, "новый отклик", "новых отклика", "новых откликов")}`
+                : `Вас зовут на ${me.incomingLikes} ${plural(me.incomingLikes, "смену", "смены", "смен")}`}
+            </span>
+            <IconChevronRight size={20} />
+          </b>
+        </button>
+      )}
+
+
+      {/* Фото заведения. У работника есть полоса «профиль готов на 70%», и
+          она работает; у заведения такой подсказки не было вообще — при том
+          что именно от его фото зависит, откликнутся ли на смену. Карточка
+          показывается, только пока фото нет. */}
+      {role === "employer" && me && !me.photoUrl && (
+        <button
+          className="card"
+          onClick={() => nav("/profile/edit")}
+          style={{
+            width: "100%",
+            textAlign: "left",
+            marginBottom: 16,
+            border: "1px solid var(--border-strong)",
+            cursor: "pointer",
+          }}
+        >
+          <b style={{ fontSize: "var(--text-md)" }}>Добавьте фото заведения</b>
+          <div className="muted" style={{ marginTop: 4, fontSize: "var(--text-sm)" }}>
+            С фотографией зала на ваши смены откликаются заметно чаще.
+          </div>
+        </button>
+      )}
+
+      {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="row">
+            <b>Смен проведено</b>
+            <span className="spacer" />
+            <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
+          </div>
+          <div className="hint">
+            Из закрытых смен складывается рейтинг — его видно ещё до отклика.
+          </div>
+        </div>
+      )}
 
       {role === "seeker" && me && (
         <ProfileMeter pct={me.profileCompletion ?? 100} />
       )}
 
-      {role === "seeker" && me && <GoalCard earned={me.earnedRub ?? 0} />}
-
       {role === "seeker" && (
         <AvailabilityCard initial={me?.availableToday ?? false} />
       )}
 
-      {!!me?.incomingLikes && me.incomingLikes > 0 && (
-        <div
-          className="card"
-          onClick={() => nav(role === "seeker" ? "/invites" : "/feed")}
-          style={{
-            marginBottom: 16,
-            background: "linear-gradient(135deg, var(--gold-soft), var(--gold))",
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          <b style={{ fontSize: 17, display: "flex", alignItems: "center", gap: 7 }}>
-            <IconBolt size={18} />
-            {role === "employer"
-              ? `Новых откликов: ${me.incomingLikes}`
-              : `Тебя зовут на смены: ${me.incomingLikes}`}
-          </b>
-          <div style={{ opacity: 0.92, fontSize: 14, marginTop: 2 }}>
-            {role === "employer"
-              ? "столько откликов на твои вакансии — открой ленту"
-              : "нажми, чтобы увидеть кто зовёт, и ответить в один тап"}
-          </div>
-        </div>
-      )}
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row">
-          <b>Тариф: {PLAN_LABEL[ent?.plan ?? "free"]}</b>
-          <span className="spacer" />
-          <button className="btn ghost" style={{ width: "auto", padding: "8px 14px" }} onClick={() => nav("/pricing")}>
-            Улучшить
-          </button>
-        </div>
-        <div className="muted" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <IconBolt size={14} /> Супер-лайки: {ent?.superlikeBalance ?? 0}
-          <span style={{ opacity: 0.5 }}>·</span>
-          <IconFire size={14} /> Boost: {ent?.boostBalance ?? 0}
-        </div>
-      </div>
-
       {role === "employer" && <CommissionCard />}
 
-      {role === "employer" && <EmployerVerify />}
+      {role === "employer" && !PILOT_MODE && <EmployerVerify />}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <b>{role === "employer" ? "Пригласить коллег-рестораторов" : "Пригласить друзей"}</b>
         <div className="muted" style={{ margin: "6px 0 12px" }}>
           {role === "employer"
-            ? "За каждого пришедшего по вашей ссылке — Boost вакансии в подарок."
-            : `За каждого по вашей ссылке — ${ref?.bonusSuperlikes ?? 3} супер-лайка «Срочно».`}
-          {" "}Уже пришло: {ref?.invited ?? 0}.
+            ? "Чем больше рядом заведений и людей, тем быстрее закрываются смены у всех."
+            : "Чем больше рядом людей, тем чаще заведения ищут именно здесь."}
+          {" "}
+          {/* «Пришло по ссылке: 0» — цифра в хвосте фразы, которую читают на
+              бегу. Ноль лучше сказать словами: он и так самый частый. */}
+          {ref?.invited
+            ? `По вашей ссылке ${plural(ref.invited, "пришёл", "пришли", "пришли")} `
+              + `${ref.invited} ${plural(ref.invited, "человек", "человека", "человек")}.`
+            : "По вашей ссылке пока никто не пришёл."}
         </div>
         <Button onClick={invite}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span className="inline">
             <IconGift size={18} /> Поделиться приглашением
           </span>
         </Button>
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <Button variant="secondary" onClick={() => nav("/settings")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconEdit size={18} /> Настройки — тема, крупный режим, звук
-          </span>
-        </Button>
+      {/* Раньше здесь стоял столбик из 4-5 одинаковых полноширинных кнопок —
+          читалось как отладочное меню. Теперь это один список со строками. */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {/* Один экран — одно имя. Пока профиль не заполнен, выше по странице
+            стоит карточка с кнопкой «Дополнить профиль», и она ведёт СЮДА ЖЕ:
+            два входа с разными названиями в одно место, видимые одновременно.
+            В меню называем так же, как называется сам экран. */}
+        <MenuRow
+          icon={<IconEdit size={18} />}
+          label={role === "employer" ? "Профиль заведения" : "Мой профиль"}
+          onClick={() => nav("/profile/edit")}
+        />
+        {role === "seeker" && (
+          <MenuRow
+            icon={<IconBookmark size={18} />}
+            label="Избранные смены"
+            onClick={() => nav("/favorites")}
+          />
+        )}
+        <MenuRow
+          icon={<IconShield size={18} />}
+          label="Настройки"
+          onClick={() => nav("/settings")}
+        />
+        <MenuRow
+          icon={<IconHelp size={18} />}
+          label="Помощь и поддержка"
+          onClick={() => nav("/support")}
+        />
+        {isAdmin && (
+          <MenuRow
+            icon={<IconShield size={18} />}
+            label="Админ-панель"
+            onClick={() => nav("/admin")}
+          />
+        )}
+        <MenuRow
+          label="Выйти из аккаунта"
+          danger
+          last
+          onClick={async () => {
+            // Подтверждение: случайно вылететь из аккаунта неприятно.
+            if (!(await confirmAction("Выйти из аккаунта?", "Выйти"))) return;
+            logout();
+            nav("/onboarding", { replace: true });
+          }}
+        />
       </div>
-
-      {role === "seeker" && (
-        <div style={{ marginBottom: 10 }}>
-          <Button variant="secondary" onClick={() => nav("/favorites")}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconBookmark size={18} /> Избранные смены
-            </span>
-          </Button>
-        </div>
-      )}
-
-      <Button variant="secondary" onClick={() => nav("/profile/edit")}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <IconEdit size={18} /> Редактировать профиль
-        </span>
-      </Button>
-
-      <div style={{ marginTop: 10 }}>
-        <Button variant="ghost" onClick={() => nav("/support")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <IconHelp size={18} /> Помощь и поддержка
-          </span>
-        </Button>
-      </div>
-
-      {isAdmin && (
-        <div style={{ marginTop: 10 }}>
-          <Button variant="ghost" onClick={() => nav("/admin")}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <IconShield size={18} /> Админ-панель
-            </span>
-          </Button>
-        </div>
-      )}
     </div>
+  );
+}
+
+/** Строка списка в профиле: иконка — подпись — шеврон. Высота ≥52px. */
+function MenuRow({
+  icon,
+  label,
+  onClick,
+  danger = false,
+  last = false,
+}: {
+  icon?: ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        width: "100%",
+        minHeight: 54,
+        padding: "0 18px",
+        background: "none",
+        border: "none",
+        borderBottom: last ? "none" : "1px solid var(--border)",
+        color: danger ? "var(--danger)" : "var(--text)",
+        fontSize: "var(--text-md)",
+        fontWeight: 600,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      {/* Плейсхолдер держит колонку иконок: без него строка без иконки
+          съезжала влево относительно остальных. */}
+      <span style={{ display: "inline-flex", width: 18, color: "var(--gold)" }}>
+        {icon}
+      </span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {/* Шеврон = «откроется экран». У «Выйти» экрана нет — там подтверждение. */}
+      {!danger && <IconChevronRight size={18} />}
+    </button>
   );
 }

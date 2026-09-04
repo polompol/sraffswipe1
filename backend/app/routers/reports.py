@@ -1,5 +1,5 @@
 """Жалобы пользователей (trust & safety): фейковые вакансии, абьюз и т.п."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -17,6 +17,21 @@ _REASON_RU = {
 }
 
 
+def _target_exists(db: Session, target_type: str, target_id: str) -> bool:
+    """Есть ли на что жаловаться. Раньше не проверялось совсем — можно было
+    залить сколько угодно жалоб на выдуманные id и забить оператору очередь."""
+    from ..models import Employer, Match, User, Vacancy
+
+    if target_type == "vacancy":
+        return db.get(Vacancy, target_id) is not None
+    if target_type == "match":
+        return db.get(Match, target_id) is not None
+    return (
+        db.get(User, target_id) is not None
+        or db.get(Employer, target_id) is not None
+    )
+
+
 @router.post(
     "",
     status_code=201,
@@ -28,6 +43,33 @@ def create_report(
     principal: dict = Depends(current_principal),
 ):
     """Принять жалобу. Модерация — вручную на пилоте (потом админ-панель)."""
+    if not _target_exists(db, body.target_type, body.target_id):
+        raise HTTPException(status_code=404, detail="Цель жалобы не найдена")
+
+    # На себя не жалуемся — это только мусор в очереди оператора.
+    if body.target_id == principal["id"]:
+        raise HTTPException(status_code=400, detail="Нельзя пожаловаться на себя")
+
+    # Одна открытая жалоба от одного человека на одну цель.
+    #
+    # Без этого один аккаунт выглядел как толпа: двадцать жалоб «мошенничество»
+    # на конкурента приходили оператору как двадцать независимых сигналов
+    # (кто их подал, в панели не видно) — и невиновное заведение отправлялось
+    # в бан. Обратный сценарий тот же: сотня мусорных жалоб вытесняла
+    # настоящую за пределы списка, и оператор её просто не видел.
+    dup = (
+        db.query(Report)
+        .filter(
+            Report.reporter_id == principal["id"],
+            Report.target_id == body.target_id,
+            Report.status == "open",
+        )
+        .first()
+    )
+    if dup is not None:
+        # Не ошибка для человека: он уже пожаловался, мы просто не плодим строки.
+        return {"ok": True, "id": dup.id, "duplicate": True}
+
     rep = Report(
         reporter_id=principal["id"],
         target_type=body.target_type,

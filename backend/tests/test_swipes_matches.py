@@ -1,5 +1,19 @@
 """Тесты ленты кандидатов, расхода супер-лайков и доступа к подтверждению."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 def _auth(client, role="seeker"):
     r = client.post("/auth/telegram", json={"init_data": "", "role": role})
@@ -16,15 +30,20 @@ def _hdr(t):
     return {"Authorization": f"Bearer {t}"}
 
 
-def _superlike_balance(client, token):
-    return client.get("/billing/entitlements", headers=_hdr(token)).json()[
-        "superlikeBalance"
-    ]
+def _swipe_count(swiper_id):
+    from app.db import SessionLocal
+    from app.models import Swipe
+
+    db = SessionLocal()
+    try:
+        return db.query(Swipe).filter(Swipe.swiper_id == swiper_id).count()
+    finally:
+        db.close()
 
 
 def _vacancy(client, headers):
     return client.post("/vacancies", headers=headers, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
@@ -39,11 +58,11 @@ def test_vacancy_filters(client):
                 json={"owner_id": owner, "sku": "sub_pro_month",
                       "provider": "yookassa", "charge_id": "f1"})
     cheap = client.post("/vacancies", headers=eh, json={
-        "role": "dishwasher", "date": "2026-06-20", "start_time": 600,
+        "role": "dishwasher", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 250, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "A"}).json()
     pricey = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-25", "start_time": 600,
+        "role": "barista", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 500, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "B"}).json()
 
@@ -53,7 +72,7 @@ def test_vacancy_filters(client):
     by_rate = client.get("/vacancies?min_rate=400").json()
     assert cheap["id"] not in {v["id"] for v in by_rate}
 
-    by_date = client.get("/vacancies?date_from=2026-06-23").json()
+    by_date = client.get(f"/vacancies?date_from={_d(6)}").json()
     assert {v["id"] for v in by_date} == {pricey["id"]}
 
     # Сортировка по ставке (по убыванию) — дорогая выше.
@@ -73,15 +92,14 @@ def test_candidates_lists_users(client):
     assert s_id in [c["id"] for c in r.json()]
 
 
-def test_superlike_not_consumed_on_missing_target(client):
-    token, _ = _auth(client, "seeker")
-    before = _superlike_balance(client, token)
-    # Несуществующая вакансия → 404, баланс НЕ списан.
+def test_swipe_to_missing_target_is_404(client):
+    """Свайп по несуществующей смене не записывается: 404 и пустая история."""
+    token, sid = _auth(client, "seeker")
     r = client.post("/swipes", headers=_hdr(token), json={
-        "target_id": "no-such", "target_type": "vacancy", "direction": "superlike",
+        "target_id": "no-such", "target_type": "vacancy", "direction": "like",
     })
     assert r.status_code == 404
-    assert _superlike_balance(client, token) == before
+    assert _swipe_count(sid) == 0
 
 
 def test_confirm_requires_participant(client):
@@ -138,32 +156,52 @@ def test_chat_history_and_send_require_participant(client):
     ).status_code == 200
 
 
-def test_act_blocked_until_confirmed(client):
+def _close_shift(client, mid: str, emp_h, seeker_h) -> None:
+    """Довести смену до закрытия: акт выдаётся только по закрытой смене."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    db = SessionLocal()
+    try:
+        v = db.get(Vacancy, db.get(Match, mid).vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+    code = [m for m in client.get("/matches", headers=emp_h).json()
+            if m["id"] == mid][0]["checkin_code"]
+    client.post(f"/matches/{mid}/checkin", headers=seeker_h, json={"code": code})
+    client.post(f"/matches/{mid}/attendance", headers=emp_h, json={"attended": True})
+
+
+def test_act_blocked_until_confirmed(client, doc_token):
     match_id, s_token, e_token = _make_match(client)
     # До подтверждения смены акт недоступен.
     assert client.get(
-        f"/matches/{match_id}/act.pdf?token={s_token}"
+        f"/matches/{match_id}/act.pdf?token={doc_token(client, s_token)}"
     ).status_code == 409
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(s_token))
     client.post(f"/matches/{match_id}/confirm", headers=_hdr(e_token))
+    # Акт — документ о ВЫПОЛНЕННОЙ работе, поэтому только по закрытой смене.
+    _close_shift(client, match_id, _hdr(e_token), _hdr(s_token))
     # После подтверждения — PDF отдаётся.
     assert client.get(
-        f"/matches/{match_id}/act.pdf?token={s_token}"
+        f"/matches/{match_id}/act.pdf?token={doc_token(client, s_token)}"
     ).status_code == 200
 
 
-def test_superlike_not_double_charged_on_repeat(client):
+def test_repeat_swipe_is_idempotent(client):
+    """Двойной клик по той же смене не плодит вторую запись."""
     e_token, _ = _auth(client, "employer")
     vac = _vacancy(client, _hdr(e_token))
-    token, _ = _auth(client, "seeker")
-    before = _superlike_balance(client, token)
-    body = {"target_id": vac["id"], "target_type": "vacancy", "direction": "superlike"}
+    token, sid = _auth(client, "seeker")
+    body = {"target_id": vac["id"], "target_type": "vacancy", "direction": "like"}
     client.post("/swipes", headers=_hdr(token), json=body)
-    after_first = _superlike_balance(client, token)
-    assert after_first == before - 1
-    # Повторный свайп по той же цели не списывает баланс ещё раз.
+    assert _swipe_count(sid) == 1
     client.post("/swipes", headers=_hdr(token), json=body)
-    assert _superlike_balance(client, token) == after_first
+    assert _swipe_count(sid) == 1
 
 
 def test_candidates_forbidden_for_seeker(client):
@@ -192,10 +230,10 @@ def test_feed_filters_by_city(client):
                 json={"owner_id": owner, "sku": "sub_pro_month",
                       "provider": "yookassa", "charge_id": "city1"})
     msk = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва", "address": "A"}).json()
     kzn = client.post("/vacancies", headers=eh, json={
-        "role": "waiter", "date": "2026-06-20", "start_time": 600,
+        "role": "waiter", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Казань", "address": "B"}).json()
 
     # Регистронезависимый фильтр по городу (кириллица).
@@ -215,7 +253,7 @@ def test_city_only_vacancy_visible_with_geo_search(client):
                 json={"owner_id": owner, "sku": "sub_pro_month",
                       "provider": "yookassa", "charge_id": "geo1"})
     v = client.post("/vacancies", headers=_hdr(e_token), json={
-        "role": "florist", "date": "2026-06-20", "start_time": 600,
+        "role": "florist", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 400, "city": "Казань", "address": "Без точки",
     }).json()  # lat/lng = 0,0 по умолчанию
     feed = client.get("/vacancies?lat=55.75&lng=37.61&radius_km=10&city=Казань").json()
@@ -231,7 +269,9 @@ def test_candidates_pii_minimized(client):
     cands = client.get("/candidates", headers=_hdr(e_token)).json()
     assert cands, "ожидаем хотя бы одного кандидата"
     for c in cands:
-        # Точные координаты дома и точная дата рождения не раскрываются.
+        # Точные координаты дома и дата рождения не раскрываются: в ленту
+        # уходит только возраст числом.
         assert c["lat"] == 0 and c["lng"] == 0
         assert c["inn"] is None
-        assert c["birth_date"] in ("", None) or c["birth_date"].endswith("-01-01")
+        assert "birth_date" not in c
+        assert c["age"] is None or 18 <= c["age"] <= 100

@@ -29,9 +29,12 @@ export function toast(text: string, kind: ToastItem["kind"] = "info"): void {
   useToastStore.getState().push(text, kind);
 }
 
+// Ошибка была нейтрально-серой (--dislike) и не читалась как ошибка, а успех
+// совпадал с брендом. Разводим по смыслу: успех — зелёный, ошибка — тёмный
+// багровый, нейтральное — «эспрессо».
 const COLOR: Record<ToastItem["kind"], string> = {
-  success: "var(--like)",
-  error: "var(--dislike)",
+  success: "var(--success-bg)",
+  error: "var(--danger-bg)",
   info: "var(--espresso)",
 };
 
@@ -43,12 +46,12 @@ export function Toaster() {
         position: "fixed",
         left: 0,
         right: 0,
-        bottom: 92,
+        bottom: "calc(92px + env(safe-area-inset-bottom))",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         gap: 8,
-        zIndex: 60,
+        zIndex: "var(--z-toast)",
         pointerEvents: "none",
       }}
     >
@@ -59,13 +62,13 @@ export function Toaster() {
           role="status"
           style={{
             background: COLOR[t.kind],
-            color: "#fff",
+            color: "var(--on-brand)",
             padding: "10px 16px",
             borderRadius: 12,
             fontWeight: 600,
-            fontSize: 14,
+            fontSize: "var(--text-sm)",
             maxWidth: "88%",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+            boxShadow: "var(--elev-3)",
           }}
         >
           {t.text}

@@ -1,13 +1,19 @@
 """Социальные фичи: рефералы, отзывы/рейтинг, профиль текущего пользователя."""
+from typing import Annotated, Literal
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..cities import normalize
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Match, Referral, Review, User, Vacancy
+from ..ratelimit import rate_limit
+from ..schemas import ExperienceTag, PhotoUrl, StaffRole
 from ..security import current_principal
+from ..timeutil import local_today
 
 router = APIRouter(tags=["social"])
 
@@ -19,7 +25,6 @@ class ReferralOut(BaseModel):
     code: str
     link: str
     invited: int
-    bonusSuperlikes: int
 
 
 @router.get("/referral/me", response_model=ReferralOut)
@@ -33,7 +38,6 @@ def referral_me(
         code=code,
         link=f"https://t.me/{settings.bot_username}?startapp={code}",
         invited=invited,
-        bonusSuperlikes=settings.referral_bonus_superlikes,
     )
 
 
@@ -41,17 +45,34 @@ def referral_me(
 
 
 class ReviewIn(BaseModel):
-    stars: int
-    text: str = ""
+    stars: Annotated[int, Field(ge=1, le=5)]
+    text: Annotated[str, StringConstraints(max_length=1000)] = ""
 
 
 def _recompute_rating(db: Session, ratee_id: str) -> float:
-    avg = (
+    """Средняя оценка, где у каждой ВТОРОЙ СТОРОНЫ один голос.
+
+    Сначала усредняем оценки внутри каждой пары, и только потом — по парам.
+    Раньше все отзывы складывались в одну кучу, и десять пятёрок от одного
+    заведения весили как десять мнений. Это открытая дверь для накрутки:
+    заведение на второй учётке Telegram (а значит, формально другой человек)
+    закрывает со «своим» работником смену за сменой и ставит по пятёрке —
+    и в ленте появляется ★5,0, за которым нет ни одного независимого мнения.
+
+    Честному человеку это ничего не портит: постоянное заведение, которое
+    зовёт вас снова и снова, — сигнал хороший, но всё-таки один голос.
+    """
+    per_pair = (
         db.query(func.avg(Review.stars))
         .filter(Review.ratee_id == ratee_id)
-        .scalar()
+        .group_by(Review.rater_id)
+        .all()
     )
-    rating = round(float(avg), 1) if avg is not None else 0.0
+    rating = (
+        round(sum(float(x[0]) for x in per_pair) / len(per_pair), 1)
+        if per_pair
+        else 0.0
+    )
     target = db.get(User, ratee_id) or db.get(Employer, ratee_id)
     if target is not None:
         target.rating = rating
@@ -59,7 +80,10 @@ def _recompute_rating(db: Session, ratee_id: str) -> float:
     return rating
 
 
-@router.post("/matches/{match_id}/review")
+@router.post(
+    "/matches/{match_id}/review",
+    dependencies=[Depends(rate_limit("review", 20, 60))],
+)
 def leave_review(
     match_id: str,
     body: ReviewIn,
@@ -74,8 +98,11 @@ def leave_review(
     me = principal["id"]
     if me not in (match.user_id, match.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа")
-    if match.status not in ("confirmed", "completed"):
-        raise HTTPException(status_code=400, detail="Смена ещё не подтверждена")
+    # Отзыв — только за фактически состоявшуюся смену (обе стороны отметились),
+    # а не за «согласились выйти» (confirmed). Иначе рейтинг накручивается
+    # сговором «работник + фейковое заведение» без единой реальной смены.
+    if match.status != "completed":
+        raise HTTPException(status_code=400, detail="Смена ещё не закрыта")
     if db.query(Review).filter(
         Review.match_id == match_id, Review.rater_id == me
     ).first():
@@ -100,53 +127,86 @@ class MeOut(BaseModel):
     name: str
     rating: float
     tgUsername: str | None = None
-    streak: int = 0
     city: str = ""
+    district: str = ""
     incomingLikes: int = 0  # «тебя хотят»: входящие лайки/отклики
     earnedRub: int = 0  # заработано через сервис (мотивация доходом)
     shiftsDone: int = 0  # сколько смен закрыто
     availableToday: bool = False  # «Готов выйти сегодня» (только соискатель)
     profileCompletion: int = 100  # % заполненности анкеты соискателя
-
-
-def _streak(db: Session, owner_id: str) -> int:
-    from ..models import Streak
-
-    s = db.get(Streak, owner_id)
-    return s.count if s else 0
+    # Поля для предзаполнения экрана редактирования (свои данные, не публичные).
+    birthDate: str = ""
+    roles: list[str] = []
+    selfEmployed: bool = False
+    inn: str | None = None
+    about: str = ""
+    experienceTags: list[str] = []
+    photoUrl: str = ""
 
 
 def _incoming_likes(db: Session, principal: dict) -> int:
-    """Сколько входящих лайков: соискателю — от заведений на него; заведению —
-    отклики соискателей на его вакансии. Крючок «тебя хотят»."""
+    """Сколько входящих откликов, на которые ЕЩЁ МОЖНО ответить.
+
+    Раньше считались все лайки за всё время: и те, где мэтч давно создан, и
+    по снятым сменам, и по прошедшим. Кнопка обещала «Вас зовут на смены: 4»,
+    человек нажимал — а в списке одна. Списки-то фильтруют правильно, врал
+    только счётчик, и это ровно та мелочь, после которой перестают верить
+    цифрам вообще.
+
+    Поэтому здесь те же условия, что и в списках: живая смена, дата не в
+    прошлом, ответа ещё не было.
+    """
     from ..models import Swipe, Vacancy
 
-    positive = ("like", "superlike")
+    me = principal["id"]
     if principal["role"] == "employer":
-        vac_ids = [
-            v.id for v in db.query(Vacancy.id)
-            .filter(Vacancy.employer_id == principal["id"]).all()
+        # Отклики на мои смены, которым я ещё не ответил (зеркало /applicants).
+        vacs = [
+            v for v in db.query(Vacancy).filter(
+                Vacancy.employer_id == me, Vacancy.status == "active",
+            ).all()
+            if v.date >= local_today(v.city)
         ]
-        if not vac_ids:
+        if not vacs:
             return 0
-        return (
-            db.query(Swipe)
-            .filter(
-                Swipe.target_type == "vacancy",
-                Swipe.target_id.in_(vac_ids),
-                Swipe.direction.in_(positive),
+        answered = {
+            uid for (uid,) in db.query(Swipe.target_id).filter(
+                Swipe.swiper_id == me, Swipe.target_type == "user",
+                Swipe.direction == "like",
             )
-            .count()
-        )
-    return (
-        db.query(Swipe)
-        .filter(
-            Swipe.target_type == "user",
-            Swipe.target_id == principal["id"],
-            Swipe.direction.in_(positive),
-        )
-        .count()
-    )
+        }
+        likers = {
+            uid for (uid,) in db.query(Swipe.swiper_id).filter(
+                Swipe.target_type == "vacancy",
+                Swipe.target_id.in_([v.id for v in vacs]),
+                Swipe.direction == "like",
+            )
+        }
+        blocked = {
+            uid for (uid,) in db.query(User.id).filter(
+                User.id.in_(likers or ["__none__"]), User.blocked.is_(True),
+            )
+        }
+        # Считаем ЛЮДЕЙ, а не лайки: один человек, откликнувшийся на три смены,
+        # — это один ответ, а не три.
+        return len(likers - answered - blocked)
+
+    # Соискателю: смены заведений, которые его позвали, и которые он ещё не
+    # смотрел (зеркало /vacancies/invites).
+    liked_me = db.query(Swipe.swiper_id).filter(
+        Swipe.target_id == me,
+        Swipe.target_type == "user",
+        Swipe.direction == "like",
+    ).scalar_subquery()
+    swiped = db.query(Swipe.target_id).filter(
+        Swipe.swiper_id == me, Swipe.target_type == "vacancy",
+    ).scalar_subquery()
+    rows = db.query(Vacancy).filter(
+        Vacancy.employer_id.in_(liked_me),
+        Vacancy.status == "active",
+        Vacancy.id.notin_(swiped),
+    ).all()
+    return sum(1 for v in rows if v.date >= local_today(v.city))
 
 
 def _shift_pay(rate: int, rate_type: str, start: int, end: int) -> int:
@@ -162,13 +222,14 @@ def _shift_pay(rate: int, rate_type: str, start: int, end: int) -> int:
 def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
     """(сколько смен закрыто, сколько заработано ₽).
 
-    Считаем по подтверждённым/завершённым мэтчам. Для соискателя — сумма
-    оплат по сменам (мотивация доходом). Для заведения — только счётчик смен."""
+    Считаем ТОЛЬКО по закрытым смёнам (completed = взаимно подтверждены). За
+    confirmed (только согласились) не начисляем — иначе «заработок» и счётчик
+    смен накручивались бы фиктивными мэтчами без реального выхода."""
     col = Match.employer_id if role == "employer" else Match.user_id
     rows = (
         db.query(Vacancy.rate, Vacancy.rate_type, Vacancy.start_time, Vacancy.end_time)
         .join(Match, Match.vacancy_id == Vacancy.id)
-        .filter(col == owner_id, Match.status.in_(("confirmed", "completed")))
+        .filter(col == owner_id, Match.status == "completed")
         .all()
     )
     shifts = len(rows)
@@ -181,6 +242,10 @@ def _earnings(db: Session, role: str, owner_id: str) -> tuple[int, int]:
 def _profile_completion(u) -> int:
     """% заполненности анкеты — ключевые поля, что влияют на мэтчи."""
     fields = [
+        # Имя не считалось вовсе, хотя безымянная карточка — худшее, что
+        # видит заведение: заполнив имя, человек не двигал шкалу и не
+        # понимал, чего от него хотят.
+        bool((u.name or "").strip()),
         bool(u.birth_date),
         bool(u.city),
         bool(u.roles),
@@ -202,22 +267,31 @@ def me(
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
-            streak=_streak(db, e.id),
             incomingLikes=_incoming_likes(db, principal),
             shiftsDone=shifts,
+            inn=e.inn or None,
+            photoUrl=e.photo_url or "",
+            city=e.city or "",
         )
     u = db.get(User, principal["id"])
     if u is None:
         raise HTTPException(status_code=404, detail="Не найдено")
     shifts, earned = _earnings(db, "seeker", u.id)
+    roles = [r for r in (u.roles or "").split(",") if r]
+    exp = [t for t in (u.experience_tags or "").split(",") if t]
+    photos = [p for p in (u.photo_urls or "").split(",") if p]
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city,
+        city=u.city, district=u.district,
         incomingLikes=_incoming_likes(db, principal),
         earnedRub=earned, shiftsDone=shifts,
-        availableToday=u.available_today,
+        availableToday=u.available_date == local_today(u.city),
         profileCompletion=_profile_completion(u),
+        birthDate=u.birth_date or "", roles=roles,
+        selfEmployed=u.self_employed, inn=u.inn,
+        about=u.about or "", experienceTags=exp,
+        photoUrl=photos[0] if photos else "",
     )
 
 
@@ -225,7 +299,10 @@ class AvailableIn(BaseModel):
     available: bool
 
 
-@router.post("/me/available")
+@router.post(
+    "/me/available",
+    dependencies=[Depends(rate_limit("available", 30, 60))],
+)
 def set_available(
     body: AvailableIn,
     db: Session = Depends(get_db),
@@ -237,9 +314,11 @@ def set_available(
     u = db.get(User, principal["id"])
     if u is None:
         raise HTTPException(status_code=404, detail="Не найдено")
-    u.available_today = body.available
+    # Пишем дату по часам ГОРОДА человека: в Владивостоке «сегодня» наступает
+    # на семь часов раньше московского, и отметка гасла бы не в ту полночь.
+    u.available_date = local_today(u.city) if body.available else ""
     db.commit()
-    return {"availableToday": u.available_today}
+    return {"availableToday": u.available_date == local_today(u.city)}
 
 
 def _age_from_iso(iso: str) -> int | None:
@@ -256,21 +335,53 @@ def _age_from_iso(iso: str) -> int | None:
     )
 
 
+def _check_photo(url: str, owner_id: str = "") -> None:
+    """Фото — только своё загруженное (или аватарка из Telegram)."""
+    from ..photos import is_allowed_photo_url
+
+    if not is_allowed_photo_url(url, owner_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Фото нужно загрузить в приложении — "
+                   "ссылка на чужой сайт не подойдёт.",
+        )
+
+
 class MeUpdateIn(BaseModel):
-    name: str | None = None
-    birth_date: str | None = None  # ISO yyyy-mm-dd
-    city: str | None = None
-    district: str | None = None
-    roles: list[str] | None = None
-    med_book: str | None = None
+    # Лимиты длины — анти-абуз: без них можно записать мегабайтные строки в
+    # имя/«о себе» и раздуть БД.
+    name: Annotated[str, StringConstraints(max_length=80)] | None = None
+    birth_date: Annotated[
+        str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    ] | None = None
+    city: Annotated[str, StringConstraints(max_length=80)] | None = None
+    district: Annotated[str, StringConstraints(max_length=80)] | None = None
+    # max_length у списка ограничивает ЧИСЛО элементов, а не их длину:
+    # двенадцать строк по мегабайту проходили проверку. Ограничиваем и то, и то.
+    # Должности — только из списка приложения. Свободный текст здесь был
+    # каналом рекламы: двенадцать «должностей» по сорок символов показываются
+    # каждому заведению в ленте, а модерации у анкеты нет.
+    roles: Annotated[list[StaffRole], Field(max_length=12)] | None = None
+    med_book: Literal["yes", "no", "expired"] | None = None
     self_employed: bool | None = None
-    inn: str | None = None
-    about: str | None = None
-    photo_url: str | None = None
-    company_name: str | None = None
+    inn: Annotated[
+        str, StringConstraints(pattern=r"^\d{10,12}$")
+    ] | None = None
+    about: Annotated[str, StringConstraints(max_length=1000)] | None = None
+    experience_tags: Annotated[
+        list[ExperienceTag], Field(max_length=12)
+    ] | None = None
+    photo_url: PhotoUrl | None = None
+    company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
 
-@router.put("/me", response_model=MeOut)
+@router.put(
+    "/me",
+    response_model=MeOut,
+    # Профиль правят редко; без лимита это была ручка для раздувания базы
+    # длинными текстами «о себе».
+    dependencies=[Depends(rate_limit("profile", 20, 60))],
+)
 def update_me(
     body: MeUpdateIn,
     db: Session = Depends(get_db),
@@ -290,15 +401,38 @@ def update_me(
         e = db.get(Employer, principal["id"])
         if e is None:
             raise HTTPException(status_code=404, detail="Не найдено")
+        # Правка названия/ИНН вручную СБРАСЫВАЕТ бейдж «Проверен»: верификация
+        # подтверждала конкретные данные из DaData. Иначе можно было бы
+        # подтвердиться, а потом переписать имя на чужой бренд с бейджем.
+        changed_identity = (
+            (body.company_name is not None and body.company_name != e.company_name)
+            or (body.inn is not None and body.inn != e.inn)
+        )
         if body.company_name is not None:
             e.company_name = body.company_name
         if body.inn is not None:
             e.inn = body.inn
+        # Фото заведения. Эта строка тут не обрабатывалась вовсе: поле в базе
+        # есть, лента и список мэтчей его показывают, а поставить его было
+        # нельзя ничем — у каждого живого заведения в приложении оставалась
+        # буква на цветном квадрате. Для сервиса, где решение принимают
+        # свайпом за секунду, карточка без фото — это карточка, которую
+        # пролистывают.
+        if body.photo_url is not None:
+            _check_photo(body.photo_url, e.id)
+            e.photo_url = body.photo_url
+        # Город заведения. По нему показывается лента кандидатов — без него
+        # заведение в другом городе листало бы москвичей.
+        if body.city is not None:
+            e.city = normalize(body.city)
+        if changed_identity and e.verified:
+            e.verified = False
         db.commit()
         return MeOut(
             id=e.id, role="employer", name=e.company_name,
             rating=e.rating, tgUsername=e.tg_username,
-            streak=_streak(db, e.id),
+            photoUrl=e.photo_url or "",
+            city=e.city or "",
         )
 
     u = db.get(User, principal["id"])
@@ -309,7 +443,7 @@ def update_me(
     if body.birth_date is not None:
         u.birth_date = body.birth_date
     if body.city is not None:
-        u.city = body.city
+        u.city = normalize(body.city)
     if body.district is not None:
         u.district = body.district
     if body.roles is not None:
@@ -322,11 +456,22 @@ def update_me(
         u.inn = body.inn
     if body.about is not None:
         u.about = body.about
+    if body.experience_tags is not None:
+        u.experience_tags = ",".join(body.experience_tags)
     if body.photo_url is not None:
+        _check_photo(body.photo_url, u.id)
         u.photo_urls = body.photo_url
     db.commit()
+    # «О себе» и имя видит каждое заведение в ленте — это такой же публичный
+    # текст, как описание смены. У смен авто-модерация была с самого начала, а
+    # у анкеты не было: «внеси залог за форму» в поле «о себе» доходило до всех
+    # заведений и никого не настораживало. Теперь оба текста проверяются
+    # одинаково.
+    from ..moderation import auto_flag
+
+    auto_flag(db, "user", u.id, u.about, u.name)
     return MeOut(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
-        streak=_streak(db, u.id), city=u.city,
+        city=u.city,
     )

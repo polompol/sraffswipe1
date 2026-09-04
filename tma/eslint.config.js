@@ -23,4 +23,22 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Сборочные скрипты (сборка юридических страниц) исполняет Node, а не
+    // браузер: там свои глобальные объекты — console, process, fs.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // Тесты в окружении Node: читают файлы и запускают сборочные скрипты.
+    files: ["src/**/*.test.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // Service worker живёт не в окне браузера, а в своём потоке: там нет
+    // window, зато есть self и clients. Без этой строки проверка кода падала
+    // на «self is not defined» — а вместе с ней и весь scripts/verify.sh.
+    files: ["public/sw.js"],
+    languageOptions: { globals: { ...globals.serviceworker } },
+  },
 );

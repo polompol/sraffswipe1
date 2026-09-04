@@ -1,13 +1,16 @@
+/* Палитра синхронизирована с приложением (tma/src/theme/theme.css):
+   багровый кримсон + слоновая кость. Раньше лендинг был в старом золоте
+   и выглядел как другой продукт. */
 :root {
-  --gold: #c9a227;
-  --gold-soft: #d9a441;
+  --gold: #a51c30;
+  --gold-soft: #c0334a;
   --caramel: #b07a47;
-  --espresso: #3b2a20;
-  --bg: #fbf6ee;
-  --card: #fffdf9;
-  --text: #2e2018;
-  --muted: #8a7866;
-  --border: #ece3d6;
+  --espresso: #2a1f1a;
+  --bg: #efe7d3;
+  --card: #fffdf8;
+  --text: #241f1b;
+  --muted: #6d6357;
+  --border: #e4d9c2;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -24,7 +27,7 @@ body {
   font-weight: 700;
   padding: 12px 20px;
   border-radius: 12px;
-  box-shadow: 0 6px 16px rgba(201, 162, 39, 0.3);
+  box-shadow: 0 6px 16px rgba(165, 28, 48, 0.26);
   transition: transform 0.08s;
 }
 .btn:active { transform: scale(0.97); }
@@ -48,7 +51,7 @@ body {
 .trust { color: var(--muted); font-size: 14px; }
 .demo {
   width: 100%; max-width: 320px; justify-self: center;
-  border-radius: 28px; box-shadow: 0 24px 60px rgba(59, 42, 32, 0.22);
+  border-radius: 28px; box-shadow: 0 24px 60px rgba(124, 21, 38, 0.22);
 }
 
 .values {

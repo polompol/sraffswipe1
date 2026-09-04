@@ -3,17 +3,88 @@
 #   https://ДОМЕН/*      → статика Telegram Mini App (nginx)
 # WebSocket-чат (/api/ws/...) проксируется тем же reverse_proxy автоматически.
 # Домен подставляется из переменной DOMAIN (см. .env).
+
+# Заголовки, которые должны стоять на КАЖДОМ ответе — и на страницах, и на
+# ответах API. Раньше они висели только на статике: ответы API уходили без
+# защиты от подмены типа содержимого и без HSTS.
+(security_headers) {
+	header {
+		# Год HTTPS: браузер больше не пойдёт на этот домен по http, даже если
+		# кто-то подсунет такую ссылку. Без preload — его отзывать долго.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Не угадывать тип содержимого: загруженный «текст» не станет скриптом.
+		X-Content-Type-Options "nosniff"
+		# В чужой домен утекает только адрес сайта, без пути и параметров.
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Гео нужно ленте, чтобы показывать смены рядом с домом (для отметки
+		# о приходе оно больше не используется — там код). Камера,
+		# микрофон и оплата приложению не нужны: пусть будут запрещены,
+		# чтобы встроенный сторонний код не смог их запросить.
+		Permissions-Policy "geolocation=(self), camera=(), microphone=(), payment=(), usb=(), midi=(), magnetometer=()"
+		# Не сообщаем, на чём работает сервер.
+		-Server
+	}
+}
+
 {$DOMAIN} {
 	encode zstd gzip
+
+	# Журнал доступа пишет адрес запроса целиком, а секреты у нас приходят
+	# именно в адресе: токен для скачивания акта и токен WebSocket-чата (иначе
+	# их некуда положить), секрет вебхука ЮKassa (касса не умеет заголовки).
+	# Без этой замены они лежали бы открытым текстом в логе на сервере —
+	# и в любой копии логов. Значения вырезаем, сам факт запроса остаётся.
+	log {
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+					replace secret REDACTED
+				}
+			}
+		}
+	}
+
+	# Анти-DoS: тело запроса до 2 МБ (фото грузятся напрямую в S3, не через API,
+	# поэтому большие тела на API не нужны). Отсекается ДО чтения в память.
+	request_body {
+		max_size 2MB
+	}
 
 	# Бэкенд. handle_path снимает префикс /api, дальше FastAPI видит свои пути
 	# (/me, /vacancies, /auth/..., /ws/chat/...).
 	handle_path /api/* {
-		reverse_proxy api:8000
+		import security_headers
+		reverse_proxy api:8000 {
+			# Перезаписываем заголовок с исходным адресом, а не дописываем к
+			# присланному. По умолчанию Caddy добавляет реальный IP в конец, и
+			# начало списка задаёт сам клиент — этим обходились ВСЕ
+			# ограничения по IP (вход, запрос кода, аналитика): достаточно было
+			# слать каждый раз новый X-Forwarded-For.
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	# Всё остальное — собранный Mini App.
 	handle {
+		import security_headers
+		# CSP для страницы приложения. Скрипты — только свои: внешний скрипт
+		# не подключить, даже если он как-то попадёт в разметку.
+		#   style-src unsafe-inline — Vite и приложение задают стили инлайном;
+		#   img-src https: data: — фото заведений с S3/CDN и встроенные иконки;
+		#   connect-src — свой API, свой WebSocket, Telegram, Sentry и хранилище
+		#     фото. Их легко забыть, а эффект тихий: браузер режет запрос молча,
+		#     нарушение видно только в консоли. Так уже было с Sentry (отчёты об
+		#     ошибках не уходили бы) и с загрузкой фото — она шлёт файл прямо в
+		#     хранилище, мимо нашего домена. Адрес хранилища задаётся в
+		#     UPLOAD_ORIGIN (пусто = загрузка фото не подключена);
+		#   frame-ancestors — открывать приложение вправе только Telegram;
+		#   base-uri/form-action/object-src — закрываем классические способы
+		#     увести переходы и данные на чужой адрес.
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self' data:; connect-src 'self' https://{$DOMAIN} wss://{$DOMAIN} https://telegram.org https://*.ingest.sentry.io https://*.ingest.de.sentry.io {$UPLOAD_ORIGIN:}; frame-ancestors https://web.telegram.org https://telegram.org https://*.telegram.org; base-uri 'self'; form-action 'self'; object-src 'none'"
+		}
 		reverse_proxy tma:80
 	}
 }

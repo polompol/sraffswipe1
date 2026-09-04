@@ -1,0 +1,6 @@
+# Контекст сборки — backend/bot/, поэтому нужен свой файл: docker читает
+# .dockerignore только из корня контекста.
+__pycache__/
+*.py[cod]
+.venv/
+.env

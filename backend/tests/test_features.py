@@ -1,5 +1,19 @@
 """Тесты новых фич: прозрачность оплаты, доверие заведения, доход, доступность."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 
 def _auth(client, role="seeker"):
     r = client.post("/auth/telegram", json={"init_data": "", "role": role})
@@ -12,7 +26,7 @@ def _hdr(token):
 
 def _make_vacancy(client, emp_token, pay_method="cash"):
     return client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "rate_type": "perHour",
         "pay_method": pay_method, "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
@@ -31,7 +45,7 @@ def test_pay_method_roundtrips(client):
 def test_pay_method_defaults_to_cash(client):
     emp_token, _ = _auth(client, "employer")
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "waiter", "date": "2026-06-21", "start_time": 600,
+        "role": "waiter", "date": SOON_1, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
@@ -42,14 +56,14 @@ def test_pay_method_defaults_to_cash(client):
 def test_tips_roundtrips(client):
     emp_token, _ = _auth(client, "employer")
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "waiter", "date": "2026-06-22", "start_time": 600,
+        "role": "waiter", "date": SOON_2, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "tips": "shared", "lat": 55.75, "lng": 37.61, "address": "Тест",
     }).json()
     assert vac["tips"] == "shared"
     # вторая смена — без чаевых
     client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "cook", "date": "2026-06-22", "start_time": 600,
+        "role": "cook", "date": SOON_2, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест2",
     })
@@ -82,7 +96,13 @@ def _full_shift_cycle(client):
 
 
 def test_seeker_earnings_counted_after_shift(client):
-    _, _, seeker_token, _, vac, _ = _full_shift_cycle(client)
+    emp_token, _, seeker_token, _, vac, match_id = _full_shift_cycle(client)
+    # До закрытия смены (только confirmed) заработок НЕ засчитан — защита от
+    # накрутки фиктивными мэтчами.
+    pre = client.get("/me", headers=_hdr(seeker_token)).json()
+    assert pre["shiftsDone"] == 0 and pre["earnedRub"] == 0
+    # Закрываем смену взаимным подтверждением → теперь считается.
+    _close_shift(client, emp_token, seeker_token, match_id)
     me = client.get("/me", headers=_hdr(seeker_token)).json()
     # 350 ₽/час × 8 ч = 2800 ₽ за смену
     assert me["shiftsDone"] == 1
@@ -94,6 +114,7 @@ def test_employer_trust_aggregates_in_feed(client):
     # заведения видны рейтинг и счётчик смен. «Платит вовремя» ещё не выдаётся:
     # порог ≥3 закрытых смен не достигнут (знак не выдаётся «авансом»).
     emp_token, emp_id, seeker_token, _, vac, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
     client.post(f"/matches/{match_id}/review", headers=_hdr(seeker_token),
                 json={"stars": 5})
 
@@ -141,7 +162,7 @@ def test_profile_completion_grows_as_fields_fill(client):
     assert 0 <= start < 100
     # Дозаполняем ключевые поля — процент растёт до 100.
     client.put("/me", headers=_hdr(seeker_token), json={
-        "birth_date": "2000-01-01", "city": "Москва",
+        "name": "Анна", "birth_date": "2000-01-01", "city": "Москва",
         "roles": ["barista"], "photo_url": "https://x/p.jpg",
         "about": "Опыт 2 года",
     })
@@ -149,6 +170,16 @@ def test_profile_completion_grows_as_fields_fill(client):
         "profileCompletion"]
     assert full == 100
     assert full > start
+
+
+def test_name_counts_towards_completion(client):
+    """Имя обязано двигать шкалу: безымянная карточка — худшее, что видит
+    заведение, а раньше заполнение имени не меняло процент вообще."""
+    token, _ = _auth(client, "seeker")
+    before = client.get("/me", headers=_hdr(token)).json()["profileCompletion"]
+    client.put("/me", headers=_hdr(token), json={"name": "Анна Петрова"})
+    after = client.get("/me", headers=_hdr(token)).json()["profileCompletion"]
+    assert after > before
 
 
 def test_feed_excludes_already_swiped_vacancy(client):
@@ -201,6 +232,7 @@ def test_invites_shows_employers_who_liked_me(client):
 
 def test_mutual_checkin_closes_only_when_both_confirm(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    _age(match_id)  # закрыть смену раньше её окончания нельзя
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
     assert code and len(code) == 6
@@ -219,14 +251,18 @@ def test_mutual_checkin_closes_only_when_both_confirm(client):
     assert done["status"] == "completed" and done["checked_in"] is True
 
 
-def test_checkin_geo_and_code_helpers(client):
+def test_checkin_requires_the_venue_code(client):
+    """Отметка «я на смене» — только кодом заведения.
+
+    Геолокацию убрали: она просила разрешение на местоположение (первое, на
+    чём люди закрывают приложение), не работала в подвалах и на кухнях и
+    ничего не доказывала — рядом с кафе можно оказаться и не работая.
+    """
     _, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
-    # Гео вдалеке — отказ; на месте — отметка проходит.
     assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                       json={"lat": 55.0, "lng": 38.5}).status_code == 400
-    r = client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
-                    json={"lat": 55.75, "lng": 37.61})
-    assert r.status_code == 200 and r.json()["seeker_checked_in"] is True
+                       json={"lat": 55.75, "lng": 37.61}).status_code == 400
+    assert client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                       json={"code": "000000"}).status_code == 400
 
 
 def test_commission_accrued_on_close(client):
@@ -234,6 +270,7 @@ def test_commission_accrued_on_close(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
@@ -267,10 +304,60 @@ def test_traffic_source_attribution(client):
     assert {x["source"]: x for x in rows2}["vk"]["seekers"] == 1
 
 
+def test_reputation_not_farmable_without_completed_shift(client):
+    # Сговор «работник + фейковое заведение»: доводим до confirmed (два свайпа
+    # + два confirm), но БЕЗ реального выхода. Отзыв и заработок недоступны.
+    emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    r = client.post(f"/matches/{match_id}/review", headers=_hdr(seeker_token),
+                    json={"stars": 5})
+    assert r.status_code == 400  # смена не закрыта → накрутить рейтинг нельзя
+    me = client.get("/me", headers=_hdr(seeker_token)).json()
+    assert me["shiftsDone"] == 0 and me["earnedRub"] == 0
+
+
+def test_sms_code_is_six_digits(client):
+    from app.sms import generate_code
+
+    for _ in range(20):
+        c = generate_code()
+        assert len(c) == 6 and c.isdigit()
+
+
+def test_blocked_user_cannot_pull_act(client, doc_token):
+    from app.db import SessionLocal
+    from app.models import Employer
+
+    emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    # Ссылку получаем ДО бана — иначе проверялось бы только то, что
+    # заблокированному не выдают новый токен. Здесь важнее другое: уже
+    # выданная ссылка после бана перестаёт работать.
+    link = doc_token(client, emp_token)
+    ok = client.get(f"/matches/{match_id}/act.pdf?token={link}")
+    assert ok.status_code == 200
+    db = SessionLocal()
+    db.get(Employer, emp_id).blocked = True
+    db.commit()
+    db.close()
+    banned = client.get(f"/matches/{match_id}/act.pdf?token={link}")
+    assert banned.status_code == 403, "акт с ИНН обеих сторон забаненному не отдаём"
+
+
+def _age(match_id: str, days: int = 0) -> None:
+    """Перемотать смену в прошлое: закрыть её можно только после окончания."""
+    from .shifttime import age_shift
+
+    age_shift(match_id, days)
+
+
 def _close_shift(client, emp_token, seeker_token, match_id):
-    """Взаимное подтверждение: работник по коду + заведение «пришёл»."""
+    """Взаимное подтверждение: работник по коду + заведение «пришёл».
+
+    Сначала доводим смену до конца — раньше её закрыть нельзя."""
+    _age(match_id)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
@@ -350,6 +437,26 @@ def test_overdue_blocks_employer_positive_swipes(client):
     assert r2.status_code == 200
 
 
+def test_overdue_blocks_urgent(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Commission
+
+    emp_token, emp_id, seeker_token, _, vac, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    db = SessionLocal()
+    db.query(Commission).filter(Commission.employer_id == emp_id).update(
+        {Commission.created_at: datetime.now(UTC) - timedelta(days=10)},
+        synchronize_session=False,
+    )
+    db.commit()
+    db.close()
+    # Должник не может рассылать «Срочно» доступным рядом.
+    assert client.post(f"/vacancies/{vac['id']}/urgent",
+                       headers=_hdr(emp_token)).status_code == 402
+
+
 def test_wallet_autopays_commission(client):
     # Аванс на балансе → комиссия за закрытую смену списывается сама.
     emp_token, emp_id, seeker_token, _, _, match_id = _full_shift_cycle(client)
@@ -372,6 +479,102 @@ def test_wallet_insufficient_falls_back_to_invoice(client):
     _close_shift(client, emp_token, seeker_token, match_id)
     bill = client.get("/billing/commission", headers=_hdr(emp_token)).json()
     assert bill["pendingRub"] == 280 and bill["balanceRub"] == 100
+
+
+def test_vacancy_rejects_zero_duration_shift(client):
+    emp_token, _ = _auth(client, "employer")
+    # Одинаковое время начала и конца почасовой смены → 422 (иначе считалось
+    # бы как 24 часа, завышая оплату и комиссию).
+    r = client.post("/vacancies", headers=_hdr(emp_token), json={
+        "role": "barista", "date": SOON, "start_time": 600,
+        "end_time": 600, "rate": 350, "rate_type": "perHour",
+        "lat": 55.75, "lng": 37.61, "address": "Тест",
+    })
+    assert r.status_code == 422
+
+
+def test_telegram_avatar_becomes_profile_photo(client):
+    # photo_url из initData Telegram → стартовое фото профиля (без S3).
+    # В insecure-режиме init_data пуст, поэтому передаём start_param-независимо:
+    # проверяем через прямую регистрацию с фото невозможно (нет подписи),
+    # поэтому проверяем, что поле есть в MeOut и не падает при пустом фото.
+    token, _ = _auth(client, "seeker")
+    me = client.get("/me", headers=_hdr(token)).json()
+    assert "photoUrl" in me and "district" in me
+
+
+def test_edit_identity_drops_verified_badge(client):
+    from app.db import SessionLocal
+    from app.models import Employer
+
+    _, emp_id = _auth(client, "employer")
+    db = SessionLocal()
+    e = db.get(Employer, emp_id)
+    e.company_name = "Кофейня «Дрова»"
+    e.inn = "7712345678"
+    e.verified = True
+    db.commit()
+    db.close()
+    # Смена названия вручную снимает бейдж «Проверен» (данные больше не сверены).
+    r = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    tok = r.json()["access_token"]
+    client.put("/me", headers=_hdr(tok), json={"company_name": "Сбербанк"})
+    db = SessionLocal()
+    assert db.get(Employer, emp_id).verified is False
+    db.close()
+
+
+def test_swipe_role_must_match_target(client):
+    seeker_token, _ = _auth(client, "seeker")
+    _, other_seeker = _auth(client, "seeker")
+    # Работник не может лайкать другого работника (только вакансии).
+    r = client.post("/swipes", headers=_hdr(seeker_token), json={
+        "target_type": "user", "target_id": other_seeker, "direction": "like",
+    })
+    assert r.status_code == 400
+
+
+def test_events_reserved_source_name_rejected(client):
+    r = client.post("/events", json={"name": "source", "props": {"src": "x"}})
+    assert r.status_code == 400
+
+
+def test_overdue_blocks_invite_again(client):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Commission
+
+    emp_token, emp_id, seeker_token, sid, _, match_id = _full_shift_cycle(client)
+    _close_shift(client, emp_token, seeker_token, match_id)
+    db = SessionLocal()
+    db.query(Commission).filter(Commission.employer_id == emp_id).update(
+        {Commission.created_at: datetime.now(UTC) - timedelta(days=10)},
+        synchronize_session=False,
+    )
+    db.commit()
+    db.close()
+    # Должник не может «позвать снова» (обход блока приглашений).
+    assert client.post(f"/employer/invite/{sid}",
+                       headers=_hdr(emp_token)).status_code == 402
+
+
+def test_wallet_topup_webhook_rejects_over_cap(client):
+    # Утечка секрета не даёт неограниченной эмиссии: сумма выше потолка → 400.
+    _, emp_id = _auth(client, "employer")
+    payload = {
+        "event": "payment.succeeded",
+        "object": {
+            "id": "yk-huge", "amount": {"value": "9000000.00", "currency": "RUB"},
+            "metadata": {
+                "owner_id": emp_id, "sku": "wallet_topup",
+                "amount_rub": "9000000",
+            },
+        },
+    }
+    r = client.post("/billing/yookassa/webhook?secret=test-internal-secret",
+                    json=payload)
+    assert r.status_code == 400
 
 
 def test_wallet_topup_webhook_idempotent(client):
@@ -421,7 +624,7 @@ def test_overdue_commission_blocks_new_vacancies(client):
                       headers=_hdr(emp_token)).json()["overdue"] is True
     # Просроченный долг → публикация новой вакансии блокируется (402).
     r = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "cook", "date": "2026-06-25", "start_time": 600,
+        "role": "cook", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     })
@@ -429,7 +632,7 @@ def test_overdue_commission_blocks_new_vacancies(client):
     # Оператор отметил оплату → публикация снова доступна.
     client.post(f"/admin/commissions/{emp_id}/settle", headers=_hdr(emp_token))
     r2 = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "cook", "date": "2026-06-25", "start_time": 600,
+        "role": "cook", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Тест",
     })
@@ -452,6 +655,7 @@ def test_conflict_creates_dispute(client):
     emp_token, _, seeker_token, _, _, match_id = _full_shift_cycle(client)
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     # Работник отметился, а заведение говорит «не вышел» → спор, не закрываем.
@@ -532,12 +736,12 @@ def test_candidate_filters_role_district_available(client):
 def test_feed_radius_filters_by_distance(client):
     emp_token, _ = _auth(client, "employer")
     near = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "lat": 55.75, "lng": 37.61,
         "address": "Рядом",
     }).json()
     far = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "lat": 56.30, "lng": 38.60,
         "address": "Далеко",
     }).json()
@@ -565,20 +769,16 @@ def test_invites_forbidden_for_employer(client):
     ).status_code == 403
 
 
-def test_activity_feed_shape(client):
+def test_activity_feed_is_gone(client):
+    """«Живой ленты активности» больше нет.
+
+    Её никто не показывал: приложение этот адрес не запрашивало ни разу, а
+    сервер на каждый запрос выбирал чужие смены — лишняя работа и лишняя
+    поверхность вокруг данных других людей.
+    """
     seeker_token, _ = _auth(client, "seeker")
-    r = client.get("/activity/recent", headers=_hdr(seeker_token))
-    assert r.status_code == 200
-    body = r.json()
-    assert "items" in body and isinstance(body["items"], list)
-    # Соискатель существует → «ищут сейчас» не ноль (fallback на число юзеров).
-    assert body["searching_now"] >= 1
-
-
-def test_activity_shows_closed_shift(client):
-    _, _, seeker_token, _, _, _ = _full_shift_cycle(client)
-    body = client.get("/activity/recent", headers=_hdr(seeker_token)).json()
-    assert any(it["kind"] == "closed" for it in body["items"])
+    assert client.get("/activity/recent",
+                      headers=_hdr(seeker_token)).status_code == 404
 
 
 def test_favorites_add_list_remove(client):
@@ -613,7 +813,11 @@ def test_attendance_and_reliability(client):
     assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(seeker_token),
                        json={"attended": True}).status_code == 403
 
-    # работодатель смены отмечает «не вышел»
+    # работодатель смены отмечает «не вышел» — но только ПОСЛЕ смены: до её
+    # окончания это отправляло человека работать по уже закрытой смене.
+    assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                       json={"attended": False}).status_code == 409
+    _age(match_id)
     r = client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
                     json={"attended": False})
     assert r.status_code == 200 and r.json()["noShow"] is True
@@ -626,12 +830,20 @@ def test_attendance_and_reliability(client):
     assert me["shifts_total"] == 1
     assert me["shifts_attended"] == 0
 
-    # отметили «вышел» — счётчик обновился
-    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
-                json={"attended": True})
-    workers = client.get("/employer/workers", headers=_hdr(emp_token)).json()
-    me = next(c for c in workers if c["id"] == sid)
-    assert me["shifts_attended"] == 1
+    # Отмеченную неявку нельзя «переиграть» на той же смене: она закрыта.
+    # Раньше отметка «не вышел» оставляла смену подтверждённой, и её можно
+    # было закрыть заново — а ночной расчёт делал это сам, снимая неявку.
+    assert client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                       json={"attended": True}).status_code == 400
+
+    # «Вышел» засчитывается по ЗАКРЫТОЙ смене — проверяем на следующей.
+    # Аккаунт тот же (в тестах вход без подписи даёт один tg_id), поэтому в
+    # надёжности накапливаются обе смены: одна неявка и одна закрытая.
+    emp2, _, seeker2, sid2, _, match2 = _full_shift_cycle(client)
+    _close_shift(client, emp2, seeker2, match2)
+    workers = client.get("/employer/workers", headers=_hdr(emp2)).json()
+    other = next(c for c in workers if c["id"] == sid2)
+    assert other["shifts_total"] == 2 and other["shifts_attended"] == 1
 
 
 def test_my_workers_and_invite_again(client):
@@ -650,7 +862,7 @@ def test_my_workers_and_invite_again(client):
 def test_urgent_ping(client):
     emp_token, _ = _auth(client, "employer")
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
-        "role": "waiter", "date": "2026-06-25", "start_time": 600,
+        "role": "waiter", "date": SOON_5, "start_time": 600,
         "end_time": 1080, "rate": 300, "rate_type": "perHour", "city": "Москва",
         "lat": 55.75, "lng": 37.61, "address": "Тверская, 1",
     }).json()
@@ -666,13 +878,13 @@ def test_urgent_ping(client):
 
 
 def test_digest_and_reminders_logic(client):
-    from datetime import UTC, datetime
-
     from app import digest
     from app.db import SessionLocal
+    from app.timeutil import local_today
 
     emp_token, _ = _auth(client, "employer")
-    today = datetime.now(UTC).date().isoformat()
+    # «Сегодня» — по Москве, как его видит человек, а не по часам сервера.
+    today = local_today()
     # активная смена на сегодня в Москве
     vac = client.post("/vacancies", headers=_hdr(emp_token), json={
         "role": "barista", "date": today, "start_time": 600, "end_time": 1080,
@@ -702,7 +914,10 @@ def test_digest_and_reminders_logic(client):
         client.post(f"/matches/{mid}/confirm", headers=_hdr(emp_token))
 
         reminders = digest.build_reminders(db)
-        assert any(uid == sid for uid, _ in reminders)
+        assert any(uid == sid for _, uid, _ in reminders)
         assert digest.send_reminders(db) >= 1
+        # Повторный запуск в тот же день НЕ дублирует напоминание.
+        assert digest.send_reminders(db) == 0
+        assert digest.build_reminders(db) == []
     finally:
         db.close()

@@ -1,25 +1,33 @@
 import type { ReactNode } from "react";
 import { IconCheck } from "./Icons";
 
-/** Единое пустое состояние: иконка-иллюстрация + заголовок + текст + CTA. */
+/** Единое пустое состояние: иконка-иллюстрация + заголовок + текст + CTA.
+ *
+ *  `fill` разворачивает состояние на свободную высоту экрана и ставит
+ *  карточку по центру. Без этого она прижималась к верху, а под ней
+ *  оставалось полэкрана пустоты — экран выглядел недогруженным, как будто
+ *  что-то не дорисовалось. */
 export function EmptyState({
   icon,
   title,
   text,
   action,
+  fill = false,
 }: {
   icon?: ReactNode;
   title: string;
   text?: string;
   action?: ReactNode;
+  fill?: boolean;
 }) {
-  return (
+  const card = (
     <div
       className="card fade-up"
       style={{
         textAlign: "center",
         padding: "44px 24px",
         boxShadow: "var(--elev-1)",
+        width: "100%",
       }}
       role="status"
     >
@@ -30,7 +38,7 @@ export function EmptyState({
           height: 72,
           margin: "0 auto 14px",
           borderRadius: "50%",
-          background: "rgba(199,162,75,.14)",
+          background: "var(--gold-tint)",
           color: "var(--gold)",
           display: "flex",
           alignItems: "center",
@@ -48,6 +56,22 @@ export function EmptyState({
         </p>
       )}
       {action && <div style={{ marginTop: 16 }}>{action}</div>}
+    </div>
+  );
+
+  if (!fill) return card;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        // Экран минус шапка и нижняя навигация — карточка встаёт по центру
+        // оставшегося места, а не под самым заголовком.
+        minHeight: "min(56vh, 480px)",
+      }}
+    >
+      {card}
     </div>
   );
 }

@@ -1,5 +1,19 @@
 """Тесты аналитики, вебхука ЮKassa и DaData-degradation."""
 
+from datetime import UTC, datetime, timedelta
+
+
+def _d(days: int) -> str:
+    """Дата смены относительно сегодня: захардкоженные даты со временем
+    протухают и вылетают из ленты (прошедшие смены не показываются)."""
+    return (datetime.now(UTC) + timedelta(days=days)).strftime("%Y-%m-%d")
+
+SOON = _d(3)
+SOON_1 = _d(4)
+SOON_2 = _d(5)
+SOON_5 = _d(8)
+
+
 INTERNAL = {"X-Internal-Token": "test-internal-secret"}
 
 
@@ -24,7 +38,10 @@ def test_events_and_funnel(client):
     f = client.get("/analytics/funnel", headers=_hdr(token)).json()["counts"]
     assert f["open"] == 1
     assert f["swipe"] == 1
-    assert f["purchase"] == 0
+    # Последний шаг воронки — закрытая смена, а не «покупка»: покупать в
+    # сервисе нечего, и этот шаг всегда показывал ноль.
+    assert f["done"] == 0
+    assert "purchase" not in f
 
 
 def test_funnel_forbidden_for_non_admin(client):
@@ -37,36 +54,6 @@ def test_funnel_forbidden_for_non_admin(client):
     ).json()["access_token"]
     r = client.get("/analytics/funnel", headers=_hdr(token))
     assert r.status_code == 403
-
-
-def test_yookassa_webhook_grants_plan(client):
-    token, owner = _auth(client, "employer")
-    payload = {
-        "event": "payment.succeeded",
-        "object": {
-            "id": "yk-evt-1",
-            "amount": {"value": "1990.00", "currency": "RUB"},
-            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
-        },
-    }
-    # Без секрета — 401.
-    assert client.post("/billing/yookassa/webhook", json=payload).status_code == 401
-    # С секретом — начисление тарифа.
-    ok = client.post(
-        "/billing/yookassa/webhook?secret=test-internal-secret", json=payload
-    )
-    assert ok.status_code == 200
-    ent = client.get("/billing/entitlements", headers=_hdr(token)).json()
-    assert ent["plan"] == "pro"
-
-    # Идемпотентность по charge_id.
-    client.post(
-        "/billing/yookassa/webhook?secret=test-internal-secret", json=payload
-    )
-    boost = client.get("/billing/entitlements", headers=_hdr(token)).json()[
-        "boostBalance"
-    ]
-    assert boost == ent["boostBalance"]  # не удвоилось
 
 
 def test_employer_verify_without_dadata(client):
@@ -99,14 +86,24 @@ def test_photo_upload_without_s3(client):
 
 
 def test_dadata_without_token_is_empty(client):
-    token, _ = _auth(client)
-    # Без DADATA_TOKEN — graceful: пустой список / found=false.
+    """Без ключа DaData подсказки адреса просто пусты, а не падают.
+
+    Проверка компании по ИНН живёт в /employer/verify — отдельной публичной
+    ручки для неё нет: она делала то же самое и так же тратила платную квоту.
+    """
+    # Подсказки адреса — только заведению: квота DaData платная, а соискателю
+    # они не нужны нигде в приложении.
+    seeker, _ = _auth(client)
+    assert client.get(
+        "/dadata/address?q=Москва", headers=_hdr(seeker)
+    ).status_code == 403
+
+    token, _ = _auth(client, "employer")
     addr = client.get("/dadata/address?q=Москва", headers=_hdr(token))
     assert addr.status_code == 200
     assert addr.json() == []
-    party = client.get("/dadata/party?inn=7707083893", headers=_hdr(token))
-    assert party.status_code == 200
-    assert party.json()["found"] is False
+    assert client.get("/dadata/party?inn=7707083893",
+                      headers=_hdr(token)).status_code == 404
 
 
 def test_production_safe_guard_rejects_default_secrets():
@@ -125,28 +122,93 @@ def test_production_safe_guard_rejects_default_secrets():
         raised = True
     assert raised
 
+    # Слишком короткий секрет тоже отклоняется (нужно ≥32 символов).
+    short = Settings(
+        dev_mode=False, jwt_secret="short", internal_api_secret="x",
+    )
+    try:
+        short.assert_production_safe()
+        short_raised = False
+    except RuntimeError:
+        short_raised = True
+    assert short_raised
+
+    # Без токена бота вход не проверить — старт тоже отклоняется.
+    no_bot = Settings(
+        dev_mode=False,
+        jwt_secret="a-real-secret-at-least-32-characters-long",
+        internal_api_secret="another-secret",
+        telegram_bot_token="",
+    )
+    try:
+        no_bot.assert_production_safe()
+        no_bot_raised = False
+    except RuntimeError:
+        no_bot_raised = True
+    assert no_bot_raised
+
     safe = Settings(
         dev_mode=False,
-        jwt_secret="a-real-long-secret",
+        jwt_secret="a-real-secret-at-least-32-characters-long",
         internal_api_secret="another-secret",
+        telegram_bot_token="1234567890:AA-fake-token-for-tests",
         allow_insecure_telegram_auth=False,
     )
     safe.assert_production_safe()  # не бросает
+
+
+
+def _some_vacancy(client) -> str:
+    """Реальная смена — жалоба теперь принимается только на существующую цель."""
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    return client.post("/vacancies", headers=eh, json={
+        "role": "barista", "date": SOON, "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+    }).json()["id"]
+
+
+def _some_match(client) -> str:
+    """Реальный мэтч — для жалобы на переписку."""
+    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
+    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
+    vac = client.post("/vacancies", headers=eh, json={
+        "role": "waiter", "date": SOON, "start_time": 600,
+        "end_time": 1080, "rate": 350, "city": "Москва",
+    }).json()
+    seeker = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
+    sh = {"Authorization": f"Bearer {seeker.json()['access_token']}"}
+    client.post("/swipes", headers=eh, json={
+        "target_id": seeker.json()["user_id"], "target_type": "user",
+        "direction": "like"})
+    return client.post("/swipes", headers=sh, json={
+        "target_id": vac["id"], "target_type": "vacancy",
+        "direction": "like"}).json()["match_id"]
 
 
 def test_report_create_and_validation(client):
     """Жалоба создаётся; некорректная причина → 422; без токена → 401."""
     r = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    vac_id = _some_vacancy(client)
     ok = client.post("/reports", headers=h, json={
-        "target_type": "vacancy", "target_id": "vac1",
+        "target_type": "vacancy", "target_id": vac_id,
         "reason": "fake", "text": "Похоже на обман",
     })
     assert ok.status_code == 201 and ok.json()["ok"] is True
     bad = client.post("/reports", headers=h, json={
-        "target_type": "vacancy", "target_id": "vac1", "reason": "nonsense",
+        "target_type": "vacancy", "target_id": vac_id, "reason": "nonsense",
     })
     assert bad.status_code == 422
+    # Выдуманная цель — 404: раньше так можно было забить очередь оператора.
+    assert client.post("/reports", headers=h, json={
+        "target_type": "vacancy", "target_id": "не-существует", "reason": "spam",
+    }).status_code == 404
+    # Повтор на ту же цель новой строки не создаёт (бригадинг).
+    again = client.post("/reports", headers=h, json={
+        "target_type": "vacancy", "target_id": vac_id, "reason": "fake",
+    })
+    assert again.json().get("duplicate") is True
     assert client.post("/reports", json={
         "target_type": "vacancy", "target_id": "x", "reason": "spam",
     }).status_code == 401
@@ -158,7 +220,8 @@ def test_admin_panel_gating_and_reports(client):
     admin_h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     # Создаём жалобу.
     client.post("/reports", headers=admin_h, json={
-        "target_type": "vacancy", "target_id": "vac1", "reason": "fake",
+        "target_type": "vacancy", "target_id": _some_vacancy(client),
+        "reason": "fake",
     })
     # Обзор и список жалоб доступны админу.
     ov = client.get("/admin/overview", headers=admin_h)
@@ -170,7 +233,6 @@ def test_admin_panel_gating_and_reports(client):
     res = client.post(f"/admin/reports/{rid}/resolve", headers=admin_h)
     assert res.status_code == 200
     assert client.get("/admin/reports?status=open", headers=admin_h).json() == []
-    assert client.get("/admin/subscriptions", headers=admin_h).status_code == 200
 
 
 def test_admin_endpoints_forbidden_for_non_admin(client):
@@ -182,7 +244,7 @@ def test_admin_endpoints_forbidden_for_non_admin(client):
         "/auth/verify", json={"phone": "+79990007777", "code": code, "role": "seeker"}
     ).json()["access_token"]
     h = {"Authorization": f"Bearer {token}"}
-    for path in ("/admin/overview", "/admin/reports", "/admin/subscriptions"):
+    for path in ("/admin/overview", "/admin/reports", "/admin/purchases"):
         assert client.get(path, headers=h).status_code == 403, path
     assert client.post("/admin/reports/any/resolve", headers=h).status_code == 403
     # Совсем без токена — тоже закрыто.
@@ -197,7 +259,7 @@ def test_admin_block_user_and_vacancy(client):
     eid = emp.json()["user_id"]
     eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     vac = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
     }).json()
     # Снять вакансию → исчезает из ленты.
@@ -227,7 +289,7 @@ def test_blocked_user_denied_with_existing_token(client):
     # После бана тот же токен получает 403 на любом защищённом эндпоинте.
     assert client.get("/me", headers=eh).status_code == 403
     assert client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
     }).status_code == 403
 
@@ -236,7 +298,8 @@ def test_admin_resolve_with_reply(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
     client.post("/reports", headers=ah, json={
-        "target_type": "vacancy", "target_id": "vacX", "reason": "fake",
+        "target_type": "vacancy", "target_id": _some_vacancy(client),
+        "reason": "fake",
     })
     rid = client.get("/admin/reports", headers=ah).json()[0]["id"]
     # Закрытие с ответом заявителю — без бота notify no-op, но эндпоинт 200.
@@ -255,7 +318,7 @@ def test_admin_warn_increments_and_closes(client):
     eid = emp.json()["user_id"]
     eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     vac = client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
     }).json()
     client.post("/reports", headers=ah, json={
@@ -284,15 +347,16 @@ def test_admin_warn_increments_and_closes(client):
 def test_admin_warn_on_match_rejected(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+    mid = _some_match(client)
     client.post("/reports", headers=ah, json={
-        "target_type": "match", "target_id": "m1", "reason": "abuse",
+        "target_type": "match", "target_id": mid, "reason": "abuse",
     })
     rid = client.get("/admin/reports", headers=ah).json()[0]["id"]
     # По переписке мэтча предупреждение выносить некому → 400.
     assert client.post(f"/admin/reports/{rid}/warn", headers=ah).status_code == 400
 
 
-def test_admin_search_and_grant(client):
+def test_admin_search_finds_venue(client):
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
     emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
@@ -300,21 +364,6 @@ def test_admin_search_and_grant(client):
     # Поиск находит заведение среди пользователей.
     users = client.get("/admin/users", headers=ah).json()
     assert any(u["id"] == eid and u["role"] == "employer" for u in users)
-    # Бесплатная выдача буста — баланс растёт.
-    g = client.post("/admin/grant", headers=ah,
-                    json={"owner_id": eid, "sku": "boost_24h"})
-    assert g.status_code == 200
-    by_id = {u["id"]: u for u in client.get("/admin/users", headers=ah).json()}
-    assert by_id[eid]["boostBalance"] == 1
-    # Выдача подписки → план обновился.
-    client.post("/admin/grant", headers=ah,
-                json={"owner_id": eid, "sku": "sub_pro_month"})
-    by_id = {u["id"]: u for u in client.get("/admin/users", headers=ah).json()}
-    assert by_id[eid]["plan"] == "pro"
-    # Неизвестный SKU → 400.
-    assert client.post(
-        "/admin/grant", headers=ah, json={"owner_id": eid, "sku": "nope"}
-    ).status_code == 400
 
 
 def test_admin_users_forbidden_for_non_admin(client):
@@ -326,9 +375,6 @@ def test_admin_users_forbidden_for_non_admin(client):
     ).json()["access_token"]
     h = {"Authorization": f"Bearer {token}"}
     assert client.get("/admin/users", headers=h).status_code == 403
-    assert client.post(
-        "/admin/grant", headers=h, json={"owner_id": "x", "sku": "boost_24h"}
-    ).status_code == 403
 
 
 def test_autoflag_scam_vacancy(client):
@@ -337,7 +383,7 @@ def test_autoflag_scam_vacancy(client):
     emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     client.post("/vacancies", headers=eh, json={
-        "role": "barista", "date": "2026-06-20", "start_time": 600,
+        "role": "barista", "date": SOON, "start_time": 600,
         "end_time": 1080, "rate": 350, "city": "Москва",
         "description": "Срочно! Внеси предоплату за форму и выходи на смену.",
     })
@@ -360,29 +406,26 @@ def test_admin_unblock(client):
     assert all(b["id"] != sid for b in blocked2)
 
 
-def test_admin_cancel_subscription_and_purchases(client):
+def test_admin_sees_topup_in_purchases(client):
+    """Журнал платежей админа: пополнение баланса видно как оплаченное."""
     admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
     ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
     emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
-    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     owner = emp.json()["user_id"]
-    # Оплата Pro через вебхук → подписка активна.
     client.post("/billing/yookassa/webhook?secret=test-internal-secret", json={
         "event": "payment.succeeded",
         "object": {
-            "id": "ref-1",
-            "amount": {"value": "1990.00", "currency": "RUB"},
-            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+            "id": "pur-1",
+            "amount": {"value": "3000.00", "currency": "RUB"},
+            "metadata": {
+                "owner_id": owner, "sku": "wallet_topup", "amount_rub": "3000",
+            },
         },
     })
-    assert client.get("/billing/entitlements", headers=eh).json()["plan"] == "pro"
-    # Платёж виден в журнале админа.
-    purch = client.get("/admin/purchases", headers=ah).json()
-    assert any(p["ownerId"] == owner and p["status"] == "paid" for p in purch)
-    # Возврат: отменяем подписку → доступ падает на free.
-    cancel = client.post(f"/admin/subscriptions/{owner}/cancel", headers=ah)
-    assert cancel.status_code == 200
-    assert client.get("/billing/entitlements", headers=eh).json()["plan"] == "free"
+    purchases = client.get("/admin/purchases", headers=ah).json()
+    mine = [p for p in purchases if p["ownerId"] == owner]
+    assert mine and mine[0]["sku"] == "wallet_topup"
+    assert mine[0]["amount"] == 3000
 
 
 def test_admin_revenue(client):
@@ -394,33 +437,15 @@ def test_admin_revenue(client):
         "event": "payment.succeeded",
         "object": {
             "id": "rev-1",
-            "amount": {"value": "1990.00", "currency": "RUB"},
-            "metadata": {"owner_id": owner, "sku": "sub_pro_month"},
+            "amount": {"value": "1000.00", "currency": "RUB"},
+            "metadata": {
+                "owner_id": owner, "sku": "wallet_topup", "amount_rub": "1000",
+            },
         },
     })
     rev = client.get("/admin/revenue", headers=ah).json()
-    assert rev["activePro"] == 1
-    assert rev["estMonthlyRub"] == 1990
-    assert rev["totalPaidRub"] == 1990
+    assert rev["topupsRub"] == 1000
+    assert rev["commissionAccruedRub"] == 0
+    # Пополнение — аванс, а не заработок сервиса: в выручку не идёт.
+    assert rev["shiftsBilled"] == 0
 
-
-def test_cancel_subscription_revokes_verification_badge(client):
-    admin = client.post("/auth/telegram", json={"init_data": "", "role": "seeker"})
-    ah = {"Authorization": f"Bearer {admin.json()['access_token']}"}
-    emp = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
-    owner = emp.json()["user_id"]
-    eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
-    # Покупка верификации → бейдж выдан.
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "verify_year", "provider": "yookassa",
-        "charge_id": "vrf-1",
-    })
-    assert client.get("/billing/entitlements", headers=eh).json()["employerVerified"]
-    # Отмена (после возврата) снимает и бейдж.
-    client.post("/billing/fulfill", headers=INTERNAL, json={
-        "owner_id": owner, "sku": "sub_pro_month", "provider": "yookassa",
-        "charge_id": "vrf-2",
-    })
-    client.post(f"/admin/subscriptions/{owner}/cancel", headers=ah)
-    ent = client.get("/billing/entitlements", headers=eh).json()
-    assert ent["employerVerified"] is False
