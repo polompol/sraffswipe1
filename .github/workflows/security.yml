@@ -131,3 +131,53 @@ jobs:
         with:
           languages: ${{ matrix.language }}
       - uses: github/codeql-action/analyze@v4
+
+  gate:
+    # ЗАЧЕМ ЭТА РАБОТА ВООБЩЕ НУЖНА.
+    #
+    # Сам по себе CodeQL не блокирует НИЧЕГО. Он загружает находки в раздел
+    # Security и завершается успехом, а у работы выше вдобавок стоит
+    # continue-on-error. То есть зелёная галочка «Анализ кода» не значит «всё
+    # чисто» — она значит «анализ отработал», хоть с десятком критических
+    # находок внутри. Заметить их можно, только зайдя в Security вручную, а
+    # туда не заходят.
+    #
+    # Здесь находки читаются через API и критические роняют сборку.
+    name: Критические находки не проходят
+    needs: [codeql]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: read
+      contents: read
+    steps:
+      - name: Прочитать находки и решить
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          # Отделяем «находок нет» от «проверка не состоялась». Второе бывает
+          # у приватного репозитория без GitHub Advanced Security: API отвечает
+          # 403/404, и молча зеленеть в этом случае — то же самое враньё, от
+          # которого мы уходим.
+          code=$(gh api "repos/$REPO/code-scanning/alerts?state=open&per_page=100" \
+                   --jq '.' > alerts.json 2>err.txt; echo $?)
+          if [ "$code" -ne 0 ]; then
+            echo "::notice::Разбор находок не состоялся — код-сканирование недоступно"
+            echo "Ответ GitHub:"; cat err.txt
+            echo "Это НЕ значит «находок нет». Для приватного репозитория"
+            echo "код-сканирование требует GitHub Advanced Security."
+            exit 0
+          fi
+          bad=$(jq '[.[] | select(.rule.security_severity_level == "critical"
+                                  or .rule.security_severity_level == "high")]' alerts.json)
+          n=$(echo "$bad" | jq 'length')
+          if [ "$n" -gt 0 ]; then
+            echo "Критических и высоких находок: $n"
+            echo "$bad" | jq -r '.[] | "  • \(.rule.security_severity_level | ascii_upcase): \(.rule.description) — \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
+            echo "::error::CodeQL нашёл $n критических/высоких проблем"
+            exit 1
+          fi
+          total=$(jq 'length' alerts.json)
+          echo "Открытых находок всего: $total, критических и высоких: 0"
