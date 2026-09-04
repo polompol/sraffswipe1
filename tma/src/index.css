@@ -11,24 +11,149 @@
 .page {
   flex: 1;
   padding: 16px;
-  padding-bottom: 88px;
+  /* Панель вкладок выше, чем кажется: 8 + 64 + 8 плюс «домашняя полоска»
+     iPhone (34px). Отступа в 88px не хватало, и последний элемент любого
+     списка — последняя смена, последний мэтч, кнопка «Выйти» — наполовину
+     уходил под панель, а прокрутить дальше было уже нельзя. */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+/* ЧАТ — СООБЩЕНИЯ ПРИЖАТЫ К НИЗУ, КАК В ЛЮБОМ МЕССЕНДЖЕРЕ.
+
+   Раньше переписка начиналась от шапки и росла вниз: при трёх сообщениях
+   между последним пузырём и панелью ввода оставалось полэкрана пустоты, и
+   экран читался как «тут что-то не загрузилось». Во всех мессенджерах
+   наоборот: мало сообщений — они лежат внизу, у поля ввода, и разговор
+   растёт вверх.
+
+   Колонка занимает всю высоту окна и прижимает содержимое к низу; когда
+   сообщений много, justify-content уже ни на что не влияет и лента ведёт
+   себя как обычно. */
+.page.chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.chat-list {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 .h1 {
-  font-size: 28px;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  /* У этой антиквы одно начертание: подделывать жирность нельзя — браузер
+     размажет буквы. Вес даёт сам рисунок шрифта. */
+  font-weight: 400;
   letter-spacing: -0.5px;
-  margin: 0 0 4px;
+  /* Один отступ на все экраны. Раньше он писался в разметке на каждом
+     заголовке и разошёлся: 0, 4, 8, 12, 16, 24 — на «Настройках» первая
+     карточка прилипала к заголовку, на «Моих сменах» дышала вдвое сильнее.
+     Случая всего два, и оба здесь: заголовок перед содержимым (16) и
+     заголовок перед подзаголовком (.h1.tight — 4). */
+  margin: 0 0 var(--space-4);
+  /* Заголовок разбивается на строки поровну, а не «сколько влезло».
+     Без этого «Смены рядом с домом — на / один день» оставляло тире висеть
+     на краю, а вторую строку — почти пустой. */
+  text-wrap: balance;
+}
+/* Заголовок, под которым сразу идёт поясняющая строка: их держим вместе. */
+.h1.tight {
+  margin-bottom: var(--space-1);
+}
+
+/* Пустая лента — см. features/feed/FeedEmpty.tsx. */
+.feed-empty {
+  text-align: center;
+  padding: var(--space-5);
+}
+.feed-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  margin: 0 auto;
+  background: var(--grad-brand);
+  color: var(--on-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Значок сервиса в шапке ленты. */
+.feed-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  margin-right: 8px;
+  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+/* Вопрос экрана: «Смены рядом» / «Кто свободен». */
+.feed-title {
+  margin: 0;
+  flex: 1;
+  font-size: var(--text-2xl);
+  letter-spacing: -0.3px;
+}
+
+/* ТИХАЯ ТЕКСТОВАЯ КНОПКА — «Ещё», «Как это работает», «Показать старые».
+
+   Действие есть, но спорить с главной кнопкой экрана оно не должно: ни
+   заливки, ни рамки. Набор из девяти свойств писался в разметке восемь раз,
+   и каждый раз чуть иначе — где-то терялся `font: inherit`, и браузер рисовал
+   кнопку своим системным кеглем. 44 точки по высоте обязательны: это самая
+   маленькая кнопка приложения, и промахнуться по ней проще всего. */
+.text-btn {
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+/* Тот же вид, но действие ведёт куда-то — цвет ссылки. */
+.text-btn--link {
+  color: var(--link);
+}
+/* Действие положительное и его надо заметить (вписать своё число). */
+.text-btn--gold {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* Мелкое пояснение под полем, строкой или блоком.
+   Раньше писалось в разметке три десятка раз, и отступы разошлись: 2, 4, 6,
+   8, 10, 12 — на соседних экранах одинаковые подсказки стояли по-разному. */
+.hint {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin: 6px 0 12px;
+}
+/* Последняя строка в карточке: нижний отступ уже даёт сама карточка. */
+.hint:last-child {
+  margin-bottom: 0;
 }
 .h2 {
-  font-size: 22px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 400;
   margin: 0 0 8px;
+  text-wrap: balance;
 }
 .muted {
   color: var(--muted);
-  font-size: 15px;
+  font-size: var(--text-base);
   line-height: 1.5;
+  /* Для абзацев — pretty: не оставляет одно слово на последней строке. */
+  text-wrap: pretty;
 }
 .row {
   display: flex;
@@ -39,48 +164,11 @@
   flex: 1;
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 54px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
-  color: #fff;
-  font-size: 16.5px;
-  font-weight: 700;
-  padding: 16px 20px;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(165, 28, 48, 0.26);
-  transition: transform 0.08s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-}
-.btn:active {
-  transform: scale(0.97);
-  box-shadow: 0 3px 10px rgba(165, 28, 48, 0.22);
-}
-.btn.secondary {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  box-shadow: 0 2px 8px rgba(59, 42, 32, 0.06);
-}
-.btn.ghost {
-  background: transparent;
-  color: var(--gold);
-  border: 1.5px solid var(--gold);
-  box-shadow: none;
-}
-.btn:disabled {
-  opacity: 0.5;
-  box-shadow: none;
-  cursor: default;
-}
+/* Кнопка в разметке. Числа — общие с компонентом <Button> (см. токены
+   --btn-* в theme.css): рядом на экране они обязаны быть одной высоты и
+   одного скругления, иначе это читается как небрежность. */
 
 /* Доступность: видимый фокус при навигации с клавиатуры (не мешает тапам). */
-.btn:focus-visible,
 .tag:focus-visible,
 .tab:focus-visible,
 .icon-btn:focus-visible,
@@ -90,12 +178,49 @@
   outline-offset: 2px;
 }
 
+/* Визуально скрытое поле, которое остаётся в порядке табуляции и доступно
+   скринридеру. display:none выкидывает элемент из табуляции целиком — так
+   поле выбора фото нельзя было открыть без мыши. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+}
+
+/* Само поле спрятано, фокус получает именно оно — подсвечиваем видимую
+   обёртку-ярлык, иначе с клавиатуры не видно, где ты находишься. Правило
+   только для label: у него своего фокуса не бывает, поэтому обводка не
+   появится от обычного тапа по чипу-кнопке. */
+label.tag:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Ползунок (радиус поиска) высотой ~20px — палец мимо. Растягиваем зону
+   нажатия до 44px, дорожка остаётся по центру. */
+input[type="range"] {
+  height: 44px;
+  cursor: pointer;
+}
+
 .card {
+  /* Цвет текста обязателен: карточка бывает и <button class="card">, а
+     браузер красит кнопку своим системным чёрным, который за темой не
+     следует. В тёмной теме заголовок такой карточки давал контраст 1.23:1 —
+     чёрный след на тёмно-винном, читать нечего. */
+  color: var(--text);
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
-  box-shadow: var(--elev-1);
+  box-shadow: var(--elev-card);
 }
 
 /* ===== Единая кнопка <Button> (дизайн-система) ===== */
@@ -105,9 +230,14 @@
   justify-content: center;
   gap: 8px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--btn-radius);
   font-family: inherit;
   font-weight: 700;
+  /* Браузер даёт кнопке своё «normal» (около 1.2), и общий межстрочный из
+     body внутрь не попадает: двухстрочная подпись слипалась. А подписи тут
+     длинные — «Ждём ответа работника», «Сохранить и смотреть смены», — и в
+     крупном режиме они переносятся почти всегда. */
+  line-height: 1.25;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -118,12 +248,34 @@
   transform: scale(0.97);
 }
 .ui-btn:disabled {
-  opacity: 0.55;
+  opacity: var(--btn-disabled);
   cursor: default;
 }
 .ui-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(165, 28, 48, 0.28);
+  /* Кольцо, а не обводка: у кнопки с тенью обводка сливается с ней. Второй
+     контур — на случай режима принудительных цветов, где тени не рисуются
+     вовсе и фокус иначе пропадал бы совсем. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+/* Размеры кнопки — классами, а не числами в разметке: иначе они разъезжаются
+   при правке в одном месте. Способ сделать кнопку в приложении ровно один —
+   компонент <Button>; класса .btn больше нет, и накапливать варианты негде. */
+.ui-btn--sm {
+  min-height: var(--btn-h-sm);
+  padding: var(--btn-pad-sm);
+  font-size: var(--text-sm);
+}
+.ui-btn--md {
+  min-height: var(--btn-h-md);
+  padding: var(--btn-pad-md);
+  font-size: var(--text-base);
+}
+.ui-btn--lg {
+  min-height: var(--btn-h-lg);
+  padding: var(--btn-pad-lg);
+  font-size: var(--text-md);
 }
 .ui-btn__icon {
   display: inline-flex;
@@ -131,7 +283,7 @@
 .ui-btn--primary {
   background: var(--grad-brand);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(165, 28, 48, 0.26);
+  box-shadow: var(--btn-shadow);
 }
 .ui-btn--secondary {
   background: var(--surface);
@@ -245,6 +397,18 @@ input:focus-visible {
   background-size: 800px 100%;
   animation: shimmer 1.3s linear infinite;
 }
+/* Блик скелетона был захардкожен белым (0.5): на тёмном фоне по экрану
+   ездила яркая белая полоса — ночью это буквально слепило. Берём тон из
+   токена рамки, он в каждой теме свой. */
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    var(--border-strong) 37%,
+    var(--border) 63%
+  );
+  background-size: 800px 100%;
+}
 
 .tag {
   display: inline-flex;
@@ -252,7 +416,7 @@ input:focus-visible {
   justify-content: center;
   gap: 5px;
   /* Читабельность чипов-фильтров: крупнее шрифт, толще рамка, выше зона тапа. */
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 600;
   padding: 8px 14px;
   /* 44px — минимальная комфортная зона нажатия пальцем (чипы фильтров,
@@ -264,6 +428,69 @@ input:focus-visible {
   color: inherit;
   transition: transform 0.08s ease, background 0.15s ease, opacity 0.15s ease;
 }
+/* ЦВЕТА ПЛАШЕК — КЛАССАМИ, А НЕ ЧИСЛАМИ В РАЗМЕТКЕ.
+
+   Одни и те же четыре расцветки писались инлайном в семи местах, и каждый
+   раз чуть иначе: где-то рамка --super, где-то --super-text, где-то к ним
+   добавлен свой кегль. Теперь набор один, и добавить пятую расцветку можно
+   только здесь. */
+/* Два класса в селекторе — не для красоты: ниже есть правило `span.tag`,
+   которое даёт подписям мягкую заливку, и одного класса ему не перебить.
+   Пока расцветка писалась инлайном, вопроса не возникало: инлайн сильнее
+   любого правила. */
+.tag.tag-gold {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+/* Залитая плашка — то, что уже выбрано или уже верно (должность смены,
+   роли человека). */
+.tag.tag-gold-fill {
+  background: var(--gold-fill);
+  border-color: var(--gold-fill);
+  color: var(--on-brand);
+}
+.tag.tag-super {
+  color: var(--super-text);
+  border-color: var(--super);
+}
+.tag.tag-muted {
+  color: var(--muted);
+  border-color: var(--border);
+}
+/* Чип-кнопка перехода: «Кто откликнулся», «Мои работники». Обычный цвет
+   текста и заметная рамка — это переход, а не выбранный фильтр. */
+.tag.tag-nav {
+  color: var(--text);
+  border-color: var(--border-strong);
+  cursor: pointer;
+}
+
+/* Чип-кнопка всегда нажимаемая: курсор писался инлайном в каждом месте, где
+   такой чип встречался. */
+button.tag {
+  cursor: pointer;
+}
+
+/* Выбор должностей группами (см. components/RolePicker). Отступы были
+   вписаны числами в разметку в пяти местах — и в двух из них уже разошлись. */
+.role-picker {
+  margin: 8px 0 16px;
+}
+.role-picker-family {
+  margin-bottom: 10px;
+}
+
+/* Чип из одной цифры («сколько человек нужно»): ровная ширина, иначе «1» и
+   «10» разной ширины и ряд выглядит рваным. */
+.tag.tag-num {
+  min-width: 52px;
+}
+
+/* Плашка мелким кеглем — в плотных списках, где их по три в строке. */
+.tag-sm {
+  font-size: var(--text-xs);
+}
+
 /* Чип-кнопка (фильтры, быстрые действия): тактильный отклик при нажатии. */
 button.tag:active {
   transform: scale(0.95);
@@ -283,7 +510,7 @@ button.tag:disabled {
 .form-label {
   display: block;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   margin-bottom: 6px;
 }
@@ -291,13 +518,24 @@ button.tag:disabled {
 .input {
   width: 100%;
   min-height: 50px;
+  /* Браузер по умолчанию рисует textarea моноширинным шрифтом: «о себе» и
+     описание смены выглядели как кусок кода. Наследуем шрифт приложения. */
+  font-family: inherit;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius-sm);
   padding: 14px 16px;
-  font-size: 16px;
+  font-size: var(--text-md);
   color: var(--text);
   outline: none;
+}
+/* Подсказка в пустом поле. Своего правила не было вовсе, поэтому браузер
+   красил её системным серым (#757575): в тёмной теме 3.91:1 — ниже порога, а
+   это единственный текст, объясняющий, что писать в поле. opacity нужен для
+   Firefox: он приглушает подсказку сверх цвета. */
+.input::placeholder {
+  color: var(--muted);
+  opacity: 1;
 }
 .input:focus {
   border-color: var(--gold);
@@ -319,6 +557,9 @@ button.tag:disabled {
 }
 .tab {
   flex: 1;
+  /* Без этого длинная подпись («Вакансии») не даёт кнопке сжаться, и в
+     крупном режиме на узком экране панель вылезала за край экрана. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -330,7 +571,7 @@ button.tag:disabled {
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 14.5px;
+  font-size: var(--text-sm);
   font-weight: 700;
   cursor: pointer;
 }
@@ -376,17 +617,22 @@ button.tag:disabled {
 }
 .icon-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: 2px;
+  right: 2px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
   border-radius: 999px;
-  background: var(--gold);
+  /* Заливка, а не акцентный цвет: в тёмной теме --gold осветлён под текст,
+     и белые цифры на нём давали 4.3:1 при кегле 10px. */
+  background: var(--gold-fill);
   color: #fff;
-  font-size: 10px;
+  /* Кружок со счётчиком новых сообщений. Цифры были 10px — их видно как
+     пятнышко, а не как число: «сколько именно непрочитанных» приходилось
+     угадывать. Кружок вырос вместе с цифрой. */
+  font-size: var(--text-xs);
   font-weight: 700;
-  line-height: 16px;
+  line-height: 22px;
   text-align: center;
 }
 /* Нижний лист (фильтры, детали смены): grabber, прокручиваемое тело, футер.
@@ -410,6 +656,12 @@ button.tag:disabled {
   background: var(--surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
+/* При открытии фокус переводится на сам лист (чтобы скринридер объявил окно),
+   но обводки вокруг всей шторки быть не должно — она читается как ошибка. */
+.sheet:focus,
+.overlay:focus {
+  outline: none;
+}
 .sheet-grab {
   width: 40px;
   height: 5px;
@@ -422,7 +674,13 @@ button.tag:disabled {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 20px 16px;
+  /* Долистав список фильтров до конца, палец начинал тащить страницу ПОД
+     шторкой — на телефоне это выглядит как будто приложение «поехало». */
+  overscroll-behavior: contain;
+  /* Снизу — «домашняя полоска» iPhone. У .sheet-foot запас есть, а здесь его
+     не было: у шторки без нижней кнопки последняя строка пояснения ложилась
+     ровно на полоску. */
+  padding: 8px 20px calc(16px + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
 }
 .sheet-foot {
@@ -433,38 +691,60 @@ button.tag:disabled {
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
-.sheet-foot .btn {
+.sheet-foot .ui-btn {
   margin: 0;
 }
-/* Строка локации/фильтра под шапкой — вся кликабельна */
-.feed-loc {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 2px 0 10px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 15.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
 /* Колода свайпа */
 .deck {
   position: relative;
+  /* Карты внутри колоды получают свой z-index (верхняя — самый большой), и без
+     этой строки они всплывали НАД кнопками «Пропустить/Отклик»: на низком
+     экране, где кнопки лежат поверх низа карточки, нажать их было нельзя
+     вообще — палец попадал в карточку. isolation запирает нумерацию карт
+     внутри колоды. */
+  isolation: isolate;
   /* Крупнее карточка: тикер убран из ленты, освободившееся место — колоде.
      Жёсткий min-height:460px на экранах ~640px уводил кнопки «Пропустить/
      Отклик» под сгиб — теперь высота ужимается вместе с экраном. */
   /* Высота считается от ОСТАТКА экрана: шапка+фильтры сверху (~120px),
      кнопки действий (92px) и таббар (88px) снизу. Раньше при 68vh колода
      занимала 560px и кнопки «Пропустить/Отклик» уезжали под таббар. */
+  /* Две высоты подряд — не опечатка: первая на случай браузера без dvh,
+     вторая для всех остальных. */
   height: clamp(300px, calc(100vh - 328px), 560px);
-  height: clamp(300px, calc(100dvh - 328px), 560px);
+  /* Плюс «домашняя полоска» iPhone: без неё кнопки «Пропустить/Отклик»
+     наезжали на панель вкладок ровно на её высоту. */
+  height: clamp(
+    300px,
+    calc(100dvh - 328px - env(safe-area-inset-bottom)),
+    560px
+  );
+}
+/* В крупном режиме кнопки «Пропустить/Отклик» и подписи под ними выше (88px
+   вместо 72px), и панель вкладок тоже. Оставляем им больше места, иначе
+   подписи уезжают под панель — а это две единственные подсказки о жестах на
+   главном экране, и читает их как раз тот, кто ещё не понял, куда смахивать. */
+body[data-large="1"] .deck {
+  height: clamp(
+    280px,
+    calc(100dvh - 392px - env(safe-area-inset-bottom)),
+    520px
+  );
 }
 .swipe-card {
   position: absolute;
   inset: 0;
+  /* Содержимое карточки — обычная колонка: сверху плашки, снизу описание.
+     Раньше оба блока были приклеены к своим краям (top: 16px и bottom: 22px)
+     и просто накладывались друг на друга, когда текста становилось больше:
+     длинное название заведения, крупный режим для слабого зрения. Колонка
+     этого не допускает — блоки расталкиваются. */
+  display: flex;
+  flex-direction: column;
+  /* Плашки прижаты к верху, описание — к низу; свободное место между ними.
+     Когда места не хватает, ужимается описание (лишние строки обрезаются), а
+     плашки остаются на своём месте. */
+  justify-content: space-between;
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: #2a1d14;
@@ -478,29 +758,91 @@ button.tag:disabled {
   background-size: cover;
   background-position: center;
 }
+/* Затемнение под белым текстом карточки. Фото загружает пользователь, и на
+   светлом снимке (белая стена, солнце) прежний градиент давал у верхнего
+   края текста всего ~2.6:1 — название заведения и адрес просто исчезали.
+   Держим ≥0.6 непрозрачности там, где начинается текст: на белом фото это
+   уже ~5:1, а тёмные фото не темнеют заметно — они и так тёмные. */
 .swipe-shade {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     to bottom,
-    transparent 40%,
-    rgba(30, 20, 14, 0.55) 70%,
-    rgba(20, 14, 10, 0.92) 100%
+    rgba(16, 11, 8, 0.14) 0%,
+    rgba(16, 11, 8, 0.1) 30%,
+    rgba(16, 11, 8, 0.62) 58%,
+    rgba(12, 8, 6, 0.9) 80%,
+    rgba(10, 7, 5, 0.96) 100%
   );
 }
 .swipe-body {
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 22px;
+  /* см. .swipe-top — иначе описание скрывается под слоем фото. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 0 20px 22px;
+  /* Обе строки обязательны: без них блок не ужимается, а вылезает за карточку
+     и накрывает кнопки «Пропустить/Отклик». */
+  min-height: 0;
+  overflow: hidden;
   color: #fff;
+  /* Подстраховка на случай очень светлого фото: тонкая тень отделяет буквы
+     от фона, не делая текст «жирным». */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
+
+/* Золотой текст ПОВЕРХ карточки — «Опытный», «Самозанятый», как платят.
+   Смысловое золото (--super) рассчитано на светлый фон страницы, а тут под
+   ним багровый градиент фотографии: на узком экране выходило 3.17:1, и это
+   были ровно те строки, по которым решают — звать человека и ехать ли на
+   смену. У поверхности есть свой золотой (--on-dark-gold), он от темы не
+   зависит и даёт 4.9–7.6:1 на всех участках градиента. */
+.swipe-card .tag,
+.swipe-card .cond-tips,
+.swipe-cond > span {
+  color: var(--on-dark-gold);
+}
+/* Залитая плашка (должность смены, роли человека) — исключение: у неё своя
+   подложка, и текст на ней белый. */
+.swipe-card .tag.tag-gold-fill {
+  color: var(--on-brand);
+}
+/* Условия смены: как платят, чаевые, медкнижка, сколько человек нужно.
+
+   Две ровные колонки вместо ряда с переносом: плашки разной ширины вставали
+   по-разному на каждой карточке, и лента выглядела дёрганой при листании. */
+.swipe-cond {
+  margin-top: 10px;
+  /* Кегль меньше основного текста карточки не для красоты: колонка шириной в
+     половину карточки, и на 390 точках «На карту в день» ломалось посреди
+     фразы — «На карту в / день». Условия читают глазами по диагонали, и
+     перенос внутри фразы сбивает сильнее, чем размер на пункт меньше. */
+  font-size: var(--text-sm);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: center;
+}
+
+/* Название заведения (или имя кандидата) — второе по важности после суммы.
+   Стиль вынесен из разметки в CSS: на низких экранах его нужно ужимать, а
+   инлайновый размер шрифта перебивает любое медиа-правило. */
+.swipe-title {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* Чистые мета-строки карточки: иконка + текст, без рамок */
 .card-meta {
   display: grid;
   gap: 4px;
   margin-top: 6px;
-  font-size: 15px;
+  font-size: var(--text-base);
   opacity: 0.92;
 }
 .card-meta > div {
@@ -509,6 +851,13 @@ button.tag:disabled {
   gap: 6px;
 }
 /* Изящный фолбэк, когда нет фото: бренд-градиент + крупный инициал */
+/* Буква на карточке без фото, когда сверху уже стоит крупная плашка: тише и
+   не спорит с ней за внимание. */
+.swipe-initial-ghost {
+  opacity: 0.22;
+  transform: translateY(14%);
+}
+
 .swipe-photo-fallback {
   background: linear-gradient(150deg, var(--crimson-dark), var(--gold-soft) 65%, var(--super));
   display: flex;
@@ -516,42 +865,83 @@ button.tag:disabled {
   justify-content: center;
   overflow: hidden;
 }
-/* «Деньги рядом сейчас» — money-магнит наверху ленты */
-/* Это настоящая кнопка (ведёт в фильтры) — сбрасываем стили кнопки, чтобы
-   выглядела как блок, но оставалась доступной с клавиатуры. */
-.money-near {
+/* В тёмной теме смысловые цвета (кримсон, золото) переопределены на светлые:
+   они рассчитаны как акценты НА тёмном фоне. Градиент-заглушка использовала
+   их как заливку — и карточка без фото получалась светло-розовой, инородной
+   на тёмном экране, с плохо читаемым белым текстом. А это ровно тот вид,
+   который увидят все на старте: фото интерьера не будет почти ни у кого. */
+[data-theme="dark"] .swipe-photo-fallback {
+  background: linear-gradient(150deg, #5c1626, #3b2018 62%, #2c1d12);
+}
+
+/* Верх карточки: ряд плашек, а под ним — главное крупно (сколько платят или
+   кто), если фото нет.
+
+   Раньше это были два независимых слоя с фиксированными координатами: плашки
+   на 16px от верха, сумма на 84px. Стоило плашкам перенестись на вторую
+   строку — длинное название района, крупный режим для слабого зрения — и они
+   ложились прямо поверх суммы. Лечили это запретом переноса, то есть плашки
+   вместо этого уезжали за край. Теперь оба блока лежат в одной колонке и
+   пересечься не могут в принципе. */
+.swipe-top {
+  /* relative обязателен: фото и затемнение лежат отдельными слоями поверх
+     карточки, и обычный текст рисуется ПОД ними — плашки просто исчезали. */
   position: relative;
-  overflow: hidden;
-  display: block;
-  width: 100%;
-  border: none;
-  font-family: inherit;
-  text-align: left;
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  margin-bottom: 12px;
+  margin: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.swipe-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  text-align: center;
   color: #fff;
-  background: linear-gradient(135deg, var(--crimson-dark), var(--gold));
-  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.22);
-  cursor: pointer;
+  /* Жест свайпа не должен упираться в надпись. */
+  pointer-events: none;
 }
-.money-near-cap {
-  display: block;
-  font-size: 14px;
-  opacity: 0.92;
+.swipe-hero-sum {
+  /* Главное на карточке крупно: сумма за смену или должность кандидата. */
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -1px;
+  text-shadow: 0 2px 12px rgba(40, 12, 18, 0.35);
 }
-.money-near-sum {
-  display: block;
-  font-size: 34px;
+/* ЦИФРЫ — НЕ АНТИКВОЙ.
+
+   Антиква (шрифт с засечками) хороша для слов: «Взаимно!», названия экранов.
+   Но её цифры нарисованы под книжный текст — узкие, с разной высотой, тройка
+   и пятёрка ныряют ниже строки. На главном числе приложения это читалось как
+   старая афиша, а не как сумма, которую сегодня заплатят.
+
+   Поэтому сумма набирается системным шрифтом — тем же, каким телефон рисует
+   цены везде, — но по-нашему: очень жирно, плотно и моноширинными цифрами
+   (tabular-nums), чтобы 1 занимала столько же, сколько 8, и число не дёргалось
+   при перелистывании колоды. Знак рубля — тише и мельче: платят за смену
+   именно число. */
+.swipe-hero-sum.is-num {
+  font-family: inherit;
   font-weight: 800;
-  letter-spacing: -0.5px;
-  line-height: 1.1;
-  margin: 2px 0;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -2px;
 }
-.money-near-sub {
-  display: block;
-  font-size: 13px;
-  opacity: 0.9;
+.swipe-hero-sum .rub {
+  font-size: 0.52em;
+  font-weight: 700;
+  letter-spacing: 0;
+  opacity: 0.8;
+  margin-left: 6px;
+}
+.swipe-hero-cap {
+  font-size: var(--text-base);
+  font-weight: 600;
+  opacity: 0.92;
 }
 
 /* Демо-карточка свайпа на онбординге — мягко качается, подсказывая жест */
@@ -583,7 +973,7 @@ button.tag:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: var(--text-lg);
   color: #fff;
 }
 .onb-demo-skip { left: -56px; border: 2px solid var(--dislike); color: var(--dislike); }
@@ -617,14 +1007,18 @@ button.tag:disabled {
   color: rgba(255, 255, 255, 0.18);
   line-height: 1;
 }
+/* Плашки поверх фото карточки (ставка, расстояние, «Сегодня»). Подложка
+   0.45 над светлым фото давала белому тексту 3.36:1 — ниже порога 4.5:1.
+   0.62 даёт ~5:1 даже на белом снимке. */
 .glass {
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.62);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #fff;
   border-radius: 999px;
   padding: 6px 12px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--text-sm);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .swipe-tint {
   position: absolute;
@@ -633,12 +1027,17 @@ button.tag:disabled {
   mix-blend-mode: multiply;
 }
 .stamp {
+  /* Штамп ХОЧУ/НЕТ проявляется по ходу жеста, а в покое у него прозрачность 0.
+     Но невидимое ещё не значит «неощутимое»: он лежит поверх верха карточки и
+     ловил нажатия — кнопка «Детали смены» на экранах 320 и 360 не открывала
+     шторку вообще. Штамп декоративный, палец должен проходить сквозь него. */
+  pointer-events: none;
   position: absolute;
   top: 28px;
   padding: 6px 14px;
   border: 4px solid;
   border-radius: 12px;
-  font-size: 30px;
+  font-size: var(--text-3xl);
   font-weight: 900;
   letter-spacing: 2px;
 }
@@ -667,20 +1066,11 @@ button.tag:disabled {
   justify-content: center;
   cursor: pointer;
 }
-.act.sm {
-  width: 60px;
-  height: 60px;
-}
 /* Высокий контраст: заливка + белая иконка — хорошо видно при слабом зрении */
 .act-like {
   background: var(--like);
   color: #fff;
   border-color: var(--like);
-}
-.act-super {
-  background: var(--super);
-  color: #fff;
-  border-color: var(--super);
 }
 .act-skip {
   background: var(--surface);
@@ -688,69 +1078,350 @@ button.tag:disabled {
   border-color: var(--dislike);
 }
 .act-label {
-  font-size: 13px;
+  font-size: var(--text-xs);
   font-weight: 700;
   line-height: 1;
 }
 .act-label-like {
   color: var(--like);
 }
-.act-label-super {
-  color: var(--super);
-}
 .act-label-skip {
-  color: var(--dislike);
+  /* --dislike нейтрально-серый и на кремовом фоне даёт 3.15:1 при кегле 13.
+     Это одна из двух подписей на главном экране — их читает как раз тот, кто
+     ещё не знает жестов. */
+  color: var(--muted);
 }
-/* Крупный режим (самостоятельная регулировка в профиле) — для слабого зрения */
+/* КРУПНЫЙ РЕЖИМ (регулировка в профиле) — для слабого зрения.
+
+   Сами размеры текста здесь больше не перечисляются: режим поднимает всю
+   типографическую шкалу разом (см. `body[data-large="1"]` в theme.css), и
+   растёт всё, что ею пользуется, — включая надписи, заданные в разметке.
+   Раньше список правил был длиннее этого файла, а половина текста на
+   карточке смены всё равно оставалась мелкой: её размеры шкале не
+   подчинялись.
+
+   Здесь остаётся только то, что размером шрифта не выражается: зоны нажатия
+   и отступы, которые должны вырасти вместе с текстом. */
+body[data-large="1"] {
+  /* Базовый размер для текста без своего размера (наследование). */
+  font-size: var(--text-lg);
+}
 body[data-large="1"] .act {
   width: 88px;
   height: 88px;
 }
-body[data-large="1"] .act.sm {
-  width: 74px;
-  height: 74px;
+/* В ленте кнопка лежит ПОВЕРХ карточки, и каждая лишняя точка её размера —
+   это точка, отнятая у текста под ней. На высоком экране места хватает; на
+   низком кнопка остаётся во весь размер своего экрана (52–60 точек, всё ещё
+   больше обязательных 44), иначе строки «Медкнижка» и «На карту в день»
+   уезжали прямо под неё — замер показывал 45 точек текста под кнопками. */
+body[data-large="1"] .page.feed-deck {
+  --act-size: 88px;
+  --act-space: 112px;
 }
-body[data-large="1"] .act-label {
-  font-size: 15px;
+@media (max-height: 760px) {
+  body[data-large="1"] .page.feed-deck {
+    --act-size: 60px;
+    --act-space: 80px;
+  }
 }
-body[data-large="1"] .swipe-body {
-  font-size: 17px;
-}
-body[data-large="1"] .feed-loc {
-  font-size: 15px;
-}
-/* Крупный режим масштабирует и основную типографику по всему интерфейсу */
-body[data-large="1"] {
-  font-size: 19px;
-}
-body[data-large="1"] .h1 {
-  font-size: 34px;
-}
-body[data-large="1"] .h2 {
-  font-size: 26px;
-}
-body[data-large="1"] .muted {
-  font-size: 17px;
+@media (max-height: 600px) {
+  body[data-large="1"] .page.feed-deck {
+    --act-size: 52px;
+    --act-space: 68px;
+  }
+  /* Крупный текст на экране 320×568 в карточку целиком не влезает — надо
+     чем-то жертвовать. Жертвуем рейтингом заведения: он есть в деталях смены,
+     а адрес, часы, оплата и медкнижка — нет. */
+  body[data-large="1"] .card-meta-trust,
+  body[data-large="1"] .cond-tips {
+    display: none;
+  }
+  body[data-large="1"] .swipe-title {
+    font-size: var(--text-md);
+  }
+  /* Последние точки: верхний отступ карточки отдаём тексту — иначе у нижней
+     строки срезаны хвосты букв, и это читается как поломка. */
+  body[data-large="1"] .swipe-top {
+    margin-top: 6px;
+  }
+  body[data-large="1"] .card-meta {
+    gap: 0;
+  }
+  body[data-large="1"] .page.feed-deck .swipe-body {
+    margin-bottom: 6px;
+  }
 }
 body[data-large="1"] .tag {
-  font-size: 17px;
   padding: 10px 16px;
 }
-body[data-large="1"] .btn {
-  font-size: 19px;
+body[data-large="1"] .ui-btn {
   min-height: 56px;
 }
-body[data-large="1"] .input {
-  font-size: 18px;
+/* Панель вкладок в крупном режиме выше обычной, а запас под списком считался
+   от обычной — нижняя карточка заезжала под панель на пару точек, и у неё
+   срезалось скругление. */
+body[data-large="1"] .page {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
-body[data-large="1"] .bubble {
-  font-size: 19px;
+/* Узкий экран + крупный режим: подписи вкладок вместе шире экрана. Уменьшаем
+   только подпись — зона нажатия и иконки остаются крупными, ради чего режим
+   и включают. */
+@media (max-width: 360px) {
+  /* Узкий экран: две колонки — это по 120 точек на условие, и «На карту в
+     день» рвётся посреди фразы: «На карту в / день». Кегль тут не спасает,
+     поэтому на 320 условия идут в одну колонку. По высоте это ничего не
+     стоит: строка, сломанная надвое, занимала ровно те же две строки. */
+  .swipe-cond {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Было 13px — МЕНЬШЕ, чем 14px в обычном режиме: включаешь крупный шрифт,
+     а подписи вкладок становятся мельче. Места хватает: самая длинная подпись
+     «Профиль» при 15px — 70 точек при ширине вкладки 78. */
+  body[data-large="1"] .tab {
+    font-size: 15px;
+  }
+  body[data-large="1"] .tab span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
 }
-body[data-large="1"] .card-meta {
-  font-size: 17px;
+
+/* ПРОСТЫЕ РАСКЛАДКИ — КЛАССАМИ, А НЕ ЧИСЛАМИ В РАЗМЕТКЕ.
+
+   Четыре набора повторялись в коде полсотни раз: «столбик с зазором»,
+   «иконка и текст в строку», «занять остаток» и «мелкий текст». Каждый раз
+   числа писались заново, и они потихоньку разъезжались — где 10, где 12.
+   Теперь это четыре класса, и зазор меняется в одном месте. */
+.stack {
+  display: grid;
+  gap: 10px;
 }
-body[data-large="1"] .tab {
-  font-size: 16px;
+.stack-lg {
+  gap: 12px;
+}
+/* Иконка и подпись в одну строку — самый частый ряд в приложении. */
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Занять остаток строки и разрешить себя сжимать. Без min-width:0 длинное
+   слово внутри распирает флекс-строку и уносит соседей за край экрана. */
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.small {
+  font-size: var(--text-xs);
+}
+
+/* ГЛАВНЫЕ ФИЛЬТРЫ ЧИПАМИ.
+
+   Ряд прокручивается вбок и НЕ переносится: на экране 320 четыре чипа со
+   значениями в строку не помещаются, а вторая строка отняла бы у карточки
+   полсотни точек — а карточка и есть продукт.
+
+   Полоса прокрутки скрыта: на телефоне её всё равно не видно, а на десктопе
+   она добавляла бы к ряду лишние восемь точек высоты. О том, что дальше есть
+   ещё, говорит затухание у правого края (маска). */
+.chips-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+.chips-row::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  overflow: hidden;
+}
+/* Включённый фильтр залит фирменным — видно с одного взгляда, что лента
+   показана не целиком. */
+.chip-on {
+  border-color: var(--gold-fill);
+  background: var(--gold-fill);
+  color: var(--on-brand);
+}
+.chip-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* 44 точки — минимальная зона, в которую уверенно попадает палец. Чип
+     выглядит невысоким, но нажимается по всей высоте ряда. */
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip-text {
+  max-width: 11ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Число «сколько нашлось» стоит рядом с названием города, а не внутри него:
+   обрезается только название, число видно всегда. */
+.chip-count {
+  flex: none;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.chip-count::before {
+  content: "·";
+  margin: 0 4px 0 0;
+  opacity: 0.6;
+}
+.chip-caret {
+  display: inline-flex;
+  opacity: 0.55;
+  transform: rotate(90deg);
+}
+/* Крестик снимает фильтр, не открывая шторку. Отдельной кнопкой, а не общим
+   нажатием: иначе нельзя было бы поменять значение, не сбросив его сначала. */
+.chip-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 44px;
+  padding: 0 8px 0 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.chip-main:focus-visible,
+.chip-clear:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.stars-row {
+  gap: 6px;
+}
+@media (max-width: 380px) {
+  /* Единственное, что здесь и должно быть: на самом узком экране звёзды
+     стоят теснее. Всё остальное когда-то заехало сюда по ошибке — целый
+     кусок файла оказался скопирован внутрь этого правила, причём в старой
+     редакции. Видно не было ничего: значения совпадали. Но любая будущая
+     правка .stack, .inline или чипов молча не доезжала бы до телефонов
+     уже 380 точек шириной — а это большинство наших. */
+  .stars-row {
+    gap: 2px;
+  }
+}
+
+/* СПИСОК СМЕН: строка «с кем и когда».
+
+   Ширина колонки с названием — самое узкое место экрана. На телефоне 320 у
+   карточки внутри 254 точки, из которых 96 съедали аватар, два зазора и
+   шеврон: названию оставалось 158, и «Бар «Полночь»» ломался на две строки, а
+   подпись «Бармен · 21 августа · 20:00–04:00» — ещё на две. Шапка карточки
+   раздувалась вдвое, и в крупном режиме занимала 114 точек вместо 52. */
+/* Лицо человека или заведения — см. components/Avatar.tsx. Стили были
+   набраны числами в трёх местах разом. */
+.avatar {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Скругление в четверть стороны: у квадрата 48 это 12, у 56 — 14. Так
+     квадрат остаётся квадратом на любом размере, а не превращается в круг. */
+  border-radius: 25%;
+  background: var(--grad-brand);
+  color: var(--on-brand);
+  font-weight: 800;
+  font-size: var(--text-lg);
+}
+.avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.match-ava {
+  width: 52px;
+  height: 52px;
+}
+.row-chevron {
+  display: inline-flex;
+  flex: none;
+}
+.match-name {
+  font-weight: 700;
+  /* Длинное название не должно разворачиваться на шесть строк и выдавливать
+     из карточки всё остальное. Два ряда — и многоточие. */
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 380px) {
+  .match-ava {
+    width: 44px;
+    height: 44px;
+  }
+  /* Шеврон декоративный: строка целиком — кнопка, и это озвучивается вслух. */
+  .row-chevron {
+    display: none;
+  }
+  /* Подпись «должность · дата · часы» на узком экране не должна тянуться на
+     три строки — на неё уходило столько же места, сколько на всю остальную
+     карточку. */
+  .match-when {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* Строка «код прихода + Отметиться».
+
+   Оба поля сжимаемые: min-width: 0 обязателен — по умолчанию элемент формы не
+   сжимается уже своего содержимого, и на экране 320 строка вылезала за край
+   карточки вместе со всей страницей. Поле шире кнопки: шесть цифр в разрядку
+   должны читаться целиком. */
+.checkin-row {
+  /* Не помещаются рядом — кнопка уходит на свою строку во всю ширину. Это
+     надёжнее, чем сжимать её: подпись остаётся целой, а строка при любом
+     шрифте не может вылезти за карточку. */
+  flex-wrap: wrap;
+}
+.checkin-row .input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.checkin-row .ui-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  padding-left: 14px;
+  padding-right: 14px;
 }
 
 /* Чат */
@@ -759,17 +1430,33 @@ body[data-large="1"] .tab {
   padding: 11px 15px;
   border-radius: 16px;
   margin: 4px 0;
-  font-size: 16px;
+  font-size: var(--text-md);
   /* Длинная ссылка/слово без пробелов иначе распирает пузырь и даёт
      горизонтальный скролл всей страницы; переводы строк сохраняем. */
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* Время в углу пузыря. Цвет задан явно, а не прозрачностью: полупрозрачный
+   текст проверку контраста обходит стороной, и «сделали потише» незаметно
+   превращается в «не прочитать». */
+.bubble-at {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: var(--text-xs);
+  vertical-align: baseline;
+  white-space: nowrap;
+  color: var(--muted);
+}
 .bubble.mine {
   margin-left: auto;
-  background: var(--gold);
+  background: var(--gold-fill);
   color: #fff;
   border-bottom-right-radius: 4px;
+}
+/* На залитом фирменным пузыре свой оттенок: 5,38 к фону — читается, но не
+   спорит с самим сообщением. */
+.bubble.mine .bubble-at {
+  color: #f3d3d8;
 }
 .bubble.theirs {
   background: var(--card);
@@ -781,7 +1468,7 @@ body[data-large="1"] .tab {
   background: var(--card);
   border: 1px solid var(--border);
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--text-xs);
   text-align: center;
 }
 
@@ -799,6 +1486,9 @@ body[data-large="1"] .tab {
   text-align: center;
 }
 .confetti {
+  /* Конфетти летят через весь экран поверх кнопок — нажатия они ловить не
+     должны ни на одной точке пути. */
+  pointer-events: none;
   position: absolute;
   width: 9px;
   height: 9px;
@@ -809,36 +1499,6 @@ body[data-large="1"] .tab {
   to {
     transform: translateY(110vh) rotate(360deg);
     opacity: 0;
-  }
-}
-
-/* Денежный дождь при закрытии смены — фирменный момент радости */
-.money-rain {
-  overflow: hidden;
-}
-.money-rain .coin {
-  position: absolute;
-  top: -8%;
-  font-size: 26px;
-  font-weight: 900;
-  color: #f4cf6a;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  animation-name: coinFall;
-  animation-timing-function: cubic-bezier(0.3, 0.1, 0.5, 1);
-  animation-iteration-count: infinite;
-  will-change: transform;
-}
-@keyframes coinFall {
-  0% {
-    transform: translateY(-10vh) rotate(0deg) scale(0.9);
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(115vh) rotate(220deg) scale(1.05);
-    opacity: 0.9;
   }
 }
 
@@ -864,9 +1524,9 @@ body[data-large="1"] .tab {
   box-shadow: 0 4px 14px rgba(124, 21, 38, 0.14);
   transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
-.act:active {
-  transform: scale(0.88);
-}
+/* Нажатие на круглую кнопку описано ниже, в разделе про кнопки свайпа:
+   здесь стояло второе такое же правило с другим числом, и оно молча
+   перебивалось. */
 
 /* Вкладки — отклик и «всплытие» активной иконки */
 .tab {
@@ -915,10 +1575,6 @@ body[data-large="1"] .tab {
 
 /* Десктоп: лёгкий подъём кнопки/карточки при наведении */
 @media (hover: hover) {
-  .btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 22px rgba(165, 28, 48, 0.3);
-  }
   .card:hover {
     box-shadow: 0 8px 20px rgba(124, 21, 38, 0.1);
   }
@@ -956,36 +1612,35 @@ body[data-large="1"] .tab {
 /* ===== Премиальная полировка «вау»: глянец, глубина, тактильность ===== */
 
 /* Главные CTA — лёгкий глянец сверху + фирменное свечение. «Дорого» на касание. */
-.btn,
 .ui-btn--primary {
+  /* Заливка через токены заливки, а не через акцентные. В тёмной теме
+     --gold/--gold-soft нарочно осветлены (они там работают ТЕКСТОМ на тёмном
+     фоне), и главная кнопка приложения становилась светло-розовой с белой
+     надписью — ночью её было почти не прочитать. */
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0) 44%),
-    linear-gradient(135deg, var(--gold-soft), var(--gold));
-  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+    linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
+
   letter-spacing: 0.2px;
 }
-.btn:active,
 .ui-btn--primary:active:not(:disabled) {
   box-shadow: 0 3px 10px rgba(165, 28, 48, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
-.btn.secondary,
-.btn.ghost {
+.ui-btn--secondary,
+.ui-btn--ghost {
   background-image: none; /* глянец — только на главных действиях */
   letter-spacing: 0.2px;
 }
 
 /* Круглые кнопки свайпа — объём: внутренняя подсветка + цветное свечение по смыслу. */
 .act-like {
-  background-image: linear-gradient(160deg, #c0334a, #a51c30);
+  /* Через токены: захардкоженный градиент оставался светло-багровым в тёмной
+     теме, а подпись под кнопкой уходила в розовый — кнопка и её подпись были
+     разного цвета. */
+  background-image: linear-gradient(160deg, var(--gold-fill-soft), var(--gold-fill));
   box-shadow: 0 10px 24px rgba(165, 28, 48, 0.42),
     inset 0 2px 4px rgba(255, 255, 255, 0.30);
-}
-.act-super {
-  background-image: linear-gradient(160deg, #d8b85a, #c39a3a);
-  box-shadow: 0 10px 24px rgba(195, 154, 58, 0.44),
-    inset 0 2px 4px rgba(255, 255, 255, 0.36);
 }
 .act-skip {
   box-shadow: 0 6px 16px rgba(60, 40, 30, 0.10),
@@ -995,6 +1650,10 @@ body[data-large="1"] .tab {
 [data-theme="dark"] .act-skip {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  /* И рамка заметнее: серый круг на тёмном фоне почти сливался с ним, а это
+     одна из двух главных кнопок экрана — та, которой пользуются чаще. */
+  border-color: var(--border-strong);
+  background: var(--card);
 }
 .act:active {
   transform: scale(0.9);
@@ -1007,16 +1666,6 @@ body[data-large="1"] .tab {
     box-shadow: 0 16px 32px rgba(165, 28, 48, 0.5),
       inset 0 2px 4px rgba(255, 255, 255, 0.3);
   }
-  .act-super:hover {
-    box-shadow: 0 16px 32px rgba(195, 154, 58, 0.52),
-      inset 0 2px 4px rgba(255, 255, 255, 0.36);
-  }
-}
-
-/* Карточки — мягче и «дороже» глубина. */
-.card {
-  box-shadow: 0 1px 2px rgba(60, 20, 25, 0.05),
-    0 6px 18px rgba(60, 20, 25, 0.07);
 }
 
 /* Уважаем настройку «уменьшить движение» (доступность) */
@@ -1026,5 +1675,625 @@ body[data-large="1"] .tab {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Горизонтальная лента подсказок в чате. Затухание у правого края —
+   единственный намёк на то, что строка продолжается за экраном: без него
+   последний чип просто обрывался на середине слова и читался как баг. */
+.quick-row {
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+}
+.quick-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* Описание смены — единственный блок карточки, который отдаёт место другим.
+   Когда текста больше, чем помещается (длинное описание, крупный режим для
+   слабого зрения), ужимается оно, а не строки со способом оплаты и
+   медкнижкой: из-за этих строк человек либо едет на смену зря, либо нет. */
+.swipe-desc {
+  flex: 0 1 auto;
+  min-height: 0;
+  /* Обрезка по строкам живёт ЗДЕСЬ, а не в разметке. Инлайновый display
+     сильнее любого правила из файла, и из-за него на экране 320 не срабатывал
+     `display: none` из медиазапроса ниже: описание превращалось в полоску из
+     половинок букв и наезжало на строку надёжности. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.swipe-body > *:not(.swipe-desc) {
+  flex: none;
+}
+
+/* ГЛАВНЫЙ ЭКРАН: карточка занимает ВСЁ, что осталось.
+
+   Высота колоды раньше считалась вычитанием: «экран минус 328 точек» — на
+   шапку, кнопки и панель вкладок. Число подобрано на большом телефоне, и на
+   дешёвом (568–640 точек в высоту, а это самые ходовые андроиды и iPhone SE)
+   расчёт разъезжался: карточка упиралась в свой минимум, а кнопки
+   «Пропустить/Отклик» с подписями уходили под панель на 50 точек. На самом
+   популярном телефоне главное действие приложения было наполовину закрыто, а
+   на разработческом — нет, поэтому никто и не видел.
+
+   Теперь никаких вычитаний: экран — колонка, шапка и кнопки занимают
+   сколько нужно, карточка забирает остаток. Появится над лентой ещё одна
+   строка (например, напоминание о сегодняшней смене) — карточка просто
+   станет ниже, а кнопки останутся на месте. */
+.page.feed-deck {
+  display: flex;
+  flex-direction: column;
+  /* Кнопки «Пропустить/Отклик» лежат поверх низа карточки — считаем их
+     координаты от этого экрана. */
+  position: relative;
+  height: 100dvh;
+  /* Лента с колодой не прокручивается: карточка одна, прокручивать нечего. */
+  overflow: hidden;
+  /* 88 — панель вкладок, 10 — воздух: без него подписи «Пропустить/Отклик»
+     ложатся вплотную к панели и читаются как её часть. */
+  padding-bottom: calc(98px + env(safe-area-inset-bottom));
+  /* Размер круглых кнопок и запас под ними внутри карточки. Две величины
+     всегда меняются вместе: сделаешь кнопки крупнее, не увеличив запас, —
+     и низ карточки уедет под них. Поэтому они стоят рядом, одной парой. */
+  --act-size: 72px;
+  --act-space: 92px;
+}
+.page.feed-deck .deck {
+  flex: 1 1 auto;
+  height: auto;
+  /* Ниже этого карточка перестаёт быть карточкой: не помещаются ни ставка,
+     ни название, ни адрес. */
+  min-height: 190px;
+}
+
+/* КНОПКИ ЛЕЖАТ ПОВЕРХ НИЗА КАРТОЧКИ — НА ЛЮБОМ ТЕЛЕФОНЕ.
+
+   Так было только на низких экранах (до 700 точек), а выше кнопки вставали
+   отдельной полосой под карточкой. Из-за этого раскладка менялась СКАЧКОМ:
+   на экране 700 точек карточка занимала 71% высоты, на 701 — уже 53%. Одна
+   точка высоты отнимала у карточки 125 точек.
+
+   Хуже того, в эту ступеньку попадали самые ходовые телефоны: 360×740
+   (Galaxy S8–S10, A50), 414×736 (iPhone 8 Plus), 393×786, 375×812. На них у
+   карточки обрезался низ — не было видно ни «На карту в день», ни
+   «Медкнижка», а строка рейтинга разрезалась поперёк букв. На 360×740
+   карточка выходила КОРОЧЕ, чем на 360×640: телефон больше, карточка меньше.
+
+   Теперь раскладка одна на всех: карточка забирает всё, что осталось, а
+   кнопки лежат на её затемнённом низу — там, где и без них тёмный градиент
+   под белым текстом, поэтому белые подписи с тенью читаются. */
+.page.feed-deck .actions {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  margin: 0;
+  gap: 22px;
+  /* Нажимаются только сами кнопки: остальная полоса остаётся карточке,
+     иначе она съедала бы свайп в самом удобном для пальца месте. */
+  pointer-events: none;
+}
+.page.feed-deck .act {
+  width: var(--act-size);
+  height: var(--act-size);
+  pointer-events: auto;
+}
+/* «Отклик» — главное действие экрана, «Пропустить» — вспомогательное.
+   Раньше они были одного размера и веса, то есть спрашивали одинаково
+   громко. Теперь у отклика заливка, тень и полный размер, у пропуска —
+   тонкая обводка и на восемь точек меньше. Меньше — но не меньше 44:
+   промахнуться по нему по-прежнему нельзя. */
+.page.feed-deck .act-skip {
+  width: calc(var(--act-size) - 8px);
+  height: calc(var(--act-size) - 8px);
+  border-width: 1.5px;
+  /* Круг меньше на восемь точек, но место под него — то же. Без этих полей
+     подпись «Пропустить» вставала на четыре точки выше «Отклика»: две
+     надписи рядом на разной высоте, и весь ряд выглядел съехавшим. */
+  margin-block: 4px;
+}
+.page.feed-deck .act-like {
+  box-shadow: 0 8px 22px rgba(165, 28, 48, 0.38);
+}
+.page.feed-deck .act-col {
+  gap: 5px;
+}
+.page.feed-deck .act-label {
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+/* Место под кнопками внутри карточки: без него название заведения и условия
+   уезжают прямо под них. */
+.page.feed-deck .swipe-body {
+  padding-bottom: var(--act-space);
+  margin-bottom: 14px;
+}
+
+/* Высокая карточка не должна быть пустой посередине.
+
+   Фото интерьера на старте не будет почти ни у кого, и тогда карточка — это
+   плашки сверху, крупная сумма и текст снизу. Пока карточка занимала половину
+   экрана, сумма стояла под плашками и это читалось нормально. На карточке во
+   весь экран между суммой и текстом оставалась дыра в четверть экрана.
+   Отдаём сумме всё свободное место: она встаёт по центру карточки, как цена
+   на витрине. */
+.swipe-top {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.swipe-hero {
+  margin-block: auto;
+}
+
+/* КАРТОЧКА — ГЛАВНОЕ, ОБВЯЗКА — НЕТ.
+
+   Порог 760, а не 700: на 701–760 точках обвязка оставалась во весь рост, а
+   карточке доставалось столько же, сколько на 640-точечном экране — и низ её
+   резался. В эту полосу попадают Galaxy S8–S10 и A50 (360×740) и iPhone 8 Plus
+   (414×736), то есть далеко не редкие телефоны.
+
+   На экране 320×568 обвязка (шапка, фильтры, кнопки, панель вкладок)
+   занимала 268 точек из 568 — почти половину. Карточке, ради которой
+   приложение и открывают, оставалось меньше, чем всему остальному вместе.
+   Поэтому на низких экранах ужимается ОБВЯЗКА, а не карточка: логотип
+   меньше, названия сервиса нет (человек и так знает, куда зашёл), отступы
+   короче, панель вкладок ниже. */
+@media (max-height: 760px) {
+  .page.feed-deck {
+    padding-top: 8px;
+  }
+  .feed-head {
+    margin-bottom: 2px !important;
+  }
+  .feed-head > span:first-child {
+    width: 28px !important;
+    height: 28px !important;
+    margin-right: 4px !important;
+  }
+  .feed-head .h2 {
+    display: none;
+  }
+  .feed-head .spacer,
+  .feed-head > *:not(.icon-btn):not(:first-child) {
+    margin-left: auto;
+  }
+  .tabbar {
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .tab {
+    min-height: 52px;
+    gap: 3px;
+  }
+}
+
+/* На низких экранах кнопки чуть меньше: 60 точек вместо 72 — всё ещё заметно
+   крупнее минимальных 44, но экономят место карточке. */
+@media (max-height: 760px) {
+  /* На низком экране кнопки меньше: 60 точек вместо 72 — всё ещё заметно
+     крупнее минимальных 44, но экономят карточке два десятка точек. Запас под
+     ними уменьшается вместе с ними. */
+  .page.feed-deck {
+    --act-size: 60px;
+    --act-space: 76px;
+  }
+  .page.feed-deck .act-col {
+    gap: 4px;
+  }
+  /* Название чуть меньше: на экране шириной 320 «Кофейня «Дрова»» занимало
+     две строки по 26 точек — и ровно на эти строки не помещался низ карточки,
+     где написано, как платят и нужна ли медкнижка. */
+  .swipe-title {
+    font-size: var(--text-xl);
+  }
+  .card-meta {
+    gap: 2px;
+    margin-top: 4px;
+  }
+  /* Ставка в час уходит: ряд плашек влезает в одну строку. */
+  .swipe-rate {
+    display: none;
+  }
+  /* Условия смены плотнее: три строки по 27 точек превращаются в три по 20.
+     Текст остаётся читаемым (13 точек), а карточка перестаёт обрезать
+     «Медкнижку» — строку, из-за которой человек зря едет на смену. */
+  .swipe-cond {
+    margin-top: 6px;
+    row-gap: 3px;
+  }
+  .swipe-top {
+    margin: 12px 16px 0;
+    /* 8, а не 10: ниже по этому же правилу стояло второе объявление с
+       восьмёркой, и десятка не действовала никогда. */
+    gap: 8px;
+  }
+  /* Сумма на низком экране чуть меньше: 46 точек на карточке высотой 366
+     смотрелись бы как заголовок афиши и отняли бы строку у названия. */
+  .swipe-hero-sum {
+    font-size: var(--text-display) !important;
+  }
+  .actions {
+    margin-top: 12px;
+    gap: 22px;
+  }
+  .act {
+    width: 60px;
+    height: 60px;
+  }
+  .act-col {
+    gap: 5px;
+  }
+}
+
+/* Крупный режим: текст больше, а карточка та же. Отыгрываем место на
+   отступах — иначе последняя строка («медкнижка», «нужно 2 чел.») остаётся
+   наполовину срезанной краем карточки, и это выглядит поломкой. */
+body[data-large="1"] .swipe-top {
+  gap: 8px;
+  margin: 12px 14px 0;
+}
+body[data-large="1"] .swipe-body {
+  margin: 0 16px 12px;
+}
+
+/* МЕТКА-ФАКТ, А НЕ КНОПКА.
+
+   Чип с рамкой в приложении означает «нажми»: так выглядят фильтры, выбор
+   должности, быстрые ответы в чате. Ровно так же выглядели обычные подписи —
+   «готов сегодня», «Опытный», «вы отказали», «На карту в день». По ним жали и
+   ничего не происходило, а это худший вид неработающей кнопки: человек решает,
+   что подвисло приложение.
+
+   Правило простое и держится само: кнопка — это <button>, и у неё рамка;
+   подпись — это <span>, и у неё мягкая заливка без рамки. Отдельный класс
+   помнить не нужно. Зона нажатия подписи не нужна, поэтому она ниже. */
+span.tag {
+  border: none;
+  background: var(--gold-tint);
+  min-height: 32px;
+  padding: 5px 12px;
+}
+
+/* САМЫЕ НИЗКИЕ ЭКРАНЫ (320×568 — старый iPhone SE, дешёвые андроиды).
+
+   Здесь карточке не хватало 30 точек: строка «как платят / медкнижка»
+   заезжала под кнопки. Ужимаем ещё: кнопки 52 точки (минимум для пальца —
+   44), мета-строки и название на ступень мельче. */
+@media (max-height: 600px) {
+  .page.feed-deck {
+    --act-size: 52px;
+    --act-space: 68px;
+  }
+  .page.feed-deck .swipe-body {
+    margin-bottom: 8px;
+  }
+  /* Описание смены на таком экране всё равно сжимается до нечитаемой полоски
+     в одну-две точки, а место (и свой отступ) занимает. Убираем совсем —
+     оно достаётся строкам, из-за которых человек и решает, ехать ли. */
+  .swipe-desc {
+    display: none;
+  }
+  /* Плашка должности: на карточке она одна, лишняя высота ей не нужна. */
+  .swipe-card .tag {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .swipe-title {
+    font-size: var(--text-lg);
+  }
+  .card-meta {
+    font-size: var(--text-sm);
+    gap: 1px;
+  }
+  .swipe-cond {
+    margin-top: 4px;
+    row-gap: 1px;
+  }
+  .card-meta {
+    margin-top: 2px;
+  }
+  /* Кнопки на пару точек ниже: подписи упираются в самый низ карточки, зато
+     последняя строка условий не уходит под них. */
+  .page.feed-deck .actions {
+    bottom: calc(100px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ПЕРЕПИСКА В РАЗБОРЕ СПОРА (админ-панель).
+
+   Не пузыри, как в чате: оператор читает не свой разговор, а чужой, и ему
+   важнее порядок и кто сказал, чем «своё справа». Поэтому ровный список с
+   подписью над каждой репликой и полоской сбоку — по цвету сразу видно, чья
+   очередь говорить. */
+.dispute-chat {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.dispute-msg {
+  padding-left: 10px;
+  border-left: 3px solid var(--border-strong);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.dispute-msg--seeker {
+  border-left-color: var(--gold);
+}
+.dispute-msg--employer {
+  border-left-color: var(--super);
+}
+.dispute-msg--system {
+  border-left-color: var(--border);
+}
+
+/* Подсказка «внутри есть ещё». Карточка открывается касанием, но снаружи это
+   ничем не выдано: раньше адрес и описание лежали прямо на лицевой стороне, и
+   вопроса «а где остальное» не возникало. Теперь они в шторке, и без этой
+   строки человек про них не узнает.
+
+   Намеренно тихая: это подпись к жесту, а не содержание. Тише основного
+   текста по прозрачности и мельче по кеглю — иначе она сама становится тем
+   самым лишним текстом, ради ухода от которого всё и затевалось. */
+/* «Подробнее» — кнопка, но выглядит как подпись: на карточке уже есть главное
+   действие (свайп и две круглые кнопки), и третья заметная кнопка спорила бы
+   с ними за внимание. Кнопкой она сделана не ради вида, а ради тех, кто не
+   может коснуться экрана: у карточки нет роли и нет места в порядке
+   табуляции, и подробности были им недоступны совсем.
+
+   Зона нажатия добита до 44 точек по высоте — тот же минимум, что у всех
+   кнопок приложения. Без padding строка текста давала около 18. */
+.swipe-more {
+  margin-top: 4px;
+  padding: 12px 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: inherit;
+  background: none;
+  border: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.78;
+  cursor: pointer;
+}
+.swipe-more:focus-visible {
+  outline: 2px solid var(--on-dark);
+  outline-offset: 3px;
+  border-radius: 4px;
+  opacity: 1;
+}
+
+/* ── Перевёртыш карточки ──────────────────────────────────────────────────
+   Подробности показывает не шторка поверх экрана, а вторая сторона самой
+   карточки. Шторка уводила карточку под себя, и связь «это та же смена»
+   держалась только на памяти; переворот её показывает.
+
+   Поворот живёт на ВНУТРЕННЕЙ обёртке, а не на самой карточке: у карточки
+   transform уже занят — им её двигает свайп, и одно свойство не может делать
+   два дела сразу. */
+.flip {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1);
+  /* Обязательно: у сторон стоит border-radius: inherit, а наследуют они от
+     ЭТОЙ обёртки. Без строки здесь цепочка обрывалась — стороны получали
+     нулевой радиус, и углы держались на одной лишь обрезке самой карточки.
+     Работало по случайности: убери у .swipe-card overflow — и углы отвалятся. */
+  border-radius: inherit;
+}
+.flip-face {
+  position: absolute;
+  inset: 0;
+  /* Без этого сквозь изнанку просвечивает лицевая сторона задом наперёд. */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* backface-visibility прячет обратную сторону только НА ГЛАЗ. Для всего
+     остального она остаётся обычным содержимым: её читает вслух скринридер,
+     по ней попадает палец, и замер контраста видит её текст на чужом фоне —
+     наша проверка читаемости из-за этого падала на обычной ленте, находя
+     тёмные буквы изнанки поверх багровой лицевой стороны.
+
+     Поэтому невидимую сторону скрываем по-настоящему. Переключение отложено
+     на середину переворота: скрой мы сразу — сторона исчезала бы в начале
+     движения, и вместо переворота человек видел бы моргание. */
+  visibility: hidden;
+  transition: visibility 0s linear 0.22s;
+}
+.swipe-card:not(.is-flipped) .flip-front,
+.swipe-card.is-flipped .flip-back {
+  visibility: visible;
+}
+.flip-back {
+  transform: rotateY(180deg);
+  background: var(--surface);
+  color: var(--text);
+}
+/* Пока карточка перевёрнута, штамп ХОЧУ/НЕТ и подсветка не нужны: тащить её
+   нельзя, а полупрозрачные слои поверх текста мешают читать. */
+.swipe-card.is-flipped .swipe-tint,
+.swipe-card.is-flipped .stamp {
+  display: none;
+}
+
+.card-back-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Снизу отступаем ровно на зону кнопок «Пропустить/Отклик»: они лежат ПОВЕРХ
+     карточки, и без этого накрывали подсказку «коснитесь, чтобы вернуться».
+     Берём ту же переменную, которой отступает лицевая сторона (см. padding у
+     .page.feed-deck .swipe-body), а не своё число: в крупном режиме кнопки
+     больше, на низком экране меньше, и подобранное на глаз значение разъехалось
+     бы ровно там, где проверить труднее всего. */
+  /* Под кнопки колоды место больше НЕ резервируем: на изнанке их не видно
+     (см. .back-open .actions ниже), у неё свои кнопки внизу. Пока место
+     резервировалось, на экране 320×568 от подробностей оставалась одна
+     строка — остальное уходило под прокрутку, и ничто на это не намекало. */
+  padding: 18px 20px 14px;
+  min-height: 0;
+}
+.card-back-head {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  margin-bottom: 4px;
+  flex: none;
+  /* Не больше двух строк. Заголовок стоит вне прокрутки, и длинное название
+     («Ресторан-бар "Старый город на Пятницкой"») отъедало у читаемой части
+     карточки половину высоты — а прокрутить его было нельзя, он же закреплён. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* Прокручивается ТОЛЬКО середина: заголовок и подсказка «коснитесь, чтобы
+   вернуться» остаются на месте. Описание смены — свободный текст любой длины,
+   и без прокрутки оно обрезало бы оговорку про деньги внизу, а она там самая
+   важная. */
+.card-back-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Кому важнее покой, чем движение: переворот происходит мгновенно. Правило
+   отдельное, а не общий `* { transition: none }` — тот гасит и подсветку
+   нажатий, по которой видно, что кнопка сработала. */
+@media (prefers-reduced-motion: reduce) {
+  .flip {
+    transition: none;
+  }
+  /* Переворота нет — значит и ждать его середины незачем. */
+  .flip-face {
+    transition: none;
+  }
+}
+
+/* Карточка перевёрнута — под кнопками теперь светлая изнанка, а не тёмный
+   градиент. Белые подписи «Пропустить/Отклик» на ней исчезали совсем: тот же
+   текст, который на лицевой стороне читается, на изнанке пропадал. Возвращаем
+   обычный цвет текста и убираем тень — она нужна была против фотографии. */
+/* Пока карточка перевёрнута, круглых кнопок колоды нет. Они лежат ПОВЕРХ
+   карточки, и на изнанке это стоило трёх бед сразу: 96 точек высоты, отнятых
+   у текста; белые подписи, пропадавшие на светлом фоне; нижняя строка изнанки,
+   заходившая им под край. У изнанки свои кнопки — в её собственном низу.
+
+   Скрываем на середине переворота, как и сами стороны: исчезни они в первом
+   кадре — карточка ещё лицом, а действовать уже нечем. */
+.page.feed-deck .actions {
+  transition: opacity 0.12s linear 0.22s, visibility 0s linear 0.22s;
+}
+.page.feed-deck.back-open .actions {
+  opacity: 0;
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page.feed-deck .actions {
+    transition: none;
+  }
+}
+
+/* Свой низ изнанки: «Назад» и главное действие. Прижат к краю и не
+   прокручивается вместе с текстом. */
+.card-back-foot {
+  flex: none;
+  display: flex;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Закреплённая оговорка на изнанке — вне прокрутки, над подсказкой. Раньше
+   она была последней строкой содержимого, и длинное описание смены уводило её
+   под сгиб: предупреждение «просят деньги вперёд — это обман» видел только
+   тот, кто догадался прокрутить. Это единственная защита работника от самого
+   частого обмана, и прятать её за жестом нельзя. */
+.card-back-note {
+  flex: none;
+  margin-top: 12px;
+}
+
+/* Знак того, что текст продолжается. Изнанка прокручивается почти всегда:
+   разбивка оплаты, адрес, что взять с собой и описание не помещаются в окно
+   целиком ни на одном телефоне. Без этого знака человек видел ровный обрыв
+   строки у нижнего края и считал, что прочитал всё.
+
+   Полоса растворения, а не стрелка: стрелку надо объяснять, а гаснущий текст
+   читается сам собой. Гасим последние 20 точек окна прокрутки. */
+.card-back-scroll {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent 100%);
+}
+
+/* НИЗКИЙ ЭКРАН (320×568 и подобные) — изнанке остаётся мало места.
+
+   Замер до этих правил: на 320×568 окно чтения выходило 79 точек, то есть две
+   строки, — заголовок в две строки, оговорка про деньги в три и кнопки внизу
+   съедали карточку целиком. Уплотняем всё, кроме оговорки: она про обман, и
+   резать её нельзя. */
+@media (max-height: 640px) {
+  .card-back-inner {
+    padding: 12px 16px 10px;
+  }
+  .card-back-head {
+    /* Одна строка вместо двух: длинное название заведения на таком экране
+       стоит дороже, чем половина всех подробностей. */
+    -webkit-line-clamp: 1;
+    font-size: var(--text-base);
+  }
+  .card-back-note {
+    margin-top: 8px;
+  }
+  .card-back-foot {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+}
+
+/* Пока читают изнанку, ряд фильтров убран. Он ничего не делает: выбирать
+   город и роль в этот момент незачем, а места занимает 48 точек — на экране
+   320×568 это треть окна чтения. Замер до правки: под текст оставалось 145
+   точек при нужных 393.
+
+   Убираем именно из потока (display), а не прячем: спрятанный элемент
+   продолжает занимать высоту, и карточка бы её не получила. */
+.page.feed-deck.back-open .chips-row {
+  display: none;
+}
+
+/* Оговорка на низком экране — плотнее. Не короче: она про обман, и резать
+   слова нельзя. Ужимаем поля и межстрочный интервал — на 320 точках это
+   возвращает тексту около 25 точек из 106, которые она занимала. */
+@media (max-height: 640px) {
+  .card-back-note .card {
+    padding: 10px 12px;
+  }
+  .card-back-note {
+    font-size: var(--text-sm);
+    line-height: 1.35;
   }
 }

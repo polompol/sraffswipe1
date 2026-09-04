@@ -1,3 +1,11 @@
+// Нижняя граница оплаты смены. Держится в паре с backend/app/schemas.py —
+// там она обязательна к соблюдению, здесь нужна, чтобы человек узнал об
+// ошибке до того, как заполнит форму до конца. Смысл границы: смена за
+// бесценок — не предложение работы, а способ бесплатно накрутить репутацию
+// парой сговорившихся аккаунтов (за неё не берётся комиссия).
+export const MIN_RATE_PER_HOUR = 100;
+export const MIN_RATE_PER_SHIFT = 500;
+
 // Доменные типы — зеркало backend (app/schemas.py) и Flutter (lib/data/models).
 
 export type AppRole = "seeker" | "employer";
@@ -58,7 +66,7 @@ export const MED_BOOK_LABELS: Record<MedBookStatus, string> = {
   expired: "Просрочена",
 };
 
-export type SwipeDirection = "like" | "superlike" | "dislike";
+export type SwipeDirection = "like" | "dislike";
 
 export type RateType = "perHour" | "perShift";
 
@@ -76,10 +84,13 @@ export const PAY_METHOD_LABELS: Record<PayMethod, string> = {
   transfer: "Перевод после смены",
 };
 
+// Короткие подписи для чипов в списке. Слово «смены» убрано — оно и так
+// понятно из контекста, а вот КОГДА платят («в день» / «после») — главное
+// отличие способов, его сокращать нельзя.
 export const PAY_METHOD_SHORT: Record<PayMethod, string> = {
-  cash: "Нал в день смены",
+  cash: "Наличными в день",
   card: "На карту в день",
-  transfer: "Перевод после",
+  transfer: "Переводом после",
 };
 
 // Чаевые: их платят гости, не заведение. Поле информационное — но цепляет.
@@ -91,20 +102,24 @@ export const TIPS_LABELS: Record<TipsMode, string> = {
   shared: "Чаевые поровну",
 };
 
-// Короткая подпись для бейджа на карточке (none — не показываем).
+// Подписи для формы публикации: там над ними уже стоит заголовок «Чаевые —
+// их платят гости», и слово «чаевые» повторялось четыре раза подряд.
+export const TIPS_CHOICE: Record<TipsMode, string> = {
+  none: "Не будет",
+  individual: "Себе",
+  shared: "Поровну",
+};
+
+// Короткая подпись для плашки на карточке (none — не показываем).
+// Тире убрано: в колонке шириной в половину карточки оно уводило слово на
+// вторую строку — «Чаевые — / поровну». Смысла тире не добавляло.
 export const TIPS_BADGE: Record<TipsMode, string> = {
   none: "",
-  individual: "Чаевые — вам",
-  shared: "Чаевые — поровну",
+  individual: "Чаевые вам",
+  shared: "Чаевые поровну",
 };
 
-export type MatchStatus = "matched" | "confirmed" | "completed";
-
-export const MATCH_STATUS_LABELS: Record<MatchStatus, string> = {
-  matched: "Мэтч",
-  confirmed: "Смена подтверждена",
-  completed: "Завершено",
-};
+export type MatchStatus = "matched" | "confirmed" | "completed" | "cancelled" | "expired";
 
 export type ExperienceTag =
   | "medBook"
@@ -121,16 +136,26 @@ export const EXPERIENCE_TAG_LABELS: Record<ExperienceTag, string> = {
   selfEmployed: "Самозанятый",
 };
 
-export interface AvailabilitySlot {
-  weekday: number; // 1..7
-  start: number; // минуты от полуночи
-  end: number;
+/** Надёжность человека: цифры, которые сервер считает одним запросом.
+ *
+ *  Три числа ходят только вместе (см. `_reliability` на сервере): всего
+ *  подтверждённых смен, из них вышел, и со сколькими РАЗНЫМИ заведениями
+ *  человек работал. Последнее важно не меньше первых двух: двенадцать смен с
+ *  одним и тем же заведением — это не опыт, а один и тот же человек с двух
+ *  сторон.
+ */
+export interface Reliability {
+  shiftsTotal: number;
+  shiftsAttended: number;
+  employersTotal?: number;
 }
 
-export interface Seeker {
+export interface Seeker extends Partial<Reliability> {
   id: string;
   name: string;
-  birthDate: string; // ISO yyyy-mm-dd
+  // Возраст числом приходит с сервера. Дату рождения в публичную ленту не
+  // отдаём вовсе: она о человеке говорит больше, чем нужно заведению.
+  age?: number | null;
   city: string;
   district: string;
   lat: number;
@@ -140,13 +165,12 @@ export interface Seeker {
   selfEmployed: boolean;
   inn?: string | null;
   experienceTags: ExperienceTag[];
-  availableSlots: AvailabilitySlot[];
   rating: number;
   photoUrls: string[];
   about: string;
   availableToday?: boolean;
-  shiftsTotal?: number; // надёжность: всего подтверждённых смен
-  shiftsAttended?: number; // из них вышел
+  // В ленте кандидатов надёжность может и не прийти (у новичка смен нет),
+  // поэтому здесь те же поля, но необязательные.
 }
 
 export interface Vacancy {
@@ -163,6 +187,10 @@ export interface Vacancy {
   payMethod?: PayMethod;
   tips?: TipsMode;
   description: string;
+  /** Сколько человек нужно на смену (по умолчанию 1). */
+  headcount?: number;
+  /** Сколько мест ещё свободно. */
+  slotsLeft?: number;
   requireMedBook: boolean;
   requireExperience: boolean;
   lat: number;
@@ -172,7 +200,6 @@ export interface Vacancy {
   interiorPhotoUrl: string;
   employerVerified: boolean;
   status: string;
-  boosted?: boolean;
   distanceKm?: number;
   // Доверие к заведению (видно ДО отклика).
   employerRating?: number;
@@ -182,7 +209,6 @@ export interface Vacancy {
 
 export interface MatchModel {
   id: string;
-  seekerId: string;
   employerId: string;
   vacancyId: string;
   status: MatchStatus;
@@ -190,42 +216,48 @@ export interface MatchModel {
   confirmedByEmployer: boolean;
   companyName?: string;
   companyPhotoUrl?: string;
+  /** Имя работника: его показывают ЗАВЕДЕНИЮ. Соискателю в этой же строке
+   *  показывается название заведения — сторона видит того, с кем договорилась,
+   *  а не саму себя. */
+  seekerName?: string;
   role?: StaffRole;
   checkinCode?: string | null; // виден только заведению (помощник)
   checkedIn?: boolean; // смена закрыта (обе стороны подтвердили)
+  /** Предложенный перенос: дата и время, если заведение его предложило. */
+  rescheduleDate?: string;
+  rescheduleStart?: number | null;
+  rescheduleEnd?: number | null;
   seekerCheckedIn?: boolean;
   employerCheckedIn?: boolean;
   disputed?: boolean;
   shiftPay?: number; // оплата смены, ₽ — для празднования дохода при закрытии
+  /** Когда смена. Раньше приложение не знало о ней ничего, кроме названия
+   *  заведения: человек открывал чат и не видел, на какой день и час он
+   *  вообще договорился. По этим же полям видно, какие действия ещё уместны. */
+  shiftDate?: string;
+  shiftStart?: number;
+  shiftEnd?: number;
 }
 
+/** Сообщение в чате смены — ровно то, что присылает сервер.
+ *
+ *  Здесь были ещё два поля, которых сервер не шлёт: `chatId` и `timestamp`.
+ *  Читать их никто не читал, но тип обещал строку, а приходило пусто. Опасно
+ *  это тем, что демо-данные их заполняли: на демо всё выглядело правильно, а
+ *  на живом сервере первый же, кто написал бы `msg.timestamp`, получил бы
+ *  пустоту — и без единой ошибки при сборке. Ровно так однажды пропала
+ *  надёжность работников на экране «Мои работники».
+ *
+ *  Времени у сообщения сейчас нет и на сервере. Если оно понадобится на
+ *  экране, начинать надо с сервера, а не с этого файла.
+ */
 export interface Message {
   id: string;
-  chatId: string;
   senderId: string;
   text: string;
   isSystem: boolean;
-  timestamp: string;
+  /** Когда написано. Для спора это главное: «написал в 23:40, что не выйдет»
+   *  без времени — не довод, а слова. */
+  createdAt: string;
 }
 
-// --- Монетизация / entitlements ---
-
-export type Plan = "free" | "pro" | "business";
-
-export interface Entitlements {
-  plan: Plan;
-  planRenewsAt?: string | null;
-  superlikeBalance: number;
-  boostBalance: number;
-  seekerPremium: boolean;
-  employerVerified: boolean;
-}
-
-export interface PriceItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  priceStars?: number; // XTR
-  priceRub?: number; // ₽ (ЮKassa)
-  badge?: string;
-}

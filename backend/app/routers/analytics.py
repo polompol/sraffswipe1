@@ -1,21 +1,23 @@
 """Аналитика воронки: приём событий + агрегаты."""
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Employer, Event, User
-from ..ratelimit import hit
+from ..models import Employer, Event, Match, User
+from ..ratelimit import client_ip, hit
 from ..security import current_principal, optional_principal
 
 router = APIRouter(tags=["analytics"])
 
-# Ключевые шаги воронки.
-FUNNEL = ["open", "swipe", "match", "confirm", "purchase"]
+# Ключевые шаги воронки. Первые два знают только события с клиента
+# («открыл приложение», «свайпнул»), остальные считаются по фактам в базе —
+# так цифра не зависит от того, дошло ли событие с телефона.
+FUNNEL = ["open", "swipe", "match", "confirm", "done"]
 
 # Максимальный размер сериализованных props события (анти-раздувание БД).
 _MAX_PROPS_CHARS = 2000
@@ -37,22 +39,37 @@ class EventIn(BaseModel):
 @router.post("/events")
 def track(
     body: EventIn,
+    request: Request,
     db: Session = Depends(get_db),
     principal: dict | None = Depends(optional_principal),
 ):
-    # Защита от раздувания БД: (1) потолок размера props — каждая запись
-    # ограничена; (2) для авторизованных — рейт-лимит на принципала. Анонимный
-    # поток (событие «открыл» до входа) ограничивается на уровне прокси (Caddy),
-    # т.к. app-лимит без принципала завязан на IP, которого здесь нет.
+    # Защита от раздувания БД: потолок размера props + частота.
+    # Раньше комментарий обещал, что анонимный поток ограничит Caddy, — но
+    # никакого лимита на прокси нет, и это была единственная ручка без
+    # авторизации, которая ПИШЕТ в базу. Теперь аноним ограничен по адресу.
     if principal:
         hit(f"events:{principal['id']}", 120, 60)
-    # «source» — служебное имя атрибуции, пишется только при регистрации
-    # (_track_source). Не даём подделать его через публичный /events и
-    # засорить админ-статистику источников.
+    else:
+        hit(f"events-ip:{client_ip(request)}", 120, 60)
+    # Служебные имена, которые клиент присылать не вправе:
+    #   source — атрибуция, пишется только при регистрации (_track_source);
+    #            иначе статистику источников можно накрутить снаружи;
+    #   job    — отметки планировщика. Они переехали в свою таблицу, но имя
+    #            держим закрытым и здесь: одна публичная ручка, пишущая в базу
+    #            под именем на выбор клиента, уже однажды позволила
+    #            останавливать все ежедневные задачи сервиса.
     name = body.name[:64]
-    if name == "source":
+    if name in {"source", "job"}:
         raise HTTPException(status_code=400, detail="Зарезервированное имя")
-    props = json.dumps(body.props or {}, ensure_ascii=False)[:_MAX_PROPS_CHARS]
+    # Обрезаем ДО сериализации, а не после. Раньше готовый JSON рубился по
+    # длине посреди строки, и в базу ложился обломок, который потом не
+    # прочитать: аналитика по такому событию просто падала.
+    raw = {}
+    for k, v in (body.props or {}).items():
+        if len(json.dumps(raw | {k: v}, ensure_ascii=False)) > _MAX_PROPS_CHARS:
+            break
+        raw[k] = v
+    props = json.dumps(raw, ensure_ascii=False)
     db.add(Event(
         owner_id=principal["id"] if principal else None,
         name=name,
@@ -78,4 +95,26 @@ def funnel(
         .all()
     )
     by_name = {name: count for name, count in rows}
-    return FunnelOut(counts={step: by_name.get(step, 0) for step in FUNNEL})
+    # Мэтчи, подтверждения и закрытые смены берём из таблицы смен: это
+    # состоявшиеся факты. Шага «покупка» здесь больше нет — покупать в
+    # сервисе нечего, и он всегда показывал ноль.
+    matches = db.query(func.count(Match.id)).scalar() or 0
+    confirmed = (
+        db.query(func.count(Match.id))
+        .filter(Match.status.in_(("confirmed", "completed")))
+        .scalar()
+        or 0
+    )
+    done = (
+        db.query(func.count(Match.id))
+        .filter(Match.status == "completed")
+        .scalar()
+        or 0
+    )
+    return FunnelOut(counts={
+        "open": by_name.get("open", 0),
+        "swipe": by_name.get("swipe", 0),
+        "match": matches,
+        "confirm": confirmed,
+        "done": done,
+    })

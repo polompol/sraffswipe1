@@ -7,12 +7,10 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..entitlements import get_or_create
 from ..models import Employer, Entitlement, Event, Referral, User
 from ..ratelimit import rate_limit_ip
 from ..schemas import TokenOut
 from ..security import create_token
-from ..streaks import touch_streak
 from ..telegram import parse_start_param, parse_user, validate_init_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -21,7 +19,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class TelegramAuthIn(BaseModel):
     init_data: str
     role: str = "seeker"  # seeker|employer
-    start_param: str = ""  # dev-override реф-кода (в проде берётся из initData)
+    # Реф-метка для разработки. В бою её берут из подписанных данных
+    # Telegram, а это поле игнорируется — подписать его нечем.
+    start_param: str = ""
 
 
 def _owner_exists(db, owner_id: str) -> bool:
@@ -36,10 +36,29 @@ def _owner_tg_id(db, owner_id: str) -> int | None:
     return owner.tg_id if owner is not None else None
 
 
+def _banned_by_tg(db, tg_id: int) -> bool:
+    """Заблокирован ли этот Telegram хоть в одной роли.
+
+    Иначе бан обходится в два нажатия: заблокированный работник открывает
+    приложение заведением, и раз такого аккаунта ещё нет — он создаётся
+    чистым. Оператор блокирует человека, а человек продолжает работать.
+    """
+    if tg_id is None:
+        return False
+    for table in (User, Employer):
+        row = db.query(table).filter(table.tg_id == tg_id).first()
+        if row is not None and row.blocked:
+            return True
+    return False
+
+
 def _apply_referral(db, referred_id: str, code: str) -> None:
-    """Бонус рефереру за нового приглашённого. Один раз на приглашённого.
-    Валюта зависит от того, КТО пригласил: работнику — супер-лайки «Срочно»,
-    заведению — Boost вакансии (супер-лайки ему почти не нужны)."""
+    """Записать, кто кого привёл. Один раз на приглашённого.
+
+    Наград за приглашение нет: внутренних «валют» в сервисе не осталось, а
+    обещать то, чего нет, нельзя. Запись нужна для честного ответа на вопрос
+    «откуда пришли люди» — по ней видно, какое заведение или работник реально
+    приводит других."""
     if not code.startswith("ref_"):
         return
     referrer_id = code[4:]
@@ -56,12 +75,7 @@ def _apply_referral(db, referred_id: str, code: str) -> None:
         return
     if db.query(Referral).filter(Referral.referred_id == referred_id).first():
         return
-    db.add(Referral(referrer_id=referrer_id, referred_id=referred_id, rewarded=True))
-    ent = get_or_create(db, referrer_id)
-    if db.get(Employer, referrer_id) is not None:
-        ent.boost_balance += 1
-    else:
-        ent.superlike_balance += settings.referral_bonus_superlikes
+    db.add(Referral(referrer_id=referrer_id, referred_id=referred_id, rewarded=False))
     db.commit()
 
 
@@ -83,11 +97,19 @@ def _track_source(db, owner_id: str, code: str, role: str) -> None:
 @router.post(
     "/telegram",
     response_model=TokenOut,
-    # Вход не требует авторизации, поэтому ограничиваем по IP:
-    # иначе скрипт бесконечно дёргает проверку подписи и базу.
-    # 30 в минуту — с запасом для человека, который переоткрывает
-    # приложение, и мало для перебора.
-    dependencies=[Depends(rate_limit_ip("tg-login", 30, 60))],
+    # Вход не требует авторизации, поэтому ограничиваем по IP: иначе скрипт
+    # бесконечно дёргает проверку подписи и базу.
+    #
+    # 300 в минуту, а не 30. Мобильные операторы прячут тысячи абонентов за
+    # одним публичным адресом (CGNAT): при всплеске — реклама, репост, ролик —
+    # живые люди с одного оператора упирались бы в отказ на входе. Симптом
+    # самый обидный: «приложение не работает», при том что в логах всё
+    # спокойно, а человек больше не вернётся.
+    #
+    # Подбирать здесь всё равно нечего: initData подписан токеном бота, и
+    # чужая подпись отвергается сразу. Лимит защищает не от подбора, а от
+    # нагрузки на базу — для этого 300 в минуту с одного адреса достаточно.
+    dependencies=[Depends(rate_limit_ip("tg-login", 300, 60))],
 )
 def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     valid = validate_init_data(
@@ -110,7 +132,21 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     # Аватарка из Telegram — фото профиля сразу, без S3. Telegram кладёт
     # photo_url в initData, если у пользователя есть публичное фото.
     tg_photo = tg_user.get("photo_url") or ""
-    ref_code = body.start_param or parse_start_param(body.init_data)
+    # Метку берём ИЗ ПОДПИСАННЫХ данных Telegram. Поле в теле запроса —
+    # только для разработки: initData там подделать нечем, а в бою оно
+    # позволяло приписать себе любой источник и любого пригласившего, то есть
+    # своими руками испортить единственный ответ на вопрос «откуда люди».
+    ref_code = parse_start_param(body.init_data)
+    if not ref_code and settings.allow_insecure_telegram_auth:
+        ref_code = body.start_param
+
+    # Бан выписывают ЧЕЛОВЕКУ, а не роли. Вход в Telegram один, ролей две, и
+    # блокировка второй роли переносится оператором сразу. Но если второй роли
+    # на момент бана ещё НЕ БЫЛО, переносить было нечего: заблокированный
+    # работник заводил заведение тем же Telegram и спокойно входил. Поэтому
+    # смотрим не только свою таблицу, но и соседнюю — по тому же tg_id.
+    if _banned_by_tg(db, tg_id):
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
 
     if body.role == "employer":
         emp = db.query(Employer).filter(Employer.tg_id == tg_id).first()
@@ -131,9 +167,8 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
             db.refresh(emp)
             _apply_referral(db, emp.id, ref_code)
             _track_source(db, emp.id, ref_code, "employer")
-        touch_streak(db, emp.id)
         return TokenOut(
-            access_token=create_token(emp.id, "employer"),
+            access_token=create_token(emp.id, "employer", emp.token_version),
             role="employer",
             user_id=emp.id,
         )
@@ -156,9 +191,8 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         db.refresh(user)
         _apply_referral(db, user.id, ref_code)
         _track_source(db, user.id, ref_code, "seeker")
-    touch_streak(db, user.id)
     return TokenOut(
-        access_token=create_token(user.id, "seeker"),
+        access_token=create_token(user.id, "seeker", user.token_version),
         role="seeker",
         user_id=user.id,
     )

@@ -27,6 +27,13 @@ def _hdr(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _age(client, match_id: str) -> None:
+    """Домотать смену до конца: закрыть её раньше окончания уже нельзя."""
+    from .shifttime import age_shift
+
+    age_shift(match_id)
+
+
 def test_me_endpoint(client):
     token, uid = _auth(client, "seeker")
     r = client.get("/me", headers=_hdr(token))
@@ -62,33 +69,23 @@ def test_profile_rejects_oversized_fields(client):
                       json={"inn": "не-число"}).status_code == 422
 
 
-def test_referral_link_and_bonus(client):
+def test_referral_link_counts_invited(client):
+    """Приглашение — это счётчик «кто кого привёл», а не награда.
+
+    Внутренних «валют» в сервисе больше нет, поэтому ссылка ничего не
+    обещает: она нужна, чтобы видеть, откуда реально приходят люди.
+    """
     # insecure-логины дают tg_id=0; разные роли → разные owner_id.
-    # Реферер-ЗАВЕДЕНИЕ получает Boost вакансии (не супер-лайки).
     ref_token, ref_id = _auth(client, "employer")
 
     link = client.get("/referral/me", headers=_hdr(ref_token)).json()
     assert link["code"] == f"ref_{ref_id}"
     assert f"ref_{ref_id}" in link["link"]
+    assert "bonusSuperlikes" not in link, "наград за приглашение больше нет"
 
-    before = client.get("/billing/entitlements", headers=_hdr(ref_token)).json()
     # Новый соискатель приходит по реф-ссылке работодателя.
     _auth(client, "seeker", start_param=f"ref_{ref_id}")
-    after = client.get("/billing/entitlements", headers=_hdr(ref_token)).json()
-    assert after["boostBalance"] == before["boostBalance"] + 1
-    assert after["superlikeBalance"] == before["superlikeBalance"]
     assert client.get("/referral/me", headers=_hdr(ref_token)).json()["invited"] == 1
-
-
-def test_referral_worker_gets_superlikes(client):
-    # Реферер-РАБОТНИК получает супер-лайки «Срочно» (его валюта).
-    ref_token, ref_id = _auth(client, "seeker")
-    before = client.get("/billing/entitlements", headers=_hdr(ref_token)).json()
-    # Приглашённый — заведение (разные роли → разные аккаунты в dev-режиме).
-    _auth(client, "employer", start_param=f"ref_{ref_id}")
-    after = client.get("/billing/entitlements", headers=_hdr(ref_token)).json()
-    assert after["superlikeBalance"] == before["superlikeBalance"] + 3
-    assert after["boostBalance"] == before["boostBalance"]
 
 
 def test_review_updates_rating(client):
@@ -120,6 +117,7 @@ def test_review_updates_rating(client):
     # Закрываем смену взаимной отметкой (код прихода → «человек пришёл»).
     code = next(m for m in client.get("/matches", headers=_hdr(emp_token)).json()
                 if m["id"] == match_id)["checkin_code"]
+    _age(client, match_id)
     client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
                 json={"code": code})
     client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),

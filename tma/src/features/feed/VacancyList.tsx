@@ -2,56 +2,24 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SwipeDirection, Vacancy } from "@/types/domain";
 import { PAY_METHOD_SHORT, STAFF_ROLE_LABELS } from "@/types/domain";
-import { fmtTime, isUrgentShift, rateLabel, shiftDayLabel } from "@/lib/format";
+import {
+  distance,
+  fmtTime,
+  isUrgentShift,
+  plural,
+  rateLabel,
+  shiftDayLabel,
+  slotsLabel,
+} from "@/lib/format";
 import { shareVacancy } from "@/lib/share";
 import { addFavorite, listFavoriteIds, removeFavorite } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
+import { Button } from "@/components/Button";
+import { Avatar } from "@/components/Avatar";
 import { ReportSheet } from "@/components/ReportSheet";
-import { IconFire, IconShare, IconCheck, IconWarning, IconBookmark } from "@/components/Icons";
+import { Sheet } from "@/components/Sheet";
+import { IconFire, IconShare, IconWarning, IconBookmark, IconMore } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
-
-/** Миниатюра 64×64 с фолбэком: бренд-градиент+инициал, поверх — фото (если
- *  загрузилось). Битая ссылка не оставляет пустой квадрат. */
-function Thumb({ src, initial }: { src?: string; initial: string }) {
-  const [ok, setOk] = useState(!!src);
-  return (
-    <div
-      style={{
-        width: 64,
-        height: 64,
-        borderRadius: 14,
-        flex: "none",
-        position: "relative",
-        overflow: "hidden",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "rgba(255,255,255,.9)",
-        fontWeight: 800,
-        fontSize: 24,
-        background: "var(--grad-brand)",
-      }}
-    >
-      {!ok && initial}
-      {src && (
-        <img
-          src={src}
-          alt=""
-          onError={() => setOk(false)}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            opacity: ok ? 1 : 0,
-            transition: "opacity .3s ease",
-          }}
-        />
-      )}
-    </div>
-  );
-}
 
 /** Список-вид ленты — альтернатива свайпу для тех, кто любит просматривать. */
 export function VacancyList({
@@ -67,6 +35,7 @@ export function VacancyList({
   hideSkip?: boolean; // в избранном «Пропустить» бессмысленна — прячем
 }) {
   const [reportId, setReportId] = useState<string | null>(null);
+  const [moreFor, setMoreFor] = useState<Vacancy | null>(null);
   const qc = useQueryClient();
   const { data: favIds } = useQuery({ queryKey: ["fav-ids"], queryFn: listFavoriteIds });
   const saved = new Set(favIds ?? []);
@@ -85,17 +54,17 @@ export function VacancyList({
       qc.invalidateQueries({ queryKey: ["fav-ids"] });
       qc.invalidateQueries({ queryKey: ["favorites"] });
     } catch {
-      toast("Не удалось сохранить", "error");
+      toast("Смена не сохранилась. Попробуйте ещё раз", "error");
     }
   }
 
   return (
-    <div className="stagger" style={{ display: "grid", gap: 12 }}>
+    <div className="stagger stack stack-lg">
       {items.map((v) => (
         <div key={v.id} className="card fade-up">
           <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-            <Thumb src={v.interiorPhotoUrl} initial={(v.companyName || "С").charAt(0)} />
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <Avatar size={64} src={v.interiorPhotoUrl} name={v.companyName || "Смена"} />
+            <div className="grow">
               {/* Заголовку — вся ширина строки. Иконки закладки и «поделиться»
                   перенесены вниз: в одной строке с ними название сжималось до
                   54px и рвалось по слогам на четыре строки. */}
@@ -112,57 +81,67 @@ export function VacancyList({
                   {v.companyName}
                 </b>
                 {isUrgentShift(v.date) && (
-                  <span className="tag pulse" style={{ flex: "none", color: "var(--gold)", borderColor: "var(--gold)" }}><IconFire size={12} /> Сегодня</span>
-                )}
-                {v.boosted && (
-                  <span className="tag pulse" style={{ flex: "none", color: "var(--super-text)", borderColor: "var(--super)" }}><IconFire size={12} /> ТОП</span>
+                  <span className="tag tag-gold pulse" style={{ flex: "none" }}><IconFire size={12} /> Сегодня</span>
                 )}
               </div>
               <div className="muted" style={{ marginTop: 2 }}>
                 {STAFF_ROLE_LABELS[v.role]} · {rateLabel(v.rate, v.rateType)}
+                {slotsLabel(v.headcount, v.slotsLeft)
+                  ? ` · ${slotsLabel(v.headcount, v.slotsLeft)}`
+                  : ""}
               </div>
               <div className="muted">
                 {shiftDayLabel(v.date)} · {fmtTime(v.startTime)}–{fmtTime(v.endTime)}
-                {typeof v.distanceKm === "number" ? ` · ${v.distanceKm.toFixed(1)} км` : ""}
-              </div>
-              <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                {v.payMethod && (
-                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
-                    {PAY_METHOD_SHORT[v.payMethod]}
-                  </span>
-                )}
-                {v.employerPaysOnTime && (
-                  <span className="tag" style={{ color: "var(--super-text)", borderColor: "var(--super)", fontSize: 13 }}>
-                    <IconCheck size={12} /> Платит вовремя
-                  </span>
-                )}
-                {!!v.employerShiftsDone && (
-                  <span className="tag" style={{ color: "var(--muted)", borderColor: "var(--border)", fontSize: 13 }}>
-                    {v.employerShiftsDone} смен закрыто
-                  </span>
-                )}
+                {distance(v.distanceKm) ? ` · ${distance(v.distanceKm)}` : ""}
               </div>
             </div>
           </div>
-          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+          {/* Чипы — на всю ширину карточки, а не в узкой колонке справа от
+              фото. Там на них оставалось 276px, и каждый вставал на свою
+              строку: три чипа съедали три строки и карточка выглядела
+              сломанной. Подписи заодно короче — теперь помещаются в одну. */}
+          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            {v.payMethod && (
+              <span className="tag tag-super tag-sm">
+                {PAY_METHOD_SHORT[v.payMethod]}
+              </span>
+            )}
+            {!!v.employerShiftsDone && (
+              <span className="tag tag-muted tag-sm">
+                {v.employerShiftsDone}{" "}
+                {plural(v.employerShiftsDone, "смена", "смены", "смен")}{" "}
+                {plural(v.employerShiftsDone, "закрыта", "закрыто", "закрыто")}
+              </span>
+            )}
+          </div>
+          {/* Ряд переносится: в крупном режиме (для слабого зрения) подписи
+              вырастают до 144 и 163 точек, вдвоём в строку они уже не влезают
+              и раньше просто уезжали за правый край экрана вместе с карточкой.
+              Основа 40% у обеих делит строку поровну, пока они помещаются, —
+              то есть обычный вид не меняется. */}
+          <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
             {!hideSkip && (
-              <button
-                className="btn secondary"
-                style={{ minHeight: 44 }}
-                onClick={() => onAct(v, "dislike")}
+              // Отклик — главное действие строки, пропуск — вспомогательное.
+              // Рядом стояли две одинаково залитые кнопки, и глазу было не за
+              // что зацепиться: «пропустить» спрашивало так же громко.
+              <Button
+                variant="ghost"
+                style={{ minHeight: 44, flex: "1 1 40%" }}
+                onClick={async () => {
+                  await onAct(v, "dislike");
+                }}
               >
                 Пропустить
-              </button>
+              </Button>
             )}
-            <button
-              className="btn"
-              style={{ minHeight: 44 }}
+            <Button
+              style={{ minHeight: 44, flex: "1 1 40%" }}
               onClick={async () => {
                 if (await onAct(v, "like")) toast("Отклик отправлен", "success");
               }}
             >
               Откликнуться
-            </button>
+            </Button>
           </div>
           <div className="row" style={{ marginTop: 4, gap: 4 }}>
             <button
@@ -174,24 +153,50 @@ export function VacancyList({
             >
               <IconBookmark size={18} filled={saved.has(v.id)} />
             </button>
+            <span className="spacer" />
+            {/* «Поделиться» и «Пожаловаться» ушли под «ещё». В первом ряду у
+                каждой смены было четыре действия, и жалоба стояла ровно так
+                же заметно, как отклик. Жалуются редко — а глаз спотыкался о
+                неё каждый раз. */}
             <button
               className="icon-btn"
-              aria-label="Поделиться сменой"
+              aria-label="Ещё действия со сменой"
               style={{ color: "var(--muted)" }}
-              onClick={() => shareVacancy(v)}
+              onClick={() => setMoreFor(v)}
             >
-              <IconShare size={18} />
-            </button>
-            <span className="spacer" />
-            <button
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, padding: "10px 4px", display: "inline-flex", alignItems: "center", gap: 5 }}
-              onClick={() => setReportId(v.id)}
-            >
-              <IconWarning size={13} /> Пожаловаться
+              <IconMore size={18} />
             </button>
           </div>
         </div>
       ))}
+      {moreFor && (
+        <Sheet title="Что сделать со сменой" onClose={() => setMoreFor(null)}>
+          <div className="stack">
+            <Button
+              variant="secondary"
+              icon={<IconShare size={16} />}
+              onClick={() => {
+                const v = moreFor;
+                setMoreFor(null);
+                shareVacancy(v);
+              }}
+            >
+              Поделиться сменой
+            </Button>
+            <Button
+              variant="ghost"
+              icon={<IconWarning size={16} />}
+              onClick={() => {
+                setReportId(moreFor.id);
+                setMoreFor(null);
+              }}
+            >
+              Пожаловаться на смену
+            </Button>
+          </div>
+        </Sheet>
+      )}
+
       {reportId && (
         <ReportSheet
           targetType="vacancy"

@@ -37,6 +37,9 @@ def _hdr(token: str) -> dict:
 
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
+    # Сторожа доступности (UptimeRobot и подобные) по умолчанию шлют HEAD.
+    # Раньше на него отвечало 405, и сервис числился упавшим круглосуточно.
+    assert client.head("/health").status_code == 200
 
 
 def test_wrong_code_rejected(client):
@@ -72,7 +75,7 @@ def test_employer_creates_vacancy_and_seeker_sees_it(client):
     assert items[0]["distance_km"] is not None
 
 
-def test_full_match_flow(client):
+def test_full_match_flow(client, doc_token):
     # Работодатель создаёт вакансию
     emp_token, emp_id = _auth(client, "+79990000010", "employer")
     vac = client.post(
@@ -124,13 +127,36 @@ def test_full_match_flow(client):
     r = client.post(f"/matches/{match_id}/confirm", headers=_hdr(emp_token))
     assert r.json()["status"] == "confirmed"
 
+    # Доводим смену до закрытия: акт — документ о ВЫПОЛНЕННОЙ работе, и
+    # раньше он выдавался ещё до самой смены.
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import SessionLocal
+    from app.models import Match, Vacancy
+
+    db = SessionLocal()
+    try:
+        v = db.get(Vacancy, db.get(Match, match_id).vacancy_id)
+        v.date = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+        db.commit()
+    finally:
+        db.close()
+    code = [m for m in client.get("/matches", headers=_hdr(emp_token)).json()
+            if m["id"] == match_id][0]["checkin_code"]
+    client.post(f"/matches/{match_id}/checkin", headers=_hdr(seeker_token),
+                json={"code": code})
+    client.post(f"/matches/{match_id}/attendance", headers=_hdr(emp_token),
+                json={"attended": True})
+
     # PDF-акт генерируется (токен участника передаётся query-параметром)
-    r = client.get(f"/matches/{match_id}/act.pdf?token={seeker_token}")
+    link = doc_token(client, seeker_token)
+    r = client.get(f"/matches/{match_id}/act.pdf?token={link}")
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content[:4] == b"%PDF"
 
     # Чужой токен к этому акту — запрещено
     other_token, _ = _auth(client, "+79990009999", "seeker")
-    forbidden = client.get(f"/matches/{match_id}/act.pdf?token={other_token}")
+    stranger = doc_token(client, other_token)
+    forbidden = client.get(f"/matches/{match_id}/act.pdf?token={stranger}")
     assert forbidden.status_code == 403

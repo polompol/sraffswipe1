@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Employer, Match, User, Vacancy
+from ..ratelimit import rate_limit_ip
+from ..roles import role_ru, time_ru
 from ..rubles import plural, rubles_in_words
-from ..security import _is_blocked, decode_token
+from ..security import decode_token, ensure_token_usable
 
 router = APIRouter(prefix="/matches", tags=["acts"])
 
@@ -32,18 +34,8 @@ def _pdf() -> FPDF:
     return pdf
 
 
-# Русские названия должностей для акта (ключи — как в вакансии).
-_ROLE_RU = {
-    "waiter": "Официант", "waiter_assistant": "Помощник официанта",
-    "barista": "Бариста", "cook": "Повар", "dishwasher": "Посудомойщик",
-    "hostess": "Хостес", "bartender": "Бармен", "hookah": "Кальянщик",
-    "florist": "Флорист", "administrator": "Администратор",
-    "courier": "Курьер", "cleaner": "Уборщик",
-}
-
-
 def _fmt_time(minutes: int) -> str:
-    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+    return time_ru(minutes)
 
 
 def _fmt_date(iso: str) -> str:
@@ -65,25 +57,44 @@ def act_number(match_id: str) -> str:
     return f"{zlib.crc32(match_id.encode()) % 100000:05d}"
 
 
-@router.get("/{match_id}/act.pdf")
+@router.get(
+    "/{match_id}/act.pdf",
+    # Генерация PDF — ~40 мс процессора на запрос, а токен передаётся в
+    # адресе: гонять можно было чем угодно, хоть curl в цикле. Лимит по IP,
+    # а не по аккаунту: заголовка Authorization здесь нет — браузер открывает
+    # PDF по прямой ссылке и заголовков не шлёт.
+    dependencies=[Depends(rate_limit_ip("act", 20, 60))],
+)
 def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
-    # Браузер открывает PDF через window.open — токен передаётся как query-параметр.
+    # Браузер открывает PDF по прямой ссылке и заголовков не шлёт, поэтому
+    # токен приходится класть в адрес. Принимаем только короткий токен «на
+    # документ» (POST /auth/doc-token): он живёт пять минут и больше ни на что
+    # не годен. Обычный токен живёт днями, а адрес оседает в истории браузера
+    # и в логах сервера — одна строка из лога давала доступ ко всему аккаунту.
     principal = decode_token(token)
     if principal is None:
         raise HTTPException(status_code=401, detail="Нужен токен")
-    # Query-токен идёт мимо current_principal — проверяем бан вручную, иначе
-    # забаненный по старому JWT (до 30 дней) тянул бы акт с ИНН обеих сторон.
-    if _is_blocked(db, principal):
-        raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
+    if principal.get("scope") != "doc":
+        raise HTTPException(
+            status_code=401,
+            detail="Ссылка устарела — откройте акт из приложения заново",
+        )
+    # Query-токен идёт мимо current_principal — проверяем теми же правилами:
+    # иначе забаненный или разлогиненный тянул бы акт с ИНН обеих сторон.
+    ensure_token_usable(db, principal)
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["id"] not in (m.user_id, m.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа к акту")
-    # Акт выполненных работ имеет смысл только для подтверждённой смены.
-    if m.status not in ("confirmed", "completed"):
+    # Только по ЗАКРЫТОЙ смене. Раньше акт выдавался и по «подтверждённой»,
+    # то есть за неделю до самой смены: получался первичный бухгалтерский
+    # документ «услуги оказаны полностью и в срок» на работу, которой ещё не
+    # было, — и с ИНН обеих сторон внутри.
+    if m.status != "completed":
         raise HTTPException(
-            status_code=409, detail="Акт доступен после подтверждения смены"
+            status_code=409,
+            detail="Акт будет доступен после закрытия смены.",
         )
     vac = db.get(Vacancy, m.vacancy_id)
     emp = db.get(Employer, m.employer_id)
@@ -96,9 +107,16 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
     dur_min = vac.end_time - vac.start_time
     if dur_min <= 0:
         dur_min += 1440
+    # Если заведение уточнило фактические часы (человек ушёл раньше или
+    # задержался) — акт обязан показать ИХ. Он считал по плану, и документ
+    # расходился со всем остальным: в приложении человек видел 1600 ₽ и
+    # комиссия бралась с 1600 ₽, а в акте, который он несёт в свою
+    # бухгалтерию, стояло 2800 ₽ за восемь часов, которых не было.
+    if m.actual_minutes:
+        dur_min = m.actual_minutes
     pay = vac.rate if vac.rate_type == "perShift" else round(vac.rate * dur_min / 60)
     hours = dur_min / 60
-    role_ru = _ROLE_RU.get(vac.role, vac.role)
+    role_name = role_ru(vac.role)
     city = vac.city or "Москва"
 
     pdf = _pdf()
@@ -151,10 +169,12 @@ def act_pdf(match_id: str, token: str = "", db: Session = Depends(get_db)):
             int(hours), "час", "часа", "часов")
         price = vac.rate
     name = (
-        f"Услуги по профессии «{role_ru}», "
+        f"Услуги по профессии «{role_name}», "
         f"{_fmt_date(vac.date)}, "
         f"{_fmt_time(vac.start_time)}–{_fmt_time(vac.end_time)}"
     )
+    if m.actual_minutes and vac.rate_type != "perShift":
+        name += " (по фактической длительности)"
     pdf.set_font("DejaVu", size=9)
     y0 = pdf.get_y()
     pdf.multi_cell(95, 6, name, border=1)
