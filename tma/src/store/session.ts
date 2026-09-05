@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { AppRole } from "@/types/domain";
-import { setToken } from "@/api/client";
+import { setAuthLostHandler, setToken } from "@/api/client";
 import { LS } from "@/lib/storage";
 
 interface SessionState {
@@ -35,3 +35,7 @@ export const useSession = create<SessionState>((set) => ({
     set({ authenticated: false, role: null, userId: null });
   },
 }));
+
+// Потерянный вход обрабатывается ЗДЕСЬ, а не в сетевом слое: там не было
+// доступа к флагу authenticated, и он оставался true при выброшенном токене.
+setAuthLostHandler(() => useSession.getState().logout());

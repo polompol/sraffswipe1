@@ -34,11 +34,35 @@ import { PILOT_MODE } from "@/lib/flags";
 import { money, plural } from "@/lib/format";
 
 function CommissionCard() {
-  const { data: bill } = useQuery({
+  const { data: bill, isError, refetch } = useQuery({
     queryKey: ["my-commission"],
     queryFn: fetchMyCommission,
+    // Обновляться при возврате в приложение — здесь это не украшение.
+    //
+    // Оплата уходит ВО ВНЕШНИЙ БРАУЗЕР (openExternal ниже): человек платит и
+    // возвращается в мини-апп. Ключ ["my-commission"] не сбрасывался нигде во
+    // всём приложении, а refetchOnWindowFocus глобально выключён — и вернувшись
+    // после оплаты, заведение видело прежний баланс и прежний долг. Дальше оно
+    // либо платит второй раз, либо пишет в поддержку.
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
   });
   const [busy, setBusy] = useState(false);
+  // Ошибку показываем, а не прячем карточку. Стояло `if (!bill) return null`
+  // на оба случая сразу: при любом сбое запроса блок с балансом и долгом
+  // исчезал целиком, и заведение видело профиль без единого упоминания денег —
+  // то есть «долгов нет». Молчание про долг хуже честного «не загрузилось».
+  if (isError) {
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="muted">Не удалось загрузить баланс и комиссию.</div>
+        <Button variant="secondary" size="sm" block={false}
+                onClick={() => void refetch()}>
+          Обновить
+        </Button>
+      </div>
+    );
+  }
   if (!bill) return null;
   const due = bill.pendingRub > 0;
 

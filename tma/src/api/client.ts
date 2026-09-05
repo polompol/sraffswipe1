@@ -63,6 +63,25 @@ export function setToken(value: string | null): void {
   else localStorage.removeItem(LS.jwt);
 }
 
+/** Что делать, когда вход окончательно потерян.
+ *
+ *  Обработчик 401 сам чистил localStorage и переводил хэш на онбординг, но не
+ *  трогал хранилище сессии в памяти: флаг authenticated оставался true. А
+ *  именно он в App.tsx решает, показать экран или увести на онбординг
+ *  (`ready ? <Page/> : <Navigate to="/onboarding"/>`). Получалось состояние
+ *  «токена нет, но приложение считает, что вход есть»: человек попадал на
+ *  онбординг, а при следующем переходе снова видел рабочий экран, который
+ *  сыпал 401 на каждом запросе.
+ *
+ *  Через обратный вызов, а не прямым импортом хранилища: store/session.ts уже
+ *  импортирует отсюда setToken, и обратный импорт замкнул бы модули в кольцо.
+ */
+let onAuthLost: (() => void) | null = null;
+
+export function setAuthLostHandler(fn: () => void): void {
+  onAuthLost = fn;
+}
+
 export function getToken(): string | null {
   return token;
 }
@@ -188,9 +207,15 @@ async function request<T>(
     if (restored) {
       return request<T>(method, url, body, { ...config, retried: true });
     }
-    setToken(null);
-    localStorage.removeItem(LS.role);
-    localStorage.removeItem(LS.uid);
+    // Один выход на всё приложение: хранилище сессии само чистит токен, роль
+    // и uid — и, в отличие от прежней здешней копии, сбрасывает флаг входа.
+    if (onAuthLost) {
+      onAuthLost();
+    } else {
+      setToken(null);
+      localStorage.removeItem(LS.role);
+      localStorage.removeItem(LS.uid);
+    }
     if (!location.hash.startsWith("#/onboarding")) {
       location.hash = "#/onboarding";
     }
