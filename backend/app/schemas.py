@@ -2,7 +2,13 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 Role = Literal["seeker", "employer"]
 Phone = Annotated[
@@ -14,6 +20,36 @@ Code = Annotated[
 # Короткие строковые поля с разумным потолком длины (анти-абуз).
 Short = Annotated[str, StringConstraints(max_length=120)]
 Longish = Annotated[str, StringConstraints(max_length=2000)]
+
+
+def _existing_day(value: str) -> str:
+    r"""Дата обязана существовать в календаре, а не только выглядеть датой.
+
+    Регулярка ^\d{4}-\d{2}-\d{2}$ пропускала 31 ноября, 30 февраля и 13-й
+    месяц. Смена на такую дату публиковалась (201), попадала в ленту, по ней
+    создавался мэтч и работник её подтверждал — а дальше упиралась в стену:
+    отмена и «смена не состоялась» отвечали 409 «не получилось разобрать время
+    смены», расчёт по расписанию её не закрывал НИКОГДА, статус навсегда
+    оставался matched. Место на смене при этом занято, комиссии нет.
+
+    Проверено сквозной пробой до правки — ровно этот вывод и получился.
+
+    Дешевле отказать на входе одной строкой, чем разбирать залипшую запись
+    руками оператора.
+    """
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError("такой даты не существует") from None
+    return value
+
+
+# Дата в формате «2026-09-05», которая ДЕЙСТВИТЕЛЬНО существует.
+IsoDate = Annotated[
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    AfterValidator(_existing_day),
+]
 
 # Должности — закрытый список, ровно как в приложении (tma/src/types/domain.ts).
 # Раньше здесь принималась любая строка, и это была бесплатная витрина для
@@ -68,7 +104,7 @@ MIN_RATE_PER_SHIFT = 500
 
 class VacancyIn(BaseModel):
     role: StaffRole
-    date: Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    date: IsoDate
     start_time: int = Field(ge=0, le=1440)
     end_time: int = Field(ge=0, le=1440)
     rate: int = Field(ge=0, le=1_000_000)

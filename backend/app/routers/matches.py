@@ -22,7 +22,7 @@ from ..models import (
 )
 from ..notify import notify_admins, notify_owner
 from ..ratelimit import rate_limit
-from ..schemas import MatchOut
+from ..schemas import IsoDate, MatchOut
 from ..security import current_principal, secure_equals
 from ..shift_rules import (
     accrue_commission,
@@ -578,7 +578,7 @@ def set_actual_hours(
 
 
 class RescheduleIn(BaseModel):
-    date: Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    date: IsoDate
     start_time: Annotated[int, Field(ge=0, le=1440)]
     end_time: Annotated[int, Field(ge=0, le=1440)]
 
