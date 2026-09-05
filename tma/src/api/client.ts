@@ -117,7 +117,7 @@ async function silentReauth(): Promise<string | null> {
   const role = localStorage.getItem(LS.role);
   if (!role) return null;
   try {
-    const { retrieveRawInitData } = await import("@telegram-apps/sdk-react");
+    const { retrieveRawInitData } = await import("@tma.js/sdk-react");
     const initData = retrieveRawInitData() ?? "";
     if (!initData) return null;
     const res = await fetch(`${baseURL}/auth/telegram`, {
