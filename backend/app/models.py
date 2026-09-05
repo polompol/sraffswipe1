@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -33,8 +34,18 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     phone: Mapped[str] = mapped_column(String, unique=True, index=True)
+    # BigInteger, а не Integer. В PostgreSQL Integer — четыре байта, потолок
+    # 2 147 483 647. Телеграм в документации к Bot API про User.id пишет прямо:
+    # «may have more than 32 significant bits… at most 52 significant bits, so
+    # a 64-bit integer … is safe». У человека с идентификатором больше потолка
+    # регистрация падала на вставке: psycopg.errors.NumericValueOutOfRange.
+    # Сделать он с этим ничего не мог — свой telegram-id не выбирают.
+    #
+    # Тесты этого не видели: по умолчанию они идут на SQLite, а SQLite
+    # объявленную ширину целого не соблюдает и молча хранит восемь байт.
+    # Дефект жил только там, где боевая база, — то есть только в бою.
     tg_id: Mapped[int | None] = mapped_column(
-        Integer, unique=True, index=True, nullable=True
+        BigInteger, unique=True, index=True, nullable=True
     )
     tg_username: Mapped[str | None] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, default="")
@@ -83,8 +94,18 @@ class Employer(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     phone: Mapped[str] = mapped_column(String, unique=True, index=True)
+    # BigInteger, а не Integer. В PostgreSQL Integer — четыре байта, потолок
+    # 2 147 483 647. Телеграм в документации к Bot API про User.id пишет прямо:
+    # «may have more than 32 significant bits… at most 52 significant bits, so
+    # a 64-bit integer … is safe». У человека с идентификатором больше потолка
+    # регистрация падала на вставке: psycopg.errors.NumericValueOutOfRange.
+    # Сделать он с этим ничего не мог — свой telegram-id не выбирают.
+    #
+    # Тесты этого не видели: по умолчанию они идут на SQLite, а SQLite
+    # объявленную ширину целого не соблюдает и молча хранит восемь байт.
+    # Дефект жил только там, где боевая база, — то есть только в бою.
     tg_id: Mapped[int | None] = mapped_column(
-        Integer, unique=True, index=True, nullable=True
+        BigInteger, unique=True, index=True, nullable=True
     )
     tg_username: Mapped[str | None] = mapped_column(String, nullable=True)
     company_name: Mapped[str] = mapped_column(String, default="")
