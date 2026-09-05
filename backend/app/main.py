@@ -1,5 +1,6 @@
 """Точка входа FastAPI-приложения StaffSwipe."""
 import logging
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -38,6 +39,53 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("staffswipe")
+
+
+class _RedactTokensInLogs(logging.Filter):
+    """Вырезает token=… из всего, что уходит в журнал.
+
+    Токен чата едет в АДРЕСЕ WebSocket: заголовки браузерному WebSocket задать
+    нельзя, другого места нет. А uvicorn пишет строку запроса целиком. Замерено
+    на живом сервере:
+
+      INFO: 127.0.0.1:35358 - "WebSocket /ws/chat/abc?token=eyJhbGciOiJIUzI1
+      NiJ9.SEKRETNYJ_TOKEN_DOSTUPA.podpis" 403
+
+    Это рабочий ключ от аккаунта на семь суток, лежащий открытым текстом в
+    журнале контейнера. Кто читает журналы — тот входит под чужим именем.
+
+    Первой попыткой я поставил uvicorn флаг --no-access-log. Не помогло, и
+    замер это показал: строку про WebSocket пишет логгер uvicorn.error, а флаг
+    глушит только uvicorn.access. Заодно флаг убирал полезные строки.
+
+    Поэтому фильтр, а не флаг: он не зависит от того, какой логгер и какая
+    версия uvicorn пишет строку, и переживёт появление новых мест. Ставится и
+    на корневой логгер, и на оба логгера uvicorn — у них свои обработчики и
+    propagate=False, до корня их записи не доходят.
+    """
+
+    _RX = re.compile(r"(token=)[^&\s\"']+")
+
+    def _clean(self, value: object) -> object:
+        return self._RX.sub(r"\1REDACTED", value) if isinstance(value, str) else value
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = self._clean(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(self._clean(a) for a in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {k: self._clean(v) for k, v in record.args.items()}
+        return True
+
+
+def _install_log_redaction() -> None:
+    """Повесить фильтр на всё, что может писать строку запроса."""
+    f = _RedactTokensInLogs()
+    for name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
+        logging.getLogger(name).addFilter(f)
+
+
+_install_log_redaction()
 
 # Наблюдаемость: Sentry подключается только если задан DSN (SDK в requirements).
 # Ошибки логируем РАЗДЕЛЬНО: «нет пакета» и «плохой DSN» — это разные проблемы,
