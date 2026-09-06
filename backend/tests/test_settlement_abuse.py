@@ -303,3 +303,63 @@ def test_hours_cannot_be_set_before_the_shift(client):
     emp_h, seeker_h, v, mid = _future_shift(client, 890030, 890031)
     r = client.post(f"/matches/{mid}/hours", headers=emp_h, json={"minutes": 240})
     assert r.status_code == 409
+
+
+def test_worker_who_named_the_code_cannot_erase_the_shift_alone(client):
+    """Отметился кодом — и сам же говорит, что смены не было: это к оператору.
+
+    Открытый канал мимо комиссии, зеркальный к «молчанию». Работник называет
+    код (заведение говорит его при встрече — это доказательство сервиса, что
+    человек был на месте), а потом сам жмёт «Смена не состоялась». Заведению
+    достаточно просто не нажимать «Человек пришёл».
+
+    Проверка расхождения смотрела только на флаг ЧУЖОЙ стороны, поэтому спор
+    не открывался: смена уходила в expired, комиссия не начислялась никогда,
+    оператор об этом не узнавал. Двумя тапами по сговору.
+
+    Отметка кодом должна весить одинаково против кого угодно — включая того,
+    кто её поставил. Запись, противоречащая сама себе, идёт к человеку.
+    """
+    emp_h, seeker_h, mid = _worked_shift(client, 880101, 880102)
+    code = [m for m in client.get("/matches", headers=emp_h).json()
+            if m["id"] == mid][0]["checkin_code"]
+    assert client.post(f"/matches/{mid}/checkin", headers=seeker_h,
+                       json={"code": code}).status_code == 200
+
+    r = client.post(f"/matches/{mid}/not-held", headers=seeker_h,
+                    json={"reason": "смены не было"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        assert m.disputed is True, (
+            "работник назвал код и сам же отменил смену — это должен видеть "
+            "оператор, а не закрываться тихо"
+        )
+        assert m.status != "expired", "смена не должна закрываться без разбора"
+    finally:
+        db.close()
+
+
+def test_worker_who_never_checked_in_still_closes_the_shift_quietly(client):
+    """Обратная сторона: законный путь остался прежним.
+
+    Работник пришёл, а заведение закрыто — кода ему никто не назвал. Такая
+    смена по-прежнему закрывается без денег, без неявки и без спора. Без этой
+    половины проверка выше доказывала бы лишь то, что кнопка сломана.
+    """
+    emp_h, seeker_h, mid = _worked_shift(client, 880111, 880112)
+    r = client.post(f"/matches/{mid}/not-held", headers=seeker_h,
+                    json={"reason": "пришла — заведение закрыто"})
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        m = db.get(Match, mid)
+        assert m.status == "expired"
+        assert m.disputed is False
+        assert m.no_show is False, "работника не наказываем: он сам сообщил"
+    finally:
+        db.close()
+    assert _commission(mid) is None

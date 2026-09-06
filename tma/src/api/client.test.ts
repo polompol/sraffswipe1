@@ -135,3 +135,25 @@ describe("ошибки", () => {
     expect(err.response).toBeUndefined();
   });
 });
+
+describe("потеря входа", () => {
+  it("401 без возможности войти заново выключает вход целиком", async () => {
+    // Раньше здесь чистился только localStorage, а флаг authenticated в
+    // хранилище сессии оставался true. Именно он в App.tsx решает, показать
+    // экран или увести на онбординг, — и человек попадал в состояние «токена
+    // нет, но приложение считает, что вход есть»: каждый следующий переход
+    // открывал рабочий экран, сыплющий 401.
+    const { useSession } = await import("@/store/session");
+    useSession.getState().setAuth("staryj-token", "seeker", "u1");
+    // Роли в localStorage достаточно, чтобы тихий вход попробовал начаться;
+    // вне Telegram он не найдёт подписи запуска и честно вернёт null.
+    mockFetch(() => jsonResponse({ detail: "unauthorized" }, 401));
+
+    await expect(api.get("/me")).rejects.toBeInstanceOf(ApiError);
+
+    const s = useSession.getState();
+    expect(s.authenticated, "флаг входа должен погаснуть").toBe(false);
+    expect(s.role).toBeNull();
+    expect(location.hash).toBe("#/onboarding");
+  });
+});

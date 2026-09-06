@@ -38,7 +38,11 @@ export default defineConfig({
           if (id.includes("react-spring") || id.includes("use-gesture")) {
             return "vendor-motion";
           }
-          if (id.includes("@telegram-apps") || id.includes("valibot")) {
+          // @tma.js — то же самое, что было @telegram-apps: библиотеку
+          // переименовали. Правило по старому имени перестало совпадать с
+          // чем-либо, и SDK молча уезжал в общий кусок сборки — разбиение
+          // работало вхолостую, а заметить это по зелёной сборке нельзя.
+          if (id.includes("@tma.js") || id.includes("valibot")) {
             return "vendor-telegram";
           }
           if (id.includes("react-dom") || id.includes("/react/")) {

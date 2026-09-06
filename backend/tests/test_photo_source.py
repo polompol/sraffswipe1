@@ -155,3 +155,57 @@ def test_someone_elses_photo_from_our_own_storage_is_refused(monkeypatch):
     )
     # Аватарка Telegram лежит не у нас — на неё правило не распространяется.
     assert photos.is_allowed_photo_url("https://t.me/i/userpic/320/abc.jpg", "u1")
+
+
+def test_someone_elses_bucket_on_the_shared_endpoint_is_refused(monkeypatch):
+    """Голый эндпоинт облака — общий для всех его клиентов, а не наш.
+
+    storage.yandexcloud.net попадал в белый список хостов, а имя бакета в пути
+    никто не проверял. Поэтому адрес вида
+    https://storage.yandexcloud.net/<ЧУЖОЙ-БАКЕТ>/photos/<мой-id>/x.jpg
+    считался «нашим хранилищем». Свой бакет в том же облаке заводится за
+    десять минут — и обе беды из шапки этого файла возвращались целиком:
+    слежка за каждым, кто открыл карточку, и подмена картинки после модерации.
+
+    Совсем запретить этот хост нельзя: когда s3_public_base не задан, наш
+    собственный адрес именно такой (routers/uploads.py собирает базу как
+    «эндпоинт/бакет»). Поэтому проверяется имя бакета в начале пути.
+    """
+    _s3_on(monkeypatch)
+    monkeypatch.setattr(settings, "s3_public_base", "")
+    assert photos.is_allowed_photo_url(
+        "https://storage.yandexcloud.net/staffswipe-photos/photos/u1/a.jpg", "u1"
+    ), "наш собственный path-style адрес обязан приниматься"
+    assert not photos.is_allowed_photo_url(
+        "https://storage.yandexcloud.net/evil-attacker-bucket/photos/u1/a.jpg", "u1"
+    )
+    # И без owner_id тоже: проверка бакета не должна зависеть от того,
+    # передали ли нам владельца.
+    assert not photos.is_allowed_photo_url(
+        "https://storage.yandexcloud.net/evil-attacker-bucket/photos/u1/a.jpg"
+    )
+
+
+def test_dot_dot_cannot_walk_into_a_stranger_folder(monkeypatch):
+    """«..» в пути схлопывает браузер — значит и проверка обязана.
+
+    Проверка папки владельца искала ВХОЖДЕНИЕ подстроки «/photos/<id>/».
+    Адрес /photos/<мой-id>/../<чужой-id>/face.jpg её проходил: подстрока на
+    месте. Браузер же «..» сворачивает и грузит чужой файл — человек выходил
+    на смену под чужим лицом, ровно против чего проверка папки и написана.
+
+    Чужой id узнать несложно: ленте кандидатов он и так виден вместе с
+    адресами фотографий.
+    """
+    _s3_on(monkeypatch)
+    assert not photos.is_allowed_photo_url(
+        "https://cdn.staffswipe.ru/photos/u1/../VICTIM/face.jpg", "u1"
+    )
+    # То же самое в процентной записи — иначе проверка обходится ею.
+    assert not photos.is_allowed_photo_url(
+        "https://cdn.staffswipe.ru/photos/u1/%2e%2e/VICTIM/face.jpg", "u1"
+    )
+    # Обратная половина: обычный адрес своей папки по-прежнему проходит.
+    assert photos.is_allowed_photo_url(
+        "https://cdn.staffswipe.ru/photos/u1/face.jpg", "u1"
+    )

@@ -1,36 +1,43 @@
-// Тонкая обёртка над @telegram-apps/sdk-react (v3). Вся работа с Telegram —
-// только здесь, чтобы при смене версии править одно место. Все вызовы
-// защищены try/catch: приложение должно открываться и вне Telegram (dev).
-
+// Тонкая обёртка над @tma.js/sdk-react. Вся работа с Telegram — только здесь,
+// чтобы при смене версии править одно место. Все вызовы защищены try/catch:
+// приложение должно открываться и вне Telegram (dev).
+//
+// ПОЧЕМУ @tma.js, А НЕ @telegram-apps. Это одна и та же библиотека, её
+// переименовали. Проверено по npm на день правки:
+//
+//   @telegram-apps/sdk-react 3.3.9  — последняя публикация 08.10.2025
+//   @tma.js/sdk-react        3.0.23 — последняя публикация 14.07.2026
+//
+// Старая линейка не обновляется одиннадцать месяцев, а её @telegram-apps/bridge
+// помечен в npm как устаревший словами «This package is not supported anymore.
+// Use @tma.js/bridge instead». Меньшие номера версий у новой линейки — это
+// перенумерация после переименования, а не откат назад.
+//
+// Оставаться на замороженной библиотеке в продукте, который живёт внутри
+// чужого клиента, нельзя: Telegram меняет поведение (safe area, полноэкранный
+// режим), и чинить это будут только там, где выходят версии.
+//
+// Плоские функции стали разделами: mountMiniAppSync → miniApp.mount(),
+// expandViewport → viewport.expand() и так далее. Проверено, что все 27
+// используемых имён есть в новой линейке и что у них сохранились .isAvailable(),
+// .ifAvailable() и .sub().
 import {
-  init as sdkInit,
-  miniAppReady,
-  mountMiniAppSync,
-  mountThemeParamsSync,
-  bindThemeParamsCssVars,
-  mountViewport,
-  expandViewport,
-  mountSwipeBehavior,
-  disableVerticalSwipes,
-  bindViewportCssVars,
   backButton,
+  closingBehavior,
   hapticFeedback,
-  retrieveRawInitData,
-  retrieveLaunchParams,
-  shareURL,
-  showPopup,
-  isPopupSupported,
+  init as sdkInit,
+  isTMA as sdkIsTMA,
+  miniApp,
   openLink as sdkOpenLink,
   openTelegramLink as sdkOpenTelegramLink,
-  isTMA as sdkIsTMA,
-  setMiniAppHeaderColor,
-  setMiniAppBackgroundColor,
-  setMiniAppBottomBarColor,
-  isMiniAppDark,
-  mountClosingBehavior,
-  enableClosingConfirmation,
-  disableClosingConfirmation,
-} from "@telegram-apps/sdk-react";
+  popup,
+  retrieveLaunchParams,
+  retrieveRawInitData,
+  shareURL,
+  swipeBehavior,
+  themeParams,
+  viewport,
+} from "@tma.js/sdk-react";
 import { createBackStack } from "@/lib/backStack";
 
 let started = false;
@@ -47,15 +54,15 @@ export async function initTelegram(): Promise<void> {
   }
 
   try {
-    mountMiniAppSync();
-    miniAppReady();
+    miniApp.mount();
+    miniApp.ready();
   } catch {
     /* noop */
   }
 
   try {
-    mountThemeParamsSync();
-    bindThemeParamsCssVars();
+    themeParams.mount();
+    themeParams.bindCssVars();
   } catch {
     /* noop */
   }
@@ -66,20 +73,20 @@ export async function initTelegram(): Promise<void> {
   // монтирование вьюпорта падало (это бывает при перезагрузке в разработке),
   // раскрытие не выполнялось вообще.
   try {
-    expandViewport();
+    viewport.expand();
   } catch {
     /* noop */
   }
 
   try {
-    await mountViewport();
-    bindViewportCssVars();
+    await viewport.mount();
+    viewport.bindCssVars();
   } catch {
     /* noop */
   }
 
   try {
-    mountClosingBehavior();
+    closingBehavior.mount();
   } catch {
     /* noop */
   }
@@ -89,8 +96,8 @@ export async function initTelegram(): Promise<void> {
     // мини-апп. Потянул карточку чуть вниз при свайпе — и вместо отклика
     // приложение схлопнулось, а человек не понял, что произошло.
     // Отключаем закрытие свайпом: выйти по-прежнему можно крестиком.
-    mountSwipeBehavior();
-    disableVerticalSwipes();
+    swipeBehavior.mount();
+    swipeBehavior.disableVertical();
   } catch {
     /* noop */
   }
@@ -202,8 +209,8 @@ export async function confirmAction(
   confirmText = "Да",
 ): Promise<boolean> {
   try {
-    if (isPopupSupported()) {
-      const id = await showPopup({
+    if (popup.isSupported()) {
+      const id = await popup.show({
         message,
         buttons: [
           { id: "ok", type: "default", text: confirmText },
@@ -296,17 +303,17 @@ export function paintChrome(dark: boolean): void {
   const bg = dark ? "#160d0f" : "#efe7d3";      // --bg
   const bar = dark ? "#201316" : "#fffdf8";     // --surface (цвет таббара)
   try {
-    if (setMiniAppHeaderColor.isAvailable()) setMiniAppHeaderColor(bg);
+    if (miniApp.setHeaderColor.isAvailable()) miniApp.setHeaderColor(bg);
   } catch {
     /* старый клиент — оставит стандартную шапку */
   }
   try {
-    setMiniAppBackgroundColor.ifAvailable(bg);
+    miniApp.setBgColor.ifAvailable(bg);
   } catch {
     /* noop */
   }
   try {
-    setMiniAppBottomBarColor.ifAvailable(bar);
+    miniApp.setBottomBarColor.ifAvailable(bar);
   } catch {
     /* noop */
   }
@@ -324,7 +331,7 @@ export function telegramDark(): boolean | null {
   // игнорируя системную. Поэтому сначала проверяем, что мы вообще внутри.
   if (!insideTelegram()) return null;
   try {
-    return isMiniAppDark();
+    return miniApp.isDark();
   } catch {
     return null;
   }
@@ -333,7 +340,7 @@ export function telegramDark(): boolean | null {
 /** Подписка на смену темы в Telegram, пока приложение открыто. */
 export function onTelegramThemeChange(fn: (dark: boolean) => void): () => void {
   try {
-    return isMiniAppDark.sub(fn);
+    return miniApp.isDark.sub(fn);
   } catch {
     return () => {};
   }
@@ -348,8 +355,8 @@ export function onTelegramThemeChange(fn: (dark: boolean) => void): () => void {
  */
 export function guardClosing(dirty: boolean): void {
   try {
-    if (dirty) enableClosingConfirmation();
-    else disableClosingConfirmation();
+    if (dirty) closingBehavior.enableConfirmation();
+    else closingBehavior.disableConfirmation();
   } catch {
     /* noop */
   }

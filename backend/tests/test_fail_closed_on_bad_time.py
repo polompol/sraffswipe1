@@ -21,10 +21,11 @@
 разрешения: он бьёт по действию, которое всё равно нельзя посчитать честно, и
 ведёт человека к оператору. Разрешение бьёт по чужим деньгам.
 """
+from datetime import UTC, datetime, timedelta
+
 from app.db import SessionLocal
 from app.models import Match, Vacancy
 from app.shift_rules import shift_is_over
-from app.timeutil import local_today
 
 
 def _auth(client, role):
@@ -33,10 +34,19 @@ def _auth(client, role):
 
 
 def _future_match(client):
-    """Договорённость о смене, которая ещё НЕ начиналась."""
+    """Договорённость о смене, которая ещё НЕ начиналась.
+
+    Дата — послезавтра, а не сегодня. Стояло local_today() с началом в 10:00,
+    и это делало проверку заложницей часа запуска: после 10 утра по Москве
+    смена «сегодня в 10:00» уже началась, перенос честно отвечал 409, и тест
+    падал на исправном коде. В сборке он проходил только потому, что она шла
+    ночью. Поймано прогоном в 13:25 по Москве. Ровно эта ошибка описана в
+    tests/shifttime.py — я повторил её, когда писал этот файл.
+    """
+    day = (datetime.now(UTC) + timedelta(days=2)).date().isoformat()
     emp_h, _ = _auth(client, "employer")
     v = client.post("/vacancies", headers=emp_h, json={
-        "role": "waiter", "date": local_today(), "start_time": 600,
+        "role": "waiter", "date": day, "start_time": 600,
         "end_time": 1080, "rate": 400, "rate_type": "perHour",
         "lat": 55.75, "lng": 37.61, "address": "Никольская, 10",
     }).json()

@@ -25,7 +25,8 @@
 загружать всё равно некуда, так что ничего рабочего это не ломает.
 """
 import logging
-from urllib.parse import urlparse
+import posixpath
+from urllib.parse import unquote, urlparse
 
 from .config import settings
 
@@ -81,13 +82,47 @@ def is_allowed_photo_url(url: str, owner_id: str = "") -> bool:
         return bool(settings.dev_mode)
     if host not in _own_hosts():
         return False
-    return not owner_id or _is_own_path(url, owner_id)
+    path = _clean_path(url)
+    prefix = _bucket_prefix(host)
+    # Имя бакета обязано быть в пути, если хост — общий эндпоинт облака.
+    if not path.startswith(prefix):
+        return False
+    return not owner_id or path.startswith(f"{prefix}photos/{owner_id}/")
 
 
-def _is_own_path(url: str, owner_id: str) -> bool:
-    """Лежит ли файл в папке этого владельца."""
-    path = urlparse(url).path
-    return f"/photos/{owner_id}/" in path
+def _bucket_prefix(host: str) -> str:
+    """С чего обязан начинаться путь НАШЕГО файла на этом хосте.
+
+    Голый эндпоинт облака (storage.yandexcloud.net) общий для ВСЕХ его
+    клиентов, а не наш. Он попадал в белый список хостов, и имя бакета в пути
+    никто не проверял: адрес вида
+    https://storage.yandexcloud.net/<ЧУЖОЙ-БАКЕТ>/photos/<мой-id>/x.jpg
+    считался «нашим хранилищем». Свой бакет в том же облаке заводится за
+    десять минут — и обе беды из шапки этого файла возвращались целиком:
+    слежка за всеми, кто открыл карточку, и подмена картинки после модерации.
+
+    Совсем убрать этот хост нельзя: когда s3_public_base не задан, наш
+    собственный адрес именно такой (см. routers/uploads.py — база собирается
+    как «эндпоинт/бакет»). Поэтому не запрет хоста, а требование имени бакета.
+    """
+    if settings.s3_bucket and host == _host(settings.s3_endpoint):
+        return f"/{settings.s3_bucket}/"
+    return "/"
+
+
+def _clean_path(url: str) -> str:
+    """Путь так, как его увидит БРАУЗЕР: со схлопнутыми «..».
+
+    Проверка папки владельца искала вхождение подстроки «/photos/<id>/» в
+    сыром пути. Адрес /photos/<мой-id>/../<чужой-id>/face.jpg её проходил:
+    подстрока на месте. А браузер по правилам разбора адреса «..» схлопывает
+    и грузит ЧУЖОЙ файл — человек выходил на смену под чужим лицом, ровно то,
+    ради чего проверка папки и написана.
+
+    unquote — потому что «..» приезжает и в процентной записи (%2e%2e).
+    """
+    raw = unquote(urlparse(url).path)
+    return posixpath.normpath(raw) if raw else "/"
 
 
 def delete_stored_photos(owner_id: str) -> int:
