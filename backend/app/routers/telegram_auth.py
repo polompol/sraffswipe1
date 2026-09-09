@@ -1,13 +1,14 @@
 """Авторизация через Telegram Mini App (initData → JWT). Замена SMS."""
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Entitlement, Event, Referral, User
+from ..posthog import capture_event, identify_user
 from ..ratelimit import rate_limit_ip
 from ..schemas import TokenOut
 from ..security import create_token
@@ -92,6 +93,10 @@ def _track_source(db, owner_id: str, code: str, role: str) -> None:
         props=json.dumps({"src": src, "role": role}, ensure_ascii=False),
     ))
     db.commit()
+    # Источник берётся из подписанного Telegram start_param, поэтому клиент не
+    # может приписать себе канал напрямую. В PostHog уходит только короткая
+    # метка, без initData и Telegram id.
+    capture_event("acquisition_source", owner_id, {"source": src, "role": role})
 
 
 @router.post(
@@ -111,7 +116,11 @@ def _track_source(db, owner_id: str, code: str, role: str) -> None:
     # нагрузки на базу — для этого 300 в минуту с одного адреса достаточно.
     dependencies=[Depends(rate_limit_ip("tg-login", 300, 60))],
 )
-def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
+def telegram_login(
+    body: TelegramAuthIn,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     valid = validate_init_data(
         body.init_data, settings.telegram_bot_token,
         max_age_seconds=settings.initdata_ttl_hours * 3600,
@@ -148,6 +157,8 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
     if _banned_by_tg(db, tg_id):
         raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
 
+    anonymous_id = request.headers.get("X-Analytics-Anonymous-Id")
+
     if body.role == "employer":
         emp = db.query(Employer).filter(Employer.tg_id == tg_id).first()
         if emp is not None and emp.blocked:
@@ -167,6 +178,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
             db.refresh(emp)
             _apply_referral(db, emp.id, ref_code)
             _track_source(db, emp.id, ref_code, "employer")
+        identify_user(emp.id, anonymous_id, "employer")
         return TokenOut(
             access_token=create_token(emp.id, "employer", emp.token_version),
             role="employer",
@@ -191,6 +203,7 @@ def telegram_login(body: TelegramAuthIn, db: Session = Depends(get_db)):
         db.refresh(user)
         _apply_referral(db, user.id, ref_code)
         _track_source(db, user.id, ref_code, "seeker")
+    identify_user(user.id, anonymous_id, "seeker")
     return TokenOut(
         access_token=create_token(user.id, "seeker", user.token_version),
         role="seeker",
