@@ -127,6 +127,14 @@ def _collect_match(session: Session, match: Match, is_new: bool) -> None:
 
 
 def _after_flush(session: Session, _flush_context: object) -> None:
+    # Dirty matches go first: when normal ORM code closes a shift we know both
+    # sides and attribute completion to the worker. The Commission fallback
+    # below handles guarded bulk UPDATE auto-settlement where Match history is
+    # intentionally not synchronized into the ORM identity map.
+    for obj in session.dirty:
+        if isinstance(obj, Match):
+            _collect_match(session, obj, False)
+
     for obj in session.new:
         if isinstance(obj, Match):
             _collect_match(session, obj, True)
@@ -146,24 +154,22 @@ def _after_flush(session: Session, _flush_context: object) -> None:
                 props,
                 dedupe=f"commission:{obj.match_id}",
             )
-            # Auto-settlement uses a guarded bulk UPDATE for the Match row, so
-            # the new idempotent Commission is also the durable completion
-            # signal. Deduplication collapses this with an ordinary Match
-            # status transition when both appear in the same transaction.
-            match = session.get(Match, obj.match_id)
-            if match is not None:
-                _queue(
-                    session,
-                    "shift_completed",
-                    match.user_id,
-                    {
-                        "match_id": match.id,
-                        "vacancy_id": match.vacancy_id,
-                        "employer_id": match.employer_id,
-                        "source": "server",
-                    },
-                    dedupe=f"shift_completed:{match.id}",
-                )
+            # Auto-settlement closes Match with a guarded Query.update(...,
+            # synchronize_session=False). That intentionally has no ORM
+            # attribute history. A newly flushed, idempotent Commission is the
+            # durable signal that this paid/chargeable completion happened.
+            # No SQL query is executed inside the flush hook.
+            _queue(
+                session,
+                "shift_completed",
+                obj.employer_id,
+                {
+                    "match_id": obj.match_id,
+                    "employer_id": obj.employer_id,
+                    "source": "server_commission_fallback",
+                },
+                dedupe=f"shift_completed:{obj.match_id}",
+            )
         elif isinstance(obj, Purchase) and obj.status == "paid":
             _queue(
                 session,
@@ -177,10 +183,6 @@ def _after_flush(session: Session, _flush_context: object) -> None:
                 },
                 dedupe=f"purchase:{obj.id}",
             )
-
-    for obj in session.dirty:
-        if isinstance(obj, Match):
-            _collect_match(session, obj, False)
 
 
 def _after_commit(session: Session) -> None:
