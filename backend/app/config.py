@@ -63,6 +63,21 @@ class Settings(BaseSettings):
     s3_public_base: str = ""
     s3_region: str = "ru-central1"
 
+    # Product analytics. The project key stays on the backend even though a
+    # PostHog project key is not an account password: keeping all analytics
+    # server-side gives StaffSwipe one privacy boundary and one kill switch.
+    posthog_enabled: bool = False
+    posthog_project_key: str = ""
+    posthog_host: str = "https://us.i.posthog.com"
+
+    @property
+    def posthog_ready(self) -> bool:
+        return bool(
+            self.posthog_enabled
+            and self.posthog_project_key.strip()
+            and self.posthog_host.strip()
+        )
+
     @property
     def s3_ready(self) -> bool:
         return bool(self.s3_endpoint and self.s3_bucket and self.s3_key)
@@ -88,6 +103,10 @@ class Settings(BaseSettings):
             problems.append(
                 "TELEGRAM_BOT_TOKEN не задан — вход через Telegram работать не будет"
             )
+        # Enabling analytics without a key is almost certainly a deployment
+        # mistake. Fail closed instead of silently believing metrics exist.
+        if self.posthog_enabled and not self.posthog_project_key.strip():
+            problems.append("POSTHOG_ENABLED=true, но POSTHOG_PROJECT_KEY не задан")
         if problems:
             raise RuntimeError(
                 "Небезопасная конфигурация для прод-режима: "
