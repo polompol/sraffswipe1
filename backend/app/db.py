@@ -57,6 +57,12 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     # Импорт моделей нужен, чтобы они зарегистрировались в metadata.
     from . import models  # noqa: F401
+    # Аналитика подписывается на уже зарегистрированные SQLAlchemy-модели и
+    # отправляет события только ПОСЛЕ успешного commit. Импорт здесь избегает
+    # цикла db -> models -> db на старте приложения.
+    from .analytics_hooks import install_analytics_hooks
+
+    install_analytics_hooks()
 
     # SQLite (dev/тесты) — создаём схему на месте. PostgreSQL (прод) управляется
     # миграциями Alembic (`alembic upgrade head`), поэтому create_all не трогаем.
