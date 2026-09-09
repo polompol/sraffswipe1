@@ -18,6 +18,29 @@ const baseURL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 /** Сколько ждём ответ. Дальше честнее сказать «нет связи», чем висеть. */
 const TIMEOUT_MS = 15000;
 
+// Псевдоним для пути до авторизации. Это НЕ Telegram id и не fingerprint:
+// случайная строка создаётся только после согласия на обработку данных и
+// хранится локально. Backend использует её только для склейки анонимного пути
+// с внутренним UUID StaffSwipe после успешного входа.
+const ANALYTICS_ANON_KEY = "staffswipe:analytics-anon:v1";
+
+export function analyticsAnonymousId(): string {
+  if (localStorage.getItem(LS.consent) !== "1") return "";
+  let value = localStorage.getItem(ANALYTICS_ANON_KEY) ?? "";
+  if (!value) {
+    value = typeof crypto?.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `a_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+    localStorage.setItem(ANALYTICS_ANON_KEY, value);
+  }
+  return value;
+}
+
+function analyticsHeader(): Record<string, string> {
+  const id = analyticsAnonymousId();
+  return id ? { "X-Analytics-Anonymous-Id": id } : {};
+}
+
 export interface RequestConfig {
   params?: object;
   headers?: Record<string, string>;
@@ -141,7 +164,7 @@ async function silentReauth(): Promise<string | null> {
     if (!initData) return null;
     const res = await fetch(`${baseURL}/auth/telegram`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...analyticsHeader() },
       body: JSON.stringify({ init_data: initData, role }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -166,7 +189,10 @@ async function request<T>(
   config: RequestConfig = {},
 ): Promise<ApiResponse<T>> {
   const full = baseURL + withParams(url, config.params);
-  const headers: Record<string, string> = { ...(config.headers ?? {}) };
+  const headers: Record<string, string> = {
+    ...analyticsHeader(),
+    ...(config.headers ?? {}),
+  };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined && !(body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
