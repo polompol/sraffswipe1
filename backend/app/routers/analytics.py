@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..models import Employer, Event, Match, User
+from ..posthog import capture_event, safe_anonymous_id
 from ..ratelimit import client_ip, hit
 from ..security import current_principal, optional_principal
 
@@ -34,6 +35,25 @@ def _is_admin(db: Session, principal: dict) -> bool:
 class EventIn(BaseModel):
     name: str
     props: dict | None = None
+
+
+def _posthog_name(name: str, principal: dict | None) -> str:
+    """Keep the legacy DB funnel stable while giving PostHog clear semantics."""
+    if name == "open":
+        return "app_opened"
+    if name == "swipe":
+        role = principal.get("role") if principal else None
+        if role == "seeker":
+            return "shift_swiped"
+        if role == "employer":
+            return "candidate_swiped"
+        return "swipe"
+    return {
+        "match": "match_ui_shown",
+        "confirm": "shift_confirm_ui_success",
+        "vacancy_publish": "vacancy_publish_ui_success",
+        "consent": "consent_accepted",
+    }.get(name, name)
 
 
 @router.post("/events")
@@ -76,6 +96,24 @@ def track(
         props=props,
     ))
     db.commit()
+
+    # Dual-write happens only after the first-party event is safely committed.
+    # Known users use the internal StaffSwipe UUID. Before login the TMA sends
+    # a random local identifier in a dedicated header; no IP, Telegram id or
+    # device fingerprint is used as identity.
+    anonymous = safe_anonymous_id(
+        request.headers.get("X-Analytics-Anonymous-Id")
+    )
+    distinct_id = (
+        principal["id"]
+        if principal
+        else (f"anon:{anonymous}" if anonymous else "")
+    )
+    if distinct_id:
+        posthog_props = dict(raw)
+        if principal:
+            posthog_props["actor_role"] = principal.get("role", "")
+        capture_event(_posthog_name(name, principal), distinct_id, posthog_props)
     return {"ok": True}
 
 
