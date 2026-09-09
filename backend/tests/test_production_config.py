@@ -1,15 +1,22 @@
 """Regression tests for fail-safe production configuration."""
 
 
-def test_dev_mode_is_explicit_in_test_environment():
+def test_config_class_defaults_dev_mode_to_false(monkeypatch):
+    from app.config import Settings
+
+    monkeypatch.delenv("DEV_MODE", raising=False)
+    cfg = Settings(_env_file=None)
+    assert cfg.dev_mode is False
+
+
+def test_shared_test_environment_explicitly_enables_dev_mode():
     from app.config import settings
 
-    # The shared test fixture deliberately opts into development mode. The
-    # important regression is that config.py itself no longer defaults to it.
+    # conftest.py opts into development mode explicitly for the test suite.
     assert settings.dev_mode is True
 
 
-def test_production_rejects_missing_secrets(monkeypatch):
+def test_production_accepts_complete_secure_configuration(monkeypatch):
     from app.config import Settings
 
     monkeypatch.setenv("DEV_MODE", "false")
