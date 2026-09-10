@@ -1,0 +1,300 @@
+/* StaffSwipe Swipe UI V2
+ *
+ * Только визуальные overrides главной колоды. Core gesture/matching остаются
+ * в SwipeDeck.tsx и backend. Файл подключается ПОСЛЕ index.css, поэтому
+ * правила здесь намеренно узко scoped под .page.feed-deck.
+ */
+
+/* Карточка должна ощущаться главным объектом, а не ещё одной панелью UI. */
+.page.feed-deck .deck {
+  margin-top: 6px;
+  perspective: 900px;
+}
+
+.page.feed-deck .swipe-card {
+  border: 1px solid color-mix(in srgb, var(--border-strong) 42%, transparent);
+  box-shadow:
+    0 22px 48px color-mix(in srgb, var(--crimson-dark) 24%, transparent),
+    0 4px 12px color-mix(in srgb, var(--text) 14%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--on-dark) 12%, transparent);
+}
+
+/* Чуть богаче depth на фото: верх остаётся живым, низ гарантированно читабелен. */
+.page.feed-deck .swipe-shade {
+  background: linear-gradient(
+    to bottom,
+    rgba(16, 11, 8, 0.08) 0%,
+    rgba(16, 11, 8, 0.04) 28%,
+    rgba(16, 11, 8, 0.28) 46%,
+    rgba(16, 11, 8, 0.68) 66%,
+    rgba(10, 7, 5, 0.93) 86%,
+    rgba(10, 7, 5, 0.98) 100%
+  );
+}
+
+.page.feed-deck .swipe-img {
+  transform: scale(1.01);
+}
+
+/* Верхние статусы похожи на аккуратные badges, а не на случайные кнопки. */
+.page.feed-deck .glass {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-inline: 11px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.page.feed-deck .swipe-top {
+  margin-inline: 18px;
+}
+
+/* Название — editorial/display акцент StaffSwipe. Prata не делаем fake-bold. */
+.page.feed-deck .swipe-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(var(--text-xl), 6.4vw, var(--text-3xl));
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* На карточке смены после названия уже есть реальная сумма из estimatedPay().
+ * Раньше при наличии фото она была обычной строкой 16px и визуально терялась.
+ * Не меняем данные — только hierarchy. У candidate после title идёт .row или
+ * .card-meta, поэтому selector не задевает его.
+ */
+.page.feed-deck .swipe-body > .swipe-title + div:not(.row):not(.card-meta) {
+  margin-top: 7px !important;
+  font-family: var(--font-display);
+  font-size: clamp(var(--text-xl), 7vw, var(--text-display)) !important;
+  line-height: 1 !important;
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-dark-gold);
+}
+
+/* Роль смены — компактный label перед названием, не конкурент цене. */
+.page.feed-deck .swipe-body > .row:first-child .tag.tag-gold-fill {
+  min-height: 34px;
+  padding: 6px 11px;
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+}
+
+/* У человека первая роль становится явным подзаголовком; остальные роли
+ * остаются вторичными chips. Это работает на существующем DOM без новых API.
+ */
+.page.feed-deck .swipe-title + .row .tag.tag-gold-fill:first-child {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  min-height: 38px;
+  padding: 6px 13px;
+  border-radius: var(--radius-sm);
+}
+
+.page.feed-deck .swipe-title + .row .tag.tag-gold-fill:not(:first-child) {
+  background: color-mix(in srgb, var(--gold-fill) 72%, transparent);
+  border-color: color-mix(in srgb, var(--gold-fill) 72%, transparent);
+}
+
+.page.feed-deck .card-meta {
+  margin-top: 8px;
+  gap: 5px;
+  line-height: 1.25;
+}
+
+.page.feed-deck .card-meta-trust {
+  color: var(--on-dark-gold);
+  font-weight: 700;
+}
+
+/* Условия внизу собираются в компактный trust strip. */
+.page.feed-deck .swipe-cond {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--on-dark) 20%, transparent);
+}
+
+/* «Подробнее» — тихая навигация, а не третья CTA. */
+.page.feed-deck .swipe-more {
+  min-height: 40px;
+  align-self: flex-start;
+  margin-top: 7px;
+  padding: 0 10px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--on-dark-gold);
+  font-weight: 800;
+  text-decoration: none;
+}
+.page.feed-deck .swipe-more::after {
+  content: "  →";
+}
+.page.feed-deck .swipe-more:active {
+  transform: translateX(2px);
+}
+
+/* Фильтры визуально легче карточки и не спорят с ней за внимание. */
+.page.feed-deck .chips-row {
+  margin-top: 2px;
+}
+.page.feed-deck .chip {
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  border-color: color-mix(in srgb, var(--border-strong) 76%, transparent);
+}
+.page.feed-deck .chip-on {
+  background: var(--gold-fill);
+  border-color: var(--gold-fill);
+}
+
+/* ===== Фирменная action-панель =====
+ * Favorite уже живёт на самой карточке. Поэтому под колодой остаются только
+ * skip и одно главное positive action. Primary делаем вытянутым stamp-CTA.
+ */
+.page.feed-deck .actions {
+  align-items: center;
+  gap: 14px;
+}
+
+.page.feed-deck .act-col {
+  position: relative;
+}
+
+.page.feed-deck .act-skip {
+  border-style: solid;
+  box-shadow:
+    0 6px 16px color-mix(in srgb, var(--text) 12%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--surface) 66%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--border-strong) 42%, transparent);
+}
+
+.page.feed-deck .act-like {
+  width: clamp(148px, 43vw, 178px);
+  height: var(--act-size);
+  border-radius: 999px;
+  justify-content: flex-start;
+  padding: 0 24px;
+  background-image:
+    linear-gradient(180deg, color-mix(in srgb, var(--on-brand) 18%, transparent), transparent 44%),
+    linear-gradient(135deg, var(--gold-fill-soft), var(--gold-fill));
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--gold-fill) 46%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--on-brand) 26%, transparent);
+}
+
+/* В markup подпись уже существует после button. Переносим её внутрь
+ * вытянутой CTA визуально, не меняя доступный aria-label самой кнопки.
+ */
+.page.feed-deck .act-col:last-child {
+  width: clamp(148px, 43vw, 178px);
+}
+.page.feed-deck .act-col:last-child .act-label-like {
+  position: absolute;
+  top: calc(var(--act-size) / 2);
+  left: 62px;
+  transform: translateY(-50%);
+  z-index: 2;
+  pointer-events: none;
+  white-space: nowrap;
+  color: var(--on-brand);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  text-shadow: none;
+  letter-spacing: 0.01em;
+}
+
+.page.feed-deck .act-label-skip {
+  font-size: var(--text-xs);
+  color: var(--on-dark);
+}
+
+.page.feed-deck .act-like:active {
+  transform: scale(0.96);
+}
+.page.feed-deck .act-skip:active {
+  transform: scale(0.92);
+}
+
+/* Штамп при жесте — рабочий язык вместо dating-like LIKE. */
+.page.feed-deck .stamp {
+  font-family: var(--font-display);
+  font-weight: 400;
+  border-width: 3px;
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.34);
+}
+
+/* Dark theme: action outline и cards должны оставаться различимыми. */
+[data-theme="dark"] .page.feed-deck .swipe-card {
+  border-color: var(--border-strong);
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.42),
+    0 4px 14px rgba(0, 0, 0, 0.32);
+}
+[data-theme="dark"] .page.feed-deck .chip {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+/* На низком экране оставляем branded CTA, но уменьшаем её ширину, чтобы она
+ * не выталкивала skip и не перекрывала карточку.
+ */
+@media (max-height: 760px) {
+  .page.feed-deck .act-like,
+  .page.feed-deck .act-col:last-child {
+    width: clamp(136px, 40vw, 154px);
+  }
+  .page.feed-deck .act-like {
+    padding-left: 20px;
+  }
+  .page.feed-deck .act-col:last-child .act-label-like {
+    left: 54px;
+  }
+}
+
+@media (max-width: 360px) {
+  .page.feed-deck .actions {
+    gap: 10px;
+  }
+  .page.feed-deck .act-like,
+  .page.feed-deck .act-col:last-child {
+    width: 136px;
+  }
+  .page.feed-deck .swipe-title {
+    font-size: var(--text-xl);
+  }
+}
+
+body[data-large="1"] .page.feed-deck .act-like,
+body[data-large="1"] .page.feed-deck .act-col:last-child {
+  width: clamp(160px, 46vw, 194px);
+}
+body[data-large="1"] .page.feed-deck .act-col:last-child .act-label-like {
+  left: 72px;
+  font-size: var(--text-base);
+}
+
+@media (max-height: 600px) {
+  body[data-large="1"] .page.feed-deck .act-like,
+  body[data-large="1"] .page.feed-deck .act-col:last-child {
+    width: 142px;
+  }
+  body[data-large="1"] .page.feed-deck .act-col:last-child .act-label-like {
+    left: 54px;
+    font-size: var(--text-xs);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page.feed-deck .swipe-img,
+  .page.feed-deck .act-like,
+  .page.feed-deck .act-skip,
+  .page.feed-deck .swipe-more {
+    transform: none;
+  }
+}
