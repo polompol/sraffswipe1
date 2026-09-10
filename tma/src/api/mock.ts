@@ -46,7 +46,7 @@ const VACANCIES: Vacancy[] = [
     lng: 37.587,
     address: "ул. Льва Толстого, 16",
     city: "Москва",
-    interiorPhotoUrl: photo("photo-1559925393-8be0ec4767c8"),
+    interiorPhotoUrl: "/images/staffswipe-restaurant.webp",
     employerVerified: true,
     status: "active",
     distanceKm: 1.6,
@@ -130,7 +130,7 @@ const SEEKERS: Seeker[] = [
     inn: "771298765432",
     experienceTags: ["medBook", "english", "experienced", "selfEmployed"],
     rating: 4.9,
-    photoUrls: [photo("photo-1494790108377-be9c29b29330")],
+    photoUrls: ["/images/staffswipe-barista.webp"],
     about: "Опыт в fine dining, английский B2.",
     availableToday: true,
     shiftsTotal: 12,
@@ -669,6 +669,7 @@ export function updateMe(patch: {
   about?: string;
   experience_tags?: string[];
   photo_url?: string;
+  photo_urls?: string[];
   self_employed?: boolean;
   inn?: string;
   company_name?: string;
@@ -693,7 +694,14 @@ export function updateMe(patch: {
   if (patch.experience_tags !== undefined) {
     meProfile.experienceTags = patch.experience_tags;
   }
-  if (patch.photo_url !== undefined) meProfile.photoUrl = patch.photo_url;
+  if (patch.photo_url !== undefined) {
+    meProfile.photoUrl = patch.photo_url;
+    meProfile.photoUrls = patch.photo_url ? [patch.photo_url] : [];
+  }
+  if (patch.photo_urls !== undefined) {
+    meProfile.photoUrls = [...new Set(patch.photo_urls)].slice(0, 5);
+    meProfile.photoUrl = meProfile.photoUrls[0] ?? "";
+  }
   if (patch.self_employed !== undefined) {
     meProfile.selfEmployed = patch.self_employed;
   }

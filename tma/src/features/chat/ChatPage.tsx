@@ -419,7 +419,7 @@ export function ChatPage() {
           right: 0,
           maxWidth: 520,
           margin: "0 auto",
-          padding: "8px 12px calc(8px + env(safe-area-inset-bottom))",
+          padding: "8px 12px calc(8px + var(--app-safe-bottom))",
           background: "var(--surface)",
           borderTop: "1px solid var(--border)",
         }}

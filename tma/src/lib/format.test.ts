@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   plural,
   fmtTime,
@@ -10,8 +10,19 @@ import {
   todayISO,
   shiftDayLabel,
   isUrgentShift,
+  fmtDate,
+  dateLong,
+  localISO,
 } from "./format";
 import type { Vacancy } from "@/types/domain";
+
+afterEach(() => vi.useRealTimers());
+
+function tomorrowISO(): string {
+  const next = new Date();
+  next.setDate(next.getDate() + 1);
+  return localISO(next);
+}
 
 describe("format", () => {
   it("fmtTime форматирует минуты от полуночи", () => {
@@ -58,16 +69,40 @@ describe("format", () => {
 
   it("shiftDayLabel: сегодня/завтра/дата", () => {
     const today = todayISO();
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const tomorrow = tomorrowISO();
     expect(shiftDayLabel(today)).toBe("Сегодня");
     expect(shiftDayLabel(tomorrow)).toBe("Завтра");
     expect(shiftDayLabel("2020-03-15")).toBe("15 марта");
   });
 
   it("isUrgentShift: горит только если смена сегодня", () => {
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const tomorrow = tomorrowISO();
     expect(isUrgentShift(todayISO())).toBe(true);
     expect(isUrgentShift(tomorrow)).toBe(false);
+  });
+});
+
+describe("календарная дата смены", () => {
+  it("сохраняет день и день недели независимо от часового пояса", () => {
+    expect(fmtDate("2020-03-15")).toBe("15 марта");
+    expect(dateLong("2020-03-15")).toBe("15 марта, воскресенье");
+    expect(fmtDate("2024-02-29")).toBe("29 февраля");
+  });
+
+  it.each(["", "2026-02-30", "2026-13-01", "2026-00-15", "не дата"])(
+    "не показывает выдуманный день для %s", (value) => {
+      expect(fmtDate(value)).toBe("");
+      expect(dateLong(value)).toBe("");
+    },
+  );
+
+  it.each([
+    [new Date(2026, 2, 7, 23, 30), "2026-03-08"],
+    [new Date(2026, 10, 1, 0, 30), "2026-11-02"],
+  ])("завтра остаётся следующим днём при переводе часов (%s)", (now, next) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    expect(shiftDayLabel(next as string)).toBe("Завтра");
   });
 });
 

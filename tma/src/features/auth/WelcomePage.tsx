@@ -23,6 +23,7 @@ import { haptic } from "@/telegram/sdk";
 import { toast } from "@/components/Toast";
 import type { StaffRole } from "@/types/domain";
 import { RolePicker } from "@/components/RolePicker";
+import { Wordmark } from "@/components/Wordmark";
 
 export function WelcomePage() {
   const nav = useNavigate();
@@ -96,6 +97,8 @@ export function WelcomePage() {
   return (
     <div className="app">
       <div className="page">
+        <header className="registration-brand"><Wordmark /><span>Регистрация</span></header>
+        <div className="registration-step is-profile"><span>01 — Роль выбрана</span><span>02 — Профиль</span></div>
         <h1 className="h1" style={{ marginTop: 24 }}>
           {isEmployer ? "Как называется заведение?" : "Как вас зовут?"}
         </h1>
@@ -162,8 +165,10 @@ export function WelcomePage() {
               type="file"
               accept="image/*"
               className="visually-hidden"
+              disabled={uploading || busy}
               onChange={(e) => {
                 const f = e.target.files?.[0];
+                e.target.value = "";
                 if (f) void pickPhoto(f);
               }}
             />
@@ -171,7 +176,7 @@ export function WelcomePage() {
         </div>
 
         <div style={{ marginTop: 28, display: "grid", gap: 10 }}>
-          <Button block loading={busy} disabled={!canSave} onClick={save}>
+          <Button block loading={busy} disabled={!canSave || uploading} onClick={save}>
             {isEmployer ? "Сохранить и найти людей" : "Сохранить и смотреть смены"}
           </Button>
           <Button

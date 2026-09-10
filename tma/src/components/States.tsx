@@ -62,13 +62,12 @@ export function SkeletonCard() {
 // и всё это время держит «Повторить» заблокированной со спиннером.
 export function ErrorBox({ onRetry }: { onRetry?: () => void }) {
   return (
-    <div className="card" style={{ textAlign: "center" }} role="alert">
+    <div className="card state-message" style={{ textAlign: "center" }} role="alert">
       <div style={{ color: "var(--muted)", display: "flex", justifyContent: "center", marginBottom: 4 }}>
         <IconWarning size={36} />
       </div>
-      <p className="muted" style={{ margin: "8px 0 12px" }}>
-        Не загрузилось. Проверьте интернет.
-      </p>
+      <h2>Не удалось загрузить</h2>
+      <p className="muted" style={{ margin: "8px 0 20px" }}>Проверьте соединение и попробуйте ещё раз.</p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry}>
           Повторить

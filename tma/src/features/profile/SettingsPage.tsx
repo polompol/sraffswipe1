@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { applyTheme, currentTheme } from "@/lib/theme";
@@ -93,7 +94,7 @@ export function SettingsPage() {
     // тумблеры растягивались во всю ширину (единственная такая страница).
     <div className="app">
       <div className="page">
-      <h1 className="h1">Настройки</h1>
+      <PageHeader title="Настройки" backTo="/profile" />
 
       <Toggle
         on={theme === "dark"}

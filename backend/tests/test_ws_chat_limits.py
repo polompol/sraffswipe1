@@ -5,6 +5,9 @@
 """
 import json
 
+import pytest
+from starlette.websockets import WebSocketDisconnect
+
 from app.db import SessionLocal
 from app.models import Employer, User
 from app.timeutil import local_today
@@ -97,3 +100,45 @@ def test_a_normal_message_still_goes_through(client):
         ws.send_text(json.dumps({"text": "Буду к десяти"}))
         got = ws.receive_json()
     assert got["text"] == "Буду к десяти"
+
+
+def test_document_token_cannot_open_chat(client, doc_token):
+    """Токен из PDF-ссылки не позволяет читать или писать в WebSocket."""
+    mid, token = _matched_pair(client)
+    short = doc_token(client, token)
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect(f"/ws/chat/{mid}?token={short}"):
+            pass
+    assert exc.value.code == 4401
+    # Полный токен того же участника по-прежнему работает.
+    with client.websocket_connect(f"/ws/chat/{mid}?token={token}") as ws:
+        ws.send_json({"text": "Выхожу завтра"})
+        assert ws.receive_json()["text"] == "Выхожу завтра"
+
+
+def test_token_expiring_after_connection_cannot_send(client, monkeypatch):
+    """Открытое соединение не продлевает право писать после срока JWT."""
+    from datetime import datetime, timedelta
+
+    import jwt.api_jwt
+
+    from app.config import settings
+
+    class AfterExpiry(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.now(tz) + timedelta(hours=settings.jwt_ttl_hours + 1)
+
+    mid, token = _matched_pair(client)
+    with client.websocket_connect(f"/ws/chat/{mid}?token={token}") as ws:
+        monkeypatch.setattr(jwt.api_jwt, "datetime", AfterExpiry)
+        ws.send_json({"text": "Просроченное сообщение"})
+        with pytest.raises(WebSocketDisconnect) as exc:
+            ws.receive_json()
+        assert exc.value.code == 4401
+    from app.models import Message
+
+    with SessionLocal() as db:
+        assert not db.query(Message).filter(
+            Message.match_id == mid, Message.text == "Просроченное сообщение",
+        ).first()

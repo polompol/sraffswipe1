@@ -1,10 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter } from "react-router-dom";
 
 import "./theme/theme.css";
 import "./index.css";
+import "./theme/hospitality.css";
 import { initTelegram } from "./telegram/sdk";
 import { initTheme, syncTelegramTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
@@ -15,10 +16,7 @@ import { Toaster } from "./components/Toast";
 import { App } from "./App";
 import { watchKeyboard } from "@/lib/keyboard";
 import { LS, SS, forgetRetired } from "@/lib/storage";
-
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
-});
+import { queryClient } from "@/lib/queryClient";
 
 // Глобальная видимость падений: необработанные ошибки и промисы → на backend.
 window.addEventListener("error", (e) => reportError(e.error ?? e.message, "window.error"));

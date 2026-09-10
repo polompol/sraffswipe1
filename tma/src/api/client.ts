@@ -56,8 +56,17 @@ export class ApiError extends Error {
 }
 
 let token: string | null = localStorage.getItem(LS.jwt);
+let sessionVersion = 0;
+let reauth: { version: number; promise: Promise<string | null> } | null = null;
 
 export function setToken(value: string | null): void {
+  // Явный вход/выход делает все старые запросы неактуальными. Тихое
+  // обновление токена сохраняет сессию и пользуется persistToken напрямую.
+  sessionVersion += 1;
+  persistToken(value);
+}
+
+function persistToken(value: string | null): void {
   token = value;
   if (value) localStorage.setItem(LS.jwt, value);
   else localStorage.removeItem(LS.jwt);
@@ -132,31 +141,56 @@ async function parseBody(res: Response): Promise<unknown> {
  * Идёт «голым» fetch, а не через `request`: иначе его собственная ошибка
  * снова привела бы сюда, и мы ушли бы в рекурсию.
  */
-async function silentReauth(): Promise<string | null> {
+async function silentReauth(version: number): Promise<string | null> {
   const role = localStorage.getItem(LS.role);
-  if (!role) return null;
+  const userId = localStorage.getItem(LS.uid);
+  if ((role !== "seeker" && role !== "employer") || !userId) return null;
+  let initData: string;
   try {
     const { retrieveRawInitData } = await import("@tma.js/sdk-react");
-    const initData = retrieveRawInitData() ?? "";
-    if (!initData) return null;
-    const res = await fetch(`${baseURL}/auth/telegram`, {
+    initData = retrieveRawInitData() ?? "";
+  } catch {
+    return null;
+  }
+  if (!initData || version !== sessionVersion) return null;
+  let res: Response;
+  try {
+    res = await fetch(`${baseURL}/auth/telegram`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ init_data: initData, role }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      access_token?: string;
-      accessToken?: string;
-    };
-    const fresh = data?.access_token ?? data?.accessToken ?? null;
-    if (!fresh) return null;
-    setToken(fresh);
-    return fresh;
   } catch {
+    // Краткий обрыв связи не означает, что человек вышел из аккаунта.
+    throw new ApiError("Нет связи с сервером", { url: "/auth/telegram", method: "POST" });
+  }
+  if (res.status === 401 || res.status === 403) return null;
+  if (!res.ok) {
+    throw new ApiError(`HTTP ${res.status}`, { url: "/auth/telegram", method: "POST" }, {
+      status: res.status, data: await parseBody(res),
+    });
+  }
+  const data = toCamel(await parseBody(res)) as {
+    accessToken?: string; role?: string; userId?: string;
+  } | null;
+  // Перенос аккаунта или выход во время запроса не должен тихо подменять
+  // личность. Новый аккаунт проходит обычный вход через setAuth.
+  if (version !== sessionVersion || data?.role !== role || data.userId !== userId
+      || typeof data.accessToken !== "string" || !data.accessToken) {
     return null;
   }
+  persistToken(data.accessToken);
+  return data.accessToken;
+}
+
+function restoreSession(version: number): Promise<string | null> {
+  if (reauth?.version === version) return reauth.promise;
+  const promise = silentReauth(version).finally(() => {
+    if (reauth?.promise === promise) reauth = null;
+  });
+  reauth = { version, promise };
+  return promise;
 }
 
 async function request<T>(
@@ -165,6 +199,11 @@ async function request<T>(
   body?: unknown,
   config: RequestConfig = {},
 ): Promise<ApiResponse<T>> {
+  const version = sessionVersion;
+  const sentToken = token;
+  const sessionChanged = () => new ApiError(
+    "Сессия изменилась. Повторите действие", { ...config, url, method },
+  );
   const full = baseURL + withParams(url, config.params);
   const headers: Record<string, string> = { ...(config.headers ?? {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -194,6 +233,10 @@ async function request<T>(
 
   const data = await parseBody(res);
 
+  // Поздний ответ прежнего аккаунта не попадает в кэш нового и не выходит
+  // из его сессии. Особенно важно для отправки сообщений и смены роли.
+  if (version !== sessionVersion) throw sessionChanged();
+
   if (res.ok) {
     return { data: (config.raw ? data : toCamel(data)) as T, status: res.status };
   }
@@ -202,10 +245,16 @@ async function request<T>(
   // подпись приходит вместе с запуском приложения. Поэтому сначала молча
   // пробуем войти заново и повторить запрос — человек ничего не заметит.
   // Только если и это не вышло, уводим на онбординг.
-  if (res.status === 401 && !config.retried) {
-    const restored = await silentReauth();
-    if (restored) {
-      return request<T>(method, url, body, { ...config, retried: true });
+  const loginRequest = ["/auth/telegram", "/auth/request-code", "/auth/verify"].includes(url);
+  if (res.status === 401 && sentToken && !loginRequest) {
+    if (!config.retried) {
+      // Все одновременные 401 ждут один вход. Запоздавший 401 использует
+      // уже обновлённый токен, не запускает ещё одну авторизацию.
+      const restored = token !== sentToken ? token : await restoreSession(version);
+      if (version !== sessionVersion) throw sessionChanged();
+      if (restored) {
+        return request<T>(method, url, body, { ...config, retried: true });
+      }
     }
     // Один выход на всё приложение: хранилище сессии само чистит токен, роль
     // и uid — и, в отличие от прежней здешней копии, сбрасывает флаг входа.

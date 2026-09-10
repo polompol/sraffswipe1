@@ -50,7 +50,10 @@ test.describe("заведение публикует смену и зовёт ч
     await page.getByRole("button", { name: "Официант", exact: true }).click();
     await page.locator('input[type="date"]').fill(inDays(2));
     await page.locator("#city-picker").fill("Казань");
-    await page.locator('input[inputmode="numeric"]').first().fill("400");
+    await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+    await page.getByLabel("Ставка", { exact: true }).fill("400");
+    await page.getByRole("button", { name: "Предпросмотр смены", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Предпросмотр смены" })).toContainText("400 ₽/час");
     await page.getByRole("button", { name: /Разместить смену/ }).click();
 
     // 2. Экран после публикации: раньше здесь была всплывашка и прыжок назад.

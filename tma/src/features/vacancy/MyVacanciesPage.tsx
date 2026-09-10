@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -63,7 +64,7 @@ export function MyVacanciesPage() {
 
   return (
     <div className="page">
-      <h1 className="h1">Мои смены</h1>
+      <PageHeader title="Мои смены" subtitle="Публикуйте смены и собирайте команду" />
       {/* Главное действие заведения — отдельной строкой во всю ширину.
           Раньше это была маленькая кнопка, прижатая к правому краю рядом с
           заголовком: самое частое действие выглядело самым второстепенным. */}

@@ -300,7 +300,7 @@ export function insideTelegram(): boolean {
  *  человека тёмный Telegram, а приложение светлое.
  */
 export function paintChrome(dark: boolean): void {
-  const bg = dark ? "#160d0f" : "#efe7d3";      // --bg
+  const bg = dark ? "#160d0f" : "#f7f2e9";      // --bg
   const bar = dark ? "#201316" : "#fffdf8";     // --surface (цвет таббара)
   try {
     if (miniApp.setHeaderColor.isAvailable()) miniApp.setHeaderColor(bg);

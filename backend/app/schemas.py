@@ -67,7 +67,7 @@ ExperienceTag = Literal[
 # можно было записать что угодно (javascript:, data:, ссылку-счётчик) — а оно
 # подставляется в src картинки на чужом экране.
 PhotoUrl = Annotated[
-    str, StringConstraints(max_length=500, pattern=r"^(https?://\S+)?$")
+    str, StringConstraints(max_length=500, pattern=r"^(https?://[^,\s]+)?$")
 ]
 
 

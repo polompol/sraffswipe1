@@ -236,7 +236,7 @@ manager = ConnectionManager()
 async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
     # Аутентификация по query-токену; sender_id берём из токена, не от клиента.
     principal = decode_token(token)
-    if principal is None:
+    if principal is None or principal.get("scope"):
         await websocket.close(code=4401)
         return
     db = SessionLocal()
@@ -261,6 +261,11 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
     try:
         while True:
             frame = await websocket.receive_text()
+            # Срок JWT мог закончиться уже после подключения. Короткий
+            # токен документа не должен открывать чат вообще (проверка выше).
+            if decode_token(token) is None:
+                await websocket.close(code=4401)
+                break
             # Считаем КАЖДЫЙ кадр, а не только тот, что дошёл до сохранения.
             # Лимит стоял после проверок «пусто» и «не строка», поэтому поток
             # пустых кадров {"text":""} проходил мимо него совсем: соединение

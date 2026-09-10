@@ -85,6 +85,7 @@ export function PhotoUpload({
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void onFile(f);
+            e.currentTarget.value = "";
           }}
         />
       </div>
