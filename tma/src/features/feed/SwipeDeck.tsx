@@ -50,10 +50,6 @@ interface Props<T> {
    *  их белые подписи рассчитаны на тёмную лицевую сторону и на светлой
    *  изнанке пропадали совсем. */
   onFlipChange?: (flipped: boolean) => void;
-  /** Слово на штампе при свайпе вправо. У соискателя «ХОЧУ», у заведения
-   *  «ЗОВУ»: один штамп на обе стороны ложился поперёк лица человека и
-   *  расходился с кнопкой под колодой, которая подписана «Позвать». */
-  likeStamp?: string;
 }
 
 const VISIBLE = 3;
@@ -66,7 +62,7 @@ function dirFrom(mx: number, sx: number): SwipeDirection {
 }
 
 export function SwipeDeck<T>(props: Props<T>) {
-  const { items, renderCard, onSwipe, keyOf, likeStamp = "ХОЧУ" } = props;
+  const { items, renderCard, onSwipe, keyOf } = props;
   // Улетевшие карточки помним ПО НОМЕРУ, но сбрасываем при смене набора.
   // Раньше номера жили вечно: человек свайпал две карточки, менял город — и
   // первые две смены нового города считались уже просмотренными. Он их не
@@ -245,7 +241,9 @@ export function SwipeDeck<T>(props: Props<T>) {
         };
       });
     },
-    { filterTaps: true },
+    // handleClick уже отличает тап от перетаскивания. Capture-перехватчик
+    // filterTaps глотает клики вложенных кнопок с остановленным pointerdown.
+    { filterTaps: false },
   );
 
   /** Нажатие по карточке — «расскажи подробнее». После перетаскивания не
@@ -302,7 +300,6 @@ export function SwipeDeck<T>(props: Props<T>) {
               </div>
             </div>
             <Tint x={style.x} />
-            <Stamps x={style.x} like={likeStamp} />
           </animated.div>
         );
       })}
@@ -328,35 +325,6 @@ function Tint({ x }: { x: SpringValue<number> }) {
           opacity: to(x, (v) => Math.max(0, Math.min(0.4, -v / 260))),
         }}
       />
-    </>
-  );
-}
-
-function Stamps({ x, like }: { x: SpringValue<number>; like: string }) {
-  return (
-    <>
-      <animated.div
-        className="stamp"
-        style={{
-          left: 20,
-          color: "var(--like)",
-          transform: "rotate(-12deg)",
-          opacity: to(x, (v) => Math.max(0, Math.min(1, v / 80))),
-        }}
-      >
-        {like}
-      </animated.div>
-      <animated.div
-        className="stamp"
-        style={{
-          right: 20,
-          color: "var(--dislike)",
-          transform: "rotate(12deg)",
-          opacity: to(x, (v) => Math.max(0, Math.min(1, -v / 80))),
-        }}
-      >
-        НЕТ
-      </animated.div>
     </>
   );
 }

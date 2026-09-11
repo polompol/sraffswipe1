@@ -37,7 +37,8 @@ import { ErrorBox, SkeletonCard } from "@/components/States";
 import { Button } from "@/components/Button";
 import {
   IconSkip,
-  IconLike,
+  IconSend,
+  IconCheck,
   IconFire,
   IconBell,
   IconPin,
@@ -226,7 +227,7 @@ export function FeedPage() {
   return (
     <div
       className={
-        deckMode ? (backOpen ? "page feed-deck back-open" : "page feed-deck") : "page"
+        deckMode ? (backOpen ? "page feed-deck hospitality-feed back-open" : "page feed-deck hospitality-feed") : "page hospitality-feed"
       }
     >
       <FeedHeader
@@ -326,7 +327,6 @@ export function FeedPage() {
               // Заведение не «хочет» человека, а зовёт его на смену: штамп
               // «ХОЧУ» поперёк чужого лица читался двусмысленно и расходился
               // с кнопкой под колодой, которая подписана «Позвать».
-              likeStamp="ЗОВУ"
               onFlipChange={setBackOpen}
               renderBack={(person, c) => (
                 <CardBack
@@ -358,11 +358,10 @@ export function FeedPage() {
                 aria-label={isSeeker ? "Откликнуться — хочу здесь работать" : "Позвать на смену"}
                 onClick={() => controller.current?.("like")}
               >
-                <IconLike size={34} />
+                {isSeeker ? <IconSend size={22} /> : <IconCheck size={22} />}
+                <span>{isSeeker ? "Откликнуться" : "Пригласить"}</span>
               </button>
-              <span className="act-label act-label-like">
-                {isSeeker ? "Отклик" : "Позвать"}
-              </span>
+
             </div>
           </div>
         </>

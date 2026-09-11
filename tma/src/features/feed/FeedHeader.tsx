@@ -1,4 +1,4 @@
-import { Logo } from "@/components/Logo";
+import { Wordmark } from "@/components/Wordmark";
 import { IconCards, IconFilter, IconList } from "@/components/Icons";
 import { haptic } from "@/telegram/sdk";
 
@@ -24,9 +24,7 @@ export function FeedHeader({
 }) {
   return (
     <div className="row feed-head" style={{ marginBottom: 6, gap: 4 }}>
-      <span aria-hidden className="feed-logo">
-        <Logo size={24} color="var(--on-brand)" />
-      </span>
+      <div className="feed-brand"><Wordmark />
       {/* Именно h1: это главный экран приложения, и заголовка первого уровня
           на нём не было вовсе — скринридер не мог назвать страницу. Класс .h2
           оставляем: он задаёт размер, а не уровень.
@@ -38,6 +36,7 @@ export function FeedHeader({
       <h1 className="h2 feed-title">
         {isSeeker ? "Смены рядом" : "Кто свободен"}
       </h1>
+      </div>
       {isSeeker && (
         <button
           className="icon-btn"

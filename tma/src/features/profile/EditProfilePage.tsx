@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,6 +30,7 @@ export function EditProfilePage() {
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
   const [name, setName] = useState("");
   const [photo, setPhoto] = useState<string>("");
+  const [photos, setPhotos] = useState<string[]>([]);
   const [birthDate, setBirthDate] = useState("");
   const [city, setCity] = useState("");
   const [district, setDistrict] = useState("");
@@ -49,7 +51,14 @@ export function EditProfilePage() {
     && (name !== (me.name ?? "")
       || about !== (me.about ?? "")
       || district !== (me.district ?? "")
-      || roles.length !== (me.roles ?? []).length);
+      || JSON.stringify([...roles].sort()) !== JSON.stringify([...(me.roles ?? [])].sort())
+      || city !== (me.city ?? "")
+      || photo !== (me.photoUrl ?? "")
+      || JSON.stringify(photos) !== JSON.stringify(me.photoUrls ?? (me.photoUrl ? [me.photoUrl] : []))
+      || birthDate !== (me.birthDate ?? "")
+      || inn !== (me.inn ?? "")
+      || selfEmployed !== (me.selfEmployed ?? false)
+      || JSON.stringify([...skills].sort()) !== JSON.stringify([...(me.experienceTags ?? []).filter((t) => SKILLS.includes(t as ExperienceTag))].sort()));
   useEffect(() => {
     guardClosing(dirty);
     return () => guardClosing(false);
@@ -82,6 +91,7 @@ export function EditProfilePage() {
     setSkills((me.experienceTags ?? []).filter((t) =>
       SKILLS.includes(t as ExperienceTag)) as ExperienceTag[]);
     setPhoto(me.photoUrl ?? "");
+    setPhotos(me.photoUrls ?? (me.photoUrl ? [me.photoUrl] : []));
   }, [me]);
 
   function toggle(r: StaffRole) {
@@ -121,7 +131,7 @@ export function EditProfilePage() {
               inn: selfEmployed && inn ? inn : undefined,
               about,
               experience_tags: skills,
-              photo_url: photo || undefined,
+              photo_urls: photos,
             },
       );
       qc.invalidateQueries({ queryKey: ["me"] });
@@ -138,9 +148,7 @@ export function EditProfilePage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1">
-          {isEmployer ? "Профиль заведения" : "Мой профиль"}
-        </h1>
+        <PageHeader title={isEmployer ? "Профиль заведения" : "Мой профиль"} backTo="/profile" subtitle="Эти данные помогают договориться о смене" />
 
         {isEmployer ? (
           <>
@@ -186,7 +194,18 @@ export function EditProfilePage() {
           </>
         ) : (
           <>
-        <PhotoUpload label="Фото профиля" value={photo} onChange={setPhoto} />
+        <div className="form-label">Фотографии профиля · {photos.length} / 5</div>
+        <p className="hint">Первое фото — главное. Добавьте портрет и кадры вашей работы.</p>
+        <div className="profile-gallery">
+          {photos.map((url, i) => <div className="profile-gallery-item" key={url}>
+            <img src={url} alt={`Фото профиля ${i + 1}`} />
+            {i > 0 && <button type="button" className="text-btn" disabled={saving}
+              onClick={() => setPhotos([url, ...photos.filter((p) => p !== url)])}>Сделать главным</button>}
+            <button type="button" className="text-btn" disabled={saving} aria-label={`Удалить фото ${i + 1}`}
+              onClick={() => setPhotos(photos.filter((p) => p !== url))}>Удалить</button>
+          </div>)}
+        </div>
+        {photos.length < 5 && <PhotoUpload label="Добавить фото профиля" onChange={(url) => setPhotos((cur) => [...new Set([...cur, url])].slice(0, 5))} />}
 
         <label className="form-label" htmlFor="name">Имя</label>
         <input id="name" className="input" style={{ marginBottom: 12 }} value={name} onChange={(e) => setName(e.target.value)} />

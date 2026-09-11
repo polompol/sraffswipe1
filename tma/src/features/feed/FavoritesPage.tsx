@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -46,7 +47,7 @@ export function FavoritesPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1">Избранные смены</h1>
+        <PageHeader title="Избранные смены" backTo="/profile" />
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (

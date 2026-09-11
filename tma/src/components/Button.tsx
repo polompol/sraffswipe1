@@ -35,6 +35,7 @@ export function Button({
   disabled,
   onClick,
   style,
+  className = "",
   ...rest
 }: Props) {
   // Внутренний «running» — авто-защита от двойных нажатий: пока async-обработчик
@@ -57,7 +58,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`ui-btn ui-btn--${variant} ui-btn--${size}`}
+      className={`ui-btn ui-btn--${variant} ui-btn--${size} ${className}`.trim()}
       disabled={isDisabled}
       aria-busy={busy}
       onClick={handle}

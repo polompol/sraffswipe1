@@ -247,16 +247,18 @@ test.describe("весь путь целиком", () => {
     // ── 2. Создание смены прямо в форме ─────────────────────────────────
     await page.goto("/#/vacancy/new");
     await expect(page.getByRole("heading", { name: "Новая смена" })).toBeVisible();
-    await page.getByRole("button", { name: "Официант", exact: true }).click();
+    await page.getByLabel("Должность", { exact: true }).selectOption("waiter");
     const inDays = (n: number) =>
       new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
     await page.locator('input[type="date"]').fill(inDays(2));
     await page.locator("#city-picker").fill("Кострома");
-    await page.locator('input[inputmode="numeric"]').first().fill("400");
     await expect(
       page.locator(".hint", { hasText: /августа|января|февраля|марта|апреля|мая|июня|июля|сентября|октября|ноября|декабря/ }),
       "выбранный день повторён словами — формат поля задаёт телефон",
     ).toBeVisible();
+    await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+    await page.getByLabel("Ставка", { exact: true }).fill("400");
+    await page.getByRole("button", { name: "Предпросмотр смены", exact: true }).click();
     await page.getByRole("button", { name: /Разместить смену/ }).click();
     await expect(page.getByRole("heading", { name: "Смена размещена" })).toBeVisible();
 

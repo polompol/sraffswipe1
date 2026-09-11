@@ -13,6 +13,10 @@ export default defineConfig({
   // какая сборка у человека на телефоне.
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [react()],
+  server: {
+    host: "0.0.0.0",
+    allowedHosts: ["terminal.local"],
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

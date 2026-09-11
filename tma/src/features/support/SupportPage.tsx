@@ -1,7 +1,9 @@
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/Button";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showBackButton, haptic, openTelegram } from "@/telegram/sdk";
-import { IconChat } from "@/components/Icons";
+import { IconChat, IconCalendar, IconMoney, IconShield, IconHelp } from "@/components/Icons";
 
 // Ссылка на поддержку (Telegram-чат/бот). Задаётся через env перед запуском.
 const SUPPORT_URL =
@@ -10,15 +12,15 @@ const SUPPORT_URL =
 const FAQ: { q: string; a: string }[] = [
   {
     q: "Как откликнуться на смену?",
-    a: "Листайте карточки смен. Свайп вправо или ♥ — «хочу здесь работать». Если заведение ответит взаимно — откроется чат.",
+    a: "Листайте карточки смен. Свайп вправо или кнопка «Откликнуться» — «хочу здесь работать». Если заведение ответит взаимно — откроется чат.",
   },
   {
     q: "Как подтвердить смену и получить акт?",
-    a: "После договорённости в чате обе стороны жмут «Подтвердить смену». Акт появится в разделе «Мои смены» после того, как смена закроется — это происходит само через 12 часов после её окончания.",
+    a: "После договорённости в чате обе стороны жмут «Подтвердить смену». Акт появится в разделе «Мои смены» после закрытия смены. Если нет спора, она закроется автоматически через 12 часов после окончания; если обе стороны подтвердили выход, закрытие возможно раньше, но только после окончания смены.",
   },
   {
     q: "Что нужно сделать после смены?",
-    a: "Ничего. Смена, о которой вы договорились, закрывается сама через 12 часов после окончания — акт появится в разделе «Мои смены». Нажать что-то нужно только если смена НЕ состоялась: там же кнопка «Смена не состоялась».",
+    a: "Проверьте, что смена прошла по договорённости. Она закроется автоматически через 12 часов после окончания, если нет спора. Если смены не было или условия не совпали, откройте «Мои смены» → «Что-то пошло не так» до автоматического закрытия.",
   },
   {
     q: "Зачем код прихода?",
@@ -42,7 +44,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Мои данные в безопасности?",
-    a: "Да. Данные хранятся на серверах в РФ, обрабатываются по 152-ФЗ. Точный адрес и контакты открываются, только когда вы договорились.",
+    a: "Рабочая переписка доступна участникам смены и поддержке для разбора споров. Правила обработки данных и согласия доступны в разделе «Настройки» → «Документы».",
   },
 ];
 
@@ -84,18 +86,24 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 export function SupportPage() {
   const nav = useNavigate();
+  const [topic, setTopic] = useState("all");
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1 tight">Помощь</h1>
-        <p className="muted" style={{ marginBottom: 16 }}>
-          Частые вопросы. Не нашли ответ — напишите нам.
-        </p>
+        <PageHeader title="Помощь" backTo="/profile" subtitle="Выберите тему — найдём следующий шаг" />
+        <div className="help-topics">
+          <button className="card help-topic" onClick={() => nav("/matches")}><IconCalendar /><b>Смена и выход</b><small>Код прихода, отмена, спор</small></button>
+          <button className="card help-topic" aria-pressed={topic === "money"} onClick={() => setTopic(topic === "money" ? "all" : "money")}><IconMoney /><b>Оплата</b><small>Комиссия и расчёты</small></button>
+          <button className="card help-topic" onClick={() => nav("/settings")}><IconShield /><b>Профиль и данные</b><small>Настройки и документы</small></button>
+          <button className="card help-topic" aria-pressed={topic === "all"} onClick={() => setTopic("all")}><IconHelp /><b>Частые вопросы</b><small>Как работает сервис</small></button>
+        </div>
+        <h2 className="h2">{topic === "money" ? "Про оплату" : "Ответы на вопросы"}</h2>
+        {topic !== "all" && <Button variant="ghost" onClick={() => setTopic("all")}>Все вопросы</Button>}
 
         <div className="stagger" style={{ display: "grid", gap: 10, marginBottom: 20 }}>
-          {FAQ.map((f) => (
+          {FAQ.filter((_, i) => topic !== "money" || [4, 5, 6].includes(i)).map((f) => (
             <FaqItem key={f.q} q={f.q} a={f.a} />
           ))}
         </div>

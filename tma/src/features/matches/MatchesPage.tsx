@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -37,7 +38,7 @@ function counterpart(m: MatchModel, role: string | null): string {
  *  заведения — то есть главное на экране набрано самым незаметным шрифтом.
  *  Человек открывал список и не понимал с ходу, что происходит с какой сменой:
  *  где ждут его, где всё закрыто, где спор. */
-function StatusLine({ m, role }: { m: MatchModel; role: string | null }) {
+function StatusLine({ m }: { m: MatchModel }) {
   let color = "var(--muted)";
   let icon: React.ReactNode = null;
   let text = "Договариваетесь о смене";
@@ -59,9 +60,11 @@ function StatusLine({ m, role }: { m: MatchModel; role: string | null }) {
     icon = <IconCheck size={17} />;
     // День уже написан строкой выше вместе с часами («Сегодня, 08:00–16:00»)
     // — здесь только состояние, без повтора дня.
-    text = shiftStarted(m)
-      ? (role === "employer" ? "Смена идёт — ждём человека" : "Смена идёт")
-      : "Смена подтверждена";
+    text = shiftEnded(m)
+      ? "Смена окончена — ожидаем закрытия"
+      : shiftStarted(m)
+        ? (m.seekerCheckedIn ? "Выход подтверждён — смена идёт" : "Смена идёт — выход ещё не подтверждён")
+        : "Смена подтверждена";
   }
 
   return (
@@ -96,7 +99,7 @@ function HowItWorks({ role }: { role: string | null }) {
           className="muted"
           style={{ fontSize: "var(--text-sm)", lineHeight: 1.5, marginTop: 4 }}
         >
-          Смена закроется сама через 12 часов — нажимать ничего не нужно.{" "}
+          Смена закроется сама через 12 часов после окончания, если нет спора.{" "}
           {role === "employer"
             ? "Назовите работнику код прихода — он подтвердит, что человек был на месте."
             : "Попросите код прихода у администратора — с ним вам не запишут неявку."}{" "}
@@ -112,6 +115,7 @@ export function MatchesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
+  const [view, setView] = useState<"all" | "current" | "history">("all");
   const [codes, setCodes] = useState<Record<string, string>>({});
   // Одна дверь для редких действий вместо ряда одинаковых кнопок на карточке.
   // Открытая смена — id мэтча, по которому открыто меню.
@@ -214,11 +218,17 @@ export function MatchesPage() {
     }
   }
 
+  const visibleMatches = data?.filter((m) => {
+    const past = ["completed", "cancelled", "expired"].includes(m.status);
+    return view === "all" || (view === "history" ? past : !past);
+  });
+
   return (
     <div className="page">
-      <h1 className="h1">
-        {role === "employer" ? "Кто выходит" : "Мои смены"}
-      </h1>
+      <PageHeader title={role === "employer" ? "Кто выходит" : "Мои смены"} subtitle="Договорённости, выход и история — в одном месте" />
+      {!!data?.length && <div className="segment-tabs" role="group" aria-label="Раздел смен">
+        {([["all", "Все"], ["current", "Текущие"], ["history", "История"]] as const).map(([key, label]) => <button key={key} aria-pressed={view === key} onClick={() => setView(key)}>{label}</button>)}
+      </div>}
       {isLoading && <SkeletonList />}
       {isError && <ErrorBox onRetry={() => refetch()} />}
       {data && data.length === 0 && (
@@ -234,8 +244,9 @@ export function MatchesPage() {
           action={<Button onClick={() => nav("/feed")}>Смотреть смены</Button>}
         />
       )}
+      {!!data?.length && visibleMatches?.length === 0 && <EmptyState title={view === "history" ? "История пока пуста" : "Нет текущих смен"} text={view === "history" ? "Здесь сохранятся завершённые и отменённые смены." : "Новая договорённость появится здесь после взаимного интереса."} action={<Button variant="secondary" onClick={() => setView("all")}>Показать все</Button>} />}
       <div className="stagger stack stack-lg">
-        {data?.map((m) => {
+        {visibleMatches?.map((m) => {
           const started = shiftStarted(m);
           const live = m.status === "confirmed" && !m.disputed;
           // Позвать оператора можно на любом этапе живой смены: беда бывает
@@ -292,7 +303,8 @@ export function MatchesPage() {
                 </span>
               </button>
 
-              <StatusLine m={m} role={role} />
+              <StatusLine m={m} />
+              {m.status === "matched" && <div style={{ marginTop: 12 }}><Button onClick={() => nav(`/chat/${m.id}`)}>Обсудить и подтвердить</Button></div>}
 
               {!!m.shiftPay && m.shiftPay > 0 && (
                 // Сумма отбита так же, как остальные блоки карточки: на 6
@@ -302,9 +314,7 @@ export function MatchesPage() {
                   {money(m.shiftPay)}
                   {/* Заведение не зарабатывает на смене, а платит за неё:
                       «заработано» в его списке читалось как ошибка. */}
-                  {m.status === "completed"
-                    ? (role === "employer" ? " выплачено" : " заработано")
-                    : " за смену"}
+                  {m.status === "completed" ? " по условиям смены" : " за смену"}
                 </div>
               )}
 
@@ -406,7 +416,7 @@ export function MatchesPage() {
               {/* До дня смены делать нечего — так и говорим, вместо кнопок. */}
               {live && !started && (
                 <div className="muted" style={{ marginTop: 8, fontSize: "var(--text-sm)" }}>
-                  Ничего делать не нужно — приходите к началу смены.
+                  Условия согласованы. Код прихода будет доступен после начала смены — используйте его только на месте.
                 </div>
               )}
 

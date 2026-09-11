@@ -1,3 +1,6 @@
+import { PageHeader } from "@/components/PageHeader";
+import { ErrorBox, SkeletonList } from "@/components/States";
+import { STAFF_ROLE_LABELS, type StaffRole } from "@/types/domain";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -213,6 +216,7 @@ function EmployerVerify() {
       haptic("success");
     } catch {
       haptic("error");
+      toast("Проверка недоступна. Попробуйте ещё раз", "error");
     } finally {
       setBusy(false);
     }
@@ -226,8 +230,10 @@ function EmployerVerify() {
           className="input"
           inputMode="numeric"
           placeholder="ИНН"
+          aria-label="ИНН заведения"
+          maxLength={12}
           value={inn}
-          onChange={(e) => setInn(e.target.value)}
+          onChange={(e) => setInn(e.target.value.replace(/\D/g, ""))}
         />
         {/* Кнопка узкая, в один ряд с полем ИНН: block={false}, высота 46 —
             вровень с input. Свой busy оставлен: он же гасит кнопку по длине
@@ -236,7 +242,7 @@ function EmployerVerify() {
           block={false}
           style={{ padding: "0 16px", height: 46 }}
           loading={busy}
-          disabled={busy || inn.length < 10}
+          disabled={busy || ![10, 12].includes(inn.length)}
           onClick={run}
         >
           Проверить
@@ -414,7 +420,7 @@ function ProfileMeter({ pct }: { pct: number }) {
 export function ProfilePage() {
   const nav = useNavigate();
   const { role, logout } = useSession();
-  const { data: me } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
+  const { data: me, isLoading, isError, refetch } = useQuery({ queryKey: ["me"], queryFn: fetchMe });
   const { data: ref } = useQuery({
     queryKey: ["referral"],
     queryFn: fetchReferral,
@@ -436,17 +442,17 @@ export function ProfilePage() {
     <div className="page">
       {/* «Выйти» переехал в конец списка внизу: деструктивное действие не
           должно быть самым заметным элементом шапки. */}
-      <div className="row" style={{ marginBottom: 16 }}>
-        <h1 className="h1" style={{ margin: 0 }}>Профиль</h1>
-      </div>
+      <PageHeader title="Профиль" action={<button className="icon-btn" aria-label="Настройки профиля" onClick={() => nav("/settings")}><IconShield size={20} /></button>} />
+      {isLoading && <SkeletonList rows={1} />}
+      {isError && <ErrorBox onRetry={() => refetch()} />}
 
-      <div className="card row" style={{ gap: 14, marginBottom: 16 }}>
+      <div className="card row profile-identity" style={{ gap: 18, marginBottom: 16 }}>
         {/* Фото из Telegram, если оно есть; иначе первая буква имени.
             Раньше вместо лица стояла иконка-портфель — та самая, которой на
             экране выбора роли подписано «Я ищу подработку». В своём профиле
             она читается как «вакансия», а не «это я». */}
         <Avatar
-          size={56}
+          size={84}
           src={me?.photoUrl}
           name={me?.name}
           fallback={role === "employer" ? <IconStore size={30} /> : <IconBriefcase size={30} />}
@@ -456,18 +462,15 @@ export function ProfilePage() {
             {me?.name ?? (role === "employer" ? "Добавьте название" : "Добавьте имя")}
           </div>
           <div className="muted" style={{ overflowWrap: "anywhere" }}>
-            {me ? <Rating value={me.rating} /> : "—"}
-            {me?.tgUsername ? ` · @${me.tgUsername}` : ""}
-            {/* У заведения то же число стоит отдельной карточкой «Смен
-                проведено» ниже по экрану: два одинаковых числа в пяти
-                сантиметрах друг от друга заставляют сверять, не разные ли
-                они. В шапке оставляем его только работнику. */}
-            {role === "seeker" && me?.shiftsDone
-              ? ` · ${me.shiftsDone} ${plural(me.shiftsDone, "смена", "смены", "смен")}`
-              : ""}
+            {[me?.roles?.map((r) => STAFF_ROLE_LABELS[r as StaffRole]).filter(Boolean).join(" · "), me?.city].filter(Boolean).join(" · ") || (role === "employer" ? "Заведение" : "Сотрудник")}
           </div>
         </span>
       </div>
+
+      {me && <div className="profile-metrics">
+        <div className="card"><b><Rating value={me.rating} /></b><span className="muted small">Рейтинг</span></div>
+        <div className="card"><b>{me.shiftsDone ?? 0}</b><span className="muted small">Закрытых смен</span></div>
+      </div>}
 
       {!!me?.incomingLikes && me.incomingLikes > 0 && (
         // Кнопка, а не div с onClick: это единственный вход на самый ценный
@@ -528,19 +531,6 @@ export function ProfilePage() {
             С фотографией зала на ваши смены откликаются заметно чаще.
           </div>
         </button>
-      )}
-
-      {role === "employer" && me && !!me.shiftsDone && me.shiftsDone > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="row">
-            <b>Смен проведено</b>
-            <span className="spacer" />
-            <b style={{ color: "var(--gold)", fontSize: "var(--text-lg)" }}>{me.shiftsDone}</b>
-          </div>
-          <div className="hint">
-            Из закрытых смен складывается рейтинг — его видно ещё до отклика.
-          </div>
-        </div>
       )}
 
       {role === "seeker" && me && (

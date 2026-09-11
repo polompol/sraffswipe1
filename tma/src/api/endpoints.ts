@@ -336,6 +336,7 @@ export interface Me {
   about?: string;
   experienceTags?: string[];
   photoUrl?: string;
+  photoUrls?: string[];
 }
 
 export async function fetchMe(): Promise<Me> {
@@ -365,6 +366,7 @@ export interface MeUpdate {
   about?: string;
   experience_tags?: string[];
   photo_url?: string;
+  photo_urls?: string[];
   company_name?: string;
 }
 
@@ -1178,5 +1180,4 @@ export async function uploadPhoto(file: File): Promise<string> {
   await postForm(data.upload_url, form);
   return data.public_url;
 }
-
 

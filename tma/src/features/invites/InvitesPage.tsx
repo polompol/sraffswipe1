@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,7 +62,7 @@ export function InvitesPage() {
     // этой части приложения (Настройки, Помощь, Анкета).
     <div className="app">
       <div className="page">
-      <h1 className="h1">Кто меня зовёт</h1>
+      <PageHeader title="Кто меня зовёт" backTo="/profile" />
 
       {/* Единый стиль состояний со всеми остальными экранами: раньше здесь
           были текстовая «Загрузка…» и самодельное пустое состояние. */}

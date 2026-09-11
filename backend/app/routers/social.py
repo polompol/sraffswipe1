@@ -142,6 +142,7 @@ class MeOut(BaseModel):
     about: str = ""
     experienceTags: list[str] = []
     photoUrl: str = ""
+    photoUrls: list[str] = []
 
 
 def _incoming_likes(db: Session, principal: dict) -> int:
@@ -292,6 +293,7 @@ def me(
         selfEmployed=u.self_employed, inn=u.inn,
         about=u.about or "", experienceTags=exp,
         photoUrl=photos[0] if photos else "",
+        photoUrls=photos,
     )
 
 
@@ -372,6 +374,7 @@ class MeUpdateIn(BaseModel):
         list[ExperienceTag], Field(max_length=12)
     ] | None = None
     photo_url: PhotoUrl | None = None
+    photo_urls: Annotated[list[PhotoUrl], Field(max_length=5)] | None = None
     company_name: Annotated[str, StringConstraints(max_length=120)] | None = None
 
 
@@ -387,6 +390,17 @@ def update_me(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
+    if body.photo_url is not None and body.photo_urls is not None:
+        raise HTTPException(status_code=422, detail="Передайте фото или галерею")
+    if body.photo_urls is not None:
+        if principal["role"] != "seeker":
+            raise HTTPException(status_code=422, detail="Галерея доступна сотруднику")
+        if any(not url for url in body.photo_urls):
+            raise HTTPException(status_code=422, detail="Пустое фото в галерее")
+        # Проверяем каждый адрес до изменения профиля: одна чужая картинка
+        # не должна попасть в ленту рядом с разрешёнными загрузками.
+        for url in body.photo_urls:
+            _check_photo(url, principal["id"])
     # Возрастной ценз 18+ проверяется на сервере (не только в UI).
     if body.birth_date:
         age = _age_from_iso(body.birth_date)
@@ -461,6 +475,8 @@ def update_me(
     if body.photo_url is not None:
         _check_photo(body.photo_url, u.id)
         u.photo_urls = body.photo_url
+    if body.photo_urls is not None:
+        u.photo_urls = ",".join(dict.fromkeys(body.photo_urls))
     db.commit()
     # «О себе» и имя видит каждое заведение в ленте — это такой же публичный
     # текст, как описание смены. У смен авто-модерация была с самого начала, а
@@ -474,4 +490,6 @@ def update_me(
         id=u.id, role="seeker", name=u.name or "Соискатель",
         rating=u.rating, tgUsername=u.tg_username,
         city=u.city,
+        photoUrl=(u.photo_urls or "").split(",")[0],
+        photoUrls=[p for p in (u.photo_urls or "").split(",") if p],
     )

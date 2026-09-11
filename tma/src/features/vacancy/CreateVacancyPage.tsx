@@ -1,3 +1,4 @@
+import { PageHeader, StepProgress } from "@/components/PageHeader";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,10 +17,9 @@ import {
   type AddressSuggestion,
 } from "@/api/endpoints";
 import { toast } from "@/components/Toast";
-import { dateLong, shiftWhen } from "@/lib/format";
+import { dateLong, shiftWhen, money, rateLabel } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
-import { RolePicker } from "@/components/RolePicker";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { CityPicker } from "@/components/CityPicker";
 import { IconCheck, IconPin } from "@/components/Icons";
@@ -79,6 +79,7 @@ export function CreateVacancyPage() {
     !HEADCOUNT_PRESETS.includes(pre?.headcount ?? 1),
   );
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState(0);
   // Экран «опубликовано» вместо возврата назад: после публикации у заведения
   // должно быть куда нажать, а не только куда вернуться.
   const [published, setPublished] = useState(false);
@@ -86,8 +87,12 @@ export function CreateVacancyPage() {
   // Кнопка «назад» Telegram. После публикации она ведёт к списку смен: назад
   // в только что отправленную форму возвращаться незачем.
   useEffect(
-    () => showBackButton(() => (published ? nav("/vacancy/my") : nav(-1))),
-    [nav, published],
+    () => showBackButton(() => {
+      if (published) nav("/vacancy/my");
+      else if (step > 0) setStep(step - 1);
+      else nav("/vacancy/my");
+    }),
+    [nav, published, step],
   );
 
   // Форма длинная: дата, время, ставка, адрес с подсказками, описание — три
@@ -101,6 +106,24 @@ export function CreateVacancyPage() {
     guardClosing(dirty);
     return () => guardClosing(false);
   }, [dirty]);
+
+  const minutes = (toMinutes(end) - toMinutes(start) + 1440) % 1440 || 1440;
+  const plannedPay = rateType === "perShift" ? Number(rate) : Math.round(Number(rate) * minutes / 60);
+
+  function nextStep() {
+    if (step === 0 && (!date || !city.trim() || !start || !end)) {
+      toast("Укажите дату, время и город смены", "error");
+      return;
+    }
+    const minimum = rateType === "perHour" ? MIN_RATE_PER_HOUR : MIN_RATE_PER_SHIFT;
+    if (step === 1 && (!Number.isFinite(Number(rate)) || Number(rate) < minimum)) {
+      toast(`Минимальная ставка — ${minimum} ₽`, "error");
+      return;
+    }
+    setStep((current) => current + 1);
+  }
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [step]);
 
   async function publish() {
     if (!date) {
@@ -258,9 +281,7 @@ export function CreateVacancyPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1 tight">
-          {editing ? "Исправить условия" : pre ? "Повторить смену" : "Новая смена"}
-        </h1>
+        <PageHeader title={editing ? "Исправить условия" : pre ? "Повторить смену" : "Новая смена"} onBack={() => step > 0 ? setStep(step - 1) : nav("/vacancy/my")} />
         {editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
             Правки видны в ленте сразу. Если по смене уже откликнулись,
@@ -273,11 +294,16 @@ export function CreateVacancyPage() {
           </p>
         )}
 
-        <div className="form-label">Должность</div>
-        <RolePicker isOn={(r) => role === r} onPick={setRole} />
+        <StepProgress current={step} steps={["Основное", "Условия", "Проверка"]} />
+        {step === 0 && <section className="form-panel" aria-label="Основное о смене">
+          <h2 className="h2">Кто, когда и где</h2>
+        <label className="form-label" htmlFor="vacancy-role">Должность</label>
+        <select id="vacancy-role" className="input" value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+          {Object.entries(STAFF_ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
 
-        <div className="form-label">Дата смены</div>
-        <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <label className="form-label" htmlFor="shift-date">Дата смены</label>
+        <input id="shift-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         {/* Поле даты рисует сама система телефона, и формат у неё свой: на
             английском телефоне это «08/29/2026». Спутать 08/29 и 29/08 легко,
             а цена ошибки — смена в другой день. Повторяем выбранное словами. */}
@@ -287,32 +313,13 @@ export function CreateVacancyPage() {
 
         <div className="row" style={{ marginBottom: 12 }}>
           <span style={{ flex: 1 }}>
-            <div className="form-label">Начало</div>
-            <input className="input" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+            <label className="form-label" htmlFor="shift-start">Начало</label>
+            <input className="input" id="shift-start" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
           </span>
           <span style={{ flex: 1 }}>
-            <div className="form-label">Конец</div>
-            <input className="input" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+            <label className="form-label" htmlFor="shift-end">Конец</label>
+            <input className="input" id="shift-end" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
           </span>
-        </div>
-
-        <div className="form-label">Ставка</div>
-        <div className="row" style={{ marginBottom: 12 }}>
-          <input
-            className="input"
-            type="number"
-            inputMode="numeric"
-            min={rateType === "perHour" ? MIN_RATE_PER_HOUR : MIN_RATE_PER_SHIFT}
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-          />
-          <button
-            className="tag"
-            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border-strong)" }}
-            onClick={() => setRateType(rateType === "perHour" ? "perShift" : "perHour")}
-          >
-            {rateType === "perHour" ? "₽/час" : "₽/смена"}
-          </button>
         </div>
 
         <div className="form-label">Сколько человек нужно</div>
@@ -378,37 +385,6 @@ export function CreateVacancyPage() {
           </p>
         )}
 
-        <div className="form-label">Как и когда платите</div>
-        <div style={{ display: "grid", gap: 8, margin: "8px 0 16px" }}>
-          {(Object.keys(PAY_METHOD_SHORT) as PayMethod[]).map((p) => (
-            <ToggleChip
-              key={p}
-              on={payMethod === p}
-              label={PAY_METHOD_SHORT[p]}
-              onClick={() => setPayMethod(p)}
-            />
-          ))}
-        </div>
-
-        <div className="form-label">Чаевые — их платят гости</div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-            gap: 8,
-            margin: "8px 0 16px",
-          }}
-        >
-          {(Object.keys(TIPS_CHOICE) as TipsMode[]).map((t) => (
-            <ToggleChip
-              key={t}
-              on={tips === t}
-              label={TIPS_CHOICE[t]}
-              onClick={() => setTips(t)}
-            />
-          ))}
-        </div>
-
         <CityPicker
           value={city}
           onChange={setCity}
@@ -450,6 +426,60 @@ export function CreateVacancyPage() {
         )}
         {suggests.length === 0 && <div style={{ marginBottom: 12 }} />}
 
+        </section>}
+        {step === 1 && <section className="form-panel" aria-label="Условия смены">
+          <h2 className="h2">Что предложите сотруднику</h2>
+        <label className="form-label" htmlFor="shift-rate">Ставка</label>
+        <div className="row" style={{ marginBottom: 12 }}>
+          <input
+            className="input"
+            id="shift-rate"
+            type="number"
+            inputMode="numeric"
+            min={rateType === "perHour" ? MIN_RATE_PER_HOUR : MIN_RATE_PER_SHIFT}
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+          />
+          <button
+            className="tag"
+            style={{ cursor: "pointer", whiteSpace: "nowrap", borderColor: "var(--border-strong)" }}
+            onClick={() => setRateType(rateType === "perHour" ? "perShift" : "perHour")}
+          >
+            {rateType === "perHour" ? "₽/час" : "₽/смена"}
+          </button>
+        </div>
+
+        <div className="form-label">Как и когда платите</div>
+        <div style={{ display: "grid", gap: 8, margin: "8px 0 16px" }}>
+          {(Object.keys(PAY_METHOD_SHORT) as PayMethod[]).map((p) => (
+            <ToggleChip
+              key={p}
+              on={payMethod === p}
+              label={PAY_METHOD_SHORT[p]}
+              onClick={() => setPayMethod(p)}
+            />
+          ))}
+        </div>
+
+        <div className="form-label">Чаевые — их платят гости</div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+            gap: 8,
+            margin: "8px 0 16px",
+          }}
+        >
+          {(Object.keys(TIPS_CHOICE) as TipsMode[]).map((t) => (
+            <ToggleChip
+              key={t}
+              on={tips === t}
+              label={TIPS_CHOICE[t]}
+              onClick={() => setTips(t)}
+            />
+          ))}
+        </div>
+
         {/* Настоящий чекбокс внутри label. Был div с onClick: требование
             медкнижки нельзя было ни переключить с клавиатуры, ни услышать в
             озвучке — для человека без мыши и тача поле просто не существовало.
@@ -474,8 +504,9 @@ export function CreateVacancyPage() {
           onChange={setInteriorPhoto}
         />
 
-        <div className="form-label">Описание</div>
+        <label className="form-label" htmlFor="shift-description">Описание</label>
         <textarea
+          id="shift-description"
           className="input"
           style={{ marginBottom: 16, minHeight: 90 }}
           placeholder="Дресс-код, бонусы, питание, чаевые…"
@@ -483,9 +514,28 @@ export function CreateVacancyPage() {
           onChange={(e) => setDesc(e.target.value)}
         />
 
-        <Button loading={busy} onClick={publish}>
-          {editing ? "Сохранить изменения" : "Разместить смену"}
-        </Button>
+        </section>}
+        {step === 2 && <>
+        <section className="card" aria-label="Предпросмотр смены">
+          {interiorPhoto && <img className="review-photo" src={interiorPhoto} alt="Место смены" />}
+          <h2 className="h2">{STAFF_ROLE_LABELS[role]}</h2>
+          <div className="review-price">{rateLabel(Number(rate), rateType)}</div>
+          <dl className="review-summary">
+            <div><dt>Когда</dt><dd>{dateLong(date)}<br />{start}–{end}{end <= start ? " следующего дня" : ""}</dd></div>
+            <div><dt>Где</dt><dd>{city}<br />{address || "Адрес уточните в чате"}</dd></div>
+            <div><dt>Нужно людей</dt><dd>{headcount}</dd></div>
+            <div><dt>Оплата</dt><dd>{PAY_METHOD_SHORT[payMethod]}</dd></div>
+            <div><dt>Чаевые</dt><dd>{TIPS_CHOICE[tips]}</dd></div>
+            <div><dt>Медкнижка</dt><dd>{medBook ? "Нужна" : "Не требуется"}</dd></div>
+          </dl>
+          {desc && <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{desc}</p>}
+        </section>
+        <p className="hint">{rateType === "perHour" ? "По плановому времени" : "За смену"} — {money(plannedPay)} на человека. Работнику платите напрямую. Комиссия сервиса для заведения — 10% после закрытия смены.</p>
+        </>}
+        <div className="form-actions">
+          {step < 2 ? <Button onClick={nextStep}>{step === 0 ? "Продолжить" : "Предпросмотр смены"}</Button> : <Button loading={busy} onClick={publish}>{editing ? "Сохранить изменения" : "Разместить смену"}</Button>}
+          {step > 0 && <Button variant="ghost" disabled={busy} onClick={() => setStep(step - 1)}>{step === 2 ? "Изменить условия" : "Назад"}</Button>}
+        </div>
       </div>
     </div>
   );
