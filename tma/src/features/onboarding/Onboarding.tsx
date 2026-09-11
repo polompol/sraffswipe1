@@ -18,7 +18,7 @@ export function Onboarding() {
         <p className="muted entry-subtitle">{campaign?.sub ?? "Соединяем людей и заведения в общепите"}</p>
         <div className="entry-roles">
           <button className="entry-role" onClick={() => nav("/role")}>
-            <img src="/images/staffswipe-barista.webp" alt="" fetchPriority="high" />
+            <img src="/images/staffswipe-barista.webp" alt="" loading="eager" />
             <span className="entry-role-copy"><small>ДЛЯ СОТРУДНИКОВ</small><strong>Найти свою<br />смену</strong><span>Работа в вашем ритме</span></span>
             <span className="entry-arrow"><IconChevronRight size={22} /></span>
           </button>

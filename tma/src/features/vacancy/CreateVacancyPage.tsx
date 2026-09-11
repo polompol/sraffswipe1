@@ -20,7 +20,6 @@ import { toast } from "@/components/Toast";
 import { dateLong, shiftWhen, money, rateLabel } from "@/lib/format";
 import { apiError } from "@/lib/errors";
 import { Button } from "@/components/Button";
-import { RolePicker } from "@/components/RolePicker";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { CityPicker } from "@/components/CityPicker";
 import { IconCheck, IconPin } from "@/components/Icons";
@@ -298,8 +297,10 @@ export function CreateVacancyPage() {
         <StepProgress current={step} steps={["Основное", "Условия", "Проверка"]} />
         {step === 0 && <section className="form-panel" aria-label="Основное о смене">
           <h2 className="h2">Кто, когда и где</h2>
-        <div className="form-label">Должность</div>
-        <RolePicker isOn={(r) => role === r} onPick={setRole} />
+        <label className="form-label" htmlFor="vacancy-role">Должность</label>
+        <select id="vacancy-role" className="input" value={role} onChange={(e) => setRole(e.target.value as StaffRole)}>
+          {Object.entries(STAFF_ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
 
         <label className="form-label" htmlFor="shift-date">Дата смены</label>
         <input id="shift-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
