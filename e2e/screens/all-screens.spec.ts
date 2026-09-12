@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,14 +7,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(here, "../screenshots");
 mkdirSync(OUT, { recursive: true });
 
-async function shot(page: Parameters<typeof test>[0] extends never ? never : any, path: string, name: string) {
+async function shot(page: Page, path: string, name: string) {
   await page.goto(`/#${path}`);
   await expect(page.locator(".app")).toBeVisible();
   await page.waitForTimeout(650);
   await page.screenshot({ path: resolve(OUT, `${name}.png`), fullPage: true });
 }
 
-async function setRole(page: any, role: "seeker" | "employer") {
+async function setRole(page: Page, role: "seeker" | "employer") {
   await page.goto("/#/onboarding");
   await page.evaluate((r: string) => {
     localStorage.setItem("ss_jwt", "mock");
