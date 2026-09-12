@@ -8,12 +8,14 @@ import { Button } from "@/components/Button";
 
 // Куда отправить человека, открывшего приложение в обычном браузере.
 const BOT_LINK = `https://t.me/${import.meta.env.VITE_BOT_USERNAME ?? "staffswipe_bot"}`;
+const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === "true";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
 import { OFFER_URL, PRIVACY_URL } from "@/lib/legal";
 import type { ComponentType } from "react";
 import { LS } from "@/lib/storage";
+import { allowRoleChoice } from "./browserAccess";
 
 
 export function RolePage() {
@@ -55,11 +57,11 @@ export function RolePage() {
     }
   }
 
-  // Вне Telegram войти невозможно в принципе: подписи запуска нет, сервер
-  // отвечает отказом, и человек упирался в «Не удалось войти — проверьте
-  // интернет», хотя интернет ни при чём. Заходят так регулярно: по ссылке из
-  // рекламы, из истории браузера.
-  if (!insideTelegram()) {
+  // В боевой сборке вне Telegram войти невозможно: подписи запуска нет,
+  // поэтому отправляем человека в бота. В mock/demo-сборке backend выключен
+  // и authTelegram использует безопасные локальные данные — там разрешаем
+  // пройти обе роли прямо в обычном браузере для QA и показа всех экранов.
+  if (!allowRoleChoice({ insideTelegram: insideTelegram(), useBackend: USE_BACKEND })) {
     return (
       <div className="app">
         <div
