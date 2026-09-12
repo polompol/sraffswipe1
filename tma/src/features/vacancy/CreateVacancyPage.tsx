@@ -1,7 +1,7 @@
 import { PageHeader, StepProgress } from "@/components/PageHeader";
-import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, RateType, StaffRole, TipsMode, Vacancy } from "@/types/domain";
 import { MIN_RATE_PER_HOUR, MIN_RATE_PER_SHIFT } from "@/types/domain";
 import {
@@ -10,7 +10,6 @@ import {
   TIPS_CHOICE,
 } from "@/types/domain";
 import {
-  createVacancy,
   updateVacancy,
   suggestAddress,
   track,
@@ -25,6 +24,9 @@ import { CityPicker } from "@/components/CityPicker";
 import { IconCheck, IconPin } from "@/components/Icons";
 import { showBackButton, haptic, guardClosing } from "@/telegram/sdk";
 import { ToggleChip } from "@/components/ToggleChip";
+import { draftSnapshot, fetchDraft, saveDraft, publishDraft, type DraftFields, type VacancyDraft } from "@/api/drafts";
+import { ErrorBox, SkeletonList } from "@/components/States";
+import { Sheet } from "@/components/Sheet";
 
 const toMinutes = (t: string): number => {
   const [h, m] = t.split(":").map(Number);
@@ -38,6 +40,18 @@ const fromMinutes = (m: number): string =>
 const HEADCOUNT_PRESETS = [1, 2, 3, 5, 10];
 
 export function CreateVacancyPage() {
+  const [params] = useSearchParams();
+  const id = params.get("draft");
+  const nav = useNavigate();
+  const query = useQuery({ queryKey: ["vacancy-draft", id], queryFn: () => fetchDraft(id!), enabled: !!id, retry: false, staleTime: 0, gcTime: 0, refetchOnWindowFocus: false, refetchOnReconnect: false });
+  if (id && (query.isFetching || query.isError)) return <div className="page">
+    <PageHeader title="Черновик смены" onBack={() => nav("/vacancy/my?tab=drafts")} />
+    {query.isFetching ? <SkeletonList /> : <ErrorBox text={apiError(query.error, "Не получилось открыть черновик")} onRetry={() => query.refetch()} />}
+  </div>;
+  return <VacancyForm key={id ?? "new"} draft={id ? query.data : undefined} />;
+}
+
+function VacancyForm({ draft }: { draft?: VacancyDraft }) {
   const nav = useNavigate();
   const qc = useQueryClient();
   // Экран работает в двух режимах:
@@ -46,53 +60,71 @@ export function CreateVacancyPage() {
   const navState = useLocation().state as
     | { prefill?: Vacancy; edit?: Vacancy }
     | null;
-  const editing = navState?.edit ?? null;
+  const editing = draft ? null : navState?.edit ?? null;
   const pre = editing ?? navState?.prefill;
-  const [role, setRole] = useState<StaffRole>(pre?.role ?? "waiter");
-  const [date, setDate] = useState(editing?.date ?? "");
-  const [start, setStart] = useState(pre ? fromMinutes(pre.startTime) : "10:00");
-  const [end, setEnd] = useState(pre ? fromMinutes(pre.endTime) : "22:00");
-  const [rate, setRate] = useState(pre ? String(pre.rate) : "350");
-  const [interiorPhoto, setInteriorPhoto] = useState(pre?.interiorPhotoUrl ?? "");
-  const [rateType, setRateType] = useState<RateType>(pre?.rateType ?? "perHour");
-  const [payMethod, setPayMethod] = useState<PayMethod>(pre?.payMethod ?? "cash");
-  const [tips, setTips] = useState<TipsMode>(pre?.tips ?? "none");
+  const seed = draft?.data;
+  const [role, setRole] = useState<StaffRole>(seed?.role ?? pre?.role ?? "waiter");
+  const [date, setDate] = useState(seed?.date ?? editing?.date ?? "");
+  const [start, setStart] = useState(seed ? seed.startTime === null ? "" : fromMinutes(seed.startTime) : pre ? fromMinutes(pre.startTime) : "10:00");
+  const [end, setEnd] = useState(seed ? seed.endTime === null ? "" : fromMinutes(seed.endTime) : pre ? fromMinutes(pre.endTime) : "22:00");
+  const [rate, setRate] = useState(seed ? seed.rate === null ? "" : String(seed.rate) : pre ? String(pre.rate) : "350");
+  const [interiorPhoto, setInteriorPhoto] = useState(seed?.interiorPhotoUrl ?? pre?.interiorPhotoUrl ?? "");
+  const [rateType, setRateType] = useState<RateType>(seed?.rateType ?? pre?.rateType ?? "perHour");
+  const [payMethod, setPayMethod] = useState<PayMethod>(seed?.payMethod ?? pre?.payMethod ?? "cash");
+  const [tips, setTips] = useState<TipsMode>(seed?.tips ?? pre?.tips ?? "none");
   // Без «Москвы» по умолчанию: заведение в Казани не заметило бы подстановку
   // и опубликовало смену в чужом городе — там её никто не увидит.
-  const [city, setCity] = useState(pre?.city || "");
+  const [city, setCity] = useState(seed?.city ?? pre?.city ?? "");
   // Пусто, а не московская улица. Подстановку легко не заметить: заведение в
   // Казани заполняло дату и ставку, адрес не трогало — и публиковало смену по
   // московскому адресу. Он потом уходит и в напоминание работнику, и в акт.
-  const [address, setAddress] = useState(pre?.address || "");
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [address, setAddress] = useState(seed?.address ?? pre?.address ?? "");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(seed ? { lat: seed.lat, lng: seed.lng } : pre ? { lat: pre.lat, lng: pre.lng } : null);
   const [suggests, setSuggests] = useState<AddressSuggestion[]>([]);
   // Последний адрес, выбранный из списка (или подставленный при входе): для
   // него подсказки не запрашиваем.
-  const chosenAddress = useRef<string>(pre?.address || "");
-  const [desc, setDesc] = useState(pre?.description ?? "");
-  const [medBook, setMedBook] = useState(pre?.requireMedBook ?? true);
+  const chosenAddress = useRef<string>(seed?.address ?? pre?.address ?? "");
+  const [desc, setDesc] = useState(seed?.description ?? pre?.description ?? "");
+  const [medBook, setMedBook] = useState(seed?.requireMedBook ?? pre?.requireMedBook ?? true);
   // Сколько человек нужно: на банкет и выходные почти никогда не один.
-  const [headcount, setHeadcount] = useState(pre?.headcount ?? 1);
+  const [headcount, setHeadcount] = useState(seed?.headcount ?? pre?.headcount ?? 1);
   // Правим смену, где стояло число не из быстрых кнопок (например 4) —
   // сразу открываем поле, иначе выбранное значение негде увидеть.
   const [custom, setCustom] = useState(
-    !HEADCOUNT_PRESETS.includes(pre?.headcount ?? 1),
+    !HEADCOUNT_PRESETS.includes(seed?.headcount ?? pre?.headcount ?? 1),
   );
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(seed?.step ?? 0);
+  const [uploading, setUploading] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const saving = useRef(false);
+  const receipt = useRef({ id: draft?.id ?? crypto.randomUUID(), version: draft?.version ?? 0 });
+  const pendingPublish = useRef<{ id: string; version: number } | null>(null);
+  const [publicationPending, setPublicationPending] = useState(false);
   // Экран «опубликовано» вместо возврата назад: после публикации у заведения
   // должно быть куда нажать, а не только куда вернуться.
   const [published, setPublished] = useState(false);
+  const data: DraftFields = {
+    role, date: date || null, startTime: start ? toMinutes(start) : null, endTime: end ? toMinutes(end) : null,
+    rate: rate === "" ? null : Number(rate), rateType, payMethod, tips, headcount,
+    description: desc, requireMedBook: medBook, requireExperience: seed?.requireExperience ?? pre?.requireExperience ?? false,
+    city, address, lat: coords?.lat ?? 0, lng: coords?.lng ?? 0, interiorPhotoUrl: interiorPhoto, step,
+  };
+  const [savedSnapshot, setSavedSnapshot] = useState(() => draftSnapshot(data));
+  const dirty = !published && (uploading || draftSnapshot(data) !== savedSnapshot || (!!pre && !editing && !draft));
+  const back = useCallback(() => {
+    if (saving.current || uploading) return;
+    if (published || publicationPending) nav("/vacancy/my");
+    else if (step > 0) setStep(step - 1);
+    else if (dirty) setLeaveOpen(true);
+    else nav(draft ? "/vacancy/my?tab=drafts" : "/vacancy/my");
+  }, [nav, uploading, published, publicationPending, step, dirty, draft]);
 
   // Кнопка «назад» Telegram. После публикации она ведёт к списку смен: назад
   // в только что отправленную форму возвращаться незачем.
   useEffect(
-    () => showBackButton(() => {
-      if (published) nav("/vacancy/my");
-      else if (step > 0) setStep(step - 1);
-      else nav("/vacancy/my");
-    }),
-    [nav, published, step],
+    () => showBackButton(back),
+    [back],
   );
 
   // Форма длинная: дата, время, ставка, адрес с подсказками, описание — три
@@ -100,8 +132,6 @@ export function CreateVacancyPage() {
   // единого вопроса. Пока в форме есть несохранённое, Telegram спрашивает
   // подтверждение при закрытии.
   // После публикации спрашивать «точно уйти?» уже не за что: форма сохранена.
-  const dirty =
-    !published && (!!date || !!desc || address !== (pre?.address ?? ""));
   useEffect(() => {
     guardClosing(dirty);
     return () => guardClosing(false);
@@ -109,6 +139,32 @@ export function CreateVacancyPage() {
 
   const minutes = (toMinutes(end) - toMinutes(start) + 1440) % 1440 || 1440;
   const plannedPay = rateType === "perShift" ? Number(rate) : Math.round(Number(rate) * minutes / 60);
+
+  async function persistDraft() {
+    const saved = await saveDraft(receipt.current.id, receipt.current.version, data);
+    receipt.current = { id: saved.id, version: saved.version };
+    setSavedSnapshot(draftSnapshot(data));
+    qc.invalidateQueries({ queryKey: ["vacancy-drafts"] });
+    return saved;
+  }
+
+  async function saveAndExit() {
+    if (saving.current || uploading) return;
+    saving.current = true;
+    setBusy(true);
+    try {
+      await persistDraft();
+      guardClosing(false);
+      toast("Черновик сохранён. Работники его пока не видят", "success");
+      nav("/vacancy/my?tab=drafts");
+    } catch (e) {
+      toast(apiError(e, "Не получилось сохранить черновик. Поля остались на экране"), "error");
+    } finally {
+      saving.current = false;
+      setBusy(false);
+      setLeaveOpen(false);
+    }
+  }
 
   function nextStep() {
     if (step === 0 && (!date || !city.trim() || !start || !end)) {
@@ -126,6 +182,7 @@ export function CreateVacancyPage() {
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [step]);
 
   async function publish() {
+    if (saving.current || uploading) return;
     if (!date) {
       toast("Укажите дату смены", "error");
       return;
@@ -149,6 +206,7 @@ export function CreateVacancyPage() {
       );
       return;
     }
+    saving.current = true;
     setBusy(true);
     try {
       const payload = {
@@ -178,16 +236,27 @@ export function CreateVacancyPage() {
         nav(-1);
         return;
       }
-      await createVacancy(payload);
+      if (!pendingPublish.current) {
+        const saved = await persistDraft();
+        pendingPublish.current = { id: saved.id, version: saved.version };
+      }
+      setPublicationPending(true);
+      await publishDraft(pendingPublish.current.id, pendingPublish.current.version);
       track("vacancy_publish", { role });
       haptic("success");
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["my-vacancies"] });
+      qc.invalidateQueries({ queryKey: ["vacancy-drafts"] });
       // Не возвращаем назад молча. Раньше публикация заканчивалась всплывашкой
       // и прыжком на предыдущий экран: смена опубликована — и что дальше?
       // Заведение ждало откликов, хотя быстрее позвать людей самому.
       setPublished(true);
     } catch (e) {
+      const status = (e as { response?: { status?: number } }).response?.status;
+      if (status && status >= 400 && status < 500 && status !== 429) {
+        pendingPublish.current = null;
+        setPublicationPending(false);
+      }
       haptic("error");
       // Сервер объясняет причину сам: и почему нельзя менять смену с
       // откликом (409), и что не так с полями — например «Смена не может
@@ -203,6 +272,7 @@ export function CreateVacancyPage() {
         "error",
       );
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   }
@@ -281,7 +351,8 @@ export function CreateVacancyPage() {
   return (
     <div className="app">
       <div className="page">
-        <PageHeader title={editing ? "Исправить условия" : pre ? "Повторить смену" : "Новая смена"} onBack={() => step > 0 ? setStep(step - 1) : nav("/vacancy/my")} />
+        <PageHeader title={editing ? "Исправить условия" : draft ? "Черновик смены" : pre ? "Повторить смену" : "Новая смена"} onBack={back} />
+        {draft && <p className="hint">Черновик виден только вам. После правок сохраните его или разместите смену.</p>}
         {editing && (
           <p className="muted" style={{ marginBottom: 16 }}>
             Правки видны в ленте сразу. Если по смене уже откликнулись,
@@ -295,6 +366,7 @@ export function CreateVacancyPage() {
         )}
 
         <StepProgress current={step} steps={["Основное", "Условия", "Проверка"]} />
+        <fieldset disabled={busy || publicationPending} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
         {step === 0 && <section className="form-panel" aria-label="Основное о смене">
           <h2 className="h2">Кто, когда и где</h2>
         <label className="form-label" htmlFor="vacancy-role">Должность</label>
@@ -502,6 +574,7 @@ export function CreateVacancyPage() {
           label="Фото места — по желанию, но с ним откликаются чаще"
           value={interiorPhoto}
           onChange={setInteriorPhoto}
+          onBusyChange={setUploading}
         />
 
         <label className="form-label" htmlFor="shift-description">Описание</label>
@@ -511,6 +584,7 @@ export function CreateVacancyPage() {
           style={{ marginBottom: 16, minHeight: 90 }}
           placeholder="Дресс-код, бонусы, питание, чаевые…"
           value={desc}
+          maxLength={2000}
           onChange={(e) => setDesc(e.target.value)}
         />
 
@@ -532,10 +606,22 @@ export function CreateVacancyPage() {
         </section>
         <p className="hint">{rateType === "perHour" ? "По плановому времени" : "За смену"} — {money(plannedPay)} на человека. Работнику платите напрямую. Комиссия сервиса для заведения — 10% после закрытия смены.</p>
         </>}
+        </fieldset>
+        {publicationPending && !busy && <p className="hint" role="status">Ответ о публикации не получен. Нажмите «Проверить публикацию»: повторная проверка не создаст вторую смену.</p>}
         <div className="form-actions">
-          {step < 2 ? <Button onClick={nextStep}>{step === 0 ? "Продолжить" : "Предпросмотр смены"}</Button> : <Button loading={busy} onClick={publish}>{editing ? "Сохранить изменения" : "Разместить смену"}</Button>}
-          {step > 0 && <Button variant="ghost" disabled={busy} onClick={() => setStep(step - 1)}>{step === 2 ? "Изменить условия" : "Назад"}</Button>}
+          {step < 2 ? <Button disabled={busy || uploading} onClick={nextStep}>{step === 0 ? "Продолжить" : "Предпросмотр смены"}</Button> : <Button loading={busy} disabled={uploading} onClick={publish}>{editing ? "Сохранить изменения" : publicationPending ? "Проверить публикацию" : "Разместить смену"}</Button>}
+          {!editing && !publicationPending && <Button variant="secondary" disabled={busy || uploading} onClick={saveAndExit}>Сохранить и выйти</Button>}
+          {step > 0 && !publicationPending && <Button variant="ghost" disabled={busy || uploading} onClick={() => setStep(step - 1)}>{step === 2 ? "Изменить условия" : "Назад"}</Button>}
+          {publicationPending && <Button variant="ghost" disabled={busy} onClick={() => nav("/vacancy/my")}>К моим сменам</Button>}
         </div>
+        {leaveOpen && <Sheet title="Есть несохранённые изменения" onClose={() => !busy && setLeaveOpen(false)}>
+          <p className="muted">{editing ? "Изменения ещё не применены к опубликованной смене." : "Сохраните черновик, чтобы продолжить позже. Работники увидят смену только после публикации."}</p>
+          <div className="stack">
+            {!editing && <Button loading={busy} onClick={saveAndExit}>Сохранить и выйти</Button>}
+            <Button variant="secondary" disabled={busy} onClick={() => setLeaveOpen(false)}>Продолжить заполнение</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => { guardClosing(false); nav(draft ? "/vacancy/my?tab=drafts" : "/vacancy/my"); }}>Выйти без сохранения</Button>
+          </div>
+        </Sheet>}
       </div>
     </div>
   );

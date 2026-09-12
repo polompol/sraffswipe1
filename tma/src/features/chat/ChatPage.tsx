@@ -420,6 +420,8 @@ export function ChatPage() {
           maxWidth: 520,
           margin: "0 auto",
           padding: "8px 12px calc(8px + var(--app-safe-bottom))",
+          paddingLeft: "max(12px, var(--app-safe-left))",
+          paddingRight: "max(12px, var(--app-safe-right))",
           background: "var(--surface)",
           borderTop: "1px solid var(--border)",
         }}

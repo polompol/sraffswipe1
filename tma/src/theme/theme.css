@@ -6,6 +6,8 @@
 :root {
   --app-safe-top: max(env(safe-area-inset-top), var(--tg-viewport-safe-area-inset-top, 0px), var(--tg-viewport-content-safe-area-inset-top, 0px));
   --app-safe-bottom: max(env(safe-area-inset-bottom), var(--tg-viewport-safe-area-inset-bottom, 0px), var(--tg-viewport-content-safe-area-inset-bottom, 0px));
+  --app-safe-left: max(env(safe-area-inset-left), var(--tg-viewport-safe-area-inset-left, 0px), var(--tg-viewport-content-safe-area-inset-left, 0px));
+  --app-safe-right: max(env(safe-area-inset-right), var(--tg-viewport-safe-area-inset-right, 0px), var(--tg-viewport-content-safe-area-inset-right, 0px));
   /* Бренд — багровый кримсон + слоновая кость + золото */
   --gold: #870e26;        /* основной акцент: бренд, кнопки, лайк */
   --gold-soft: #a5283e;   /* партнёр для градиентов (светлее кримсон) */

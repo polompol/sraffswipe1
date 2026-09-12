@@ -20,6 +20,7 @@ import type {
   VacancyInput,
   VerifyResult,
 } from "./endpoints";
+import type { InvitationPage, InvitationView, OutgoingInvitation } from "./invitations";
 
 const photo = (id: string) =>
   `https://images.unsplash.com/${id}?w=900&q=80&auto=format&fit=crop`;
@@ -165,6 +166,7 @@ const DEMO_MATCH_ID = "demo-match";
 const matches: MatchModel[] = [
   {
     id: DEMO_MATCH_ID,
+    userId: "s2",
     employerId: "emp1",
     vacancyId: "vac1",
     status: "confirmed",
@@ -186,6 +188,7 @@ const matches: MatchModel[] = [
   // кнопки «Мне не заплатили» — то есть половины экрана «Мои смены».
   {
     id: "demo-match-done",
+    userId: "s2",
     employerId: "emp2",
     vacancyId: "vac2",
     status: "completed",
@@ -318,6 +321,7 @@ export function sendSwipe(
       VACANCIES.find((v) => seeker.roles.includes(v.role)) ?? VACANCIES[0];
     const m: MatchModel = {
       id: uid(),
+      userId: seeker.id,
       employerId: mine.employerId,
       vacancyId: mine.id,
       status: "matched",
@@ -332,6 +336,7 @@ export function sendSwipe(
       shiftEnd: mine.endTime,
     };
     matches.unshift(m);
+    if (!demoInvited.has(seeker.id)) demoInvited.set(seeker.id, new Date().toISOString());
     messagesByMatch[m.id] = [
       {
         id: uid(),
@@ -996,8 +1001,28 @@ export function fetchMyWorkers() {
   ]);
 }
 
-export function inviteWorker(_userId: string): Promise<boolean> {
+const demoInvited = new Map([["s2", minutesAgo(170)], ["s3", minutesAgo(10)]]);
+
+export function inviteWorker(userId: string): Promise<boolean> {
+  if (demoInvited.has(userId)) return Promise.resolve(false);
+  demoInvited.set(userId, new Date().toISOString());
   return Promise.resolve(true);
+}
+
+export function fetchOutgoingInvitations(view: InvitationView, offset: number): Promise<InvitationPage> {
+  const rows: OutgoingInvitation[] = [];
+  for (const [userId, invitedAt] of demoInvited) {
+    const user = SEEKERS.find(s => s.id === userId);
+    if (!user) continue;
+    const related = matches.filter(m => m.userId === userId);
+    if (view === "waiting" && related.length || view === "with_matches" && !related.length) continue;
+    const m = related.find(m => ["matched", "confirmed"].includes(m.status)) ?? related[0];
+    rows.push({ id: `invite-${userId}`, userId, name: user.name, photoUrl: user.photoUrls?.[0] ?? "", roles: user.roles,
+      invitedAt, status: m?.status ?? "waiting", matchesCount: related.length,
+      latestMatch: m ? { id: m.id, status: m.status, role: m.role!, shiftDate: m.shiftDate!, shiftStart: m.shiftStart!, shiftEnd: m.shiftEnd! } : null });
+  }
+  rows.sort((a, b) => b.invitedAt.localeCompare(a.invitedAt));
+  return Promise.resolve({ items: rows.slice(offset, offset + 20), total: rows.length, nextOffset: offset + 20 < rows.length ? offset + 20 : null });
 }
 
 export function fetchApplicants() {

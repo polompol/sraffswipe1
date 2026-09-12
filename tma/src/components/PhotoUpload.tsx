@@ -14,10 +14,12 @@ export function PhotoUpload({
   label = "Фото",
   value,
   onChange,
+  onBusyChange,
 }: {
   label?: string;
   value?: string;
   onChange: (url: string) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -25,6 +27,7 @@ export function PhotoUpload({
 
   async function onFile(file: File) {
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     try {
       const url = await uploadPhoto(file);
@@ -41,6 +44,7 @@ export function PhotoUpload({
       );
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 

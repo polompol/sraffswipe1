@@ -1,4 +1,6 @@
 """Свайпы и детект мэтча."""
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -272,6 +274,9 @@ def swipe(
         .first()
     )
 
+    # У заведения ошибка создания договорённости должна откатить и новый
+    # интерес. Иначе UI сообщает 409, а журнал уже показывает приглашение.
+    defer_commit = principal["role"] == "employer" and body.direction in _POSITIVE
     if existing is None:
         db.add(
             Swipe(
@@ -282,7 +287,10 @@ def swipe(
             )
         )
         try:
-            db.commit()
+            if defer_commit:
+                db.flush()
+            else:
+                db.commit()
         except IntegrityError:
             # Гонка: параллельный запрос уже записал этот свайп — откатываем
             # списание баланса и считаем операцию идемпотентной.
@@ -294,7 +302,11 @@ def swipe(
         # карточками много. Обратный путь (лайк → отказ) намеренно не
         # разрешаем: он ломал бы уже созданный мэтч и договорённость.
         existing.direction = body.direction
-        db.commit()
+        existing.created_at = datetime.now(UTC)
+        if defer_commit:
+            db.flush()
+        else:
+            db.commit()
 
     if body.direction not in _POSITIVE:
         return SwipeOut(recorded=True, matched=False)
@@ -378,7 +390,10 @@ def swipe(
                     detail="На эту смену уже набраны все люди. "
                            "Увеличьте число мест или опубликуйте новую смену.",
                 ) from None
+            db.commit()  # Включая идемпотентный случай уже существующего мэтча.
             _on_match(db, match, created)
             return _matched_out(match.id, order_vac[seeker_like.target_id])
 
+    if defer_commit:
+        db.commit()
     return SwipeOut(recorded=True, matched=False)

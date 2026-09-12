@@ -30,14 +30,15 @@ import {
   IconChevronRight,
 } from "@/components/Icons";
 import { Button } from "@/components/Button";
+import { Sheet } from "@/components/Sheet";
 import { Avatar } from "@/components/Avatar";
 import { Rating } from "@/components/Rating";
 import { toast } from "@/components/Toast";
 import { PILOT_MODE } from "@/lib/flags";
 import { money, plural } from "@/lib/format";
 
-function CommissionCard() {
-  const { data: bill, isError, refetch } = useQuery({
+export function CommissionCard() {
+  const { data: bill, isError, isFetching, refetch } = useQuery({
     queryKey: ["my-commission"],
     queryFn: fetchMyCommission,
     // Обновляться при возврате в приложение — здесь это не украшение.
@@ -51,6 +52,8 @@ function CommissionCard() {
     refetchOnMount: "always",
   });
   const [busy, setBusy] = useState(false);
+  const [amount, setAmount] = useState<number | null>(null);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
   // Ошибку показываем, а не прячем карточку. Стояло `if (!bill) return null`
   // на оба случая сразу: при любом сбое запроса блок с балансом и долгом
   // исчезал целиком, и заведение видело профиль без единого упоминания денег —
@@ -73,6 +76,8 @@ function CommissionCard() {
     setBusy(true);
     try {
       const { url } = await walletTopup(amount);
+      setPaymentLink(url);
+      setAmount(null);
       haptic("light");
       openExternal(url);
     } catch {
@@ -187,7 +192,7 @@ function CommissionCard() {
                   borderColor: "var(--gold)",
                   color: "var(--gold)",
                 }}
-                onClick={() => topup(a)}
+                onClick={() => setAmount(a)}
               >
                 {money(a)}
               </button>
@@ -199,6 +204,35 @@ function CommissionCard() {
           Оплата картой пока не подключена. Нужно пополнить баланс —
           напишите в поддержку.
         </div>
+      )}
+      {paymentLink && (
+        <div className="stack" style={{ marginTop: 16 }}>
+          <p className="muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+            Открытие страницы банка не подтверждает оплату. После оплаты проверьте
+            баланс: зачисление может занять несколько минут. Не платите повторно,
+            если деньги уже списались.
+          </p>
+          <Button variant="secondary" loading={isFetching} onClick={async () => {
+            const result = await refetch();
+            if (!result.isError) toast("Баланс обновлён", "info");
+          }}>Проверить баланс</Button>
+          <Button variant="ghost" onClick={() => openExternal(paymentLink)}>Открыть оплату</Button>
+        </div>
+      )}
+      {amount !== null && (
+        <Sheet title="Пополнить баланс" onClose={() => { if (!busy) setAmount(null); }} footer={
+          <div className="stack" style={{ width: "100%" }}>
+            <Button loading={busy} onClick={() => topup(amount)}>Перейти к оплате</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setAmount(null)}>Отмена</Button>
+          </div>
+        }>
+          <p className="h1" style={{ margin: "12px 0" }}>{money(amount)}</p>
+          <p>Это баланс комиссии StaffSwipe, не оплата работы сотрудника.</p>
+          <p className="muted">Оплата откроется на странице платёжного сервиса.
+            Данные карты в StaffSwipe вводить не нужно.</p>
+          {paymentLink && <p className="hint">Вы уже открывали оплату. Если деньги
+            списались, отмените это пополнение и проверьте баланс.</p>}
+        </Sheet>
       )}
     </div>
   );

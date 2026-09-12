@@ -60,14 +60,14 @@ export function SkeletonCard() {
 // Query, а он возвращает свой результат и в `Promise<void>` не укладывается.
 // На поведение это не влияет — <Button> дожидается того, что вернул обработчик,
 // и всё это время держит «Повторить» заблокированной со спиннером.
-export function ErrorBox({ onRetry }: { onRetry?: () => void }) {
+export function ErrorBox({ onRetry, text = "Проверьте соединение и попробуйте ещё раз." }: { onRetry?: () => void; text?: string }) {
   return (
     <div className="card state-message" style={{ textAlign: "center" }} role="alert">
       <div style={{ color: "var(--muted)", display: "flex", justifyContent: "center", marginBottom: 4 }}>
         <IconWarning size={36} />
       </div>
       <h2>Не удалось загрузить</h2>
-      <p className="muted" style={{ margin: "8px 0 20px" }}>Проверьте соединение и попробуйте ещё раз.</p>
+      <p className="muted" style={{ margin: "8px 0 20px" }}>{text}</p>
       {onRetry && (
         <Button variant="secondary" onClick={onRetry}>
           Повторить

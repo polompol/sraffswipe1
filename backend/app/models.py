@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
@@ -179,6 +180,26 @@ class Vacancy(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     employer: Mapped[Employer] = relationship(back_populates="vacancies")
+
+
+class VacancyDraft(Base):
+    """Приватная незавершённая форма, отдельно от публичных смен."""
+
+    __tablename__ = "vacancy_drafts"
+    __table_args__ = (
+        Index("ix_vacancy_draft_owner_updated", "employer_id", "updated_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    employer_id: Mapped[str] = mapped_column(ForeignKey("employers.id"))
+    payload: Mapped[dict] = mapped_column(JSON)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    published_vacancy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("vacancies.id"), nullable=True
+    )
+    deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
 class Swipe(Base):

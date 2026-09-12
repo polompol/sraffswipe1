@@ -222,7 +222,8 @@ def invite_again(
                    "чтобы звать людей.",
         )
     emp = db.get(Employer, principal["id"])
-    if emp is None or db.get(User, user_id) is None:
+    worker = db.get(User, user_id)
+    if emp is None or worker is None or worker.blocked:
         raise HTTPException(status_code=404, detail="Не найдено")
     # Звать некуда, если нет ни одной опубликованной смены: человек получал
     # «вас снова зовут», открывал приложение — и не находил, на что
@@ -235,15 +236,14 @@ def invite_again(
     # не находил, на что откликнуться.
     from ..timeutil import local_today
 
-    has_shift = (
+    has_shift = next((v for v in (
         db.query(Vacancy)
         .filter(
             Vacancy.employer_id == principal["id"],
             Vacancy.status == "active",
-            Vacancy.date >= local_today(),
         )
-        .first()
-    )
+        .all()
+    ) if v.date >= local_today(v.city)), None)
     if has_shift is None:
         raise HTTPException(
             status_code=409,
@@ -259,21 +259,38 @@ def invite_again(
         )
         .first()
     )
-    if not exists:
-        db.add(Swipe(
-            swiper_id=principal["id"], target_id=user_id,
-            target_type="user", direction="like",
-        ))
-        db.commit()
+    already_invited = exists is not None and exists.direction == "like"
+    if already_invited:
+        return {"ok": True, "notified": False}
+    from .vacancies import taken_counts
+
+    future_shifts = [v for v in db.query(Vacancy).filter(
+        Vacancy.employer_id == principal["id"], Vacancy.status == "active",
+    ).all() if v.date >= local_today(v.city)]
+    taken = taken_counts(db, [v.id for v in future_shifts])
+    if not any(taken.get(v.id, 0) < v.headcount for v in future_shifts):
+        raise HTTPException(
+            409, "На будущих сменах нет свободных мест. "
+            "Увеличьте число мест или опубликуйте новую смену.",
+        )
+    # Тот же путь, что у кнопки в карточке: предыдущий отказ можно изменить,
+    # а существующий отклик сотрудника сразу создаёт договорённость.
+    from ..schemas import SwipeIn
+    from .swipes import swipe
+
+    result = swipe(
+        SwipeIn(target_id=user_id, target_type="user", direction="like"),
+        db=db, principal=principal,
+    )
     # Пинг шлём только при НОВОМ интересе — повторные вызовы не спамят человека.
-    if not exists:
+    if not already_invited and not result.matched:
         notify_owner(
             db, user_id, f"Вас снова зовут на смену в «{emp.company_name}»"
         )
     # Отдаём, отправили мы сообщение или человек уже был позван: иначе кнопка
     # на второе нажатие показывала тот же успех, и управляющий не понимал,
     # дошло ли до человека хоть что-нибудь.
-    return {"ok": True, "notified": not exists}
+    return {"ok": True, "notified": not already_invited}
 
 
 class VerifyIn(BaseModel):

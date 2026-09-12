@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     yookassa_vat_code: int = 1
     sentry_dsn: str = ""
     admin_tg_ids: str = ""
+
+    @property
+    def owner_admin_tg_id(self) -> int | None:
+        """В рабочем режиме владелец один; username и списки не подходят."""
+        raw = self.admin_tg_ids.strip()
+        if not raw.isascii() or not raw.isdigit() or len(raw) > 16:
+            return None
+        value = int(raw)
+        return value if 0 < value < 2**53 else None
+
     s3_endpoint: str = ""
     s3_bucket: str = ""
     s3_key: str = ""
@@ -87,6 +97,10 @@ class Settings(BaseSettings):
         if not self.telegram_bot_token:
             problems.append(
                 "TELEGRAM_BOT_TOKEN не задан — вход через Telegram работать не будет"
+            )
+        if self.owner_admin_tg_id is None:
+            problems.append(
+                "ADMIN_TG_IDS должен содержать один положительный Telegram ID владельца"
             )
         if problems:
             raise RuntimeError(

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   checkinShift,
   disputeShift,
@@ -115,6 +115,8 @@ export function MatchesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
+  const [params, setParams] = useSearchParams();
+  const workerId = role === "employer" ? params.get("worker") : null;
   const [view, setView] = useState<"all" | "current" | "history">("all");
   const [codes, setCodes] = useState<Record<string, string>>({});
   // Одна дверь для редких действий вместо ряда одинаковых кнопок на карточке.
@@ -219,6 +221,7 @@ export function MatchesPage() {
   }
 
   const visibleMatches = data?.filter((m) => {
+    if (workerId && m.userId !== workerId) return false;
     const past = ["completed", "cancelled", "expired"].includes(m.status);
     return view === "all" || (view === "history" ? past : !past);
   });
@@ -226,6 +229,10 @@ export function MatchesPage() {
   return (
     <div className="page">
       <PageHeader title={role === "employer" ? "Кто выходит" : "Мои смены"} subtitle="Договорённости, выход и история — в одном месте" />
+      {workerId && <div className="card" style={{ marginBottom: 16 }}>
+        <p style={{ margin: "0 0 8px" }}>Смены с сотрудником: <b>{data?.find(m => m.userId === workerId)?.seekerName ?? "выбранный сотрудник"}</b></p>
+        <button className="text-btn" onClick={() => setParams({})}>Показать всех сотрудников</button>
+      </div>}
       {!!data?.length && <div className="segment-tabs" role="group" aria-label="Раздел смен">
         {([["all", "Все"], ["current", "Текущие"], ["history", "История"]] as const).map(([key, label]) => <button key={key} aria-pressed={view === key} onClick={() => setView(key)}>{label}</button>)}
       </div>}

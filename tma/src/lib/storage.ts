@@ -30,6 +30,8 @@ export const LS = {
   soundOff: "ss_sound",
   /** Крупные кнопки и текст. */
   large: "ss_large",
+  /** Изолированные тестовые формы в явно обозначенном демо без backend. */
+  demoDrafts: "ss_demo_drafts",
 } as const;
 
 /**

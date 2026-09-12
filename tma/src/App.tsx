@@ -58,6 +58,9 @@ const InvitesPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("@/features/profile/SettingsPage").then((m) => ({ default: m.SettingsPage })),
 );
+const OutgoingInvitationsPage = lazy(() =>
+  import("@/features/invites/OutgoingInvitationsPage").then(m => ({ default: m.OutgoingInvitationsPage })),
+);
 
 function TabBar() {
   const { role } = useSession();
@@ -156,7 +159,7 @@ export function App() {
       />
       <Route
         path="/vacancy/my"
-        element={ready ? <Shell><MyVacanciesPage /></Shell> : <Navigate to="/onboarding" />}
+        element={ready && role === "employer" ? <Shell><MyVacanciesPage /></Shell> : <Navigate to={ready ? "/feed" : "/onboarding"} />}
       />
       <Route
         path="/profile"
@@ -164,7 +167,8 @@ export function App() {
       />
 
       <Route path="/profile/edit" element={ready ? <EditProfilePage /> : <Navigate to="/onboarding" />} />
-      <Route path="/vacancy/new" element={ready ? <CreateVacancyPage /> : <Navigate to="/onboarding" />} />
+      <Route path="/vacancy/new" element={ready && role === "employer" ? <CreateVacancyPage /> : <Navigate to={ready ? "/feed" : "/onboarding"} />} />
+      <Route path="/invitations" element={ready && role === "employer" ? <OutgoingInvitationsPage /> : <Navigate to={ready ? "/feed" : "/onboarding"} />} />
       <Route path="/chat/:matchId" element={ready ? <ChatPage /> : <Navigate to="/onboarding" />} />
       <Route path="/funnel" element={ready ? <FunnelPage /> : <Navigate to="/onboarding" />} />
       <Route path="/admin" element={ready ? <AdminPage /> : <Navigate to="/onboarding" />} />

@@ -12,6 +12,8 @@
 .page {
   flex: 1;
   padding: 16px;
+  padding-left: max(16px, var(--app-safe-left));
+  padding-right: max(16px, var(--app-safe-right));
   /* Панель вкладок выше, чем кажется: 8 + 64 + 8 плюс «домашняя полоска»
      iPhone (34px). Отступа в 88px не хватало, и последний элемент любого
      списка — последняя смена, последний мэтч, кнопка «Выйти» — наполовину
@@ -554,6 +556,8 @@ button.tag:disabled {
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding: 8px 4px calc(8px + var(--app-safe-bottom));
+  padding-left: max(4px, var(--app-safe-left));
+  padding-right: max(4px, var(--app-safe-right));
   z-index: 30;
 }
 .tab {
@@ -682,6 +686,8 @@ button.tag:disabled {
      не было: у шторки без нижней кнопки последняя строка пояснения ложилась
      ровно на полоску. */
   padding: 8px 20px calc(16px + var(--app-safe-bottom));
+  padding-left: max(20px, var(--app-safe-left));
+  padding-right: max(20px, var(--app-safe-right));
   -webkit-overflow-scrolling: touch;
 }
 .sheet-foot {
@@ -689,6 +695,8 @@ button.tag:disabled {
   display: flex;
   gap: 10px;
   padding: 12px 20px calc(12px + var(--app-safe-bottom));
+  padding-left: max(20px, var(--app-safe-left));
+  padding-right: max(20px, var(--app-safe-right));
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
@@ -1875,6 +1883,8 @@ body[data-large="1"] .page {
   }
   .tabbar {
     padding: 4px 4px calc(4px + var(--app-safe-bottom));
+    padding-left: max(4px, var(--app-safe-left));
+    padding-right: max(4px, var(--app-safe-right));
   }
   .tab {
     min-height: 52px;

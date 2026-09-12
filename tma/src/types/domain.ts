@@ -209,6 +209,7 @@ export interface Vacancy {
 
 export interface MatchModel {
   id: string;
+  userId?: string;
   employerId: string;
   vacancyId: string;
   status: MatchStatus;
@@ -260,4 +261,3 @@ export interface Message {
    *  без времени — не довод, а слова. */
   createdAt: string;
 }
-

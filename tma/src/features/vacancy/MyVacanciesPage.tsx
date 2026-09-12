@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   deleteVacancy,
   fetchMyVacancies,
@@ -18,10 +18,13 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { Sheet } from "@/components/Sheet";
 import type { Vacancy } from "@/types/domain";
+import { DraftList } from "./DraftList";
 
 export function MyVacanciesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const drafts = params.get("tab") === "drafts";
   // Редкие действия по смене — под одной дверью «Ещё».
   const [moreFor, setMoreFor] = useState<Vacancy | null>(null);
   const { data, isLoading, isError, refetch } = useQuery({
@@ -64,7 +67,7 @@ export function MyVacanciesPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Мои смены" subtitle="Публикуйте смены и собирайте команду" />
+      <PageHeader title="Мои смены" subtitle={drafts ? undefined : "Публикуйте смены и собирайте команду"} />
       {/* Главное действие заведения — отдельной строкой во всю ширину.
           Раньше это была маленькая кнопка, прижатая к правому краю рядом с
           заголовком: самое частое действие выглядело самым второстепенным. */}
@@ -73,7 +76,7 @@ export function MyVacanciesPage() {
           + Разместить смену
         </Button>
       </div>
-      <div
+      {!drafts && <div
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
@@ -93,17 +96,24 @@ export function MyVacanciesPage() {
         >
           Мои работники
         </button>
+        <button className="tag tag-nav" style={{ gridColumn: "1 / -1" }} onClick={() => nav("/invitations")}>Приглашения</button>
+      </div>}
+
+      <div className="segment-tabs" role="group" aria-label="Раздел смен" style={{ marginBottom: 16 }}>
+        <button aria-pressed={!drafts} onClick={() => setParams({})}>Опубликованные</button>
+        <button aria-pressed={drafts} onClick={() => setParams({ tab: "drafts" })}>Черновики</button>
       </div>
+      {drafts && <DraftList />}
 
       {/* При отказе сервера экран был просто дырой: ни объяснения, ни
           «Повторить». У заведения с пятью опубликованными сменами это
           выглядит как «всё пропало». */}
-      {isLoading && <SkeletonList />}
-      {isError && <ErrorBox onRetry={() => refetch()} />}
+      {!drafts && isLoading && <SkeletonList />}
+      {!drafts && isError && <ErrorBox onRetry={() => refetch()} />}
 
       {/* Раньше новое заведение видело заголовок и пустоту — непонятно,
           что делать дальше. Теперь экран сам ведёт к размещению смены. */}
-      {!isLoading && !isError && data && data.length === 0 && (
+      {!drafts && !isLoading && !isError && data && data.length === 0 && (
         <EmptyState
           fill
           icon={<IconCalendar size={34} />}
@@ -115,7 +125,7 @@ export function MyVacanciesPage() {
       )}
 
       <div className="stagger stack stack-lg">
-        {data?.map((v) => (
+        {!drafts && data?.map((v) => (
           <div key={v.id} className="card">
             <b>{STAFF_ROLE_LABELS[v.role]}</b>
             <div className="muted" style={{ marginTop: 6 }}>

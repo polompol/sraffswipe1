@@ -44,9 +44,9 @@ export function Toaster() {
     <div
       style={{
         position: "fixed",
-        left: 0,
-        right: 0,
-        bottom: "calc(92px + env(safe-area-inset-bottom))",
+        left: "var(--app-safe-left)",
+        right: "var(--app-safe-right)",
+        bottom: "calc(92px + var(--app-safe-bottom))",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
