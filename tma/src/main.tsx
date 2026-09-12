@@ -5,6 +5,7 @@ import { HashRouter } from "react-router-dom";
 
 import "./theme/theme.css";
 import "./index.css";
+import "./swipe-v2.css";
 import { initTelegram } from "./telegram/sdk";
 import { initTheme, syncTelegramTheme } from "./lib/theme";
 import { track } from "./api/endpoints";
