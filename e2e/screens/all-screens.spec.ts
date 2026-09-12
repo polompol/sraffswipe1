@@ -23,6 +23,10 @@ async function setRole(page: Page, role: "seeker" | "employer") {
     localStorage.setItem("ss_consent", "1");
     localStorage.setItem("ss_swipe_hinted", "1");
   }, role);
+  // Zustand reads auth/role from localStorage when the app module is loaded.
+  // Reload so the browser session hydrates the role we just selected before
+  // navigating to protected routes for screenshots.
+  await page.reload();
 }
 
 test("capture all current StaffSwipe route screens", async ({ page }) => {
