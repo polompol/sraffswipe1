@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, sendMessage, track } from "@/api/endpoints";
+import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, track } from "@/api/endpoints";
 import { useBackend } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
 import {
   fmtTime,
-  msgTime,
   numRu,
   shiftDayLabel,
   shiftEnded,
@@ -25,8 +24,13 @@ import { toast } from "@/components/Toast";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { useChatHistory } from "./useChatHistory";
 import { useChatSocket } from "./useChatSocket";
+import { useChatDraft } from "./useChatDraft";
+import { useChatOutbox } from "./useChatOutbox";
+import { ChatConnectionState, type ChatConnection } from "./ChatConnectionState";
+import { MessageComposer } from "./MessageComposer";
+import { MessageList } from "./MessageList";
 import { EmptyState } from "@/components/EmptyState";
-import { IconSend, IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
+import { IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
 
 // Быстрые ответы — частые фразы одним нажатием. У сторон они РАЗНЫЕ: заведению
 // предлагались реплики работника («Какой адрес?», «Что взять с собой?»), то
@@ -59,11 +63,18 @@ export function ChatPage() {
   const qc = useQueryClient();
   const myId = useSession((s) => s.userId);
   const role = useSession((s) => s.role);
-  const [text, setText] = useState("");
+  const chatUserId = myId ?? "me";
+  const chatRole = role === "employer" ? "employer" : "seeker";
+  const draft = useChatDraft({ userId: chatUserId, role: chatRole, matchId });
+  const text = draft.text;
   // Есть ли живое соединение. Нужно, чтобы честно сказать человеку «связь
   // потеряна, восстанавливаем» вместо молчаливого чата, который выглядит
   // рабочим, но ничего не получает.
   const [live, setLive] = useState(true);
+  const [socketAccessLost, setSocketAccessLost] = useState(false);
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
   const [reportOpen, setReportOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   // Подтверждение смены берём из данных сервера, а не из локального стейта —
@@ -114,19 +125,53 @@ export function ChatPage() {
     appendMessage,
   } = useChatHistory(matchId);
 
+  const outbox = useChatOutbox({
+    matchId,
+    userId: chatUserId,
+    role: chatRole,
+    confirmedMessages: messages ?? [],
+    live: (!useBackend || live) && online && !socketAccessLost,
+    appendConfirmed: appendMessage,
+  });
+  const accessLost = socketAccessLost || outbox.terminalAccessLost;
+  const connectionState: ChatConnection = accessLost
+    ? "access_lost"
+    : !online
+      ? "offline"
+      : useBackend && !live
+        ? "reconnecting"
+        : "connected";
+
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  useEffect(() => setSocketAccessLost(false), [matchId]);
+
   // К последнему сообщению — при открытии чата и на каждое новое.
   //
   // Следим именно за ПОСЛЕДНИМ сообщением, а не за всем списком: когда
   // догружается старая переписка, список меняется, а прокручивать вниз нельзя
   // — человек только что нажал «показать более ранние» и смотрит наверх.
   // Что я в этом чате уже отправлял — чтобы не предлагать это снова кнопкой.
-  const mySent = new Set(
-    (messages ?? [])
-      .filter((m: Message) => !m.isSystem && m.senderId === (myId ?? "me"))
+  const mySent = new Set([
+    ...(messages ?? [])
+      .filter((m: Message) => !m.isSystem && m.senderId === chatUserId)
       .map((m: Message) => m.text.trim()),
-  );
+    ...outbox.entries.map((entry) => entry.text.trim()),
+  ]);
 
-  const lastId = messages?.length ? messages[messages.length - 1].id : "";
+  const lastOutbox = outbox.entries.length
+    ? outbox.entries[outbox.entries.length - 1]
+    : null;
+  const lastId = `${messages?.length ? messages[messages.length - 1].id : ""}|${lastOutbox?.clientMessageId ?? ""}:${lastOutbox?.status ?? ""}`;
   // Прокручиваем и когда меняется высота панели: кнопка «Подтвердить смену»
   // появляется не сразу, и без этого список оставался стоять как был.
   useEffect(() => {
@@ -180,29 +225,24 @@ export function ChatPage() {
       qc.invalidateQueries({ queryKey: ["matches"] });
     },
     onLive: setLive,
+    onAccessLost: () => setSocketAccessLost(true),
   });
 
-  async function deliver(t: string) {
-    try {
-      const msg = await sendMessage(matchId, t);
-      appendMessage(msg); // мгновенно показываем; WS-echo дедуплицируется
-    } catch {
-      haptic("error");
-      setText(t); // вернуть текст, чтобы не потерять сообщение
-      toast("Не отправилось — нажмите отправить ещё раз", "error");
+  async function sendComposer(submitted: string) {
+    const accepted = await outbox.sendText(submitted);
+    if (accepted) {
+      draft.clearIfUnchanged(submitted);
+      haptic("light");
+      return;
     }
+    haptic("error");
+    toast("Не удалось сохранить сообщение — текст остался", "error");
   }
 
-  async function send() {
-    const t = text.trim();
-    if (!t) return;
-    setText("");
-    await deliver(t);
-  }
-
-  function quickReply(t: string) {
+  async function quickReply(t: string) {
     haptic("light");
-    void deliver(t);
+    const accepted = await outbox.sendText(t);
+    if (!accepted) toast("Не удалось сохранить сообщение", "error");
   }
 
   const toMinutes = (t: string) => {
@@ -346,18 +386,10 @@ export function ChatPage() {
           </button>
         </div>
 
-        {!live && useBackend && (
-          <div
-            className="muted"
-            role="status"
-            style={{ textAlign: "center", fontSize: "var(--text-xs)", padding: "6px 0" }}
-          >
-            Связь потеряна — восстанавливаем…
-          </div>
-        )}
+        <ChatConnectionState state={connectionState} />
         {isLoading && <SkeletonList rows={4} />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
-        {!isLoading && !isError && messages && messages.length === 0 && (
+        {!isLoading && !isError && messages && messages.length === 0 && outbox.entries.length === 0 && (
           <EmptyState
             fill
             icon={<IconChat size={34} />}
@@ -383,16 +415,12 @@ export function ChatPage() {
           </button>
         )}
 
-        {messages?.map((m: Message) => {
-          if (m.isSystem) return <div key={m.id} className="bubble system">{m.text}</div>;
-          const mine = m.senderId === (myId ?? "me");
-          return (
-            <div key={m.id} className={`bubble ${mine ? "mine" : "theirs"}`}>
-              {m.text}
-              <span className="bubble-at">{msgTime(m.createdAt)}</span>
-            </div>
-          );
-        })}
+        <MessageList
+          messages={messages ?? []}
+          outbox={outbox.entries}
+          myId={chatUserId}
+          onRetry={(clientMessageId) => void outbox.retry(clientMessageId)}
+        />
         </div>
         {/* Якорь для прокрутки и одновременно распорка под нижнюю панель.
             Без него чат открывался на самом первом сообщении: свежие
@@ -454,7 +482,8 @@ export function ChatPage() {
               key={q}
               className="tag"
               style={{ cursor: "pointer", whiteSpace: "nowrap", flex: "none", borderColor: "var(--border-strong)" }}
-              onClick={() => quickReply(q)}
+              disabled={accessLost}
+              onClick={() => void quickReply(q)}
             >
               {q}
             </button>
@@ -519,24 +548,12 @@ export function ChatPage() {
           )}
 
         </div>
-        <div className="row">
-          <input
-            className="input"
-            aria-label="Текст сообщения"
-            placeholder="Сообщение…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-          />
-          <Button
-            block={false}
-            aria-label="Отправить"
-            onClick={send}
-            style={{ width: 52, flex: "none", padding: 0 }}
-          >
-            <IconSend size={20} />
-          </Button>
-        </div>
+        <MessageComposer
+          text={text}
+          setText={draft.setText}
+          onSubmit={sendComposer}
+          disabled={accessLost}
+        />
       </div>
 
       {troubleOpen && (
