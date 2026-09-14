@@ -11,7 +11,7 @@ interface UseChatDraftArgs {
   matchId: string;
 }
 
-interface DraftIdentity extends UseChatDraftArgs {}
+type DraftIdentity = UseChatDraftArgs;
 
 function sameIdentity(a: DraftIdentity, b: DraftIdentity): boolean {
   return a.userId === b.userId && a.role === b.role && a.matchId === b.matchId;
