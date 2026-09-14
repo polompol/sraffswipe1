@@ -102,19 +102,23 @@ export function useChatOutbox(
   deps: OutboxDeps = {},
 ) {
   const { matchId, userId, role, confirmedMessages, live, appendConfirmed } = args;
-  const send = deps.send ?? (sendMessage as SendFn);
-  const makeId = deps.makeId ?? newClientMessageId;
-  const now = deps.now ?? Date.now;
+  const sendRef = useRef<SendFn>(deps.send ?? (sendMessage as SendFn));
+  const appendRef = useRef(appendConfirmed);
+  const makeIdRef = useRef(deps.makeId ?? newClientMessageId);
+  const nowRef = useRef(deps.now ?? Date.now);
+  sendRef.current = deps.send ?? (sendMessage as SendFn);
+  appendRef.current = appendConfirmed;
+  makeIdRef.current = deps.makeId ?? newClientMessageId;
+  nowRef.current = deps.now ?? Date.now;
+
   const [entries, setEntries] = useState<OutboxEntry[]>(() =>
     loadOutbox(userId, role, matchId),
   );
-  const entriesRef = useRef(entries);
   const inFlight = useRef(new Set<string>());
   const messagesRef = useRef(confirmedMessages);
   messagesRef.current = confirmedMessages;
 
   const replaceEntries = useCallback((next: OutboxEntry[]) => {
-    entriesRef.current = next;
     setEntries(next);
   }, []);
 
@@ -140,7 +144,7 @@ export function useChatOutbox(
       reload();
       return;
     }
-    if (!canRetry(source, now())) return;
+    if (!canRetry(source, nowRef.current())) return;
 
     inFlight.current.add(source.clientMessageId);
     const sending: OutboxEntry = {
@@ -158,14 +162,14 @@ export function useChatOutbox(
     reload();
 
     try {
-      const message = await send(matchId, {
+      const message = await sendRef.current(matchId, {
         text: source.text,
         clientMessageId: source.clientMessageId,
       });
-      appendConfirmed(message);
+      appendRef.current(message);
       removeOutbox(userId, role, source.clientMessageId);
     } catch (error) {
-      const failure = classifyFailure(error, now());
+      const failure = classifyFailure(error, nowRef.current());
       upsertOutbox(userId, role, {
         ...sending,
         ...failure,
@@ -174,16 +178,16 @@ export function useChatOutbox(
       inFlight.current.delete(source.clientMessageId);
       reload();
     }
-  }, [appendConfirmed, matchId, now, reload, role, send, userId]);
+  }, [matchId, reload, role, userId]);
 
   const sendText = useCallback(async (rawText: string): Promise<boolean> => {
     const text = rawText.trim();
     if (!text) return false;
     const entry: OutboxEntry = {
-      clientMessageId: makeId(),
+      clientMessageId: makeIdRef.current(),
       matchId,
       text: text.slice(0, 2000),
-      createdAt: new Date(now()).toISOString(),
+      createdAt: new Date(nowRef.current()).toISOString(),
       status: "pending",
       attempts: 0,
     };
@@ -191,7 +195,7 @@ export function useChatOutbox(
     reload();
     await deliver(entry);
     return true;
-  }, [deliver, makeId, matchId, now, reload, role, userId]);
+  }, [deliver, matchId, reload, role, userId]);
 
   const retry = useCallback(async (clientMessageId: string): Promise<void> => {
     const entry = loadOutbox(userId, role, matchId).find(
@@ -209,10 +213,10 @@ export function useChatOutbox(
         removeOutbox(userId, role, entry.clientMessageId);
         continue;
       }
-      if (canRetry(entry, now())) await deliver(entry);
+      if (canRetry(entry, nowRef.current())) await deliver(entry);
     }
     reload();
-  }, [deliver, matchId, now, reconcileConfirmed, reload, role, userId]);
+  }, [deliver, matchId, reconcileConfirmed, reload, role, userId]);
 
   useEffect(() => {
     reload();
