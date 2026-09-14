@@ -291,12 +291,19 @@ class Message(Base):
     """Сообщение чата (коллекция messages)."""
 
     __tablename__ = "messages"
+    __table_args__ = (
+        Index(
+            "uq_message_client_request", "match_id", "sender_id",
+            "client_message_id", unique=True,
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     match_id: Mapped[str] = mapped_column(ForeignKey("matches.id"), index=True)
     # Отправитель НЕ внешний ключ: у системных сообщений здесь стоит слово
     # «system», а не чей-то id.
     sender_id: Mapped[str] = mapped_column(String)
+    client_message_id: Mapped[str | None] = mapped_column(String(36))
     text: Mapped[str] = mapped_column(Text)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

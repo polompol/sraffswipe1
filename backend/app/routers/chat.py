@@ -8,12 +8,14 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import ValidationError
 from sqlalchemy import and_, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import redisclient
 from ..db import SessionLocal, get_db
-from ..models import Match, Message
+from ..models import Employer, Match, Message, User
 from ..notify import notify_owner
 from ..ratelimit import hit, rate_limit
 from ..schemas import MessageIn, MessageOut
@@ -41,12 +43,89 @@ def _require_participant(db: Session, match_id: str, principal: dict) -> Match:
 def _to_out(m: Message) -> MessageOut:
     return MessageOut(
         id=m.id,
+        client_message_id=m.client_message_id,
         match_id=m.match_id,
         sender_id=m.sender_id,
         text=m.text,
         is_system=m.is_system,
         created_at=m.created_at,
     )
+
+
+def _find_client_message(
+    db: Session, match_id: str, sender_id: str, client_id: str | None,
+) -> Message | None:
+    if client_id is None:
+        return None
+    return db.query(Message).filter(
+        Message.match_id == match_id, Message.sender_id == sender_id,
+        Message.client_message_id == client_id,
+    ).first()
+
+
+def _same_message(existing: Message, text: str) -> tuple[Message, bool]:
+    if existing.text != text:
+        raise HTTPException(
+            status_code=409,
+            detail="Этот идентификатор уже использован для другого сообщения",
+        )
+    return existing, False
+
+
+def _save_message(
+    db: Session, match_id: str, sender_id: str, body: MessageIn,
+) -> tuple[Message, bool]:
+    """Квитанция запроса общая для REST и WS, включая параллельную вставку."""
+    client_id = str(body.client_message_id) if body.client_message_id else None
+    existing = _find_client_message(db, match_id, sender_id, client_id)
+    if existing is not None:
+        return _same_message(existing, body.text)
+    msg = Message(
+        match_id=match_id, sender_id=sender_id, text=body.text,
+        client_message_id=client_id,
+    )
+    try:
+        with db.begin_nested():
+            db.add(msg)
+            db.flush()
+    except IntegrityError:
+        # SAVEPOINT оставляет сессию пригодной для чтения победившей записи.
+        existing = _find_client_message(db, match_id, sender_id, client_id)
+        if existing is None:
+            raise
+        return _same_message(existing, body.text)
+    db.commit()
+    db.refresh(msg)
+    return msg, True
+
+
+def _notify_new_message(db: Session, match: Match, msg: Message) -> None:
+    """Повторы не создают ещё одно уведомление или флаг модерации."""
+    from ..moderation import auto_flag
+
+    auto_flag(db, "match", match.id, msg.text)
+    other = (
+        match.employer_id if msg.sender_id == match.user_id else match.user_id
+    )
+    receiver = db.get(User, other) or db.get(Employer, other)
+    if receiver is not None and not receiver.blocked:
+        notify_owner(
+            db, other, f"💬 Новое сообщение: {msg.text[:60]}",
+            open_app="Ответить", screen="chat", ident=match.id,
+        )
+
+
+def _socket_access(match_id: str, token: str) -> tuple[dict | None, int | None]:
+    principal = decode_token(token)
+    if principal is None or principal.get("scope"):
+        return None, 4401
+    with SessionLocal() as db:
+        try:
+            ensure_token_usable(db, principal)
+            _require_participant(db, match_id, principal)
+        except HTTPException:
+            return None, 4403
+    return principal, None
 
 
 # Сколько сообщений отдаём за раз. Раньше отдавались ВСЕ сообщения чата
@@ -115,31 +194,11 @@ async def send(
     principal: dict = Depends(current_principal),
 ):
     match = _require_participant(db, match_id, principal)
-    msg = Message(match_id=match_id, sender_id=principal["id"], text=body.text)
-    db.add(msg)
-    db.commit()
-    db.refresh(msg)
+    msg, created = _save_message(db, match_id, principal["id"], body)
     out = _to_out(msg)
-    # mode="json": дата должна уехать строкой — объект даты в JSON не
-    # укладывается, и раздача молча падала бы вместе с сокетом.
-    await manager.broadcast(match_id, out.model_dump(mode="json"))
-    # Уведомляем второго участника мэтча в Telegram.
-    other = (
-        match.employer_id
-        if principal["id"] == match.user_id
-        else match.user_id
-    )
-    # Открываем ИМЕННО этот разговор, а не общий список мэтчей: раньше на
-    # каждое сообщение человек попадал в список и искал нужный чат сам. Именно
-    # из-за такой мелочи переписку уводят в личку — а там мы её не видим.
-    notify_owner(
-        db, other, f"💬 Новое сообщение: {body.text[:60]}",
-        open_app="Ответить", screen="chat", ident=match_id,
-    )
-    # Авто-модерация чата: «переведи предоплату» и т.п. → флаг админу.
-    from ..moderation import auto_flag
-
-    auto_flag(db, "match", match_id, body.text)
+    if created:
+        _notify_new_message(db, match, msg)
+        await manager.broadcast(match_id, out.model_dump(mode="json"))
     return out
 
 
@@ -159,6 +218,7 @@ class ConnectionManager:
 
     def __init__(self) -> None:
         self._rooms: dict[str, list[WebSocket]] = {}
+        self._tokens: dict[int, str] = {}
         self._listener = None       # задача-подписчик, одна на процесс
 
     async def _ensure_listener(self) -> None:
@@ -186,12 +246,16 @@ class ConnectionManager:
             _log.warning("Подписка чата на Redis прервалась: %s", exc)
             self._listener = None   # следующий чат попробует подписаться заново
 
-    async def connect(self, match_id: str, ws: WebSocket) -> None:
+    async def connect(
+        self, match_id: str, ws: WebSocket, *, token: str = "",
+    ) -> None:
         await ws.accept()
         await self._ensure_listener()
+        self._tokens[id(ws)] = token
         self._rooms.setdefault(match_id, []).append(ws)
 
     def disconnect(self, match_id: str, ws: WebSocket) -> None:
+        self._tokens.pop(id(ws), None)
         room = self._rooms.get(match_id)
         if not room:
             return
@@ -205,9 +269,19 @@ class ConnectionManager:
         dead: list[WebSocket] = []
         for ws in list(self._rooms.get(match_id, [])):
             try:
+                # Проверяем получателя, даже если он ничего не отправляет.
+                _, code = _socket_access(match_id, self._tokens.get(id(ws), ""))
+                if code is not None:
+                    await ws.close(code=code)
+                    dead.append(ws)
+                    continue
                 await ws.send_json(data)
-            except Exception:  # noqa: BLE001 — сокет умер: помечаем на удаление
+            except Exception:  # noqa: BLE001 — при сбое закрываем доступ
                 dead.append(ws)
+                try:
+                    await ws.close(code=1011)
+                except Exception:  # noqa: BLE001 — сокет уже закрыт
+                    pass
         for ws in dead:
             self.disconnect(match_id, ws)
 
@@ -234,55 +308,38 @@ manager = ConnectionManager()
 
 @router.websocket("/ws/chat/{match_id}")
 async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
-    # Аутентификация по query-токену; sender_id берём из токена, не от клиента.
-    principal = decode_token(token)
-    if principal is None or principal.get("scope"):
-        await websocket.close(code=4401)
+    principal, code = _socket_access(match_id, token)
+    if code is not None:
+        await websocket.close(code=code)
         return
-    db = SessionLocal()
-    try:
-        match = db.get(Match, match_id)
-        if match is None or principal["id"] not in (
-            match.user_id, match.employer_id
-        ):
-            await websocket.close(code=4403)
-            return
-        try:
-            # Забаненный или разлогиненный не висит в чужом чате.
-            ensure_token_usable(db, principal)
-        except HTTPException:
-            await websocket.close(code=4403)
-            return
-    finally:
-        db.close()
-
     sender = principal["id"]
-    await manager.connect(match_id, websocket)
+    await manager.connect(match_id, websocket, token=token)
     try:
         while True:
-            frame = await websocket.receive_text()
-            # Срок JWT мог закончиться уже после подключения. Короткий
-            # токен документа не должен открывать чат вообще (проверка выше).
+            try:
+                frame = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=30,
+                )
+            except TimeoutError:
+                # Бездействующее соединение тоже не живёт после отзыва.
+                _, code = _socket_access(match_id, token)
+                if code is not None:
+                    await websocket.close(code=code)
+                    break
+                continue
             if decode_token(token) is None:
                 await websocket.close(code=4401)
                 break
-            # Считаем КАЖДЫЙ кадр, а не только тот, что дошёл до сохранения.
-            # Лимит стоял после проверок «пусто» и «не строка», поэтому поток
-            # пустых кадров {"text":""} проходил мимо него совсем: соединение
-            # крутилось на полной скорости сети и занимало процесс.
             try:
+                # Пустые/битые кадры тоже расходуют лимит.
                 hit(f"msg:{sender}", 30, 60)
             except HTTPException:
                 await websocket.send_json(
                     {"error": "Слишком часто. Подождите немного."}
                 )
                 continue
-            # Размер кадра ограничиваем ДО разбора. Длину текста мы и раньше
-            # резали до 2000, но резали уже после того, как приняли кадр
-            # целиком: один кадр на сотню мегабайт занимал столько же памяти
-            # на сервере, и никакой лимит частоты этого не отменял.
-            if len(frame) > _WS_FRAME_MAX:
-                await websocket.close(code=1009)  # message too big
+            if len(frame.encode("utf-8")) > _WS_FRAME_MAX:
+                await websocket.close(code=1009)
                 break
             try:
                 data = json.loads(frame)
@@ -290,44 +347,39 @@ async def ws_chat(websocket: WebSocket, match_id: str, token: str = ""):
                 continue
             if not isinstance(data, dict):
                 continue
-            # Тот же контроль, что и на REST-пути: обрезаем длину (анти-раздувание
-            # БД) и молча пропускаем пустое. Без этого WS был обходом лимита 2000.
             raw = data.get("text", "")
             text = raw.strip()[:2000] if isinstance(raw, str) else ""
             if not text:
                 continue
-            db = SessionLocal()
             try:
-                # Проверяем на каждое сообщение: за долгий коннект человека
-                # могли заблокировать или разлогинить.
+                body = MessageIn(
+                    text=text, client_message_id=data.get("client_message_id"),
+                )
+            except ValidationError:
+                await websocket.send_json(
+                    {"error": "Некорректный идентификатор сообщения"}
+                )
+                continue
+            _, code = _socket_access(match_id, token)
+            if code is not None:
+                await websocket.close(code=code)
+                break
+            with SessionLocal() as db:
                 try:
-                    ensure_token_usable(db, principal)
-                except HTTPException:
-                    await websocket.close(code=4403)
-                    break
-                msg = Message(match_id=match_id, sender_id=sender, text=text)
-                db.add(msg)
-                db.commit()
-                db.refresh(msg)
+                    match = _require_participant(db, match_id, principal)
+                    msg, created = _save_message(db, match_id, sender, body)
+                except HTTPException as exc:
+                    await websocket.send_json({"error": exc.detail})
+                    continue
                 payload = _to_out(msg).model_dump(mode="json")
-                # Авто-модерация подозрительных фраз — ровно как на
-                # REST-пути: жалоба на СМЕНУ, а не на отдельное сообщение.
-                # Здесь стоял тип «message», которого нет в списке
-                # допустимых целей: такая жалоба показывалась оператору без
-                # предмета, а кнопка «Заблокировать» искала пользователя по
-                # id сообщения и отвечала «не найден». То есть мошенник,
-                # писавший через сокет, попадал в жалобу, с которой нельзя
-                # было ничего сделать.
-                from ..moderation import auto_flag
-                auto_flag(db, "match", match_id, text)
-            finally:
-                db.close()
-            await manager.broadcast(match_id, payload)
+                if created:
+                    _notify_new_message(db, match, msg)
+            if created:
+                await manager.broadcast(match_id, payload)
+            else:
+                # Повтор подтверждаем только отправителю, без нового broadcast.
+                await websocket.send_json(payload)
     except WebSocketDisconnect:
         pass
     finally:
-        # Отписываем сокет ЛЮБЫМ путём выхода, а не только по обрыву связи.
-        # Раньше выход по ошибке (битый JSON, закрытие с нашей стороны)
-        # оставлял мёртвый сокет в комнате навсегда, и каждое следующее
-        # сообщение в этом чате пыталось в него писать.
         manager.disconnect(match_id, websocket)
