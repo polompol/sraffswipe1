@@ -1,0 +1,114 @@
+name: Chat receipt GREEN patch
+
+on:
+  push:
+    branches:
+      - codex/staffswipe-production-readiness
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tma/package-lock.json
+      - run: npm ci
+        working-directory: tma
+      - name: Apply minimal receipt propagation patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('tma/src/api/endpoints.ts')
+          s = p.read_text()
+          old = '''export async function sendMessage(
+            matchId: string,
+            text: string,
+          ): Promise<Message> {
+            if (!USE_BACKEND) return mock.sendMessage(matchId, text);
+            const { data } = await api.post<Message>(`/matches/${matchId}/messages`, {
+              text,
+            });
+            return data;
+          }
+          '''
+          new = '''export interface ChatMessageInput {
+            text: string;
+            clientMessageId: string;
+          }
+
+          export async function sendMessage(
+            matchId: string,
+            input: string | ChatMessageInput,
+          ): Promise<Message> {
+            const text = typeof input === "string" ? input : input.text;
+            const clientMessageId =
+              typeof input === "string" ? undefined : input.clientMessageId;
+            if (!USE_BACKEND) {
+              const message = await mock.sendMessage(matchId, text);
+              return clientMessageId ? { ...message, clientMessageId } : message;
+            }
+            const { data } = await api.post<Message>(`/matches/${matchId}/messages`, {
+              text,
+              ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
+            });
+            return data;
+          }
+          '''
+          if old not in s:
+              raise SystemExit('sendMessage block not found exactly')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('tma/src/types/domain.ts')
+          s = p.read_text()
+          old = '''export interface Message {
+            id: string;
+            senderId: string;
+          '''
+          new = '''export interface Message {
+            id: string;
+            /** Клиентская квитанция сообщения. Одинакова для всех повторов одной отправки. */
+            clientMessageId?: string;
+            senderId: string;
+          '''
+          if old not in s:
+              raise SystemExit('Message interface anchor not found')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('tma/src/features/chat/useChatSocket.ts')
+          s = p.read_text()
+          old = '''        ref.current.onMessage({
+                    id: raw.id,
+                    senderId: raw.sender_id,
+          '''
+          new = '''        ref.current.onMessage({
+                    id: raw.id,
+                    clientMessageId: raw.client_message_id ?? undefined,
+                    senderId: raw.sender_id,
+          '''
+          if old not in s:
+              raise SystemExit('WebSocket message mapping anchor not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Verify targeted GREEN
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test -- --run src/features/chat/messageIdentity.test.tsx
+        working-directory: tma
+      - name: Commit verified patch and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/chat-receipt-green.yml
+          git add tma/src/api/endpoints.ts tma/src/types/domain.ts tma/src/features/chat/useChatSocket.ts
+          git commit -m "feat: propagate chat client receipt identity"
+          git push origin HEAD:codex/staffswipe-production-readiness
