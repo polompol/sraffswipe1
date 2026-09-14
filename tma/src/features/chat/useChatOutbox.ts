@@ -6,7 +6,6 @@ import {
   removeOutbox,
   upsertOutbox,
   type OutboxEntry,
-  type OutboxError,
 } from "./chatPersistence";
 
 const RATE_LIMIT_COOLDOWN_MS = 30_000;
