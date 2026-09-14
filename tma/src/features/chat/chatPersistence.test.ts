@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearChatDraft,
+  clearChatRecoveryMemory,
   markChatMessageFailed,
   markChatMessageSending,
   queueChatMessage,
@@ -11,7 +12,10 @@ import {
 } from "./chatPersistence";
 import type { Message } from "@/types/domain";
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  clearChatRecoveryMemory();
+});
 
 describe("черновик чата", () => {
   it("хранится отдельно для каждой смены и пустой текст удаляет ключ", () => {
