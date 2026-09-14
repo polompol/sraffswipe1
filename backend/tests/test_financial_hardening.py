@@ -7,6 +7,7 @@ erasure must never destroy unresolved money or debt.
 from uuid import uuid4
 
 from app.db import SessionLocal
+from app.financial_models import RefundAllowance
 from app.models import Commission, Entitlement, Match, Purchase, Vacancy, WalletTxn
 
 
@@ -65,17 +66,17 @@ def _paid_purchase(eid: str, amount: int, suffix: str) -> str:
         db.close()
 
 
-def _refund_total(purchase_id: str):
+def _refund_total(purchase_id: str) -> int:
     db = SessionLocal()
     try:
-        p = db.get(Purchase, purchase_id)
-        return getattr(p, "refunded_amount", None)
+        row = db.get(RefundAllowance, purchase_id)
+        return int(row.reserved_amount) if row else 0
     finally:
         db.close()
 
 
 def test_shared_topup_helper_claims_provider_charge_once(client):
-    from app.routers import billing
+    from app.financial_hardening import apply_verified_topup
 
     _, _, eid, _ = _setup(client, 830001)
     payment = {
@@ -88,14 +89,12 @@ def test_shared_topup_helper_claims_provider_charge_once(client):
             "amount_rub": "2500",
         },
     }
-    apply = getattr(billing, "apply_verified_topup", None)
-    assert callable(apply), "shared exactly-once top-up helper is missing"
 
     db = SessionLocal()
     try:
-        assert apply(db, payment, note="test topup") is True
+        assert apply_verified_topup(db, payment, note="test topup") is True
         db.commit()
-        assert apply(db, payment, note="duplicate") is False
+        assert apply_verified_topup(db, payment, note="duplicate") is False
         db.commit()
     finally:
         db.close()
@@ -158,7 +157,7 @@ def test_reconcile_rejects_metadata_amount_mismatch(client, monkeypatch):
 
 
 def test_bank_refund_retry_reserves_once(client, monkeypatch):
-    from app.routers import admin_accounts
+    from app import financial_hardening as fh
 
     _, admin_h, eid, _ = _setup(client, 830004)
     client.post(
@@ -172,9 +171,7 @@ def test_bank_refund_retry_reserves_once(client, monkeypatch):
         calls.append((charge_id, amount, request_id))
         return "succeeded", "refund-provider-1"
 
-    monkeypatch.setattr(
-        admin_accounts, "_create_yookassa_refund", provider, raising=False
-    )
+    monkeypatch.setattr(fh, "_create_yookassa_refund", provider)
     request_id = str(uuid4())
     body = {"request_id": request_id, "amount_rub": 2000, "note": "возврат"}
 
@@ -191,17 +188,16 @@ def test_bank_refund_retry_reserves_once(client, monkeypatch):
 
 
 def test_bank_refund_total_cannot_exceed_purchase(client, monkeypatch):
-    from app.routers import admin_accounts
+    from app import financial_hardening as fh
 
     _, admin_h, eid, _ = _setup(client, 830005)
     client.post(f"/admin/wallet/{eid}/credit", headers=admin_h,
                 json={"amount_rub": 7000})
     pid = _paid_purchase(eid, 5000, "cap")
     monkeypatch.setattr(
-        admin_accounts,
+        fh,
         "_create_yookassa_refund",
         lambda *a: ("succeeded", f"refund-{a[2]}"),
-        raising=False,
     )
 
     one = client.post(
@@ -219,17 +215,16 @@ def test_bank_refund_total_cannot_exceed_purchase(client, monkeypatch):
 
 
 def test_bank_refund_cannot_exceed_available_wallet(client, monkeypatch):
-    from app.routers import admin_accounts
+    from app import financial_hardening as fh
 
     _, admin_h, eid, _ = _setup(client, 830006)
     client.post(f"/admin/wallet/{eid}/credit", headers=admin_h,
                 json={"amount_rub": 1000})
     pid = _paid_purchase(eid, 5000, "balance")
     monkeypatch.setattr(
-        admin_accounts,
+        fh,
         "_create_yookassa_refund",
         lambda *a: ("succeeded", "should-not-run"),
-        raising=False,
     )
 
     r = client.post(
@@ -238,21 +233,20 @@ def test_bank_refund_cannot_exceed_available_wallet(client, monkeypatch):
     )
     assert r.status_code == 409
     assert _balance(eid) == 1000
-    assert _refund_total(pid) in (None, 0)
+    assert _refund_total(pid) == 0
 
 
 def test_definitive_refund_rejection_restores_reservation(client, monkeypatch):
-    from app.routers import admin_accounts
+    from app import financial_hardening as fh
 
     _, admin_h, eid, _ = _setup(client, 830007)
     client.post(f"/admin/wallet/{eid}/credit", headers=admin_h,
                 json={"amount_rub": 5000})
     pid = _paid_purchase(eid, 5000, "reject")
     monkeypatch.setattr(
-        admin_accounts,
+        fh,
         "_create_yookassa_refund",
         lambda *a: ("rejected", None),
-        raising=False,
     )
 
     r = client.post(
@@ -265,7 +259,7 @@ def test_definitive_refund_rejection_restores_reservation(client, monkeypatch):
 
 
 def test_ambiguous_refund_stays_pending_and_reserved(client, monkeypatch):
-    from app.routers import admin_accounts
+    from app import financial_hardening as fh
 
     _, admin_h, eid, _ = _setup(client, 830008)
     client.post(f"/admin/wallet/{eid}/credit", headers=admin_h,
@@ -277,9 +271,7 @@ def test_ambiguous_refund_stays_pending_and_reserved(client, monkeypatch):
         calls.append(args)
         return "unknown", None
 
-    monkeypatch.setattr(
-        admin_accounts, "_create_yookassa_refund", unknown, raising=False
-    )
+    monkeypatch.setattr(fh, "_create_yookassa_refund", unknown)
     request_id = str(uuid4())
     payload = {"request_id": request_id, "amount_rub": 2000, "note": "timeout"}
 
@@ -342,17 +334,16 @@ def test_erase_blocked_while_commission_is_pending(client):
 
 
 def test_erase_blocked_while_bank_refund_is_pending(client, monkeypatch):
-    from app.routers import admin_accounts
+    from app import financial_hardening as fh
 
     _, admin_h, eid, _ = _setup(client, 830011)
     client.post(f"/admin/wallet/{eid}/credit", headers=admin_h,
                 json={"amount_rub": 5000})
     pid = _paid_purchase(eid, 5000, "erase-pending")
     monkeypatch.setattr(
-        admin_accounts,
+        fh,
         "_create_yookassa_refund",
         lambda *a: ("unknown", None),
-        raising=False,
     )
     rr = client.post(
         f"/admin/payments/{pid}/refund", headers=admin_h,
