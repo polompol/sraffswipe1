@@ -1,0 +1,31 @@
+name: Financial hardening text catalogue
+
+on:
+  push:
+    branches:
+      - codex/staffswipe-financial-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-financial-hardening
+          fetch-depth: 0
+      - name: Regenerate text catalogue
+        run: python3 scripts/texts.py --write
+      - name: Commit generated catalogue
+        run: |
+          if git diff --quiet -- docs/ТЕКСТЫ.md; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/ТЕКСТЫ.md
+          git commit -m "docs: refresh text catalogue"
+          git push origin HEAD:codex/staffswipe-financial-hardening
