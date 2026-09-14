@@ -193,7 +193,9 @@ export function useChatOutbox(
     };
     if (!upsertOutbox(userId, role, entry)) return false;
     reload();
-    await deliver(entry);
+    // The UI owns only durable enqueue latency. Network delivery continues in
+    // the background with the exact same receipt and remains visible/retryable.
+    void deliver(entry);
     return true;
   }, [deliver, matchId, reload, role, userId]);
 
