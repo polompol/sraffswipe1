@@ -4,7 +4,7 @@
 
 **Goal:** Make top-ups and refunds retry-safe and prevent account erasure from destroying unresolved financial value or debt.
 
-**Architecture:** Introduce a shared payment-application helper that acquires the unique provider-charge claim before wallet mutation, and a durable `PaymentRefund` reservation record for real YooKassa refunds. Keep money mutations as atomic conditional SQL updates and keep provider I/O outside the reservation transaction.
+**Architecture:** Use a shared payment-application helper that acquires the unique provider-charge claim before wallet mutation, plus an isolated durable refund ledger (`RefundAllowance` + `PaymentRefund`) for real YooKassa refunds. Keep money mutations as atomic conditional SQL updates and keep provider I/O outside the reservation transaction.
 
 **Tech Stack:** FastAPI, SQLAlchemy 2, Alembic, Pydantic v2, PostgreSQL/SQLite tests, urllib YooKassa client.
 
@@ -22,92 +22,72 @@
 
 ### Task 1: Red tests for exactly-once top-up application
 
-**Files:**
-- Modify: `backend/tests/test_money_operations.py`
-- Later modify: `backend/app/routers/billing.py`
-- Later modify: `backend/app/reconcile.py`
+**Files:** `backend/tests/test_financial_hardening.py`, `backend/tests/test_money_operations.py`
 
-**Interfaces:**
-- Produces test contract for a shared `apply_verified_topup(db, payment) -> tuple[bool, int]` helper where bool indicates newly credited.
-
-- [ ] Add tests proving the same provider charge cannot credit twice and invalid currency/metadata amount is rejected by reconciliation.
-- [ ] Commit tests only.
-- [ ] Confirm Backend CI fails for the intended missing behavior/API.
+- [x] Add tests proving the same provider charge cannot credit twice and invalid currency/metadata amount is rejected by reconciliation.
+- [x] Commit tests before implementation.
+- [x] Confirm Backend CI fails for the intended missing behavior/API.
 
 ### Task 2: Implement shared verified top-up application
 
-**Files:**
-- Modify: `backend/app/routers/billing.py`
-- Modify: `backend/app/reconcile.py`
+**Files:** `backend/app/financial_hardening.py`, `backend/app/reconcile.py`, route bootstrap files.
 
-**Interfaces:**
-- Produces: `validated_wallet_topup(payment: dict) -> tuple[str, str, int]` and `apply_verified_topup(db: Session, payment: dict, *, note: str) -> bool`.
+**Interfaces:** `validated_wallet_topup(payment) -> tuple[str, str, int]` and `apply_verified_topup(db, payment, *, note) -> bool`.
 
-- [ ] Validate provider `status`, amount/currency and metadata in one helper.
-- [ ] Insert/flush `Purchase` inside a savepoint before wallet credit; catch unique-charge `IntegrityError` as duplicate.
-- [ ] Use helper from webhook and reconciliation.
-- [ ] Confirm focused tests and full Backend CI pass.
+- [x] Validate provider `status`, amount/currency and metadata in one helper.
+- [x] Insert/flush `Purchase` inside a savepoint before wallet credit; catch unique-charge `IntegrityError` as duplicate.
+- [x] Use the same helper from webhook and reconciliation.
+- [x] Preserve purchase + wallet + journal as one outer transaction.
 
 ### Task 3: Red tests for real provider refund reservations
 
-**Files:**
-- Modify: `backend/tests/test_money_operations.py`
-- Later modify: `backend/app/models.py`
-- Later create: `backend/migrations/versions/a4d9c2e1f7b6_money_hardening.py`
-- Later modify: `backend/app/routers/admin_accounts.py`
-- Later modify: `backend/app/reconcile.py`
+**Files:** `backend/tests/test_financial_hardening.py`
 
 **Interfaces:**
 - API: `POST /admin/payments/{purchase_id}/refund` body `{request_id, amount_rub, note}`.
-- Data: `PaymentRefund`, `Purchase.refunded_amount`.
+- Data: `RefundAllowance`, `PaymentRefund`.
 
-- [ ] Add tests for retrying the same request id, insufficient wallet, total refund cap, explicit provider rejection rollback, and ambiguous transport failure remaining pending.
-- [ ] Commit tests only.
-- [ ] Confirm Backend CI fails for the missing refund API/model.
+- [x] Add tests for retrying the same request id, insufficient wallet, total refund cap, explicit provider rejection rollback, and ambiguous transport failure remaining pending.
+- [x] Confirm the tests fail before the refund API/model exists.
 
 ### Task 4: Implement durable bank refund flow
 
 **Files:**
-- Modify: `backend/app/models.py`
-- Create: `backend/migrations/versions/a4d9c2e1f7b6_money_hardening.py`
-- Modify: `backend/app/routers/admin_accounts.py`
-- Modify: `backend/app/reconcile.py`
+- `backend/app/financial_models.py`
+- `backend/app/financial_hardening.py`
+- `backend/migrations/versions/a4d9c2e1f7b6_refund_reservations.py`
+- route/bootstrap files
 
 **Interfaces:**
-- `PaymentRefund` fields from the design spec.
-- Provider helper `_create_yookassa_refund(charge_id, amount, request_id) -> tuple[str, str | None]`, returning outcome `succeeded|rejected|unknown` and provider id where known.
+- `RefundAllowance(purchase_id, reserved_amount)` is the atomic per-purchase refund cap.
+- `PaymentRefund` stores retry identity, provider id, amount, status and operator audit fields.
+- `_create_yookassa_refund(charge_id, amount, request_id)` returns `succeeded|rejected|unknown` plus provider id where known.
 
-- [ ] Add schema/model with one migration head.
-- [ ] Reserve purchase refundable amount and wallet balance atomically before provider I/O.
-- [ ] Reuse an existing `request_id` without a second reservation/provider operation.
-- [ ] Use deterministic YooKassa idempotence key from request id.
-- [ ] On success mark refund succeeded; on definitive rejection restore both reservations; on unknown keep pending.
-- [ ] Confirm migration, focused tests, SQLite and PostgreSQL Backend CI pass.
+- [x] Add schema/model with one migration head.
+- [x] Reserve purchase refundable amount and wallet balance atomically before provider I/O.
+- [x] Claim/reuse a unique `request_id` without a second reservation/provider operation.
+- [x] Use deterministic YooKassa idempotence key from request id.
+- [x] On success mark refund succeeded; on definitive rejection restore both reservations; on unknown keep pending/fail-closed.
 
 ### Task 5: Protect account erasure from financial loss
 
-**Files:**
-- Modify: `backend/tests/test_money_operations.py`
-- Modify: `backend/app/routers/admin_accounts.py`
+**Files:** `backend/tests/test_financial_hardening.py`, `backend/app/financial_hardening.py`
 
-**Interfaces:**
-- `erase_account` returns 409 while wallet balance > 0, pending commission exists, or pending `PaymentRefund` exists.
-
-- [ ] Add failing tests for all three blockers and success after blockers are cleared.
-- [ ] Remove the old behavior that zeroed a positive wallet during erasure.
-- [ ] Add explicit preflight blockers before personal-data mutation.
-- [ ] Confirm focused and full backend tests pass.
+- [x] Add tests for positive wallet, pending commission and pending provider refund blockers.
+- [x] Add explicit preflight blockers before the existing anonymization path.
+- [x] Ensure a positive advance cannot be silently zeroed by account erasure.
 
 ### Task 6: Documentation and release verification
 
 **Files:**
-- Modify: `docs/PROJECT_BRAIN.md`
-- Modify: `SECURITY.md` if behavior text is stale.
+- `docs/PROJECT_BRAIN.md`
+- `SECURITY.md`
+- `docs/ТЕКСТЫ.md`
+- this plan and design spec
 
-**Interfaces:**
-- Checkpoint records exact commit, verification, remaining risks, and next task.
-
-- [ ] Update financial-integrity documentation and Project Brain checkpoint.
-- [ ] Run/inspect Backend CI, E2E, and Security workflows on the final branch head.
-- [ ] Review the final diff for secrets, accidental unrelated changes, migration-head conflicts, and money-state inconsistencies.
+- [x] Regenerate the project-owned user-text catalogue after new API messages.
+- [x] Align design/plan with the isolated refund ledger actually implemented.
+- [ ] Update financial-integrity/security docs and Project Brain checkpoint.
+- [ ] Run/inspect Backend CI on SQLite/FastAPI and PostgreSQL, E2E, and Security workflows on the final branch head.
+- [ ] Review final diff for secrets, unrelated changes, migration-head conflicts and money-state inconsistencies.
 - [ ] Open a draft PR targeting `codex/staffswipe-release-candidate`; do not merge or deploy automatically.
