@@ -21,37 +21,44 @@ Close the remaining release-blocking money-integrity gaps without changing Staff
 - Account erasure is blocked while wallet balance is positive, a provider refund is pending, or employer commission debt is pending. Financial records stay immutable/auditable.
 
 ## Data model
-Add `PaymentRefund`:
-- `id`: internal UUID
-- `purchase_id`: FK to `purchases.id`, indexed
-- `owner_id`: indexed
-- `request_id`: UUID string, globally unique (client/admin retry identity)
-- `provider_refund_id`: nullable unique provider id
-- `amount`: integer RUB
-- `status`: `pending|succeeded|failed`
-- `note`: operator reason
-- `actor_id`: administrator principal id
-- `created_at`
+Add an isolated financial ledger instead of modifying historical `Purchase` rows.
 
-Add `Purchase.refunded_amount` integer default 0. It represents money reserved for succeeded or uncertain/pending provider refunds. The field is updated atomically with `refunded_amount + amount <= purchase.amount`.
+`RefundAllowance`:
+- `purchase_id`: PK/FK to `purchases.id`;
+- `reserved_amount`: integer RUB already reserved by succeeded or in-flight bank refunds.
+
+`PaymentRefund`:
+- `id`: internal UUID;
+- `purchase_id`: FK to `purchases.id`, indexed;
+- `owner_id`: indexed;
+- `request_id`: UUID string, globally unique (admin retry identity);
+- `provider_refund_id`: nullable unique provider id;
+- `amount`: integer RUB;
+- `status`: `pending|succeeded|failed`;
+- `note`: operator reason;
+- `actor_id`: administrator principal id;
+- `created_at`.
+
+The per-purchase cap is enforced with an atomic conditional update of `RefundAllowance.reserved_amount`, so `reserved_amount + amount <= Purchase.amount` even under concurrent requests. Keeping this counter in its own table avoids rewriting existing purchase rows while preserving a durable reservation.
 
 ## Top-up application
-Create one helper used by webhook and reconciliation. It first validates trusted provider payment data, then tries to insert the `Purchase` inside a savepoint and flush it before touching wallet balance. If the unique provider charge already exists, the helper returns duplicate without crediting. If the insert wins, wallet credit and journal entry happen in the same outer transaction.
+One helper is used by webhook and reconciliation. It validates trusted provider payment data, then tries to insert the `Purchase` inside a savepoint and flush it before touching wallet balance. If the unique provider charge already exists, the helper returns duplicate without crediting. If the insert wins, wallet credit and journal entry happen in the same outer transaction.
 
 ## Bank refund flow
 `POST /admin/payments/{purchase_id}/refund` accepts `request_id`, `amount_rub`, and `note`.
 
 Reservation transaction:
 1. Require admin and a paid YooKassa wallet-topup purchase.
-2. If `request_id` already exists, return its current state without mutating money.
-3. Atomically reserve purchase refundable amount (`refunded_amount += amount` with cap).
-4. Atomically debit employer wallet (`balance_rub -= amount` with sufficient-balance condition).
-5. Add `PaymentRefund(status=pending)` and a negative `WalletTxn(kind=provider_refund)` audit row.
-6. Commit reservation before external I/O.
+2. Claim the globally unique `request_id` before money mutation; an existing request returns its current state.
+3. Ensure the purchase has a `RefundAllowance` row.
+4. Atomically reserve refundable amount in `RefundAllowance` with a cap at the original `Purchase.amount`.
+5. Atomically debit employer wallet (`balance_rub -= amount` with sufficient-balance condition).
+6. Add `PaymentRefund(status=pending)` and a negative `WalletTxn(kind=provider_refund)` audit row.
+7. Commit reservation before external I/O.
 
-Provider call uses deterministic `Idempotence-Key` derived from `request_id`. A successful response stores provider refund id/status. A transport/unknown failure leaves the request pending and reserved so a retry cannot double-refund. A definitive provider rejection releases both reservations atomically and marks the refund failed.
+Provider call uses deterministic YooKassa `Idempotence-Key` equal to `request_id`. A successful response stores provider refund id/status. A transport/unknown failure leaves the request pending and reserved so a retry cannot double-refund. A definitive provider rejection releases both the allowance reservation and wallet debit atomically and marks the refund failed.
 
-A provider lookup/reconciliation helper can re-check pending refund ids/requests later; this design does not silently credit money back on ambiguous network outcomes.
+Pending provider refunds remain fail-closed: the platform does not silently put reserved money back after an ambiguous provider response. A follow-up reconciliation mechanism can resolve these states against YooKassa without risking a double refund.
 
 ## Account erasure
 Before anonymization, reject with 409 when:
@@ -59,19 +66,18 @@ Before anonymization, reject with 409 when:
 - employer has `Commission.status == pending`;
 - owner has `PaymentRefund.status == pending`.
 
-Do not create the old `erase` wallet transaction that simply destroys a positive advance. Operator must complete a real refund/settlement/write-off first, leaving a coherent financial history.
+The old erase path is reused only after these preconditions pass, so it can no longer silently destroy a positive advance. Operator must complete a real refund/settlement/write-off first, leaving a coherent financial history.
 
 ## Testing
-Add adversarial backend tests for:
+Adversarial backend tests cover:
 - duplicate provider charge claimed once;
 - webhook/reconciliation helper duplicate path does not double-credit;
 - reconcile rejects wrong currency and metadata amount mismatch;
 - refund retry with same request id reserves once;
 - total partial refunds cannot exceed purchase amount;
 - refund cannot exceed available wallet balance;
-- definitive refund rejection restores wallet and purchase refundable amount;
+- definitive refund rejection restores wallet and allowance reservation;
 - ambiguous provider failure stays pending/reserved;
-- erasure blocked by positive wallet, pending commission, and pending bank refund;
-- erasure still works once financial blockers are cleared.
+- erasure blocked by positive wallet, pending commission, and pending bank refund.
 
 Run Ruff, backend tests on SQLite and PostgreSQL via CI, E2E, and Security workflows before considering merge. No production deployment or real YooKassa call is part of this change.
