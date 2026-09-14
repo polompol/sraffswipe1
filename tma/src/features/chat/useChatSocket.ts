@@ -51,6 +51,7 @@ export function useChatSocket(matchId: string, handlers: Handlers): void {
           // мимо него). Своё время на случай старого сервера — лучше, чем
           // пустое место в углу пузыря.
           createdAt: raw.created_at ?? new Date().toISOString(),
+          clientMessageId: raw.client_message_id ?? undefined,
         });
         // Системные сообщения приходят на смену статуса: вторая сторона
         // подтвердила, отметилась, перенесла. Без обновления кнопка над

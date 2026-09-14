@@ -148,10 +148,15 @@ export async function fetchMessages(
 export async function sendMessage(
   matchId: string,
   text: string,
+  clientMessageId: string,
 ): Promise<Message> {
-  if (!USE_BACKEND) return mock.sendMessage(matchId, text);
+  if (!USE_BACKEND) {
+    const message = await mock.sendMessage(matchId, text);
+    return { ...message, clientMessageId };
+  }
   const { data } = await api.post<Message>(`/matches/${matchId}/messages`, {
     text,
+    client_message_id: clientMessageId,
   });
   return data;
 }
