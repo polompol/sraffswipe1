@@ -81,7 +81,7 @@ export function MessageList({ messages, outbox, myId, onRetry }: Props) {
                   className="text-btn"
                   aria-label="Повторить отправку"
                   onClick={() => onRetry(entry.clientMessageId)}
-                  style={{ marginLeft: 6, minHeight: 32 }}
+                  style={{ marginLeft: 6, minHeight: 44 }}
                 >
                   Повторить
                 </button>
