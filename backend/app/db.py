@@ -6,12 +6,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
 
-# Python's sqlite3 historically uses LEGACY_TRANSACTION_CONTROL: SELECT and
-# SAVEPOINT do not necessarily start a real outer transaction.  That can make
-# a released SAVEPOINT survive a later Session.rollback(), unlike PostgreSQL.
-# Modern transaction control keeps dev/tests honest for atomic money flows.
 connect_args = (
-    {"check_same_thread": False, "autocommit": False}
+    {"check_same_thread": False}
     if settings.database_url.startswith("sqlite")
     else {}
 )
