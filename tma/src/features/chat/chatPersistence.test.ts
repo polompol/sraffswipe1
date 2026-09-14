@@ -25,6 +25,24 @@ describe("черновик чата", () => {
     expect(readChatDraft("match-1")).toBe("");
     expect(readChatDraft("match-2")).toBe("Нужна форма?");
   });
+
+  it("не переносится между аккаунтами на одном устройстве", () => {
+    localStorage.setItem("ss_uid", "user-1");
+    writeChatDraft("match-1", "Личный черновик");
+    queueChatMessage(
+      "match-1",
+      "Неопределённая отправка",
+      "33333333-3333-4333-8333-333333333333",
+    );
+
+    localStorage.setItem("ss_uid", "user-2");
+    expect(readChatDraft("match-1")).toBe("");
+    expect(restoreChatOutbox("match-1")).toEqual([]);
+
+    localStorage.setItem("ss_uid", "user-1");
+    expect(readChatDraft("match-1")).toBe("Личный черновик");
+    expect(restoreChatOutbox("match-1")).toHaveLength(1);
+  });
 });
 
 describe("неопределённая отправка", () => {
