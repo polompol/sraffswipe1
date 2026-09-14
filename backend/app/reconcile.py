@@ -7,8 +7,8 @@
 только на него нельзя.
 
 Раз в сутки берём у ЮKassa список успешных платежей и сверяем с таблицей
-purchases. Найденные пропажи ДОЗАЧИСЛЯЕМ — тем же путём и с той же защитой от
-повтора, что и вебхук, поэтому двойного зачисления быть не может.
+purchases. Найденные пропажи ДОЗАЧИСЛЯЕМ тем же exactly-once путём, что и
+вебхук. Валюта, сумма и metadata проверяются одинаково в обоих каналах.
 """
 import base64
 import json
@@ -20,7 +20,6 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .models import Purchase
 
 _log = logging.getLogger("staffswipe")
 
@@ -67,14 +66,12 @@ def fetch_payment(charge_id: str) -> dict | None:
 
 
 def reconcile(db: Session, hours: int = 48) -> dict:
-    """Сверить платежи за последние `hours` часов и дозачислить пропущенные.
+    """Сверить платежи за последние ``hours`` часов и дозачислить пропущенные.
 
-    Возвращает сводку для оператора: сколько проверено, сколько не хватало,
-    сколько денег дозачислено. Текст исключения наружу НЕ отдаём. Дыры тут нет
-    — эндпоинт админский, — но текст ошибки писала не мы: его составляет
-    библиотека, и что в нём окажется, мы не выбираем (адрес прокси, имя узла,
-    внутренние подробности). Оператору это ничего не объясняет, а починить
-    сверку помогает лог, куда исключение уходит целиком, со стеком.
+    Every provider item goes through the same strict validator and unique
+    charge claim as the webhook.  A webhook/reconcile race therefore has one
+    winner and one harmless duplicate instead of a 500/partial accounting
+    state.
     """
     if not settings.yookassa_ready:
         return {"skipped": "ЮKassa не подключена"}
@@ -86,45 +83,40 @@ def reconcile(db: Session, hours: int = 48) -> dict:
         _log.exception("Сверка с ЮKassa не удалась")
         return {"error": "Не удалось получить платежи ЮKassa"}
 
-    from .routers.billing import credit_wallet
+    # Import lazily: this module is also used by the verified webhook path.
+    from .financial_hardening import apply_verified_topup, validated_wallet_topup
 
     checked = restored = restored_rub = 0
     skipped: list[str] = []
-    for it in items:
-        charge_id = it.get("id")
-        meta = it.get("metadata") or {}
-        owner_id, sku = meta.get("owner_id"), meta.get("sku")
-        if not charge_id or sku != "wallet_topup" or not owner_id:
+    for payment in items:
+        # Only objects that look like our wallet top-ups count as checked;
+        # unrelated YooKassa products are ignored, not reported as failures.
+        meta = payment.get("metadata") or {}
+        if meta.get("sku") != "wallet_topup" or not meta.get("owner_id"):
             continue
         checked += 1
-        if db.query(Purchase).filter(
-            Purchase.provider_charge_id == charge_id
-        ).first():
-            continue  # платёж уже проведён вебхуком — всё в порядке
-
-        # Сумму берём из САМОГО платежа, а не из metadata: metadata мы
-        # заполняли сами, а value — то, что реально списала касса.
         try:
-            rub = int(float((it.get("amount") or {}).get("value", 0)))
-        except (TypeError, ValueError):
-            rub = 0
-        if not 100 <= rub <= 100_000:
-            skipped.append(f"{charge_id}: сумма вне лимита ({rub})")
+            charge_id, owner_id, rub = validated_wallet_topup(payment)
+            created = apply_verified_topup(
+                db,
+                payment,
+                note="Пополнение картой (дозачислено сверкой)",
+            )
+        except ValueError as exc:
+            db.rollback()
+            skipped.append(f"{payment.get('id') or 'без id'}: {exc}")
             continue
 
-        db.add(Purchase(
-            owner_id=owner_id, sku="wallet_topup", provider="yookassa",
-            amount=rub, currency="RUB", status="paid",
-            provider_charge_id=charge_id,
-        ))
-        credit_wallet(db, owner_id, rub,
-                      "Пополнение картой (дозачислено сверкой)", commit=False)
+        if not created:
+            continue
         db.commit()
         restored += 1
         restored_rub += rub
         _log.warning(
             "Сверка: вебхук не дошёл, дозачислено %s ₽ заведению %s (%s)",
-            rub, owner_id, charge_id,
+            rub,
+            owner_id,
+            charge_id,
         )
 
     return {
