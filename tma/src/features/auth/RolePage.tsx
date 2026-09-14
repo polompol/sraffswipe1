@@ -16,6 +16,7 @@ import { OFFER_URL, PRIVACY_URL } from "@/lib/legal";
 import type { ComponentType } from "react";
 import { LS } from "@/lib/storage";
 import { Wordmark } from "@/components/Wordmark";
+import { allowRoleChoice } from "./browserAccess";
 
 
 export function RolePage() {
@@ -64,7 +65,7 @@ export function RolePage() {
   // отвечает отказом, и человек упирался в «Не удалось войти — проверьте
   // интернет», хотя интернет ни при чём. Заходят так регулярно: по ссылке из
   // рекламы, из истории браузера.
-  if (useBackend && !insideTelegram()) {
+  if (!allowRoleChoice({ insideTelegram: insideTelegram(), useBackend })) {
     return (
       <div className="app">
         <div
