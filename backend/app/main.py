@@ -44,7 +44,7 @@ logger = logging.getLogger("staffswipe")
 
 
 class _RedactTokensInLogs(logging.Filter):
-    """Вырезает token=… из всего, что уходит в журнал.
+    """Вырезает token=… и secret=… из всего, что уходит в журнал.
 
     Токен чата едет в АДРЕСЕ WebSocket: заголовки браузерному WebSocket задать
     нельзя, другого места нет. А uvicorn пишет строку запроса целиком. Замерено
@@ -70,7 +70,7 @@ class _RedactTokensInLogs(logging.Filter):
     propagate=False, до корня их записи не доходят.
     """
 
-    _RX = re.compile(r"(token=)[^&\s\"']+")
+    _RX = re.compile(r"((?:token|secret)=)[^&\s\"']+")
 
     def _clean(self, value: object) -> object:
         return self._RX.sub(r"\1REDACTED", value) if isinstance(value, str) else value
