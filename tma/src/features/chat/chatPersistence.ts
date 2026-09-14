@@ -13,96 +13,60 @@ export interface ChatOutboxItem {
 const MAX_OUTBOX = 20;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Текст переписки чувствителен: не кладём его ни в localStorage, ни в
+ * sessionStorage. Эти Map живут только пока живёт текущий JS-контекст Mini App.
+ * После перезапуска источником истины снова становится серверная история.
+ */
+const drafts = new Map<string, string>();
+const outboxes = new Map<string, ChatOutboxItem[]>();
+
 function ownerScope(): string {
   try {
     return localStorage.getItem(LS.uid) || "anon";
   } catch {
+    // Если browser storage недоступен, сам чат всё равно работает в памяти.
     return "anon";
   }
 }
 
-function draftKey(matchId: string): string {
-  return `${LS.chatDraft}:${ownerScope()}:${matchId}`;
-}
-
-function outboxKey(matchId: string): string {
-  return `${LS.chatOutbox}:${ownerScope()}:${matchId}`;
-}
-
-function safeGet(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function safeSet(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Приватный режим/переполненное хранилище не должны ломать сам чат.
-  }
-}
-
-function safeRemove(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Хранилище может быть недоступно — тогда просто живём без persistence.
-  }
+function scopeKey(matchId: string): string {
+  return `${ownerScope()}:${matchId}`;
 }
 
 export function readChatDraft(matchId: string): string {
-  return safeGet(draftKey(matchId)) ?? "";
+  return drafts.get(scopeKey(matchId)) ?? "";
 }
 
 export function writeChatDraft(matchId: string, text: string): void {
-  if (!text) {
-    clearChatDraft(matchId);
-    return;
-  }
-  safeSet(draftKey(matchId), text);
+  const key = scopeKey(matchId);
+  if (!text) drafts.delete(key);
+  else drafts.set(key, text);
 }
 
 export function clearChatDraft(matchId: string): void {
-  safeRemove(draftKey(matchId));
-}
-
-function validOutboxItem(value: unknown): value is ChatOutboxItem {
-  if (!value || typeof value !== "object") return false;
-  const row = value as Partial<ChatOutboxItem>;
-  return (
-    typeof row.clientMessageId === "string"
-    && typeof row.text === "string"
-    && (row.status === "sending" || row.status === "failed")
-    && typeof row.createdAt === "string"
-  );
+  drafts.delete(scopeKey(matchId));
 }
 
 function readRawOutbox(matchId: string): ChatOutboxItem[] {
-  const raw = safeGet(outboxKey(matchId));
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const cutoff = Date.now() - MAX_AGE_MS;
-    return parsed
-      .filter(validOutboxItem)
-      .filter((row) => {
-        const ts = Date.parse(row.createdAt);
-        return Number.isFinite(ts) && ts >= cutoff;
-      })
-      .slice(-MAX_OUTBOX);
-  } catch {
-    return [];
-  }
+  const key = scopeKey(matchId);
+  const cutoff = Date.now() - MAX_AGE_MS;
+  const next = (outboxes.get(key) ?? [])
+    .filter((row) => {
+      const ts = Date.parse(row.createdAt);
+      return Number.isFinite(ts) && ts >= cutoff;
+    })
+    .slice(-MAX_OUTBOX);
+  if (next.length === 0) outboxes.delete(key);
+  else outboxes.set(key, next);
+  return next;
 }
 
 function writeOutbox(matchId: string, rows: ChatOutboxItem[]): ChatOutboxItem[] {
+  const key = scopeKey(matchId);
   const next = rows.slice(-MAX_OUTBOX);
-  if (next.length === 0) safeRemove(outboxKey(matchId));
-  else safeSet(outboxKey(matchId), JSON.stringify(next));
+  if (next.length === 0) outboxes.delete(key);
+  else outboxes.set(key, next);
   return next;
 }
 
@@ -161,9 +125,10 @@ export function removeChatOutboxItem(matchId: string, clientMessageId: string): 
 }
 
 /**
- * После reload неизвестное `sending` не отправляем автоматически: сервер мог
- * уже принять запрос, а ответ потерялся. Сначала история подтверждает receipt;
- * если его там нет, показываем ручной «Повторить» с ТЕМ ЖЕ idempotency key.
+ * Серверная история подтверждает receipt по client_message_id. Неизвестное
+ * `sending` не отправляем автоматически: ответ мог потеряться после успешной
+ * записи на сервере. В текущей сессии показываем ручной «Повторить» с тем же
+ * idempotency key; после полного перезапуска текст намеренно не сохраняется.
  */
 export function restoreChatOutbox(
   matchId: string,
@@ -178,4 +143,10 @@ export function restoreChatOutbox(
     .filter((row) => !confirmed.has(row.clientMessageId))
     .map((row) => ({ ...row, status: "failed" as const }));
   return writeOutbox(matchId, next);
+}
+
+/** Очистить чувствительный session-memory, например при выходе из аккаунта. */
+export function clearChatRecoveryMemory(): void {
+  drafts.clear();
+  outboxes.clear();
 }
