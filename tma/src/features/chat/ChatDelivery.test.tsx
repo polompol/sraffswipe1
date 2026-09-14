@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Message } from "@/types/domain";
 import type { OutboxEntry } from "./chatPersistence";
 import { ChatConnectionState } from "./ChatConnectionState";
@@ -27,6 +27,8 @@ function outbox(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
     ...overrides,
   };
 }
+
+afterEach(cleanup);
 
 describe("chat delivery presentation", () => {
   it("shows a pending bubble immediately with a non-color status", () => {
