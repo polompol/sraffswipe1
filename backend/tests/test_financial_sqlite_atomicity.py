@@ -97,3 +97,13 @@ def test_failed_refund_reservation_does_not_leave_phantom_request(client, monkey
     assert second.status_code == 200, second.text
     assert second.json()["status"] == "succeeded"
     assert len(provider_calls) == 1
+
+    db = SessionLocal()
+    try:
+        refund = db.query(PaymentRefund).filter(
+            PaymentRefund.request_id == request_id
+        ).one()
+        assert refund.status == "succeeded"
+        assert refund.provider_refund_id == "refund-after-retry"
+    finally:
+        db.close()
