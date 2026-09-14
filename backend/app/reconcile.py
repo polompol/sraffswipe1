@@ -9,6 +9,9 @@
 Раз в сутки берём у ЮKassa список успешных платежей и сверяем с таблицей
 purchases. Найденные пропажи ДОЗАЧИСЛЯЕМ тем же exactly-once путём, что и
 вебхук. Валюта, сумма и metadata проверяются одинаково в обоих каналах.
+Неопределённые банковские возвраты сверяются отдельно: известный refund id
+проверяем GET-запросом, а повтор POST разрешён только внутри безопасного окна
+идемпотентности провайдера.
 """
 import base64
 import json
@@ -66,12 +69,12 @@ def fetch_payment(charge_id: str) -> dict | None:
 
 
 def reconcile(db: Session, hours: int = 48) -> dict:
-    """Сверить платежи за последние ``hours`` часов и дозачислить пропущенные.
+    """Сверить платежи и неопределённые возвраты с ЮKassa.
 
-    Every provider item goes through the same strict validator and unique
-    charge claim as the webhook.  A webhook/reconcile race therefore has one
-    winner and one harmless duplicate instead of a 500/partial accounting
-    state.
+    Every provider payment goes through the same strict validator and unique
+    charge claim as the webhook.  Pending refunds stay locally reserved until
+    YooKassa gives a terminal result; reconciliation never creates a second
+    local reservation.
     """
     if not settings.yookassa_ready:
         return {"skipped": "ЮKassa не подключена"}
@@ -85,6 +88,7 @@ def reconcile(db: Session, hours: int = 48) -> dict:
 
     # Import lazily: this module is also used by the verified webhook path.
     from .financial_hardening import apply_verified_topup, validated_wallet_topup
+    from .refund_reconciliation import reconcile_pending_refunds
 
     checked = restored = restored_rub = 0
     skipped: list[str] = []
@@ -119,9 +123,11 @@ def reconcile(db: Session, hours: int = 48) -> dict:
             charge_id,
         )
 
+    refund_result = reconcile_pending_refunds(db)
     return {
         "checked": checked,
         "restored": restored,
         "restored_rub": restored_rub,
         "skipped": skipped,
+        **refund_result,
     }
