@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -43,7 +44,7 @@ export function WorkersPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1">Мои работники</h1>
+        <PageHeader title="Мои работники" backTo="/vacancy/my" />
         {isLoading && <SkeletonList />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
         {!isLoading && !isError && (!data || data.length === 0) && (

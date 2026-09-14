@@ -5,6 +5,8 @@ import time
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
+import pytest
+
 from app.telegram import validate_init_data
 
 
@@ -46,6 +48,20 @@ def test_validate_init_data_signature():
     h = hmac.new(secret, dcs.encode(), hashlib.sha256).hexdigest()
     stale = urlencode({**stale_pairs, "hash": h})
     assert validate_init_data(stale, token) is False
+
+
+@pytest.mark.parametrize("signature", ["я" * 64, "🍵" * 64, "g" * 64, "a" * 63])
+def test_malformed_signature_is_rejected_without_server_error(
+    client, monkeypatch, signature,
+):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "telegram_bot_token", "123:ABC")
+    monkeypatch.setattr(settings, "allow_insecure_telegram_auth", False)
+    result = client.post("/auth/telegram", json={
+        "init_data": urlencode({"hash": signature}), "role": "seeker",
+    })
+    assert result.status_code == 401
 
 
 def test_telegram_login_creates_working_account(client):

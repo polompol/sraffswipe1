@@ -24,5 +24,6 @@ def test_production_accepts_complete_secure_configuration(monkeypatch):
     monkeypatch.setenv("INTERNAL_API_SECRET", "internal-test-secret")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "bot-token")
     monkeypatch.setenv("ALLOW_INSECURE_TELEGRAM_AUTH", "false")
+    monkeypatch.setenv("ADMIN_TG_IDS", "970001")
     cfg = Settings()
     cfg.assert_production_safe()

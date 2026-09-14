@@ -1,0 +1,9 @@
+{
+  "name": "staffswipe",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix tma run dev --",
+    "build": "npm --prefix tma run build",
+    "verify": "bash scripts/verify.sh"
+  }
+}

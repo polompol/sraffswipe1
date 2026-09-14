@@ -331,6 +331,10 @@ def wallet_topup(
         )
         if url:
             return PaymentOut(url=url)
+        raise HTTPException(
+            status_code=503,
+            detail="Не удалось создать платёж. Попробуйте ещё раз позже.",
+        )
     base = settings.payment_return_url or "https://example.com/pay"
     return PaymentOut(url=f"{base}?sku=wallet_topup&owner={principal['id']}")
 

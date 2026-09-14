@@ -144,7 +144,7 @@ def test_falls_back_to_memory_when_redis_dies(monkeypatch):
         ratelimit.hit("падение", limit=2, window=60)
 
 
-def test_chat_message_reaches_another_process(redis_url):
+def test_chat_message_reaches_another_process(redis_url, client, make_match):
     """Сообщение, отправленное в одном процессе, доходит до сокета в другом.
 
     Два ConnectionManager = два процесса приложения. Сокет подключён только
@@ -154,6 +154,11 @@ def test_chat_message_reaches_another_process(redis_url):
         pytest.skip("нужен настоящий Redis: pub/sub у подделки не полный")
 
     from app.routers.chat import ConnectionManager
+
+    account = client.post(
+        "/auth/telegram", json={"init_data": "", "role": "employer"},
+    ).json()
+    match_id = make_match(account["user_id"])
 
     class FakeSocket:
         def __init__(self):
@@ -171,9 +176,9 @@ def test_chat_message_reaches_another_process(redis_url):
         proc_a = ConnectionManager()     # процесс, который принимает сообщение
         proc_b = ConnectionManager()     # процесс, где сидит собеседник
         ws = FakeSocket()
-        await proc_b.connect("match-1", ws)
+        await proc_b.connect(match_id, ws, token=account["access_token"])
         await asyncio.sleep(0.3)         # даём подписке встать
-        await proc_a.broadcast("match-1", {"text": "привет из другого процесса"})
+        await proc_a.broadcast(match_id, {"text": "привет из другого процесса"})
         for _ in range(30):
             if ws.got:
                 break

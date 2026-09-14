@@ -1,6 +1,7 @@
 """Pydantic-схемы запросов/ответов."""
 from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import (
     AfterValidator,
@@ -67,7 +68,7 @@ ExperienceTag = Literal[
 # можно было записать что угодно (javascript:, data:, ссылку-счётчик) — а оно
 # подставляется в src картинки на чужом экране.
 PhotoUrl = Annotated[
-    str, StringConstraints(max_length=500, pattern=r"^(https?://\S+)?$")
+    str, StringConstraints(max_length=500, pattern=r"^(https?://[^,\s]+)?$")
 ]
 
 
@@ -269,6 +270,7 @@ class MatchOut(BaseModel):
 
 # ---- chat ----
 class MessageIn(BaseModel):
+    client_message_id: UUID | None = None
     text: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
     ]
@@ -284,6 +286,7 @@ class ReportIn(BaseModel):
 
 class MessageOut(BaseModel):
     id: str
+    client_message_id: str | None = None
     match_id: str
     sender_id: str
     text: str

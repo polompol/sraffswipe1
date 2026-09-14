@@ -152,6 +152,7 @@ def test_production_safe_guard_rejects_default_secrets():
         jwt_secret="a-real-secret-at-least-32-characters-long",
         internal_api_secret="another-secret",
         telegram_bot_token="1234567890:AA-fake-token-for-tests",
+        admin_tg_ids="970001",
         allow_insecure_telegram_auth=False,
     )
     safe.assert_production_safe()  # не бросает
@@ -448,4 +449,3 @@ def test_admin_revenue(client):
     assert rev["commissionAccruedRub"] == 0
     # Пополнение — аванс, а не заработок сервиса: в выручку не идёт.
     assert rev["shiftsBilled"] == 0
-

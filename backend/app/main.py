@@ -23,6 +23,7 @@ from .routers import (
     dadata,
     employer,
     favorites,
+    invitations,
     matches,
     meta,
     reports,
@@ -32,6 +33,7 @@ from .routers import (
     telegram_auth,
     uploads,
     vacancies,
+    vacancy_drafts,
 )
 
 logging.basicConfig(
@@ -42,7 +44,7 @@ logger = logging.getLogger("staffswipe")
 
 
 class _RedactTokensInLogs(logging.Filter):
-    """Вырезает token=… из всего, что уходит в журнал.
+    """Вырезает token=… и secret=… из всего, что уходит в журнал.
 
     Токен чата едет в АДРЕСЕ WebSocket: заголовки браузерному WebSocket задать
     нельзя, другого места нет. А uvicorn пишет строку запроса целиком. Замерено
@@ -68,7 +70,7 @@ class _RedactTokensInLogs(logging.Filter):
     propagate=False, до корня их записи не доходят.
     """
 
-    _RX = re.compile(r"(token=)[^&\s\"']+")
+    _RX = re.compile(r"((?:token|secret)=)[^&\s\"']+")
 
     def _clean(self, value: object) -> object:
         return self._RX.sub(r"\1REDACTED", value) if isinstance(value, str) else value
@@ -111,14 +113,6 @@ if settings.sentry_dsn:
 async def lifespan(app: FastAPI):
     # Fail-fast: в прод-режиме не стартуем с дефолтными секретами.
     settings.assert_production_safe()
-    # Не ошибка, но и не мелочь: без списка админов в сервисе нет оператора —
-    # споры по сменам разбирать некому, админ-панель не откроется ни у кого.
-    # Ронять из-за этого сервер не за что, а в логе видно должно быть сразу.
-    if not settings.dev_mode and not settings.admin_tg_ids.strip():
-        logger.warning(
-            "ADMIN_TG_IDS пуст — админ-панель недоступна никому, "
-            "споры по сменам разбирать будет некому"
-        )
     init_db()
     yield
 
@@ -214,6 +208,8 @@ async def request_logger(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(telegram_auth.router)
 app.include_router(vacancies.router)
+app.include_router(vacancy_drafts.router)
+app.include_router(invitations.router)
 app.include_router(candidates.router)
 app.include_router(swipes.router)
 app.include_router(matches.router)

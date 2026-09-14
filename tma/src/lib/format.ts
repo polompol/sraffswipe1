@@ -13,8 +13,20 @@ const MONTHS = [
 ];
 
 export function fmtDate(iso: string): string {
-  const d = new Date(iso);
+  const d = calendarDate(iso);
+  if (!d) return "";
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+/** Дата смены — календарный день, без перевода из UTC в пояс телефона. */
+function calendarDate(iso: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const [year, month, day] = iso.split("-").map(Number);
+  const d = new Date(0);
+  d.setFullYear(year, month - 1, day);
+  d.setHours(12, 0, 0, 0);
+  return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day
+    ? d : null;
 }
 
 /** Дата как ГГГГ-ММ-ДД по МЕСТНОМУ времени телефона.
@@ -37,7 +49,9 @@ export function todayISO(): string {
 /** Подпись дня смены: «Сегодня»/«Завтра» или дата — для чувства срочности. */
 export function shiftDayLabel(iso: string): string {
   const today = todayISO();
-  const tomorrow = localISO(new Date(Date.now() + 86400000));
+  const next = new Date();
+  next.setDate(next.getDate() + 1);
+  const tomorrow = localISO(next);
   if (iso === today) return "Сегодня";
   if (iso === tomorrow) return "Завтра";
   return fmtDate(iso);
@@ -51,8 +65,8 @@ export function shiftDayLabel(iso: string): string {
  *  полем повторяем выбранное по-русски.
  */
 export function dateLong(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
+  const d = calendarDate(iso);
+  if (!d) return "";
   const week = ["воскресенье", "понедельник", "вторник", "среда",
     "четверг", "пятница", "суббота"];
   return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${week[d.getDay()]}`;

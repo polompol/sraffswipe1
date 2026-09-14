@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -59,7 +60,7 @@ export function ApplicantsPage() {
   return (
     <div className="app">
       <div className="page">
-        <h1 className="h1 tight">Кто откликнулся</h1>
+        <PageHeader title="Кто откликнулся" backTo="/vacancy/my" />
         {!!data?.length && (
           <p className="muted" style={{ margin: "0 0 14px" }}>
             Ответьте — и сразу откроется чат.

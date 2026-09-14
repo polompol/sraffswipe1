@@ -59,7 +59,9 @@ export function VacancyList({
   }
 
   return (
-    <div className="stagger stack stack-lg">
+    // Нулевая нижняя граница колонки не даёт длинному названию распирать
+    // всю карточку на узком экране с крупным шрифтом.
+    <div className="stagger stack stack-lg" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
       {items.map((v) => (
         <div key={v.id} className="card fade-up">
           <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>

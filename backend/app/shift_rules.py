@@ -64,7 +64,13 @@ def shift_pay(v: Vacancy, actual_minutes: int | None = None) -> int:
     if v.rate_type == "perShift":
         return v.rate
     mins = actual_minutes if actual_minutes is not None else planned_minutes(v)
-    return round(v.rate * mins / 60)
+    # Как Math.round() в приложении: половина рубля округляется вверх.
+    # Decimal сохраняет точное произведение ставки и минут без float.
+    return int(
+        (Decimal(v.rate) * mins / 60).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+    )
 
 
 def already_accrued(db: Session, match_id: str) -> bool:

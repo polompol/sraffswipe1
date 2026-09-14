@@ -50,10 +50,6 @@ interface Props<T> {
    *  их белые подписи рассчитаны на тёмную лицевую сторону и на светлой
    *  изнанке пропадали совсем. */
   onFlipChange?: (flipped: boolean) => void;
-  /** Слово на штампе при свайпе вправо. У соискателя «ХОЧУ», у заведения
-   *  «ЗОВУ»: один штамп на обе стороны ложился поперёк лица человека и
-   *  расходился с кнопкой под колодой, которая подписана «Позвать». */
-  likeStamp?: string;
 }
 
 const VISIBLE = 3;
@@ -66,7 +62,7 @@ function dirFrom(mx: number, sx: number): SwipeDirection {
 }
 
 export function SwipeDeck<T>(props: Props<T>) {
-  const { items, renderCard, onSwipe, keyOf, likeStamp = "ХОЧУ" } = props;
+  const { items, renderCard, onSwipe, keyOf } = props;
   // Улетевшие карточки помним ПО НОМЕРУ, но сбрасываем при смене набора.
   // Раньше номера жили вечно: человек свайпал две карточки, менял город — и
   // первые две смены нового города считались уже просмотренными. Он их не
@@ -95,8 +91,16 @@ export function SwipeDeck<T>(props: Props<T>) {
   }, [flipped, onFlipChange]);
   const deckKey = items.map((it) => keyOf(it)).join("|");
   const lastDeck = useRef(deckKey);
+  // Каждый набор имеет своё поколение, даже при переходе A → B → A.
+  // Ответ от прежнего набора не должен менять новую колоду.
+  const generation = useRef(0);
+  useEffect(() => () => {
+    // После ухода с экрана не вызываем анимации и onEmpty.
+    generation.current += 1;
+  }, []);
   if (lastDeck.current !== deckKey) {
     lastDeck.current = deckKey;
+    generation.current += 1;
     gone.clear();
     settled.clear();
     // Перевёрнутой карточки в новой колоде нет: иначе первая же карточка
@@ -114,6 +118,7 @@ export function SwipeDeck<T>(props: Props<T>) {
 
   function fling(index: number, dir: SwipeDirection) {
     if (gone.has(index)) return;
+    const swipeGeneration = generation.current;
     // Решение принято — карточка улетает лицом, а не изнанкой. Иначе
     // следующая за ней встречала бы человека перевёрнутой.
     if (flipped === keyOf(items[index])) setFlipped(null);
@@ -133,6 +138,7 @@ export function SwipeDeck<T>(props: Props<T>) {
     // насовсем: человек видел ошибку («смена уже занята», «оплатите счёт»),
     // а смена исчезала из колоды — вернуться к ней было нельзя ничем.
     const back = () => {
+      if (swipeGeneration !== generation.current) return;
       gone.delete(index);
       settled.delete(index);
       apiRef.start((i) => (i === index
@@ -149,16 +155,24 @@ export function SwipeDeck<T>(props: Props<T>) {
     // сообщил, что смен больше нет, и показал пустое состояние поверх
     // вернувшейся карточки.
     const done = () => {
+      if (swipeGeneration !== generation.current) return;
       settled.add(index);
       if (settled.size === items.length) props.onEmpty?.();
     };
-    const res = onSwipe(items[index], dir) as unknown;
+    let res: unknown;
+    try {
+      res = onSwipe(items[index], dir);
+    } catch {
+      // Ошибка до создания Promise тоже должна вернуть карточку.
+      back();
+      return;
+    }
     if (res && typeof (res as Promise<unknown>).then === "function") {
       (res as Promise<unknown>).then(done, back);
     } else {
       done();
     }
-    restack();
+    if (swipeGeneration === generation.current) restack();
   }
 
   // Пересобрать стопку: оставшиеся карты подрастают к фронту (живее).
@@ -245,7 +259,9 @@ export function SwipeDeck<T>(props: Props<T>) {
         };
       });
     },
-    { filterTaps: true },
+    // handleClick уже отличает тап от перетаскивания. Capture-перехватчик
+    // filterTaps глотает клики вложенных кнопок с остановленным pointerdown.
+    { filterTaps: false },
   );
 
   /** Нажатие по карточке — «расскажи подробнее». После перетаскивания не
@@ -302,7 +318,6 @@ export function SwipeDeck<T>(props: Props<T>) {
               </div>
             </div>
             <Tint x={style.x} />
-            <Stamps x={style.x} like={likeStamp} />
           </animated.div>
         );
       })}
@@ -328,35 +343,6 @@ function Tint({ x }: { x: SpringValue<number> }) {
           opacity: to(x, (v) => Math.max(0, Math.min(0.4, -v / 260))),
         }}
       />
-    </>
-  );
-}
-
-function Stamps({ x, like }: { x: SpringValue<number>; like: string }) {
-  return (
-    <>
-      <animated.div
-        className="stamp"
-        style={{
-          left: 20,
-          color: "var(--like)",
-          transform: "rotate(-12deg)",
-          opacity: to(x, (v) => Math.max(0, Math.min(1, v / 80))),
-        }}
-      >
-        {like}
-      </animated.div>
-      <animated.div
-        className="stamp"
-        style={{
-          right: 20,
-          color: "var(--dislike)",
-          transform: "rotate(12deg)",
-          opacity: to(x, (v) => Math.max(0, Math.min(1, -v / 80))),
-        }}
-      >
-        НЕТ
-      </animated.div>
     </>
   );
 }

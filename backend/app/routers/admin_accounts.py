@@ -601,6 +601,7 @@ def erase_account(
         Referral,
         Review,
         SavedSearch,
+        VacancyDraft,
     )
 
     target = db.get(User, owner_id)
@@ -629,6 +630,9 @@ def erase_account(
     removed["свайпы"] = _drop(Swipe, Swipe.swiper_id == owner_id,
                               Swipe.target_id == owner_id)
     removed["избранное"] = _drop(Favorite, Favorite.owner_id == owner_id)
+    removed["черновики смен"] = _drop(
+        VacancyDraft, VacancyDraft.employer_id == owner_id
+    )
     removed["сохранённые поиски"] = _drop(SavedSearch,
                                           SavedSearch.owner_id == owner_id)
     removed["события аналитики"] = _drop(Event, Event.owner_id == owner_id)

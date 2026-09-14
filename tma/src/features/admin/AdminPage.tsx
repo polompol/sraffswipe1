@@ -15,6 +15,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAdminOverview } from "@/api/endpoints";
+import { ApiError } from "@/api/client";
+import { ErrorBox, SkeletonList } from "@/components/States";
+import { PageHeader } from "@/components/PageHeader";
 import { showBackButton } from "@/telegram/sdk";
 import { IconShield } from "@/components/Icons";
 import { TodayTab } from "./TodayTab";
@@ -40,14 +43,25 @@ export function AdminPage() {
   // живёт здесь, а не внутри вкладки «Сегодня».
   const ov = useQuery({ queryKey: ["admin-overview"], queryFn: fetchAdminOverview });
 
-  // 403 для не-админа → показываем заглушку.
+  // Не загружаем рабочие разделы, пока сервер не подтвердил доступ.
+  if (ov.isPending) {
+    return <div className="page"><PageHeader title="Админ-панель" />
+      {ov.fetchStatus === "paused"
+        ? <ErrorBox text="Нет соединения. Панель откроется после восстановления связи." />
+        : <SkeletonList />}
+    </div>;
+  }
+
   if (ov.isError) {
+    const denied = ov.error instanceof ApiError && ov.error.response?.status === 403;
     return (
       <div className="page">
-        <h1 className="h1">Админ-панель</h1>
-        <div className="card muted row" style={{ justifyContent: "center", gap: 8 }} role="alert">
-          <IconShield size={18} /> Доступ только для администратора
-        </div>
+        <PageHeader title="Админ-панель" />
+        {denied ? (
+          <div className="card muted row" style={{ justifyContent: "center", gap: 8 }} role="alert">
+            <IconShield size={18} /> Доступ только для администратора
+          </div>
+        ) : <ErrorBox onRetry={() => ov.refetch()} />}
       </div>
     );
   }
@@ -56,7 +70,7 @@ export function AdminPage() {
 
   return (
     <div className="page">
-      <h1 className="h1" style={{ margin: "0 0 12px" }}>Админ-панель</h1>
+      <PageHeader title="Админ-панель" />
 
       {/* Вкладки: одна строка, всегда видно, где ты и где горит. */}
       {/* Ряд прокручиваемый, а не сетка в четыре равные доли: на узком

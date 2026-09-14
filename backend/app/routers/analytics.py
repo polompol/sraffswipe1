@@ -24,6 +24,13 @@ _MAX_PROPS_CHARS = 2000
 
 
 def _is_admin(db: Session, principal: dict) -> bool:
+    if not settings.dev_mode:
+        owner_id = settings.owner_admin_tg_id
+        if owner_id is None:
+            return False
+        model = Employer if principal["role"] == "employer" else User
+        owner = db.get(model, principal["id"])
+        return owner is not None and owner.tg_id == owner_id
     admins = {x.strip() for x in settings.admin_tg_ids.split(",") if x.strip()}
     if not admins:
         return False

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AppRole } from "@/types/domain";
 import { setAuthLostHandler, setToken } from "@/api/client";
 import { LS } from "@/lib/storage";
+import { queryClient } from "@/lib/queryClient";
 
 interface SessionState {
   authenticated: boolean;
@@ -14,11 +15,12 @@ interface SessionState {
 
 const savedRole = (localStorage.getItem(LS.role) as AppRole | null) ?? null;
 
-export const useSession = create<SessionState>((set) => ({
+export const useSession = create<SessionState>((set, get) => ({
   authenticated: Boolean(localStorage.getItem(LS.jwt)),
   role: savedRole,
   userId: localStorage.getItem(LS.uid),
   setAuth: (token, role, userId) => {
+    if (get().userId !== userId || get().role !== role) queryClient.clear();
     setToken(token);
     localStorage.setItem(LS.role, role);
     localStorage.setItem(LS.uid, userId);
@@ -30,6 +32,7 @@ export const useSession = create<SessionState>((set) => ({
   },
   logout: () => {
     setToken(null);
+    queryClient.clear();
     localStorage.removeItem(LS.role);
     localStorage.removeItem(LS.uid);
     set({ authenticated: false, role: null, userId: null });

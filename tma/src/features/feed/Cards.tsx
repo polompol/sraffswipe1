@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { useLargeMode, useShortScreen } from "@/lib/large";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PayMethod, Seeker, Vacancy } from "@/types/domain";
@@ -38,6 +38,7 @@ import { toast } from "@/components/Toast";
 import { reliabilityText } from "@/lib/reliability";
 import { Rating } from "@/components/Rating";
 import { haptic } from "@/telegram/sdk";
+import { SwipePhoto } from "./SwipePhoto";
 
 const PAY_ICON: Record<PayMethod, typeof IconCash> = {
   cash: IconCash,
@@ -53,47 +54,6 @@ const PAY_ICON: Record<PayMethod, typeof IconCash> = {
  *  огромной пустой буквы показываем главное: сколько платят и за что. Раньше
  *  верхняя половина карточки была пустым полем с инициалом, и лента без фото
  *  выглядела так, будто в сервисе ничего нет. */
-function SwipePhoto({ src, initial, hasHero, onHero }: {
-  src?: string;
-  initial: string;
-  /** Есть ли у карточки крупная плашка на случай «фото нет». Саму плашку
-   *  рисует карточка — здесь только решается, показывать ли её. */
-  hasHero?: boolean;
-  /** Показывается ли крупная плашка вместо фото — чтобы карточка не повторяла
-   *  ту же сумму ещё раз ниже. */
-  onHero?: (shown: boolean) => void;
-}) {
-  const [state, setState] = useState<"load" | "ok" | "err">(src ? "load" : "err");
-  // Битая ссылка на фото — тот же случай, что и «фото нет»: показываем
-  // главное, а не пустую букву.
-  const showHero = !!hasHero && (!src || state === "err");
-  useEffect(() => onHero?.(showHero), [showHero, onHero]);
-  return (
-    <div className="swipe-photo swipe-photo-fallback">
-      {showHero ? (
-        /* Буква — под плашкой, а не вместо неё. Без фото середина карточки
-           оставалась большим пустым пятном: главное было прижато к верху,
-           подробности к низу, а между ними полкарточки багрового ничего.
-           Буква заполняет провал и даёт карточке лицо. */
-        <span className="swipe-initial swipe-initial-ghost">{initial}</span>
-      ) : (
-        <span className="swipe-initial">{initial}</span>
-      )}
-      {src && state === "load" && <div className="photo-shimmer" />}
-      {src && state !== "err" && (
-        <img
-          src={src}
-          alt=""
-          className="swipe-img"
-          style={{ opacity: state === "ok" ? 1 : 0 }}
-          onLoad={() => setState("ok")}
-          onError={() => setState("err")}
-        />
-      )}
-    </div>
-  );
-}
-
 /** Кнопка-закладка прямо на свайп-карточке. stopPropagation на pointerdown —
  *  чтобы тап по закладке не запускал жест свайпа. */
 function CardFavButton({ id, top = true }: { id: string; top?: boolean }) {
@@ -220,7 +180,7 @@ export function VacancyCardContent({ v, onDetails, top = true }: {
   top?: boolean;
 }) {
   const urgent = isUrgentShift(v.date);
-  const hasPhoto = !!v.interiorPhotoUrl;
+  const hasPhoto = !!(v.interiorPhotoUrl || v.companyPhotoUrl);
   const PayGlyph = v.payMethod ? PAY_ICON[v.payMethod] : null;
   // Когда фото нет, сумма уже написана крупно поверх карточки — и повторялась
   // строкой «≈ 2 800 ₽ за смену» на три сантиметра ниже. Два одинаковых числа
@@ -234,7 +194,9 @@ export function VacancyCardContent({ v, onDetails, top = true }: {
   return (
     <>
       <SwipePhoto
-        src={hasPhoto ? v.interiorPhotoUrl : undefined}
+        photos={[v.interiorPhotoUrl, v.companyPhotoUrl].filter(Boolean)}
+        label={v.companyName}
+        top={top}
         initial={(v.companyName || "С").charAt(0)}
         onHero={setHeroShown}
         hasHero={!large && !short}
@@ -246,7 +208,7 @@ export function VacancyCardContent({ v, onDetails, top = true }: {
           стоило ряду плашек перенестись на вторую строку (длинный район,
           крупный режим для слабого зрения) — плашки наезжали прямо на сумму.
           Теперь они не могут пересечься в принципе: это обычный поток. */}
-      <div className="swipe-top">
+      <div className="swipe-top vacancy-photo-meta">
         {/* верхний ряд: ставка слева, срочность/дистанция справа — без лишнего */}
         <div className="row" style={{ gap: 8, flexWrap: "wrap", rowGap: 8 }}>
         {/* Ставка в час. На низком экране прячется (класс swipe-rate): ряд
@@ -309,8 +271,8 @@ export function VacancyCardContent({ v, onDetails, top = true }: {
             слабого зрения), низ карточки обрезается — и обрезалось ровно то
             число, ради которого человек её и открыл. */}
         {!heroShown && (
-          <div style={{
-            marginTop: 4, fontWeight: 800, fontSize: "var(--text-md)",
+          <div className="shift-price" style={{
+            marginTop: 4, fontWeight: 800,
             fontVariantNumeric: "tabular-nums",
           }}>
             {v.rateType === "perShift" ? "" : "≈ "}
@@ -351,7 +313,7 @@ export function VacancyCardContent({ v, onDetails, top = true }: {
             и лента выглядела дёрганой при листании. */}
         <div className="swipe-cond">
           {PayGlyph && v.payMethod && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super)", fontWeight: 700 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--super-text)", fontWeight: 700 }}>
               <PayGlyph size={16} /> {PAY_METHOD_SHORT[v.payMethod]}
             </span>
           )}
@@ -410,7 +372,9 @@ export function SeekerCardContent({ s, onDetails, top = true }: {
   return (
     <>
       <SwipePhoto
-        src={hasPhoto ? photos[0] : undefined}
+        photos={photos}
+        label={s.name}
+        top={top}
         initial={(s.name || "?").charAt(0)}
         onHero={setHeroShown}
         hasHero={!large && !short}
@@ -489,7 +453,7 @@ export function SeekerCardContent({ s, onDetails, top = true }: {
 
         <div className="card-meta">
           {!heroShown && !!s.shiftsTotal && s.shiftsTotal > 0 && (
-            <div style={{ color: "var(--super)", fontWeight: 700 }}>
+            <div style={{ color: "var(--super-text)", fontWeight: 700 }}>
               <IconCheck size={15} />{" "}
               {reliabilityText(s.shiftsTotal, s.shiftsAttended, s.employersTotal)}
             </div>

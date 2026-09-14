@@ -282,8 +282,11 @@ def test_reschedule_rejects_past_and_zero_length(client):
     24 часа: оплата и комиссия вырастали втрое от одной опечатки.
     """
     emp_h, _seeker_h, _sid, _v, mid = _pair(client, 7401, 7402)
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    # Календарный день сервера может отличаться от дня смены (например,
+    # в среде UTC+08 уже завтра, а в Москве ещё сегодня).
+    today = date.fromisoformat(local_today())
+    yesterday = (today - timedelta(days=1)).isoformat()
+    tomorrow = (today + timedelta(days=1)).isoformat()
 
     past = client.post(
         f"/matches/{mid}/reschedule", headers=emp_h,

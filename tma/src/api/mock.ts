@@ -20,6 +20,7 @@ import type {
   VacancyInput,
   VerifyResult,
 } from "./endpoints";
+import type { InvitationPage, InvitationView, OutgoingInvitation } from "./invitations";
 
 const photo = (id: string) =>
   `https://images.unsplash.com/${id}?w=900&q=80&auto=format&fit=crop`;
@@ -46,7 +47,7 @@ const VACANCIES: Vacancy[] = [
     lng: 37.587,
     address: "ул. Льва Толстого, 16",
     city: "Москва",
-    interiorPhotoUrl: photo("photo-1559925393-8be0ec4767c8"),
+    interiorPhotoUrl: "/images/staffswipe-restaurant.webp",
     employerVerified: true,
     status: "active",
     distanceKm: 1.6,
@@ -130,7 +131,7 @@ const SEEKERS: Seeker[] = [
     inn: "771298765432",
     experienceTags: ["medBook", "english", "experienced", "selfEmployed"],
     rating: 4.9,
-    photoUrls: [photo("photo-1494790108377-be9c29b29330")],
+    photoUrls: ["/images/staffswipe-barista.webp"],
     about: "Опыт в fine dining, английский B2.",
     availableToday: true,
     shiftsTotal: 12,
@@ -165,6 +166,7 @@ const DEMO_MATCH_ID = "demo-match";
 const matches: MatchModel[] = [
   {
     id: DEMO_MATCH_ID,
+    userId: "s2",
     employerId: "emp1",
     vacancyId: "vac1",
     status: "confirmed",
@@ -186,6 +188,7 @@ const matches: MatchModel[] = [
   // кнопки «Мне не заплатили» — то есть половины экрана «Мои смены».
   {
     id: "demo-match-done",
+    userId: "s2",
     employerId: "emp2",
     vacancyId: "vac2",
     status: "completed",
@@ -318,6 +321,7 @@ export function sendSwipe(
       VACANCIES.find((v) => seeker.roles.includes(v.role)) ?? VACANCIES[0];
     const m: MatchModel = {
       id: uid(),
+      userId: seeker.id,
       employerId: mine.employerId,
       vacancyId: mine.id,
       status: "matched",
@@ -332,6 +336,7 @@ export function sendSwipe(
       shiftEnd: mine.endTime,
     };
     matches.unshift(m);
+    if (!demoInvited.has(seeker.id)) demoInvited.set(seeker.id, new Date().toISOString());
     messagesByMatch[m.id] = [
       {
         id: uid(),
@@ -669,6 +674,7 @@ export function updateMe(patch: {
   about?: string;
   experience_tags?: string[];
   photo_url?: string;
+  photo_urls?: string[];
   self_employed?: boolean;
   inn?: string;
   company_name?: string;
@@ -693,7 +699,14 @@ export function updateMe(patch: {
   if (patch.experience_tags !== undefined) {
     meProfile.experienceTags = patch.experience_tags;
   }
-  if (patch.photo_url !== undefined) meProfile.photoUrl = patch.photo_url;
+  if (patch.photo_url !== undefined) {
+    meProfile.photoUrl = patch.photo_url;
+    meProfile.photoUrls = patch.photo_url ? [patch.photo_url] : [];
+  }
+  if (patch.photo_urls !== undefined) {
+    meProfile.photoUrls = [...new Set(patch.photo_urls)].slice(0, 5);
+    meProfile.photoUrl = meProfile.photoUrls[0] ?? "";
+  }
   if (patch.self_employed !== undefined) {
     meProfile.selfEmployed = patch.self_employed;
   }
@@ -988,8 +1001,28 @@ export function fetchMyWorkers() {
   ]);
 }
 
-export function inviteWorker(_userId: string): Promise<boolean> {
+const demoInvited = new Map([["s2", minutesAgo(170)], ["s3", minutesAgo(10)]]);
+
+export function inviteWorker(userId: string): Promise<boolean> {
+  if (demoInvited.has(userId)) return Promise.resolve(false);
+  demoInvited.set(userId, new Date().toISOString());
   return Promise.resolve(true);
+}
+
+export function fetchOutgoingInvitations(view: InvitationView, offset: number): Promise<InvitationPage> {
+  const rows: OutgoingInvitation[] = [];
+  for (const [userId, invitedAt] of demoInvited) {
+    const user = SEEKERS.find(s => s.id === userId);
+    if (!user) continue;
+    const related = matches.filter(m => m.userId === userId);
+    if (view === "waiting" && related.length || view === "with_matches" && !related.length) continue;
+    const m = related.find(m => ["matched", "confirmed"].includes(m.status)) ?? related[0];
+    rows.push({ id: `invite-${userId}`, userId, name: user.name, photoUrl: user.photoUrls?.[0] ?? "", roles: user.roles,
+      invitedAt, status: m?.status ?? "waiting", matchesCount: related.length,
+      latestMatch: m ? { id: m.id, status: m.status, role: m.role!, shiftDate: m.shiftDate!, shiftStart: m.shiftStart!, shiftEnd: m.shiftEnd! } : null });
+  }
+  rows.sort((a, b) => b.invitedAt.localeCompare(a.invitedAt));
+  return Promise.resolve({ items: rows.slice(offset, offset + 20), total: rows.length, nextOffset: offset + 20 < rows.length ? offset + 20 : null });
 }
 
 export function fetchApplicants() {

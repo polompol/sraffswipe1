@@ -432,6 +432,15 @@ def create_vacancy(
     if emp is None:
         raise HTTPException(status_code=404, detail="Работодатель не найден")
 
+    v = prepare_vacancy(db, emp, body)
+    db.commit()
+    db.refresh(v)
+    after_publish(db, background, v)
+    return _to_out(v, emp, None)
+
+
+def prepare_vacancy(db: Session, emp: Employer, body: VacancyIn) -> Vacancy:
+    """Одинаковые проверки для новой формы и публикации черновика; без commit."""
     # Просроченный долг по комиссии → новые вакансии не публикуем до оплаты.
     if commission_overdue(db, emp.id):
         raise HTTPException(
@@ -448,8 +457,12 @@ def create_vacancy(
     data["city"] = normalize(data.get("city", ""))
     v = Vacancy(employer_id=emp.id, **data)
     db.add(v)
-    db.commit()
-    db.refresh(v)
+    db.flush()
+    return v
+
+
+def after_publish(db: Session, background: BackgroundTasks, v: Vacancy) -> None:
+    """Только после успешного сохранения, один раз на публикацию."""
     # Алерты по сохранённым поискам — в фоне, чтобы не тормозить публикацию.
     from .saved_searches import notify_matching_searches
 
@@ -457,8 +470,7 @@ def create_vacancy(
     # Авто-модерация: подозрительные формулировки (предоплата и т.п.).
     from ..moderation import auto_flag
 
-    auto_flag(db, "vacancy", v.id, body.description, body.role)
-    return _to_out(v, emp, None)
+    auto_flag(db, "vacancy", v.id, v.description, v.role)
 
 
 def _own_vacancy_or_404(db: Session, vacancy_id: str, principal: dict) -> Vacancy:

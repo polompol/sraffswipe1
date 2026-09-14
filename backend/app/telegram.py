@@ -29,7 +29,11 @@ def validate_init_data(
     pairs = parse_qsl(init_data, keep_blank_values=True)
     fields = dict(pairs)
     received_hash = fields.get("hash", "")
-    if not received_hash:
+    # compare_digest(str, str) бросает TypeError на кириллице. Отвергаем
+    # неверный формат подписи до сравнения, возвращая обычный отказ входа.
+    if len(received_hash) != 64 or any(
+        c not in "0123456789abcdef" for c in received_hash
+    ):
         return False
     secret_key = hmac.new(
         b"WebAppData", bot_token.encode(), hashlib.sha256

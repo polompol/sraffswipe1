@@ -1,20 +1,21 @@
 # StaffSwipe — Telegram Mini App
 
 Фронтенд Mini App на актуальном стеке: **React + TypeScript + Vite +
-@telegram-apps/sdk-react**. Серверное состояние — TanStack Query, клиентское —
+@tma.js/sdk-react**. Серверное состояние — TanStack Query, клиентское —
 Zustand, свайп — `@use-gesture/react` + `@react-spring/web`.
 
 ## Запуск
 
 ```bash
-npm install
+npm ci
 cp .env.example .env      # настройте VITE_API_BASE_URL / VITE_USE_BACKEND
 npm run dev               # vite dev-сервер
 npm run build             # tsc + production-сборка в dist/
 ```
 
-Без `VITE_USE_BACKEND=true` приложение работает на встроенных mock-данных —
-открывается в Telegram без сервера.
+Без `VITE_USE_BACKEND=true` приложение работает на встроенных демо-данных и
+открывается в обычном браузере без сервера. Выбор роли помечен как демо;
+смены и профили вымышлены. С настоящим сервером вход требует Telegram.
 
 ## Подключение к Telegram
 
@@ -25,16 +26,15 @@ npm run build             # tsc + production-сборка в dist/
 
 ## Структура
 
-```
-src/
-├── telegram/sdk.ts        # обёртка над @telegram-apps/sdk-react (init, haptics, back-button, share)
-├── api/                   # axios + JWT, endpoints, mock-данные
-├── store/session.ts       # zustand-сессия (jwt, роль)
-├── types/domain.ts        # доменные типы (зеркало backend)
-├── lib/format.ts          # форматирование дат/ставок
-└── features/              # onboarding, auth(role), feed(свайп), matches, chat,
-                           # profile, vacancy, shifts, admin, support
-```
+| Путь в `src/` | Назначение |
+| --- | --- |
+| `telegram/sdk.ts` | Обёртка над Telegram SDK: запуск, отклик на касание, навигация |
+| `api/` | Fetch + JWT, единый повторный вход, API и демо-данные |
+| `store/session.ts` | Сессия Zustand; очистка личных данных при выходе и смене аккаунта |
+| `lib/queryClient.ts` | Общий кэш TanStack Query |
+| `types/domain.ts` | Доменные типы, согласованные с сервером |
+| `lib/format.ts` | Календарные даты, время, ставки и суммы |
+| `features/` | Регистрация, лента, смены, чат, профиль, админка и поддержка |
 
 ## Монетизация
 

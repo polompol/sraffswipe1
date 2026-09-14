@@ -1,20 +1,21 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AppRole } from "@/types/domain";
 import { useSession } from "@/store/session";
 import { authTelegram, track } from "@/api/endpoints";
+import { useBackend } from "@/api/client";
 import { rawInitData, haptic, openExternal, insideTelegram } from "@/telegram/sdk";
 import { Button } from "@/components/Button";
 
 // Куда отправить человека, открывшего приложение в обычном браузере.
 const BOT_LINK = `https://t.me/${import.meta.env.VITE_BOT_USERNAME ?? "staffswipe_bot"}`;
-const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === "true";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 import { IconBriefcase, IconStore, IconChevronRight } from "@/components/Icons";
 import { OFFER_URL, PRIVACY_URL } from "@/lib/legal";
 import type { ComponentType } from "react";
 import { LS } from "@/lib/storage";
+import { Wordmark } from "@/components/Wordmark";
 import { allowRoleChoice } from "./browserAccess";
 
 
@@ -22,12 +23,14 @@ export function RolePage() {
   const nav = useNavigate();
   const setAuth = useSession((s) => s.setAuth);
   const [busy, setBusy] = useState<AppRole | null>(null);
+  const choosing = useRef(false);
   const [consent, setConsent] = useState(
     localStorage.getItem(LS.consent) === "1",
   );
 
   async function choose(role: AppRole) {
-    if (!consent) return;
+    if (!consent || choosing.current) return;
+    choosing.current = true;
     setBusy(role);
     haptic("light");
     try {
@@ -44,6 +47,7 @@ export function RolePage() {
       haptic("error");
       toast(apiError(e, "Не удалось войти. Попробуйте ещё раз через минуту"), "error");
       setBusy(null);
+      choosing.current = false;
     }
   }
 
@@ -57,11 +61,11 @@ export function RolePage() {
     }
   }
 
-  // В боевой сборке вне Telegram войти невозможно: подписи запуска нет,
-  // поэтому отправляем человека в бота. В mock/demo-сборке backend выключен
-  // и authTelegram использует безопасные локальные данные — там разрешаем
-  // пройти обе роли прямо в обычном браузере для QA и показа всех экранов.
-  if (!allowRoleChoice({ insideTelegram: insideTelegram(), useBackend: USE_BACKEND })) {
+  // Вне Telegram войти невозможно в принципе: подписи запуска нет, сервер
+  // отвечает отказом, и человек упирался в «Не удалось войти — проверьте
+  // интернет», хотя интернет ни при чём. Заходят так регулярно: по ссылке из
+  // рекламы, из истории браузера.
+  if (!allowRoleChoice({ insideTelegram: insideTelegram(), useBackend })) {
     return (
       <div className="app">
         <div
@@ -101,8 +105,15 @@ export function RolePage() {
           justifyContent: "center",
         }}
       >
+        <header className="registration-brand"><Wordmark /><span>Регистрация</span></header>
+        <div className="registration-step"><span>01 — Роль</span><span>02 — Профиль</span></div>
         <h1 className="h1" style={{ marginTop: 0 }}>С чего начнём?</h1>
         <p className="muted">Это можно поменять позже</p>
+        {!useBackend && (
+          <p className="muted small" role="status">
+            Демо-режим: смены и профили вымышлены. Можно попробовать обе роли.
+          </p>
+        )}
 
         <label
           className="card row"
@@ -111,6 +122,7 @@ export function RolePage() {
           <input
             type="checkbox"
             checked={consent}
+            disabled={busy !== null}
             onChange={(e) => acceptConsent(e.target.checked)}
             style={{ marginTop: 3 }}
           />
@@ -152,6 +164,7 @@ export function RolePage() {
             title="Я ищу подработку"
             sub="Официант, бариста, кальянщик, флорист, курьер"
             loading={busy === "seeker"}
+            disabled={!consent || busy !== null}
             onClick={() => choose("seeker")}
           />
           <RoleCard
@@ -160,6 +173,7 @@ export function RolePage() {
             title="Я ищу сотрудников"
             sub="Кафе, ресторан, бар, кофейня, кальянная"
             loading={busy === "employer"}
+            disabled={!consent || busy !== null}
             onClick={() => choose("employer")}
           />
         </div>
@@ -174,6 +188,7 @@ function RoleCard(props: {
   title: string;
   sub: string;
   loading: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   const { Icon } = props;
@@ -182,7 +197,8 @@ function RoleCard(props: {
       className="card row"
       style={{ textAlign: "left", gap: 16, cursor: "pointer" }}
       onClick={props.onClick}
-      disabled={props.loading}
+      disabled={props.disabled}
+      aria-busy={props.loading}
     >
       <span
         style={{

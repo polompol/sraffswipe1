@@ -1,7 +1,7 @@
 # StaffSwipe — Project Brain
 
 > Канонический контекст проекта для продолжения работы между чатами, моделями и сессиями.
-> Последняя синхронизация: 2026-09-12.
+> Последняя синхронизация: 2026-09-14; рабочая ветка `codex/staffswipe-release-candidate`.
 
 ## Зачем этот файл
 
@@ -29,7 +29,7 @@ Telegram Mini App для HoReCa: двусторонний marketplace сотру
 
 ## Техническая база
 
-- `tma/`: React 18 + TypeScript + Vite + `@telegram-apps/sdk-react` v3, TanStack Query, Zustand, HashRouter.
+- `tma/`: React 18 + TypeScript + Vite + `@tma.js/sdk-react` v3, TanStack Query, Zustand, HashRouter.
 - `backend/`: FastAPI + SQLAlchemy 2 + Pydantic v2 + Alembic.
 - PostgreSQL в production, SQLite для dev/tests.
 - `backend/bot/`: aiogram bot как отдельный процесс.
@@ -95,7 +95,7 @@ bash scripts/e2e.sh
 
 ## Текущее состояние
 
-По актуальной памяти репозитория продукт **готов к пилоту**; работа слита в `main`. Для реального запуска остаются внешние production-реквизиты/инфраструктура (сервер, домен, токен бота и связанные настройки — см. `docs/LAUNCH.md`).
+Полная готовность к пилоту **пока не подтверждена**. Прежняя запись «вся работа слита» устарела: дизайн и дополнительные исправления находятся в PR #54 и #59. Итоговая интеграция готовится в `codex/staffswipe-release-candidate`, без выкладки и реальных финансовых операций. Помимо внешних настроек остаются подтверждённые программные задачи по сообщениям и интерфейсу.
 
 При этом продуктовая работа продолжается: приоритет — довести UX и визуальную систему до полноценного, очень удобного Telegram Mini App без разрушения уже готовой доменной и финансовой логики.
 
@@ -133,18 +133,9 @@ bash scripts/e2e.sh
 
 ## Checkpoint
 
-**Дата:** 2026-09-12  
-**Статус:** continuity layer создан; кодовая база по текущей документации готова к пилоту.  
-**Фокус:** UX/visual polish + Telegram Mini App completeness + security/admin hardening без регрессий доменной логики.  
-**Следующий шаг:** при следующем запросе пользователя сначала определить конкретную область работы и сверить её с актуальным `main`; продолжать с существующей реализации, а не проектировать StaffSwipe заново.
-
-### Формат будущего обновления checkpoint
-
-```text
-Дата:
-Что сделано:
-Затронутые файлы/экраны:
-Что проверено:
-Открытые риски:
-Следующая конкретная задача:
-```
+**Дата:** 2026-09-14.
+**Что сделано:** финансовый hardening вынесен в `codex/staffswipe-financial-hardening` поверх `codex/staffswipe-release-candidate`: проверяемое пополнение ЮKassa, exactly-once зачисление, атомарные денежные изменения, реальные provider refunds с локальным резервом, durable `request_id`, reconciliation для `pending`/`succeeded`/`rejected`/`unknown`, безопасная GET-сверка по `provider_refund_id`, ограничение повторного POST безопасным окном, защита удаления аккаунта с финансовыми обязательствами, Alembic migration и регрессионные тесты SQLite/PostgreSQL.
+**Проверено:** head `0424c8973f04f9057689282d93f881fa4baaa4cb`: Backend CI — lint/FastAPI success и PostgreSQL success; E2E — success; Security — success по pip-audit, npm audit, gitleaks, CodeQL Python, CodeQL JavaScript/TypeScript и critical gate. Это автоматические проверки; реальные операции в ЮKassa и production-инфраструктура этим не подтверждаются.
+**Открытые программные задачи:** идемпотентная отправка сообщений и доступ к активным WebSocket; черновики/ошибки/история чата; доступность свайпов и reduced motion; согласованный статус админки и документов; дальнейшая доводка UX обеих ролей и trust/safety сценариев.
+**Внешние условия запуска:** настройки Telegram и платёжного провайдера, проверка webhook/возвратов на тестовом контуре ЮKassa, инфраструктура, настоящие устройства iOS/Android, резервное копирование и доступ единственного владельца. Реальные платежи этим checkpoint не подтверждаются.
+**Следующая конкретная задача:** после review/интеграции financial hardening закрыть переписку: exactly-once/idempotent send, активные WebSocket, retry/error/draft/history, затем прогнать backend + PostgreSQL + frontend/E2E + Security и только после этого переходить к следующему release-кандидату.

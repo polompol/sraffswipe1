@@ -1,29 +1,17 @@
+import { Button } from "./Button";
+import { IconStar } from "./Icons";
 import { useState } from "react";
 import { leaveReview } from "@/api/endpoints";
 import { haptic } from "@/telegram/sdk";
 import { toast } from "@/components/Toast";
 import { apiError } from "@/lib/errors";
 
-/** Звезда: залитая золотом или пустой контур. */
-function Star({ filled, size = 34 }: { filled: boolean; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.9 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z"
-        fill={filled ? "var(--gold)" : "none"}
-        stroke={filled ? "var(--gold)" : "var(--dislike, #cbb9a7)"}
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** Оценка смены ★1–5 в один тап. Показываем сразу после закрытия смены —
- *  момент наивысшей эмоции, отзывов собирается больше. Звёзды пустые и
- *  заполняются при выборе, чтобы не путать с уже выставленной оценкой. */
+/** Оценка и комментарий после закрытия смены. Выбор звезды — черновик;
+ *  отзыв уходит только по явному нажатию «Отправить отзыв». */
 export function ReviewStars({ matchId }: { matchId: string }) {
   const [done, setDone] = useState(false);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState(0); // выбранная оценка
   const [hover, setHover] = useState(0);   // подсветка при наведении
 
@@ -37,18 +25,19 @@ export function ReviewStars({ matchId }: { matchId: string }) {
 
   const active = hover || picked;
 
-  async function rate(stars: number) {
-    setPicked(stars);
+  async function rate() {
+    setBusy(true);
     haptic("success");
     try {
-      await leaveReview(matchId, stars, "");
+      await leaveReview(matchId, picked, comment.trim());
       setDone(true);
     } catch (e) {
       // Звёзды загорались и гасли без объяснения — человек жал ещё раз и
       // получал отказ «отзыв уже оставлен».
       haptic("error");
-      setPicked(0);
       toast(apiError(e, "Оценка не ушла — попробуйте ещё раз"), "error");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -69,7 +58,9 @@ export function ReviewStars({ matchId }: { matchId: string }) {
             key={s}
             aria-label={`Оценка ${s} из 5`}
             onMouseEnter={() => setHover(s)}
-            onClick={() => rate(s)}
+            aria-pressed={picked === s}
+            disabled={busy}
+            onClick={() => { setPicked(s); haptic("select"); }}
             style={{
               background: "none",
               border: "none",
@@ -80,10 +71,15 @@ export function ReviewStars({ matchId }: { matchId: string }) {
               lineHeight: 0,
             }}
           >
-            <Star filled={s <= active} />
+            <span style={{ color: s <= active ? "var(--super-text)" : "var(--muted)", opacity: s <= active ? 1 : .55 }}><IconStar size={32} /></span>
           </button>
         ))}
       </div>
+      {picked > 0 && <div className="stack" style={{ marginTop: 12, textAlign: "left" }}>
+        <label className="form-label" htmlFor={`review-${matchId}`}>Комментарий — по желанию</label>
+        <textarea id={`review-${matchId}`} className="input" maxLength={1000} rows={3} placeholder="Что понравилось и что можно улучшить?" value={comment} onChange={(e) => setComment(e.target.value)} />
+        <Button loading={busy} onClick={rate}>Отправить отзыв</Button>
+      </div>}
     </div>
   );
 }
