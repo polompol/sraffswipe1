@@ -1,4 +1,5 @@
 """Pending bank refunds must be resolvable without double-reserving money."""
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from app.db import SessionLocal
@@ -55,7 +56,7 @@ def test_reconcile_retries_pending_refund_with_same_request_id(client, monkeypat
     from app import financial_hardening as fh
     from app import reconcile as rec
 
-    employer_h, eid = _auth(client, "employer")
+    _, eid = _auth(client, "employer")
     _detach(eid, 830101)
     admin_h, _ = _auth(client, "seeker")
 
@@ -219,5 +220,69 @@ def test_reconcile_definitive_rejection_releases_reservation_once(client, monkey
         assert refund.status == "failed"
         assert allowance.reserved_amount == 0
         assert ent.balance_rub == 5000
+    finally:
+        db.close()
+
+
+def test_reconcile_does_not_replay_stale_unknown_refund(client, monkeypatch):
+    """YooKassa idempotency is 24h; after that POST retry can double-refund."""
+    from app import financial_hardening as fh
+    from app import reconcile as rec
+
+    _, eid = _auth(client, "employer")
+    _detach(eid, 830104)
+    admin_h, _ = _auth(client, "seeker")
+    client.post(
+        f"/admin/wallet/{eid}/credit",
+        headers=admin_h,
+        json={"amount_rub": 5000, "note": "fixture"},
+    )
+    purchase_id = _paid_purchase(eid, "charge-stale-unknown")
+    request_id = str(uuid4())
+
+    monkeypatch.setattr(
+        fh,
+        "_create_yookassa_refund",
+        lambda *args: ("unknown", None),
+    )
+    first = client.post(
+        f"/admin/payments/{purchase_id}/refund",
+        headers=admin_h,
+        json={"request_id": request_id, "amount_rub": 1200, "note": "timeout"},
+    )
+    assert first.status_code == 202, first.text
+
+    db = SessionLocal()
+    try:
+        refund = db.query(PaymentRefund).filter(
+            PaymentRefund.request_id == request_id
+        ).one()
+        refund.created_at = datetime.utcnow() - timedelta(hours=25)
+        db.commit()
+    finally:
+        db.close()
+
+    _prepare_reconcile(rec, monkeypatch)
+
+    def must_not_retry(*args):
+        raise AssertionError("stale refund POST must not be replayed")
+
+    monkeypatch.setattr(fh, "_create_yookassa_refund", must_not_retry)
+    out = client.post("/admin/payments/reconcile", headers=admin_h)
+    assert out.status_code == 200, out.text
+    body = out.json()
+    assert body["refunds_checked"] == 1
+    assert body["refunds_manual"] == 1
+
+    db = SessionLocal()
+    try:
+        refund = db.query(PaymentRefund).filter(
+            PaymentRefund.request_id == request_id
+        ).one()
+        allowance = db.get(RefundAllowance, purchase_id)
+        ent = db.get(Entitlement, eid)
+        assert refund.status == "pending"
+        assert allowance.reserved_amount == 1200
+        assert ent.balance_rub == 3800
     finally:
         db.close()
