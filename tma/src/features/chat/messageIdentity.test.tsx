@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Message } from "@/types/domain";
 
 const RECEIPT = "11111111-1111-4111-8111-111111111111";
 
@@ -109,6 +110,37 @@ describe("chat client receipt contract", () => {
       clientMessageId: RECEIPT,
     }));
 
+    unmount();
+    client.clear();
+  });
+
+  it("replaces the same sender receipt instead of adding a second bubble", async () => {
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+    const { useChatHistory } = await import("./useChatHistory");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const optimistic: Message = {
+      id: "old-local-copy",
+      clientMessageId: RECEIPT,
+      senderId: "u1",
+      text: "Привет",
+      isSystem: false,
+      createdAt: "2026-09-14T10:00:00Z",
+    };
+    client.setQueryData<Message[]>(["messages", "m1"], [optimistic]);
+
+    const { result, unmount } = renderHook(() => useChatHistory("m1"), { wrapper });
+    const confirmed: Message = {
+      ...optimistic,
+      id: "srv-2",
+      createdAt: "2026-09-14T10:00:01Z",
+    };
+
+    act(() => result.current.appendMessage(confirmed));
+
+    expect(client.getQueryData<Message[]>(["messages", "m1"])).toEqual([confirmed]);
     unmount();
     client.clear();
   });
