@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import base64
 import json
+import urllib.request
 from decimal import Decimal, InvalidOperation
 from typing import Annotated
 from urllib import error as urlerror
-import urllib.request
 from uuid import UUID
 
 from fastapi import Depends, HTTPException
