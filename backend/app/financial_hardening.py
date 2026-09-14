@@ -13,7 +13,7 @@ import urllib.request
 from decimal import Decimal, InvalidOperation
 from typing import Annotated
 from urllib import error as urlerror
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -78,32 +78,46 @@ def validated_wallet_topup(payment: dict) -> tuple[str, str, int]:
 
 
 def apply_verified_topup(db: Session, payment: dict, *, note: str) -> bool:
-    """Apply one verified provider charge exactly once.
+    """Apply one verified provider charge exactly once and atomically.
 
-    The unique provider charge is claimed *before* wallet mutation inside a
-    SAVEPOINT.  A concurrent webhook/reconcile loser therefore returns False
-    instead of crediting again or poisoning the outer SQLAlchemy transaction.
-    The caller owns the outer commit so Purchase + wallet + journal are atomic.
+    PostgreSQL keeps the unique provider-charge claim in a SAVEPOINT so a
+    concurrent duplicate does not poison the caller's outer transaction.
+    SQLite's legacy transaction mode can release a SAVEPOINT before a real
+    outer BEGIN exists, so there we use one DML ``ON CONFLICT DO NOTHING``
+    claim.  That starts the real write transaction before wallet mutation, so
+    a later outer rollback removes Purchase + wallet + journal together.
     """
     charge_id, owner_id, rub = validated_wallet_topup(payment)
     if db.get(Employer, owner_id) is None:
         raise ValueError("Платёж принадлежит неизвестному аккаунту")
 
-    purchase = Purchase(
-        owner_id=owner_id,
-        sku="wallet_topup",
-        provider="yookassa",
-        amount=rub,
-        currency="RUB",
-        status="paid",
-        provider_charge_id=charge_id,
-    )
-    try:
-        with db.begin_nested():
-            db.add(purchase)
-            db.flush()
-    except IntegrityError:
-        return False
+    values = {
+        "owner_id": owner_id,
+        "sku": "wallet_topup",
+        "provider": "yookassa",
+        "amount": rub,
+        "currency": "RUB",
+        "status": "paid",
+        "provider_charge_id": charge_id,
+    }
+    if db.get_bind().dialect.name == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        result = db.execute(
+            sqlite_insert(Purchase)
+            .values(id=str(uuid4()), **values)
+            .on_conflict_do_nothing(index_elements=["provider_charge_id"])
+        )
+        if result.rowcount != 1:
+            return False
+    else:
+        purchase = Purchase(**values)
+        try:
+            with db.begin_nested():
+                db.add(purchase)
+                db.flush()
+        except IntegrityError:
+            return False
 
     billing.credit_wallet(
         db,
