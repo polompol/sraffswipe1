@@ -260,4 +260,6 @@ export interface Message {
   /** Когда написано. Для спора это главное: «написал в 23:40, что не выйдет»
    *  без времени — не довод, а слова. */
   createdAt: string;
+  /** Идемпотентный receipt клиента: связывает retry/outbox с серверной записью. */
+  clientMessageId?: string;
 }

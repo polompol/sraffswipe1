@@ -25,6 +25,17 @@ import { toast } from "@/components/Toast";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { useChatHistory } from "./useChatHistory";
 import { useChatSocket } from "./useChatSocket";
+import {
+  clearChatDraft,
+  markChatMessageFailed,
+  markChatMessageSending,
+  queueChatMessage,
+  readChatDraft,
+  removeChatOutboxItem,
+  restoreChatOutbox,
+  writeChatDraft,
+  type ChatOutboxItem,
+} from "./chatPersistence";
 import { EmptyState } from "@/components/EmptyState";
 import { IconSend, IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
 
@@ -59,7 +70,10 @@ export function ChatPage() {
   const qc = useQueryClient();
   const myId = useSession((s) => s.userId);
   const role = useSession((s) => s.role);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => readChatDraft(matchId));
+  const [outbox, setOutbox] = useState<ChatOutboxItem[]>(() =>
+    restoreChatOutbox(matchId),
+  );
   // Есть ли живое соединение. Нужно, чтобы честно сказать человеку «связь
   // потеряна, восстанавливаем» вместо молчаливого чата, который выглядит
   // рабочим, но ничего не получает.
@@ -103,6 +117,15 @@ export function ChatPage() {
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
+  useEffect(() => {
+    setText(readChatDraft(matchId));
+    setOutbox(restoreChatOutbox(matchId));
+  }, [matchId]);
+
+  useEffect(() => {
+    writeChatDraft(matchId, text);
+  }, [matchId, text]);
+
   const {
     messages,
     isLoading,
@@ -120,6 +143,11 @@ export function ChatPage() {
   // догружается старая переписка, список меняется, а прокручивать вниз нельзя
   // — человек только что нажал «показать более ранние» и смотрит наверх.
   // Что я в этом чате уже отправлял — чтобы не предлагать это снова кнопкой.
+  useEffect(() => {
+    if (!messages) return;
+    setOutbox(restoreChatOutbox(matchId, messages));
+  }, [matchId, messages]);
+
   const mySent = new Set(
     (messages ?? [])
       .filter((m: Message) => !m.isSystem && m.senderId === (myId ?? "me"))
@@ -182,14 +210,33 @@ export function ChatPage() {
     onLive: setLive,
   });
 
-  async function deliver(t: string) {
+  async function deliver(t: string, retryId?: string) {
+    const clientMessageId = retryId ?? crypto.randomUUID();
+    const pending = retryId
+      ? markChatMessageSending(matchId, clientMessageId)
+      : queueChatMessage(matchId, t, clientMessageId);
+    if (!pending) return;
+    setOutbox((current) => [
+      ...current.filter((row) => row.clientMessageId !== clientMessageId),
+      pending,
+    ]);
+
     try {
-      const msg = await sendMessage(matchId, t);
+      const msg = await sendMessage(matchId, t, clientMessageId);
       appendMessage(msg); // мгновенно показываем; WS-echo дедуплицируется
+      removeChatOutboxItem(matchId, clientMessageId);
+      setOutbox((current) =>
+        current.filter((row) => row.clientMessageId !== clientMessageId),
+      );
     } catch {
       haptic("error");
-      setText(t); // вернуть текст, чтобы не потерять сообщение
-      toast("Не отправилось — нажмите отправить ещё раз", "error");
+      const failed = markChatMessageFailed(matchId, clientMessageId);
+      if (failed) {
+        setOutbox((current) => current.map((row) =>
+          row.clientMessageId === clientMessageId ? failed : row,
+        ));
+      }
+      toast("Не отправилось — сообщение сохранено для повтора", "error");
     }
   }
 
@@ -197,6 +244,7 @@ export function ChatPage() {
     const t = text.trim();
     if (!t) return;
     setText("");
+    clearChatDraft(matchId);
     await deliver(t);
   }
 
@@ -393,6 +441,29 @@ export function ChatPage() {
             </div>
           );
         })}
+        {outbox.map((pending) => (
+          <div
+            key={pending.clientMessageId}
+            className="bubble mine"
+            style={{ opacity: pending.status === "sending" ? 0.68 : 1 }}
+          >
+            {pending.text}
+            <span className="bubble-at">
+              {pending.status === "sending" ? (
+                "Отправляем…"
+              ) : (
+                <button
+                  type="button"
+                  className="text-btn"
+                  style={{ fontSize: "inherit", padding: 0 }}
+                  onClick={() => void deliver(pending.text, pending.clientMessageId)}
+                >
+                  Не отправилось · Повторить
+                </button>
+              )}
+            </span>
+          </div>
+        ))}
         </div>
         {/* Якорь для прокрутки и одновременно распорка под нижнюю панель.
             Без него чат открывался на самом первом сообщении: свежие
