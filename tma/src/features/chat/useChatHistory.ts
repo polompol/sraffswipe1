@@ -4,13 +4,15 @@
  * Сервер отдаёт последние 100 сообщений — у смены с долгой перепиской
  * остальное лежит выше и подтягивается по кнопке. Добавление идёт через один
  * и тот же путь и для отправленного нами, и для пришедшего по сокету: там
- * дедупликация по id, иначе собственное сообщение задваивается его же эхом.
+ * дедупликация по серверному id и клиентской квитанции, иначе собственное
+ * сообщение задваивается его же эхом/повторной доставкой.
  */
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMessages, MESSAGES_PAGE } from "@/api/endpoints";
 import type { Message } from "@/types/domain";
 import { toast } from "@/components/Toast";
+import { mergeConfirmedMessage } from "./messageIdentity";
 
 export function useChatHistory(matchId: string) {
   const qc = useQueryClient();
@@ -46,13 +48,11 @@ export function useChatHistory(matchId: string) {
     }
   }
 
-  /** Добавить сообщение в кэш с дедупликацией по id (эхо от сокета не задвоит). */
+  /** Добавить server truth без дубля по server id или sender+client receipt. */
   function appendMessage(msg: Message) {
-    qc.setQueryData<Message[]>(["messages", matchId], (old) => {
-      const list = old ?? [];
-      if (list.some((m) => m.id === msg.id)) return list;
-      return [...list, msg];
-    });
+    qc.setQueryData<Message[]>(["messages", matchId], (old) =>
+      mergeConfirmedMessage(old ?? [], msg),
+    );
   }
 
   return {
