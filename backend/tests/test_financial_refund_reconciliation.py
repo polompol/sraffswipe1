@@ -286,3 +286,75 @@ def test_reconcile_does_not_replay_stale_unknown_refund(client, monkeypatch):
         assert ent.balance_rub == 3800
     finally:
         db.close()
+
+
+def test_reconcile_stale_refund_with_provider_id_uses_get(client, monkeypatch):
+    from app import financial_hardening as fh
+    from app import reconcile as rec
+
+    _, eid = _auth(client, "employer")
+    _detach(eid, 830105)
+    admin_h, _ = _auth(client, "seeker")
+    client.post(
+        f"/admin/wallet/{eid}/credit",
+        headers=admin_h,
+        json={"amount_rub": 5000, "note": "fixture"},
+    )
+    purchase_id = _paid_purchase(eid, "charge-stale-known")
+    request_id = str(uuid4())
+    provider_id = "provider-refund-known-1"
+
+    monkeypatch.setattr(
+        fh,
+        "_create_yookassa_refund",
+        lambda *args: ("unknown", provider_id),
+    )
+    first = client.post(
+        f"/admin/payments/{purchase_id}/refund",
+        headers=admin_h,
+        json={"request_id": request_id, "amount_rub": 900, "note": "pending"},
+    )
+    assert first.status_code == 202, first.text
+
+    db = SessionLocal()
+    try:
+        refund = db.query(PaymentRefund).filter(
+            PaymentRefund.request_id == request_id
+        ).one()
+        refund.created_at = datetime.utcnow() - timedelta(hours=25)
+        db.commit()
+    finally:
+        db.close()
+
+    _prepare_reconcile(rec, monkeypatch)
+
+    def must_not_retry(*args):
+        raise AssertionError("known provider refund must be checked with GET")
+
+    seen: list[str] = []
+
+    def fetched(refund_id: str):
+        seen.append(refund_id)
+        return "succeeded", refund_id
+
+    monkeypatch.setattr(fh, "_create_yookassa_refund", must_not_retry)
+    monkeypatch.setattr(fh, "_fetch_yookassa_refund", fetched, raising=False)
+    out = client.post("/admin/payments/reconcile", headers=admin_h)
+    assert out.status_code == 200, out.text
+    body = out.json()
+    assert body["refunds_checked"] == 1
+    assert body["refunds_succeeded"] == 1
+    assert seen == [provider_id]
+
+    db = SessionLocal()
+    try:
+        refund = db.query(PaymentRefund).filter(
+            PaymentRefund.request_id == request_id
+        ).one()
+        allowance = db.get(RefundAllowance, purchase_id)
+        ent = db.get(Entitlement, eid)
+        assert refund.status == "succeeded"
+        assert allowance.reserved_amount == 900
+        assert ent.balance_rub == 4100
+    finally:
+        db.close()
