@@ -20,6 +20,13 @@ interface Handlers {
   onSystem: () => void;
   /** Есть ли сейчас живое соединение (для значка «онлайн»). */
   onLive: (live: boolean) => void;
+  /** Сервер окончательно запретил этот чат — повторять соединение нельзя. */
+  onAccessLost?: () => void;
+}
+
+/** 4401/4403 означают не плохую сеть, а окончательную потерю доступа. */
+export function shouldReconnectChatSocket(code: number): boolean {
+  return code !== 4401 && code !== 4403;
 }
 
 export function useChatSocket(matchId: string, handlers: Handlers): void {
@@ -82,7 +89,14 @@ export function useChatSocket(matchId: string, handlers: Handlers): void {
         attempt += 1;
         timer = setTimeout(connect, delay);
       };
-      ws.onclose = retry;
+      ws.onclose = (event) => {
+        ref.current.onLive(false);
+        if (!shouldReconnectChatSocket(event.code)) {
+          ref.current.onAccessLost?.();
+          return;
+        }
+        retry();
+      };
       ws.onerror = () => ws?.close();
       ws.onmessage = onFrame;
     };
