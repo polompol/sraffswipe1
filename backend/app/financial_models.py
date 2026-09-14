@@ -4,8 +4,8 @@ They live outside ``models.py`` so the existing domain model stays stable while
 refund state gets its own auditable records. Foreign keys use table names, so
 this module does not import the domain models and can be registered early.
 """
-from datetime import UTC, datetime
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
