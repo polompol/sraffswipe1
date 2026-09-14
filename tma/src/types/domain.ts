@@ -254,6 +254,8 @@ export interface MatchModel {
  */
 export interface Message {
   id: string;
+  /** Клиентская квитанция сообщения. Одинакова для всех повторов одной отправки. */
+  clientMessageId?: string;
   senderId: string;
   text: string;
   isSystem: boolean;

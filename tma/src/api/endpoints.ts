@@ -145,13 +145,25 @@ export async function fetchMessages(
   return data;
 }
 
+export interface ChatMessageInput {
+  text: string;
+  clientMessageId: string;
+}
+
 export async function sendMessage(
   matchId: string,
-  text: string,
+  input: string | ChatMessageInput,
 ): Promise<Message> {
-  if (!USE_BACKEND) return mock.sendMessage(matchId, text);
+  const text = typeof input === "string" ? input : input.text;
+  const clientMessageId =
+    typeof input === "string" ? undefined : input.clientMessageId;
+  if (!USE_BACKEND) {
+    const message = await mock.sendMessage(matchId, text);
+    return clientMessageId ? { ...message, clientMessageId } : message;
+  }
   const { data } = await api.post<Message>(`/matches/${matchId}/messages`, {
     text,
+    ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
   });
   return data;
 }

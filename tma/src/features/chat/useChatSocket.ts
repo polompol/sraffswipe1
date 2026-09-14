@@ -43,6 +43,7 @@ export function useChatSocket(matchId: string, handlers: Handlers): void {
         const raw = JSON.parse(ev.data);
         ref.current.onMessage({
           id: raw.id,
+          clientMessageId: raw.client_message_id ?? undefined,
           senderId: raw.sender_id,
           text: raw.text,
           isSystem: Boolean(raw.is_system),
