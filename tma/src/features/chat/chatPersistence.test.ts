@@ -43,6 +43,20 @@ describe("черновик чата", () => {
     expect(readChatDraft("match-1")).toBe("Личный черновик");
     expect(restoreChatOutbox("match-1")).toHaveLength(1);
   });
+
+  it("никогда не пишет текст переписки в persistent browser storage", () => {
+    localStorage.setItem("ss_uid", "user-1");
+    writeChatDraft("match-1", "секретный текст черновика");
+    queueChatMessage(
+      "match-1",
+      "секретный текст отправки",
+      "44444444-4444-4444-8444-444444444444",
+    );
+
+    expect(localStorage.getItem("ss_chat_draft:user-1:match-1")).toBeNull();
+    expect(localStorage.getItem("ss_chat_outbox:user-1:match-1")).toBeNull();
+    expect(Object.values(localStorage).join(" ")).not.toContain("секретный текст");
+  });
 });
 
 describe("неопределённая отправка", () => {
@@ -57,7 +71,7 @@ describe("неопределённая отправка", () => {
     expect(retry?.status).toBe("sending");
   });
 
-  it("после перезапуска не предлагает повтор уже подтверждённого сообщения", () => {
+  it("не предлагает повтор уже подтверждённого сервером сообщения", () => {
     const confirmedId = "11111111-1111-4111-8111-111111111111";
     const unknownId = "22222222-2222-4222-8222-222222222222";
     queueChatMessage("match-1", "Первое", confirmedId);
