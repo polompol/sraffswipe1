@@ -98,8 +98,13 @@ def test_reconcile_restores_a_lost_payment(client, monkeypatch):
     monkeypatch.setattr(rec.settings, "yookassa_secret_key", "key", False)
     monkeypatch.setattr(rec, "_fetch_payments", lambda *a, **kw: [{
         "id": "потерянный-платёж-1",
+        "status": "succeeded",
         "amount": {"value": "3000.00", "currency": "RUB"},
-        "metadata": {"owner_id": eid, "sku": "wallet_topup"},
+        "metadata": {
+            "owner_id": eid,
+            "sku": "wallet_topup",
+            "amount_rub": "3000",
+        },
     }])
 
     r = client.post("/admin/payments/reconcile", headers=admin_h)
@@ -132,8 +137,13 @@ def test_reconcile_skips_already_processed(client, monkeypatch):
     monkeypatch.setattr(rec.settings, "yookassa_secret_key", "key", False)
     monkeypatch.setattr(rec, "_fetch_payments", lambda *a, **kw: [{
         "id": "уже-проведён",
+        "status": "succeeded",
         "amount": {"value": "1000.00", "currency": "RUB"},
-        "metadata": {"owner_id": eid, "sku": "wallet_topup"},
+        "metadata": {
+            "owner_id": eid,
+            "sku": "wallet_topup",
+            "amount_rub": "1000",
+        },
     }])
     r = client.post("/admin/payments/reconcile", headers=admin_h)
     assert r.json()["restored"] == 0
