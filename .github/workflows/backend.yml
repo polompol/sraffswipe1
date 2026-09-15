@@ -11,12 +11,9 @@ on:
       - "tma/src/types/**"
       - "tma/src/api/**"
       - ".github/workflows/backend.yml"
+  # Release-gate contract: every PR head must have fresh backend evidence,
+  # including PostgreSQL and recovery verification, even for docs/ops-only changes.
   pull_request:
-    paths:
-      - "backend/**"
-      - "tma/src/types/**"
-      - "tma/src/api/**"
-      - ".github/workflows/backend.yml"
 
 jobs:
   test:
