@@ -6,9 +6,11 @@ have to re-implement status rules and then discover mismatches after a tap.
 """
 
 import pytest
+from fastapi import HTTPException
 
 from app.db import SessionLocal
 from app.models import Match
+import app.routers.matches as matches_router
 
 
 def _auth(client, role: str):
@@ -40,6 +42,84 @@ def test_confirm_cannot_mutate_terminal_match(client, make_match, terminal_statu
         assert match.status == terminal_status
         assert match.confirmed_by_seeker is False
         assert match.confirmed_by_employer is False
+    finally:
+        db.close()
+
+
+def test_confirm_requires_matching_role_and_participant(client, make_match):
+    _, employer_id = _auth(client, "employer")
+    _, seeker_id = _auth(client, "seeker")
+    match_id = make_match(
+        employer_id,
+        seeker_id,
+        status="matched",
+        confirmed_by_seeker=False,
+        confirmed_by_employer=False,
+    )
+
+    db = SessionLocal()
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            matches_router.confirm(
+                match_id,
+                force=True,
+                db=db,
+                # The ID belongs to the seeker side but the token claims the
+                # employer role. Identity alone must never cross roles.
+                principal={"id": seeker_id, "role": "employer"},
+            )
+        assert exc_info.value.status_code == 403
+        db.rollback()
+
+        stored = db.get(Match, match_id)
+        assert stored is not None
+        assert stored.confirmed_by_seeker is False
+        assert stored.confirmed_by_employer is False
+        assert stored.status == "matched"
+    finally:
+        db.close()
+
+
+def test_repeat_confirm_is_idempotent_without_duplicate_notification(
+    client, make_match, monkeypatch
+):
+    _, employer_id = _auth(client, "employer")
+    _, seeker_id = _auth(client, "seeker")
+    match_id = make_match(
+        employer_id,
+        seeker_id,
+        status="matched",
+        confirmed_by_seeker=False,
+        confirmed_by_employer=False,
+    )
+    notifications: list[tuple[str, str]] = []
+
+    def fake_notify(db, owner_id, text, **kwargs):
+        notifications.append((owner_id, text))
+
+    monkeypatch.setattr(matches_router, "notify_owner", fake_notify)
+
+    db = SessionLocal()
+    try:
+        principal = {"id": seeker_id, "role": "seeker"}
+        first = matches_router.confirm(
+            match_id, force=True, db=db, principal=principal
+        )
+        second = matches_router.confirm(
+            match_id, force=True, db=db, principal=principal
+        )
+
+        assert first.confirmed_by_seeker is True
+        assert second.confirmed_by_seeker is True
+        assert second.status == "matched"
+        assert len(notifications) == 1
+        assert notifications[0][0] == employer_id
+
+        stored = db.get(Match, match_id)
+        assert stored is not None
+        assert stored.confirmed_by_seeker is True
+        assert stored.confirmed_by_employer is False
+        assert stored.status == "matched"
     finally:
         db.close()
 
