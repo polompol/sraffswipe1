@@ -1,0 +1,165 @@
+name: TMA match actions green patch
+
+on:
+  push:
+    branches: [codex/staffswipe-production-readiness]
+    paths: [.github/workflows/zz-tma-match-actions-green.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tma/package-lock.json
+      - name: Apply server-owned action visibility
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          domain = Path('tma/src/types/domain.ts')
+          text = domain.read_text(encoding='utf-8')
+          anchor = 'export interface MatchModel {\n'
+          addition = '''export type MatchAction =\n  | "confirm"\n  | "cancel"\n  | "propose_reschedule"\n  | "accept_reschedule"\n  | "decline_reschedule"\n  | "checkin"\n  | "attendance"\n  | "not_held"\n  | "set_hours"\n  | "dispute";\n\nexport interface MatchModel {\n'''
+          if anchor not in text:
+              raise SystemExit('MatchModel anchor missing')
+          text = text.replace(anchor, addition, 1)
+          anchor = '  status: MatchStatus;\n  confirmedBySeeker: boolean;\n'
+          replacement = '''  status: MatchStatus;\n  /** Server-owned capabilities for state-changing shift actions. Missing means\n   * fail closed on a live backend; demo mode keeps its explicit legacy rules. */\n  allowedActions?: MatchAction[];\n  confirmedBySeeker: boolean;\n'''
+          if anchor not in text:
+              raise SystemExit('MatchModel status anchor missing')
+          domain.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
+
+          helper = Path('tma/src/features/matches/matchActions.ts')
+          helper.write_text('''import type { MatchAction, MatchModel } from "@/types/domain";\n\n/** State-changing controls are fail-closed when the live API omitted its\n * capability list. Status is presentation data, never an authorization hint. */\nexport function hasMatchAction(match: MatchModel | null | undefined, action: MatchAction): boolean {\n  return Array.isArray(match?.allowedActions) && match.allowedActions.includes(action);\n}\n\nexport function hasAnyMatchAction(\n  match: MatchModel | null | undefined,\n  actions: readonly MatchAction[],\n): boolean {\n  return actions.some((action) => hasMatchAction(match, action));\n}\n''', encoding='utf-8')
+
+          matches = Path('tma/src/features/matches/MatchesPage.tsx')
+          text = matches.read_text(encoding='utf-8')
+          anchor = '} from "@/api/endpoints";\nimport { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";\n'
+          replacement = '''} from "@/api/endpoints";\nimport { useBackend } from "@/api/client";\nimport { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";\nimport { hasMatchAction } from "./matchActions";\n'''
+          if anchor not in text:
+              raise SystemExit('MatchesPage import anchor missing')
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''          const started = shiftStarted(m);\n          const live = m.status === "confirmed" && !m.disputed;\n          // Позвать оператора можно на любом этапе живой смены: беда бывает\n          // и до неё («требуют залог за форму»). А «смена не состоялась» —\n          // только после окончания, это решается внутри самой шторки.\n          const hasTrouble = live || (role === "seeker" && canReportNoPay(m));\n'''
+          replacement = '''          const started = shiftStarted(m);\n          const live = m.status === "confirmed" && !m.disputed;\n          // На живом backend разрешение на state-changing CTA приходит с\n          // сервера. Локальное время остаётся только для поясняющего текста.\n          const canAttendance = useBackend\n            ? hasMatchAction(m, "attendance")\n            : live && role === "employer" && started && !m.employerCheckedIn;\n          const canCheckin = useBackend\n            ? hasMatchAction(m, "checkin")\n            : live && role === "seeker" && started && !m.seekerCheckedIn;\n          const canNotHeld = useBackend\n            ? hasMatchAction(m, "not_held")\n            : live && shiftEnded(m);\n          const canDispute = useBackend ? hasMatchAction(m, "dispute") : live;\n          const canNoPay =\n            role === "seeker"\n            && canReportNoPay(m)\n            && (!useBackend || hasMatchAction(m, "dispute"));\n          const hasTrouble = canNotHeld || canDispute || canNoPay;\n'''
+          if anchor not in text:
+              raise SystemExit('MatchesPage action block anchor missing')
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''              {m.status === "matched" && <div style={{ marginTop: 12 }}><Button onClick={() => nav(`/chat/${m.id}`)}>Обсудить и подтвердить</Button></div>}\n'''
+          replacement = '''              {m.status === "matched" && (\n                <div style={{ marginTop: 12 }}>\n                  <Button onClick={() => nav(`/chat/${m.id}`)}>\n                    {useBackend && !hasMatchAction(m, "confirm")\n                      ? "Открыть чат"\n                      : "Обсудить и подтвердить"}\n                  </Button>\n                </div>\n              )}\n'''
+          if anchor not in text:
+              raise SystemExit('MatchesPage matched CTA anchor missing')
+          text = text.replace(anchor, replacement, 1)
+
+          text = text.replace(
+              '{live && role === "employer" && started && (',
+              '{role === "employer" && (useBackend ? canAttendance || !!m.employerCheckedIn : live && started) && (',
+              1,
+          )
+          text = text.replace(
+              '{m.checkinCode && !m.employerCheckedIn && (',
+              '{m.checkinCode && !m.employerCheckedIn && (!useBackend || canAttendance) && (',
+              1,
+          )
+          employer_branch = '''                  {m.employerCheckedIn ? (\n                    <div className="muted" style={{ marginTop: 10 }}>\n                      Вы подтвердили выход ✓\n                    </div>\n                  ) : (\n                    <div style={{ marginTop: 12 }}>\n                      <Button onClick={() => mark(m.id, true)}>\n                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>\n                          <IconCheck size={16} /> Подтвердить выход\n                        </span>\n                      </Button>\n                    </div>\n                  )}\n'''
+          employer_replacement = '''                  {m.employerCheckedIn ? (\n                    <div className="muted" style={{ marginTop: 10 }}>\n                      Вы подтвердили выход ✓\n                    </div>\n                  ) : canAttendance ? (\n                    <div style={{ marginTop: 12 }}>\n                      <Button onClick={() => mark(m.id, true)}>\n                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>\n                          <IconCheck size={16} /> Подтвердить выход\n                        </span>\n                      </Button>\n                    </div>\n                  ) : null}\n'''
+          if employer_branch not in text:
+              raise SystemExit('MatchesPage employer CTA anchor missing')
+          text = text.replace(employer_branch, employer_replacement, 1)
+
+          text = text.replace(
+              '{live && role === "seeker" && started && (',
+              '{role === "seeker" && (useBackend ? canCheckin || !!m.seekerCheckedIn : live && started) && (',
+              1,
+          )
+
+          text = text.replace(
+              '{troubleFor.status === "confirmed" && !troubleFor.disputed && shiftEnded(troubleFor) && (',
+              '{(useBackend ? hasMatchAction(troubleFor, "not_held") : troubleFor.status === "confirmed" && !troubleFor.disputed && shiftEnded(troubleFor)) && (',
+              1,
+          )
+          text = text.replace(
+              '{troubleFor.status === "confirmed" && !troubleFor.disputed && (',
+              '{(useBackend ? hasMatchAction(troubleFor, "dispute") : troubleFor.status === "confirmed" && !troubleFor.disputed) && (',
+              1,
+          )
+          text = text.replace(
+              '{role === "seeker" && canReportNoPay(troubleFor) && (',
+              '{role === "seeker" && canReportNoPay(troubleFor) && (!useBackend || hasMatchAction(troubleFor, "dispute")) && (',
+              1,
+          )
+          text = text.replace(
+              '''{troubleFor.status === "confirmed"\n                && !troubleFor.disputed\n                && shiftEnded(troubleFor)\n                ? " Если смены не было — отметьте это, комиссию не возьмём."\n                : ""}''',
+              '''{(useBackend\n                ? hasMatchAction(troubleFor, "not_held")\n                : troubleFor.status === "confirmed"\n                  && !troubleFor.disputed\n                  && shiftEnded(troubleFor))\n                ? " Если смены не было — отметьте это, комиссию не возьмём."\n                : ""}''',
+              1,
+          )
+          matches.write_text(text, encoding='utf-8')
+
+          chat = Path('tma/src/features/chat/ChatPage.tsx')
+          text = chat.read_text(encoding='utf-8')
+          anchor = 'import { MessageList } from "./MessageList";\n'
+          replacement = 'import { MessageList } from "./MessageList";\nimport { hasMatchAction } from "@/features/matches/matchActions";\n'
+          if anchor not in text:
+              raise SystemExit('ChatPage import anchor missing')
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''  // Смена ещё «живая»: не отменена и не закрыта сама собой.\n  const alive =\n    !!srvMatch && !["cancelled", "expired", "completed"].includes(srvMatch.status);\n  // Смена ещё не началась — по отметкам И ПО ВРЕМЕНИ. Только по отметкам было\n  // мало: сервер теперь отказывает в отмене и переносе начавшейся смены (это\n  // была универсальная кнопка «не платить»), а приложение об этом не знало и\n  // показывало кнопки, которые отвечали ошибкой.\n  const notStarted =\n    !!srvMatch\n    && !srvMatch.seekerCheckedIn\n    && !srvMatch.employerCheckedIn\n    && !shiftStarted(srvMatch);\n  const canCancel = alive && notStarted;\n  const canMove = role === "employer" && alive && notStarted;\n  // Уточнить часы можно только в первые сутки после смены.\n  const canSetHours =\n    role === "employer" && alive && !!srvMatch && shiftEnded(srvMatch);\n  const canAct = canCancel || canMove || canSetHours;\n'''
+          replacement = '''  // На живом backend разрешения state-changing действий принадлежат серверу.\n  // Локальные status/time правила остаются только для mock/demo, чтобы демо\n  // работало без сервера и при этом production никогда не угадывал доступ.\n  const alive =\n    !!srvMatch && !["cancelled", "expired", "completed"].includes(srvMatch.status);\n  const notStarted =\n    !!srvMatch\n    && !srvMatch.seekerCheckedIn\n    && !srvMatch.employerCheckedIn\n    && !shiftStarted(srvMatch);\n  const canConfirm = !!srvMatch && (useBackend\n    ? hasMatchAction(srvMatch, "confirm")\n    : !iConfirmed && alive);\n  const canCancel = !!srvMatch && (useBackend\n    ? hasMatchAction(srvMatch, "cancel")\n    : alive && notStarted);\n  const canMove = role === "employer" && !!srvMatch && (useBackend\n    ? hasMatchAction(srvMatch, "propose_reschedule")\n    : alive && notStarted);\n  const canSetHours = role === "employer" && !!srvMatch && (useBackend\n    ? hasMatchAction(srvMatch, "set_hours")\n    : alive && shiftEnded(srvMatch));\n  const canAcceptMove = role === "seeker" && !!srvMatch && (useBackend\n    ? hasMatchAction(srvMatch, "accept_reschedule")\n    : !!srvMatch.rescheduleDate);\n  const canDeclineMove = role === "seeker" && !!srvMatch && (useBackend\n    ? hasMatchAction(srvMatch, "decline_reschedule")\n    : !!srvMatch.rescheduleDate);\n  const canAct = canCancel || canMove || canSetHours;\n'''
+          if anchor not in text:
+              raise SystemExit('ChatPage action block anchor missing')
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''          <Button\n            variant={iConfirmed ? "secondary" : "primary"}\n            disabled={iConfirmed}\n            onClick={() => doConfirm()}\n          >\n'''
+          replacement = '''          {(!useBackend || canConfirm || iConfirmed) && (\n          <Button\n            variant={iConfirmed ? "secondary" : "primary"}\n            disabled={useBackend ? !canConfirm : iConfirmed}\n            onClick={() => doConfirm()}\n          >\n'''
+          if anchor not in text:
+              raise SystemExit('ChatPage confirm open anchor missing')
+          text = text.replace(anchor, replacement, 1)
+          anchor = '''            </span>\n          </Button>\n          {/* Одна дверь вместо ряда кнопок.'''
+          replacement = '''            </span>\n          </Button>\n          )}\n          {/* Одна дверь вместо ряда кнопок.'''
+          if anchor not in text:
+              raise SystemExit('ChatPage confirm close anchor missing')
+          text = text.replace(anchor, replacement, 1)
+
+          text = text.replace(
+              '{role === "seeker" && srvMatch?.rescheduleDate && (',
+              '{role === "seeker" && srvMatch?.rescheduleDate && (canAcceptMove || canDeclineMove) && (',
+              1,
+          )
+          anchor = '''              <div className="row" style={{ gap: 8 }}>\n                <Button onClick={() => answerMove(true)}>Подходит</Button>\n                <Button variant="ghost" onClick={() => answerMove(false)}>\n                  Не смогу\n                </Button>\n              </div>\n'''
+          replacement = '''              <div className="row" style={{ gap: 8 }}>\n                {canAcceptMove && (\n                  <Button onClick={() => answerMove(true)}>Подходит</Button>\n                )}\n                {canDeclineMove && (\n                  <Button variant="ghost" onClick={() => answerMove(false)}>\n                    Не смогу\n                  </Button>\n                )}\n              </div>\n'''
+          if anchor not in text:
+              raise SystemExit('ChatPage reschedule buttons anchor missing')
+          text = text.replace(anchor, replacement, 1)
+          chat.write_text(text, encoding='utf-8')
+          PY
+      - name: Install TMA dependencies
+        working-directory: tma
+        run: npm ci
+      - name: Verify TMA GREEN
+        working-directory: tma
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test -- --run src/features/matches/matchActions.test.ts
+          npm test -- --run
+          npm run build
+      - name: Commit verified TMA patch and remove helper workflow
+        shell: bash
+        run: |
+          rm .github/workflows/zz-tma-match-actions-green.yml
+          git config user.name staffswipe-ci
+          git config user.email staffswipe-ci@users.noreply.github.com
+          git add tma/src/types/domain.ts tma/src/features/matches/matchActions.ts tma/src/features/matches/MatchesPage.tsx tma/src/features/chat/ChatPage.tsx .github/workflows/zz-tma-match-actions-green.yml
+          git commit -m "fix: drive match actions from server capabilities"
+          git push origin HEAD:codex/staffswipe-production-readiness
