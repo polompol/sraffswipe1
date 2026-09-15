@@ -3,6 +3,9 @@ from app.db import SessionLocal
 from app.models import User
 from app.security import create_token
 
+REPLY_TEXT = "Комиссия начисляется только после закрытой смены."
+CLOSE_TEXT = "Вопрос решён, данные можно изменить в настройках."
+
 
 def _auth(client, role="seeker"):
     r = client.post("/auth/telegram", json={"init_data": "", "role": role})
@@ -162,16 +165,16 @@ def test_admin_support_queue_is_private_and_reply_is_audited(client):
     replied = client.post(
         f"/admin/support/{case_id}/reply",
         headers=admin_h,
-        json={"reply": "  Комиссия начисляется только после закрытой смены.  "},
+        json={"reply": f"  {REPLY_TEXT}  "},
     )
     assert replied.status_code == 200
     assert replied.json()["status"] == "answered"
-    assert replied.json()["adminReply"] == "Комиссия начисляется только после закрытой смены."
+    assert replied.json()["adminReply"] == REPLY_TEXT
 
     mine = client.get("/support/cases", headers=owner_h).json()
     user_row = next(x for x in mine if x["id"] == case_id)
     assert user_row["status"] == "answered"
-    assert user_row["adminReply"] == "Комиссия начисляется только после закрытой смены."
+    assert user_row["adminReply"] == REPLY_TEXT
 
     audit = client.get("/admin/audit", headers=admin_h)
     assert audit.status_code == 200
@@ -181,7 +184,7 @@ def test_admin_support_queue_is_private_and_reply_is_audited(client):
     )
     assert audit_row["actorId"] == admin_id
     assert audit_row["targetType"] == "support_case"
-    assert audit_row["reason"] == "Комиссия начисляется только после закрытой смены."
+    assert audit_row["reason"] == REPLY_TEXT
 
 
 def test_admin_closes_support_case_and_open_queue_excludes_it(client):
@@ -205,11 +208,11 @@ def test_admin_closes_support_case_and_open_queue_excludes_it(client):
     closed = client.post(
         f"/admin/support/{case_id}/close",
         headers=admin_h,
-        json={"reply": "  Вопрос решён, данные можно изменить в настройках.  "},
+        json={"reply": f"  {CLOSE_TEXT}  "},
     )
     assert closed.status_code == 200
     assert closed.json()["status"] == "closed"
-    assert closed.json()["adminReply"] == "Вопрос решён, данные можно изменить в настройках."
+    assert closed.json()["adminReply"] == CLOSE_TEXT
 
     open_rows = client.get("/admin/support?status=open", headers=admin_h)
     assert open_rows.status_code == 200
@@ -222,7 +225,7 @@ def test_admin_closes_support_case_and_open_queue_excludes_it(client):
     mine = client.get("/support/cases", headers=owner_h).json()
     row = next(x for x in mine if x["id"] == case_id)
     assert row["status"] == "closed"
-    assert row["adminReply"] == "Вопрос решён, данные можно изменить в настройках."
+    assert row["adminReply"] == CLOSE_TEXT
 
     audit = client.get("/admin/audit", headers=admin_h).json()
     audit_row = next(
@@ -230,4 +233,4 @@ def test_admin_closes_support_case_and_open_queue_excludes_it(client):
         if x["action"] == "support.close" and x["targetId"] == case_id
     )
     assert audit_row["targetType"] == "support_case"
-    assert audit_row["reason"] == "Вопрос решён, данные можно изменить в настройках."
+    assert audit_row["reason"] == CLOSE_TEXT
