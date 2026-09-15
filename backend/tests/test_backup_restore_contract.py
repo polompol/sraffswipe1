@@ -4,6 +4,7 @@ The actual proof runs in PostgreSQL CI. These assertions prevent the recovery
 step from silently becoming a no-op or drifting away from production's
 SQL+gzip backup format.
 """
+
 from pathlib import Path
 
 
