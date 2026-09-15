@@ -21,6 +21,11 @@ describe("server-owned match actions", () => {
     expect(hasAnyMatchAction(m, ["cancel", "set_hours"])).toBe(false);
   });
 
+  it("fails closed while a match is still loading", () => {
+    expect(hasMatchAction(null, "confirm")).toBe(false);
+    expect(hasAnyMatchAction(undefined, ["confirm", "cancel"])).toBe(false);
+  });
+
   it("shows only actions explicitly granted by the server", () => {
     const m = match(["checkin", "dispute"]);
     expect(hasMatchAction(m, "checkin")).toBe(true);
