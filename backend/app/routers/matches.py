@@ -910,14 +910,31 @@ def resolve_match(
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if body.outcome not in {"completed", "no_show"}:
+        raise HTTPException(status_code=400, detail="outcome: completed|no_show")
     if not m.disputed:
         raise HTTPException(
             status_code=409,
             detail="Спор уже закрыт или не был открыт",
         )
-    if body.outcome not in {"completed", "no_show"}:
-        raise HTTPException(status_code=400, detail="outcome: completed|no_show")
 
+    # БД, а не ORM-кэш, решает, кто первым закрыл спор. Два воркера могут
+    # одновременно прочитать disputed=True; conditional UPDATE пропустит
+    # только одного. Если дальнейший вердикт упадёт, тот же transaction
+    # откатит и claim, поэтому спор не потеряется.
+    claimed = (
+        db.query(Match)
+        .filter(Match.id == match_id, Match.disputed.is_(True))
+        .update({Match.disputed: False}, synchronize_session=False)
+    )
+    if claimed != 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Спор уже закрыт или не был открыт",
+        )
+    # synchronize_session=False намеренно не трогает stale identity map.
+    # Синхронизируем локальный объект явно, чтобы последующий flush не смог
+    # вернуть disputed=True обратно в базу.
     m.disputed = False
     if body.outcome == "completed":
         m.status = "completed"
