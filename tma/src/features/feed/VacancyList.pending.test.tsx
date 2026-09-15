@@ -59,9 +59,7 @@ describe("VacancyList pending actions", () => {
     expect((like as HTMLButtonElement).disabled).toBe(true);
 
     await act(async () => pending.resolve(true));
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Откликнуться" })).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByText("Тестовое кафе")).toBeNull());
   });
 
   it("treats a resolved false result as an accepted action without a success toast", async () => {
@@ -70,9 +68,7 @@ describe("VacancyList pending actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Откликнуться" }));
 
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Откликнуться" })).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByText("Тестовое кафе")).toBeNull());
     expect(onAct).toHaveBeenCalledTimes(1);
   });
 });
