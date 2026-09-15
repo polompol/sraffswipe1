@@ -1,14 +1,13 @@
 name: E2E
 
 # Сквозные проверки в настоящем браузере: живой бэкенд + собранное
-# приложение. Запускаются, когда меняется что-то из того, что они трогают, —
-# то есть почти всегда, кроме правок документации.
+# приложение. На каждом PR head даём свежое доказательство для release gate;
+# push-прогоны остаются path-filtered, чтобы не тратить runners без причины.
 on:
   push:
     branches: ["**"]
     paths: ["e2e/**", "tma/**", "backend/**", ".github/workflows/e2e.yml"]
   pull_request:
-    paths: ["e2e/**", "tma/**", "backend/**", ".github/workflows/e2e.yml"]
 
 jobs:
   browser:

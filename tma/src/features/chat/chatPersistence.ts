@@ -1,152 +1,251 @@
-import type { Message } from "@/types/domain";
-import { LS } from "@/lib/storage";
+import type { AppRole } from "@/types/domain";
 
-export type ChatDeliveryStatus = "sending" | "failed";
+const CHAT_STORAGE_PREFIX = "ss_chat_v1";
+const MAX_TEXT = 2000;
+const MAX_OUTBOX = 100;
 
-export interface ChatOutboxItem {
+export type OutboxStatus = "pending" | "sending" | "failed" | "blocked";
+export type OutboxError =
+  | "network"
+  | "rate_limit"
+  | "forbidden"
+  | "server"
+  | "integrity";
+
+export interface OutboxEntry {
   clientMessageId: string;
+  matchId: string;
   text: string;
-  status: ChatDeliveryStatus;
   createdAt: string;
+  status: OutboxStatus;
+  attempts: number;
+  lastError?: OutboxError;
+  retryAfter?: number;
 }
 
-const MAX_OUTBOX = 20;
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+export interface PersistedChatStateV1 {
+  version: 1;
+  drafts: Record<string, string>;
+  outbox: OutboxEntry[];
+}
+
+const OUTBOX_STATUSES = new Set<OutboxStatus>([
+  "pending",
+  "sending",
+  "failed",
+  "blocked",
+]);
+const OUTBOX_ERRORS = new Set<OutboxError>([
+  "network",
+  "rate_limit",
+  "forbidden",
+  "server",
+  "integrity",
+]);
 
 /**
- * Текст переписки чувствителен: не кладём его ни в localStorage, ни в
- * sessionStorage. Эти Map живут только пока живёт текущий JS-контекст Mini App.
- * После перезапуска источником истины снова становится серверная история.
+ * Chat plaintext is sensitive. Recovery state lives only for the lifetime of
+ * the current Mini App JavaScript context; it is never written to
+ * localStorage/sessionStorage. The server history remains the durable source
+ * of truth for messages that were confirmed by the backend.
  */
-const drafts = new Map<string, string>();
-const outboxes = new Map<string, ChatOutboxItem[]>();
+const runtimeStates = new Map<string, PersistedChatStateV1>();
 
-function ownerScope(): string {
-  try {
-    return localStorage.getItem(LS.uid) || "anon";
-  } catch {
-    // Если browser storage недоступен, сам чат всё равно работает в памяти.
-    return "anon";
+function emptyState(): PersistedChatStateV1 {
+  return { version: 1, drafts: {}, outbox: [] };
+}
+
+function finiteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function sanitizeOutboxEntry(value: unknown): OutboxEntry | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.clientMessageId !== "string" || !row.clientMessageId ||
+    typeof row.matchId !== "string" || !row.matchId ||
+    typeof row.text !== "string" ||
+    typeof row.createdAt !== "string" || !row.createdAt ||
+    typeof row.status !== "string" ||
+    !OUTBOX_STATUSES.has(row.status as OutboxStatus) ||
+    !finiteNumber(row.attempts)
+  ) {
+    return null;
+  }
+
+  const attempts = Math.max(0, Math.floor(row.attempts));
+  const lastError =
+    typeof row.lastError === "string" && OUTBOX_ERRORS.has(row.lastError as OutboxError)
+      ? row.lastError as OutboxError
+      : undefined;
+  const retryAfter = finiteNumber(row.retryAfter) ? row.retryAfter : undefined;
+
+  return {
+    clientMessageId: row.clientMessageId,
+    matchId: row.matchId,
+    text: row.text.slice(0, MAX_TEXT),
+    createdAt: row.createdAt,
+    status: row.status as OutboxStatus,
+    attempts,
+    ...(lastError ? { lastError } : {}),
+    ...(retryAfter !== undefined ? { retryAfter } : {}),
+  };
+}
+
+function sanitizeState(value: unknown): PersistedChatStateV1 {
+  if (!value || typeof value !== "object") return emptyState();
+  const raw = value as Record<string, unknown>;
+  if (raw.version !== 1) return emptyState();
+
+  const drafts: Record<string, string> = {};
+  if (raw.drafts && typeof raw.drafts === "object") {
+    for (const [matchId, text] of Object.entries(raw.drafts as Record<string, unknown>)) {
+      if (matchId && typeof text === "string" && text.length > 0) {
+        drafts[matchId] = text.slice(0, MAX_TEXT);
+      }
+    }
+  }
+
+  const outbox = Array.isArray(raw.outbox)
+    ? raw.outbox
+        .map(sanitizeOutboxEntry)
+        .filter((row): row is OutboxEntry => row !== null)
+        .slice(-MAX_OUTBOX)
+    : [];
+
+  return { version: 1, drafts, outbox };
+}
+
+function cloneState(state: PersistedChatStateV1): PersistedChatStateV1 {
+  return {
+    version: 1,
+    drafts: { ...state.drafts },
+    outbox: state.outbox.map((row) => ({ ...row })),
+  };
+}
+
+function runtimeKey(userId: string, role: AppRole): string {
+  return `${role}:${userId}`;
+}
+
+/** Legacy key kept only so interim builds can scrub plaintext they wrote. */
+export function chatStorageKey(userId: string, role: AppRole): string {
+  return `${CHAT_STORAGE_PREFIX}:${role}:${userId}`;
+}
+
+function removePersistentKey(key: string): void {
+  for (const storage of [
+    typeof localStorage === "undefined" ? null : localStorage,
+    typeof sessionStorage === "undefined" ? null : sessionStorage,
+  ]) {
+    try {
+      storage?.removeItem(key);
+    } catch {
+      // Restricted Telegram/private storage must never break chat.
+    }
   }
 }
 
-function scopeKey(matchId: string): string {
-  return `${ownerScope()}:${matchId}`;
+function purgeLegacyPersistentChatPlaintext(): void {
+  for (const storage of [
+    typeof localStorage === "undefined" ? null : localStorage,
+    typeof sessionStorage === "undefined" ? null : sessionStorage,
+  ]) {
+    if (!storage) continue;
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
+        if (key?.startsWith(`${CHAT_STORAGE_PREFIX}:`)) keys.push(key);
+      }
+      for (const key of keys) storage.removeItem(key);
+    } catch {
+      // Best-effort cleanup only; memory recovery still works.
+    }
+  }
 }
 
-export function readChatDraft(matchId: string): string {
-  return drafts.get(scopeKey(matchId)) ?? "";
+purgeLegacyPersistentChatPlaintext();
+
+export function loadChatState(userId: string, role: AppRole): PersistedChatStateV1 {
+  removePersistentKey(chatStorageKey(userId, role));
+  const state = runtimeStates.get(runtimeKey(userId, role));
+  return state ? cloneState(state) : emptyState();
 }
 
-export function writeChatDraft(matchId: string, text: string): void {
-  const key = scopeKey(matchId);
-  if (!text) drafts.delete(key);
-  else drafts.set(key, text);
+/** Runtime memory cannot fail because browser persistent storage is not used. */
+export function saveChatState(
+  userId: string,
+  role: AppRole,
+  state: PersistedChatStateV1,
+): boolean {
+  removePersistentKey(chatStorageKey(userId, role));
+  runtimeStates.set(runtimeKey(userId, role), sanitizeState(state));
+  return true;
 }
 
-export function clearChatDraft(matchId: string): void {
-  drafts.delete(scopeKey(matchId));
-}
-
-function readRawOutbox(matchId: string): ChatOutboxItem[] {
-  const key = scopeKey(matchId);
-  const cutoff = Date.now() - MAX_AGE_MS;
-  const next = (outboxes.get(key) ?? [])
-    .filter((row) => {
-      const ts = Date.parse(row.createdAt);
-      return Number.isFinite(ts) && ts >= cutoff;
-    })
-    .slice(-MAX_OUTBOX);
-  if (next.length === 0) outboxes.delete(key);
-  else outboxes.set(key, next);
-  return next;
-}
-
-function writeOutbox(matchId: string, rows: ChatOutboxItem[]): ChatOutboxItem[] {
-  const key = scopeKey(matchId);
-  const next = rows.slice(-MAX_OUTBOX);
-  if (next.length === 0) outboxes.delete(key);
-  else outboxes.set(key, next);
-  return next;
-}
-
-export function queueChatMessage(
+export function saveDraft(
+  userId: string,
+  role: AppRole,
   matchId: string,
   text: string,
+): boolean {
+  const state = loadChatState(userId, role);
+  const next = text.slice(0, MAX_TEXT);
+  if (next) state.drafts[matchId] = next;
+  else delete state.drafts[matchId];
+  return saveChatState(userId, role, state);
+}
+
+export function loadDraft(
+  userId: string,
+  role: AppRole,
+  matchId: string,
+): string {
+  return loadChatState(userId, role).drafts[matchId] ?? "";
+}
+
+export function upsertOutbox(
+  userId: string,
+  role: AppRole,
+  entry: OutboxEntry,
+): boolean {
+  const clean = sanitizeOutboxEntry(entry);
+  if (!clean) return false;
+  const state = loadChatState(userId, role);
+  const index = state.outbox.findIndex(
+    (row) => row.clientMessageId === clean.clientMessageId,
+  );
+  if (index >= 0) state.outbox[index] = clean;
+  else state.outbox.push(clean);
+  state.outbox = state.outbox.slice(-MAX_OUTBOX);
+  return saveChatState(userId, role, state);
+}
+
+export function removeOutbox(
+  userId: string,
+  role: AppRole,
   clientMessageId: string,
-): ChatOutboxItem {
-  const item: ChatOutboxItem = {
-    clientMessageId,
-    text,
-    status: "sending",
-    createdAt: new Date().toISOString(),
-  };
-  const current = readRawOutbox(matchId).filter(
+): boolean {
+  const state = loadChatState(userId, role);
+  state.outbox = state.outbox.filter(
     (row) => row.clientMessageId !== clientMessageId,
   );
-  writeOutbox(matchId, [...current, item]);
-  return item;
+  return saveChatState(userId, role, state);
 }
 
-function updateStatus(
-  matchId: string,
-  clientMessageId: string,
-  status: ChatDeliveryStatus,
-): ChatOutboxItem | null {
-  let changed: ChatOutboxItem | null = null;
-  const next = readRawOutbox(matchId).map((row) => {
-    if (row.clientMessageId !== clientMessageId) return row;
-    changed = { ...row, status };
-    return changed;
-  });
-  writeOutbox(matchId, next);
-  return changed;
+export function loadOutbox(
+  userId: string,
+  role: AppRole,
+  matchId?: string,
+): OutboxEntry[] {
+  const rows = loadChatState(userId, role).outbox;
+  return matchId ? rows.filter((row) => row.matchId === matchId) : rows;
 }
 
-export function markChatMessageFailed(
-  matchId: string,
-  clientMessageId: string,
-): ChatOutboxItem | null {
-  return updateStatus(matchId, clientMessageId, "failed");
-}
-
-export function markChatMessageSending(
-  matchId: string,
-  clientMessageId: string,
-): ChatOutboxItem | null {
-  return updateStatus(matchId, clientMessageId, "sending");
-}
-
-export function removeChatOutboxItem(matchId: string, clientMessageId: string): void {
-  writeOutbox(
-    matchId,
-    readRawOutbox(matchId).filter((row) => row.clientMessageId !== clientMessageId),
-  );
-}
-
-/**
- * Серверная история подтверждает receipt по client_message_id. Неизвестное
- * `sending` не отправляем автоматически: ответ мог потеряться после успешной
- * записи на сервере. В текущей сессии показываем ручной «Повторить» с тем же
- * idempotency key; после полного перезапуска текст намеренно не сохраняется.
- */
-export function restoreChatOutbox(
-  matchId: string,
-  serverMessages: readonly Message[] = [],
-): ChatOutboxItem[] {
-  const confirmed = new Set(
-    serverMessages
-      .map((message) => message.clientMessageId)
-      .filter((id): id is string => Boolean(id)),
-  );
-  const next = readRawOutbox(matchId)
-    .filter((row) => !confirmed.has(row.clientMessageId))
-    .map((row) => ({ ...row, status: "failed" as const }));
-  return writeOutbox(matchId, next);
-}
-
-/** Очистить чувствительный session-memory, например при выходе из аккаунта. */
-export function clearChatRecoveryMemory(): void {
-  drafts.clear();
-  outboxes.clear();
+/** Remove only the selected account/role runtime state and any legacy key. */
+export function clearChatAccount(userId: string, role: AppRole): void {
+  runtimeStates.delete(runtimeKey(userId, role));
+  removePersistentKey(chatStorageKey(userId, role));
 }

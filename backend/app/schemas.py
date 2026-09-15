@@ -232,6 +232,9 @@ class MatchOut(BaseModel):
     employer_id: str
     vacancy_id: str
     status: str
+    # Server-owned UI capabilities. Endpoints still authorize every action; this
+    # list prevents the TMA from offering a button the server would reject.
+    allowed_actions: list[str] = Field(default_factory=list)
     confirmed_by_seeker: bool
     confirmed_by_employer: bool
     # Код прихода виден ТОЛЬКО заведению (называет работнику на месте).

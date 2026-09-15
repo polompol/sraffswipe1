@@ -4,6 +4,7 @@ import re
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,7 @@ from .routers import (
     acts,
     admin,
     admin_accounts,
+    admin_support,
     analytics,
     auth,
     billing,
@@ -29,6 +31,7 @@ from .routers import (
     reports,
     saved_searches,
     social,
+    support,
     swipes,
     telegram_auth,
     uploads,
@@ -124,6 +127,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 def _cors_origins() -> list[str]:
     explicit = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
     if explicit:
@@ -171,8 +175,12 @@ async def unhandled_error(request: Request, exc: Exception):
     # где номер генерировался, и в теле ответа всегда стояло «-» — спросить у
     # человека было нечего.
     rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
-    logger.exception("Необработанная ошибка rid=%s %s %s", rid, request.method,
-                     request.url.path)
+    logger.exception(
+        "Необработанная ошибка rid=%s %s %s",
+        rid,
+        request.method,
+        request.url.path,
+    )
     return JSONResponse(
         status_code=500,
         content={"detail": "Внутренняя ошибка сервера", "request_id": rid},
@@ -205,6 +213,7 @@ async def request_logger(request: Request, call_next):
     )
     return response
 
+
 app.include_router(auth.router)
 app.include_router(telegram_auth.router)
 app.include_router(vacancies.router)
@@ -219,11 +228,13 @@ app.include_router(billing.router)
 app.include_router(social.router)
 app.include_router(saved_searches.router)
 app.include_router(reports.router)
+app.include_router(support.router)
 app.include_router(dadata.router)
 app.include_router(employer.router)
 app.include_router(uploads.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
+app.include_router(admin_support.router)
 # Вторая половина админки: люди, деньги, аккаунты. Префикс тот же.
 app.include_router(admin_accounts.router)
 app.include_router(favorites.router)
@@ -264,3 +275,72 @@ def ready():
     finally:
         db.close()
     return {"status": "ok", "db": "ok"}
+
+
+OPS_SCHEDULER_STALE_SECONDS = 180
+
+
+@app.api_route("/health/ops", methods=["GET", "HEAD"], tags=["meta"])
+def operational_health():
+    """Operational status beyond request-serving readiness.
+
+    This endpoint is for alerting/diagnostics, not Docker restarts. It reports
+    only bounded component states: no DSNs, connection strings, exception
+    text, Telegram identifiers, or payment data leave the server.
+    """
+    from sqlalchemy import text
+
+    from .db import SessionLocal
+    from .redisclient import health_probe
+    from .service_health import ServiceHeartbeat
+
+    components: dict[str, str] = {
+        "db": "unavailable",
+        "redis": "unavailable",
+        "scheduler": "unknown",
+    }
+    heartbeat_at = None
+
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        components["db"] = "ok"
+        heartbeat = db.get(ServiceHeartbeat, "scheduler")
+        if heartbeat is not None:
+            heartbeat_at = heartbeat.updated_at
+    except Exception:  # noqa: BLE001 — raw dependency error stays in logs
+        logger.exception("операционная проверка: база не отвечает")
+    finally:
+        db.close()
+
+    components["redis"] = health_probe()
+
+    age_seconds: int | None = None
+    if components["db"] == "ok":
+        if heartbeat_at is None:
+            components["scheduler"] = "missing"
+        else:
+            if heartbeat_at.tzinfo is None:
+                heartbeat_utc = heartbeat_at.replace(tzinfo=UTC)
+            else:
+                heartbeat_utc = heartbeat_at.astimezone(UTC)
+            age_seconds = max(
+                0, int((datetime.now(UTC) - heartbeat_utc).total_seconds())
+            )
+            components["scheduler"] = (
+                "ok" if age_seconds <= OPS_SCHEDULER_STALE_SECONDS else "stale"
+            )
+
+    healthy = (
+        components["db"] == "ok"
+        and components["redis"] in {"ok", "disabled"}
+        and components["scheduler"] == "ok"
+    )
+    content = {
+        "status": "ok" if healthy else "unavailable",
+        "components": components,
+        "schedulerAgeSeconds": age_seconds,
+    }
+    if healthy:
+        return content
+    return JSONResponse(status_code=503, content=content)

@@ -52,7 +52,9 @@ def test_blocked_vacancy_stops_working_everywhere(client):
     # Оператор блокирует смену.
     ah, _ = _auth(client)  # conftest: tg_id=0 = админ
     assert client.post(
-        f"/admin/vacancies/{vac['id']}/block", headers=ah
+        f"/admin/vacancies/{vac['id']}/block",
+        headers=ah,
+        json={"reason": "подозрительная смена"},
     ).status_code == 200
 
     # Из избранного пропала, откликнуться нельзя.
@@ -85,6 +87,39 @@ def test_report_brigading_is_limited(client):
         if r["targetId"] == vac["id"]
     ]
     assert len(on_target) == 1, "шесть жалоб от одного человека — одна строка"
+
+
+def test_stranger_cannot_report_foreign_match(client):
+    """UUID чужой смены не должен превращаться в билет в операторскую очередь."""
+    from app.db import SessionLocal
+    from app.models import User
+
+    from .test_chat_history import _matched
+
+    _, _, match_id = _matched(client)
+
+    # В insecure-тестах один tg_id переиспользуется. Уводим участника на
+    # другой Telegram-id, чтобы следующий вход создал действительно чужого
+    # пользователя, как в IDOR-тестах чата. Этот тест специально остаётся в
+    # общем backend matrix: защита должна быть одинаковой на SQLite/PostgreSQL.
+    db = SessionLocal()
+    try:
+        for user in db.query(User).all():
+            user.tg_id = 980000 + int(user.tg_id or 0)
+            user.phone = f"tg:{user.tg_id}"
+        db.commit()
+    finally:
+        db.close()
+
+    stranger_h, _ = _auth(client, "seeker")
+    response = client.post("/reports", headers=stranger_h, json={
+        "target_type": "match",
+        "target_id": match_id,
+        "reason": "abuse",
+        "text": "Чужая смена",
+    })
+
+    assert response.status_code == 403
 
 
 def test_address_hints_are_for_employers_only(client):

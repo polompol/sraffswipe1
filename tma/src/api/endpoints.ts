@@ -145,18 +145,25 @@ export async function fetchMessages(
   return data;
 }
 
+export interface ChatMessageInput {
+  text: string;
+  clientMessageId: string;
+}
+
 export async function sendMessage(
   matchId: string,
-  text: string,
-  clientMessageId: string,
+  input: string | ChatMessageInput,
 ): Promise<Message> {
+  const text = typeof input === "string" ? input : input.text;
+  const clientMessageId =
+    typeof input === "string" ? undefined : input.clientMessageId;
   if (!USE_BACKEND) {
     const message = await mock.sendMessage(matchId, text);
-    return { ...message, clientMessageId };
+    return clientMessageId ? { ...message, clientMessageId } : message;
   }
   const { data } = await api.post<Message>(`/matches/${matchId}/messages`, {
     text,
-    client_message_id: clientMessageId,
+    ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
   });
   return data;
 }
@@ -1018,21 +1025,22 @@ export async function adminCreditWallet(
 export async function resolveMatch(
   matchId: string,
   outcome: "completed" | "no_show",
+  reason: string,
 ): Promise<void> {
   if (!USE_BACKEND) return mock.resolveMatch(matchId, outcome);
-  await api.post(`/matches/${matchId}/resolve`, { outcome });
+  await api.post(`/matches/${matchId}/resolve`, { outcome, reason });
 }
 
 /** Заблокировать пользователя (соискателя/работодателя). */
-export async function blockUser(userId: string): Promise<void> {
+export async function blockUser(userId: string, reason: string): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport("");
-  await api.post(`/admin/users/${userId}/block`, {});
+  await api.post(`/admin/users/${userId}/block`, { reason });
 }
 
 /** Снять вакансию (фейк/обман) с публикации. */
-export async function blockVacancy(vacancyId: string): Promise<void> {
+export async function blockVacancy(vacancyId: string, reason: string): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport("");
-  await api.post(`/admin/vacancies/${vacancyId}/block`, {});
+  await api.post(`/admin/vacancies/${vacancyId}/block`, { reason });
 }
 
 export async function unblockUser(userId: string): Promise<void> {

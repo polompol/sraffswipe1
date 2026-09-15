@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message, MatchModel } from "@/types/domain";
-import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, sendMessage, track } from "@/api/endpoints";
+import { ShiftConflict, answerReschedule, cancelShift, confirmShift, proposeReschedule, setActualHours, fetchMatches, track } from "@/api/endpoints";
 import { useBackend } from "@/api/client";
 import { showBackButton, haptic } from "@/telegram/sdk";
 import { coin } from "@/lib/sfx";
 import {
   fmtTime,
-  msgTime,
   numRu,
   shiftDayLabel,
   shiftEnded,
@@ -25,19 +24,15 @@ import { toast } from "@/components/Toast";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { useChatHistory } from "./useChatHistory";
 import { useChatSocket } from "./useChatSocket";
-import {
-  clearChatDraft,
-  markChatMessageFailed,
-  markChatMessageSending,
-  queueChatMessage,
-  readChatDraft,
-  removeChatOutboxItem,
-  restoreChatOutbox,
-  writeChatDraft,
-  type ChatOutboxItem,
-} from "./chatPersistence";
+import { useChatDraft } from "./useChatDraft";
+import { useChatOutbox } from "./useChatOutbox";
+import { ChatConnectionState, type ChatConnection } from "./ChatConnectionState";
+import { MessageComposer } from "./MessageComposer";
+import { MessageList } from "./MessageList";
+import { hasMatchAction } from "@/features/matches/matchActions";
+import { useMatchActionRunner } from "@/features/matches/useMatchActionRunner";
 import { EmptyState } from "@/components/EmptyState";
-import { IconSend, IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
+import { IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
 
 // Быстрые ответы — частые фразы одним нажатием. У сторон они РАЗНЫЕ: заведению
 // предлагались реплики работника («Какой адрес?», «Что взять с собой?»), то
@@ -70,14 +65,19 @@ export function ChatPage() {
   const qc = useQueryClient();
   const myId = useSession((s) => s.userId);
   const role = useSession((s) => s.role);
-  const [text, setText] = useState(() => readChatDraft(matchId));
-  const [outbox, setOutbox] = useState<ChatOutboxItem[]>(() =>
-    restoreChatOutbox(matchId),
-  );
+  const actionRunner = useMatchActionRunner();
+  const chatUserId = myId ?? "me";
+  const chatRole = role === "employer" ? "employer" : "seeker";
+  const draft = useChatDraft({ userId: chatUserId, role: chatRole, matchId });
+  const text = draft.text;
   // Есть ли живое соединение. Нужно, чтобы честно сказать человеку «связь
   // потеряна, восстанавливаем» вместо молчаливого чата, который выглядит
   // рабочим, но ничего не получает.
   const [live, setLive] = useState(true);
+  const [socketAccessLost, setSocketAccessLost] = useState(false);
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
   const [reportOpen, setReportOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   // Подтверждение смены берём из данных сервера, а не из локального стейта —
@@ -117,15 +117,6 @@ export function ChatPage() {
 
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
-  useEffect(() => {
-    setText(readChatDraft(matchId));
-    setOutbox(restoreChatOutbox(matchId));
-  }, [matchId]);
-
-  useEffect(() => {
-    writeChatDraft(matchId, text);
-  }, [matchId, text]);
-
   const {
     messages,
     isLoading,
@@ -137,24 +128,53 @@ export function ChatPage() {
     appendMessage,
   } = useChatHistory(matchId);
 
+  const outbox = useChatOutbox({
+    matchId,
+    userId: chatUserId,
+    role: chatRole,
+    confirmedMessages: messages ?? [],
+    live: (!useBackend || live) && online && !socketAccessLost,
+    appendConfirmed: appendMessage,
+  });
+  const accessLost = socketAccessLost || outbox.terminalAccessLost;
+  const connectionState: ChatConnection = accessLost
+    ? "access_lost"
+    : !online
+      ? "offline"
+      : useBackend && !live
+        ? "reconnecting"
+        : "connected";
+
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  useEffect(() => setSocketAccessLost(false), [matchId]);
+
   // К последнему сообщению — при открытии чата и на каждое новое.
   //
   // Следим именно за ПОСЛЕДНИМ сообщением, а не за всем списком: когда
   // догружается старая переписка, список меняется, а прокручивать вниз нельзя
   // — человек только что нажал «показать более ранние» и смотрит наверх.
   // Что я в этом чате уже отправлял — чтобы не предлагать это снова кнопкой.
-  useEffect(() => {
-    if (!messages) return;
-    setOutbox(restoreChatOutbox(matchId, messages));
-  }, [matchId, messages]);
-
-  const mySent = new Set(
-    (messages ?? [])
-      .filter((m: Message) => !m.isSystem && m.senderId === (myId ?? "me"))
+  const mySent = new Set([
+    ...(messages ?? [])
+      .filter((m: Message) => !m.isSystem && m.senderId === chatUserId)
       .map((m: Message) => m.text.trim()),
-  );
+    ...outbox.entries.map((entry) => entry.text.trim()),
+  ]);
 
-  const lastId = messages?.length ? messages[messages.length - 1].id : "";
+  const lastOutbox = outbox.entries.length
+    ? outbox.entries[outbox.entries.length - 1]
+    : null;
+  const lastId = `${messages?.length ? messages[messages.length - 1].id : ""}|${lastOutbox?.clientMessageId ?? ""}:${lastOutbox?.status ?? ""}`;
   // Прокручиваем и когда меняется высота панели: кнопка «Подтвердить смену»
   // появляется не сразу, и без этого список оставался стоять как был.
   useEffect(() => {
@@ -179,23 +199,34 @@ export function ChatPage() {
     : !!srvMatch?.confirmedBySeeker;
   const bothConfirmed =
     !!srvMatch && srvMatch.confirmedBySeeker && srvMatch.confirmedByEmployer;
-  // Смена ещё «живая»: не отменена и не закрыта сама собой.
+  // На живом backend разрешения state-changing действий принадлежат серверу.
+  // Локальные status/time правила остаются только для mock/demo, чтобы демо
+  // работало без сервера и при этом production никогда не угадывал доступ.
   const alive =
     !!srvMatch && !["cancelled", "expired", "completed"].includes(srvMatch.status);
-  // Смена ещё не началась — по отметкам И ПО ВРЕМЕНИ. Только по отметкам было
-  // мало: сервер теперь отказывает в отмене и переносе начавшейся смены (это
-  // была универсальная кнопка «не платить»), а приложение об этом не знало и
-  // показывало кнопки, которые отвечали ошибкой.
   const notStarted =
     !!srvMatch
     && !srvMatch.seekerCheckedIn
     && !srvMatch.employerCheckedIn
     && !shiftStarted(srvMatch);
-  const canCancel = alive && notStarted;
-  const canMove = role === "employer" && alive && notStarted;
-  // Уточнить часы можно только в первые сутки после смены.
-  const canSetHours =
-    role === "employer" && alive && !!srvMatch && shiftEnded(srvMatch);
+  const canConfirm = !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "confirm")
+    : !iConfirmed && alive);
+  const canCancel = !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "cancel")
+    : alive && notStarted);
+  const canMove = role === "employer" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "propose_reschedule")
+    : alive && notStarted);
+  const canSetHours = role === "employer" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "set_hours")
+    : alive && shiftEnded(srvMatch));
+  const canAcceptMove = role === "seeker" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "accept_reschedule")
+    : !!srvMatch.rescheduleDate);
+  const canDeclineMove = role === "seeker" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "decline_reschedule")
+    : !!srvMatch.rescheduleDate);
   const canAct = canCancel || canMove || canSetHours;
 
 
@@ -208,49 +239,24 @@ export function ChatPage() {
       qc.invalidateQueries({ queryKey: ["matches"] });
     },
     onLive: setLive,
+    onAccessLost: () => setSocketAccessLost(true),
   });
 
-  async function deliver(t: string, retryId?: string) {
-    const clientMessageId = retryId ?? crypto.randomUUID();
-    const pending = retryId
-      ? markChatMessageSending(matchId, clientMessageId)
-      : queueChatMessage(matchId, t, clientMessageId);
-    if (!pending) return;
-    setOutbox((current) => [
-      ...current.filter((row) => row.clientMessageId !== clientMessageId),
-      pending,
-    ]);
-
-    try {
-      const msg = await sendMessage(matchId, t, clientMessageId);
-      appendMessage(msg); // мгновенно показываем; WS-echo дедуплицируется
-      removeChatOutboxItem(matchId, clientMessageId);
-      setOutbox((current) =>
-        current.filter((row) => row.clientMessageId !== clientMessageId),
-      );
-    } catch {
-      haptic("error");
-      const failed = markChatMessageFailed(matchId, clientMessageId);
-      if (failed) {
-        setOutbox((current) => current.map((row) =>
-          row.clientMessageId === clientMessageId ? failed : row,
-        ));
-      }
-      toast("Не отправилось — сообщение сохранено для повтора", "error");
+  async function sendComposer(submitted: string) {
+    const accepted = await outbox.sendText(submitted);
+    if (accepted) {
+      draft.clearIfUnchanged(submitted);
+      haptic("light");
+      return;
     }
+    haptic("error");
+    toast("Не удалось сохранить сообщение — текст остался", "error");
   }
 
-  async function send() {
-    const t = text.trim();
-    if (!t) return;
-    setText("");
-    clearChatDraft(matchId);
-    await deliver(t);
-  }
-
-  function quickReply(t: string) {
+  async function quickReply(t: string) {
     haptic("light");
-    void deliver(t);
+    const accepted = await outbox.sendText(t);
+    if (!accepted) toast("Не удалось сохранить сообщение", "error");
   }
 
   const toMinutes = (t: string) => {
@@ -261,12 +267,14 @@ export function ChatPage() {
   async function saveHours() {
     const minutes = Math.round(parseFloat(hoursValue.replace(",", ".")) * 60);
     try {
-      const m = await setActualHours(matchId, minutes, hoursNote.trim());
-      haptic("success");
-      setMatchState(m);
-      setHoursOpen(false);
-      toast("Часы сохранили — работник уже видит", "success");
-      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      await actionRunner.run(matchId, "set_hours", async () => {
+        const m = await setActualHours(matchId, minutes, hoursNote.trim());
+        haptic("success");
+        setMatchState(m);
+        setHoursOpen(false);
+        toast("Часы сохранили — работник уже видит", "success");
+        qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      });
     } catch (e: any) {
       haptic("error");
       toast(apiError(e, "Часы не сохранились — попробуйте ещё раз"), "error");
@@ -275,13 +283,15 @@ export function ChatPage() {
 
   async function proposeMove() {
     try {
-      const m = await proposeReschedule(
-        matchId, moveDate, toMinutes(moveStart), toMinutes(moveEnd));
-      haptic("success");
-      setMatchState(m);
-      setMoveOpen(false);
-      toast("Предложили перенос — ждём ответа", "success");
-      qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      await actionRunner.run(matchId, "propose_reschedule", async () => {
+        const m = await proposeReschedule(
+          matchId, moveDate, toMinutes(moveStart), toMinutes(moveEnd));
+        haptic("success");
+        setMatchState(m);
+        setMoveOpen(false);
+        toast("Предложили перенос — ждём ответа", "success");
+        qc.invalidateQueries({ queryKey: ["messages", matchId] });
+      });
     } catch (e: any) {
       haptic("error");
       toast(apiError(e, "Перенос не предложился — попробуйте ещё раз"), "error");
@@ -289,13 +299,16 @@ export function ChatPage() {
   }
 
   async function answerMove(accept: boolean) {
+    const action = accept ? "accept_reschedule" : "decline_reschedule";
     try {
-      const m = await answerReschedule(matchId, accept);
-      haptic(accept ? "success" : "warning");
-      setMatchState(m);
-      toast(accept ? "Смена перенесена ✓" : "Ответили: выйти не сможете", "success");
-      qc.invalidateQueries({ queryKey: ["messages", matchId] });
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, action, async () => {
+        const m = await answerReschedule(matchId, accept);
+        haptic(accept ? "success" : "warning");
+        setMatchState(m);
+        toast(accept ? "Смена перенесена ✓" : "Ответили: выйти не сможете", "success");
+        qc.invalidateQueries({ queryKey: ["messages", matchId] });
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       haptic("error");
       toast("Ответ не ушёл — попробуйте ещё раз", "error");
@@ -304,19 +317,21 @@ export function ChatPage() {
 
   async function doCancel() {
     try {
-      const m = await cancelShift(matchId, cancelReason.trim());
-      haptic("warning");
-      setMatchState(m);
-      setCancelOpen(false);
-      setCancelReason("");
-      toast(
-        role === "employer"
-          ? "Смена отменена — работник уже знает"
-          : "Смена отменена — заведение уже знает",
-        "success",
-      );
-      qc.invalidateQueries({ queryKey: ["messages", matchId] });
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "cancel", async () => {
+        const m = await cancelShift(matchId, cancelReason.trim());
+        haptic("warning");
+        setMatchState(m);
+        setCancelOpen(false);
+        setCancelReason("");
+        toast(
+          role === "employer"
+            ? "Смена отменена — работник уже знает"
+            : "Смена отменена — заведение уже знает",
+          "success",
+        );
+        qc.invalidateQueries({ queryKey: ["messages", matchId] });
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch (e: any) {
       haptic("error");
       toast(
@@ -328,21 +343,23 @@ export function ChatPage() {
 
   async function doConfirm(force = false) {
     try {
-      const m = await confirmShift(matchId, force);
-      track("confirm");
-      haptic("success");
-      coin();
-      setMatchState(m);
-      toast(
-        m.confirmedBySeeker && m.confirmedByEmployer
-          ? "Договорились ✓ Смена подтверждена"
-          : role === "employer"
-            ? "Готово! Ждём, когда работник подтвердит"
-            : "Готово! Ждём, когда заведение подтвердит",
-        "success",
-      );
-      qc.invalidateQueries({ queryKey: ["messages", matchId] });
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "confirm", async () => {
+        const m = await confirmShift(matchId, force);
+        track("confirm");
+        haptic("success");
+        coin();
+        setMatchState(m);
+        toast(
+          m.confirmedBySeeker && m.confirmedByEmployer
+            ? "Договорились ✓ Смена подтверждена"
+            : role === "employer"
+              ? "Готово! Ждём, когда работник подтвердит"
+              : "Готово! Ждём, когда заведение подтвердит",
+          "success",
+        );
+        qc.invalidateQueries({ queryKey: ["messages", matchId] });
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch (e) {
       // Пересечение с другой сменой — не ошибка, а вопрос. Решает человек:
       // бывает, что первую смену отменили, а статус ещё не обновился.
@@ -394,18 +411,10 @@ export function ChatPage() {
           </button>
         </div>
 
-        {!live && useBackend && (
-          <div
-            className="muted"
-            role="status"
-            style={{ textAlign: "center", fontSize: "var(--text-xs)", padding: "6px 0" }}
-          >
-            Связь потеряна — восстанавливаем…
-          </div>
-        )}
+        <ChatConnectionState state={connectionState} />
         {isLoading && <SkeletonList rows={4} />}
         {isError && <ErrorBox onRetry={() => refetch()} />}
-        {!isLoading && !isError && messages && messages.length === 0 && (
+        {!isLoading && !isError && messages && messages.length === 0 && outbox.entries.length === 0 && (
           <EmptyState
             fill
             icon={<IconChat size={34} />}
@@ -431,39 +440,12 @@ export function ChatPage() {
           </button>
         )}
 
-        {messages?.map((m: Message) => {
-          if (m.isSystem) return <div key={m.id} className="bubble system">{m.text}</div>;
-          const mine = m.senderId === (myId ?? "me");
-          return (
-            <div key={m.id} className={`bubble ${mine ? "mine" : "theirs"}`}>
-              {m.text}
-              <span className="bubble-at">{msgTime(m.createdAt)}</span>
-            </div>
-          );
-        })}
-        {outbox.map((pending) => (
-          <div
-            key={pending.clientMessageId}
-            className="bubble mine"
-            style={{ opacity: pending.status === "sending" ? 0.68 : 1 }}
-          >
-            {pending.text}
-            <span className="bubble-at">
-              {pending.status === "sending" ? (
-                "Отправляем…"
-              ) : (
-                <button
-                  type="button"
-                  className="text-btn"
-                  style={{ fontSize: "inherit", padding: 0 }}
-                  onClick={() => void deliver(pending.text, pending.clientMessageId)}
-                >
-                  Не отправилось · Повторить
-                </button>
-              )}
-            </span>
-          </div>
-        ))}
+        <MessageList
+          messages={messages ?? []}
+          outbox={outbox.entries}
+          myId={chatUserId}
+          onRetry={(clientMessageId) => void outbox.retry(clientMessageId)}
+        />
         </div>
         {/* Якорь для прокрутки и одновременно распорка под нижнюю панель.
             Без него чат открывался на самом первом сообщении: свежие
@@ -525,7 +507,8 @@ export function ChatPage() {
               key={q}
               className="tag"
               style={{ cursor: "pointer", whiteSpace: "nowrap", flex: "none", borderColor: "var(--border-strong)" }}
-              onClick={() => quickReply(q)}
+              disabled={accessLost}
+              onClick={() => void quickReply(q)}
             >
               {q}
             </button>
@@ -534,24 +517,28 @@ export function ChatPage() {
         {/* Подтверждение смены — главное действие экрана, поэтому primary.
             После подтверждения гасим до secondary: это уже статус, а не CTA. */}
         <div style={{ marginBottom: 8 }}>
+          {(!useBackend || canConfirm || iConfirmed) && (
           <Button
             variant={iConfirmed ? "secondary" : "primary"}
-            disabled={iConfirmed}
+            disabled={actionRunner.isPending(matchId, "confirm") || (useBackend ? !canConfirm : iConfirmed)}
             onClick={() => doConfirm()}
           >
             <span className="inline">
               <IconCheck size={17} />
               {/* Без второй галочки в тексте: слева уже стоит иконка, и
                   вместе получалось «✓ Смена подтверждена ✓». */}
-              {bothConfirmed
-                ? "Смена подтверждена"
-                : iConfirmed
-                  ? role === "employer"
-                    ? "Ждём ответа работника"
-                    : "Ждём ответа заведения"
-                  : "Подтвердить смену"}
+              {actionRunner.isPending(matchId, "confirm")
+                ? "Подтверждаем…"
+                : bothConfirmed
+                  ? "Смена подтверждена"
+                  : iConfirmed
+                    ? role === "employer"
+                      ? "Ждём ответа работника"
+                      : "Ждём ответа заведения"
+                    : "Подтвердить смену"}
             </span>
           </Button>
+          )}
           {/* Одна дверь вместо ряда кнопок. Уточнить часы, перенести и
               отменить нужны редко — но когда нужны, их ищут именно тут.
               Пять кнопок в ряд превращали чат в панель управления. */}
@@ -567,7 +554,7 @@ export function ChatPage() {
 
           {/* Работнику: заведение предложило другой день — надо ответить.
               Это не пряталось бы в меню: тут ждут ответа именно от него. */}
-          {role === "seeker" && srvMatch?.rescheduleDate && (
+          {role === "seeker" && srvMatch?.rescheduleDate && (canAcceptMove || canDeclineMove) && (
             <div
               className="card"
               style={{ marginTop: 8, borderColor: "var(--gold)" }}
@@ -581,33 +568,29 @@ export function ChatPage() {
                   ` · ${fmtTime(srvMatch.rescheduleStart)}–${fmtTime(srvMatch.rescheduleEnd ?? 0)}`}
               </p>
               <div className="row" style={{ gap: 8 }}>
-                <Button onClick={() => answerMove(true)}>Подходит</Button>
-                <Button variant="ghost" onClick={() => answerMove(false)}>
-                  Не смогу
-                </Button>
+                {canAcceptMove && (
+                  <Button disabled={actionRunner.isPending(matchId, "accept_reschedule")} onClick={() => answerMove(true)}>{actionRunner.isPending(matchId, "accept_reschedule") ? "Сохраняем…" : "Подходит"}</Button>
+                )}
+                {canDeclineMove && (
+                  <Button
+                    variant="ghost"
+                    disabled={actionRunner.isPending(matchId, "decline_reschedule")}
+                    onClick={() => answerMove(false)}
+                  >
+                    {actionRunner.isPending(matchId, "decline_reschedule") ? "Отправляем…" : "Не смогу"}
+                  </Button>
+                )}
               </div>
             </div>
           )}
 
         </div>
-        <div className="row">
-          <input
-            className="input"
-            aria-label="Текст сообщения"
-            placeholder="Сообщение…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-          />
-          <Button
-            block={false}
-            aria-label="Отправить"
-            onClick={send}
-            style={{ width: 52, flex: "none", padding: 0 }}
-          >
-            <IconSend size={20} />
-          </Button>
-        </div>
+        <MessageComposer
+          text={text}
+          setText={draft.setText}
+          onSubmit={sendComposer}
+          disabled={accessLost}
+        />
       </div>
 
       {troubleOpen && (
@@ -698,7 +681,7 @@ export function ChatPage() {
               onChange={(e) => setHoursNote(e.target.value)}
             />
             <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-              <Button block onClick={saveHours}>Сохранить часы</Button>
+              <Button block disabled={actionRunner.isPending(matchId, "set_hours")} onClick={saveHours}>{actionRunner.isPending(matchId, "set_hours") ? "Сохраняем…" : "Сохранить часы"}</Button>
               <Button variant="ghost" block onClick={() => setHoursOpen(false)}>
                 Отмена
               </Button>
@@ -740,8 +723,8 @@ export function ChatPage() {
               </div>
             </div>
             <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-              <Button block disabled={!moveDate} onClick={proposeMove}>
-                Предложить перенос
+              <Button block disabled={!moveDate || actionRunner.isPending(matchId, "propose_reschedule")} onClick={proposeMove}>
+                {actionRunner.isPending(matchId, "propose_reschedule") ? "Отправляем…" : "Предложить перенос"}
               </Button>
               <Button variant="ghost" block onClick={() => setMoveOpen(false)}>
                 Отмена
@@ -767,8 +750,8 @@ export function ChatPage() {
               onChange={(e) => setCancelReason(e.target.value)}
             />
             <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-              <Button variant="danger" block onClick={doCancel}>
-                Отменить смену
+              <Button variant="danger" block disabled={actionRunner.isPending(matchId, "cancel")} onClick={doCancel}>
+                {actionRunner.isPending(matchId, "cancel") ? "Отменяем…" : "Отменить смену"}
               </Button>
               <Button variant="ghost" block onClick={() => setCancelOpen(false)}>
                 Назад
@@ -783,12 +766,13 @@ export function ChatPage() {
             <div className="stack">
               <Button
                 block
+                disabled={actionRunner.isPending(matchId, "confirm")}
                 onClick={() => {
                   setConflict(null);
                   void doConfirm(true);
                 }}
               >
-                Всё равно беру
+                {actionRunner.isPending(matchId, "confirm") ? "Подтверждаем…" : "Всё равно беру"}
               </Button>
               {/* Не «Отменить»: рядом стоит «Всё равно беру», и человек читал
                   это как «отменить смену» — ценой была потерянная подработка. */}

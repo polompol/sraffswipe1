@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { MatchModel, Seeker, SwipeDirection, Vacancy } from "@/types/domain";
 import { sendSwipe, track } from "@/api/endpoints";
@@ -19,10 +19,18 @@ import { pop } from "@/lib/sfx";
 export function useSwipeAction(isSeeker: boolean) {
   const qc = useQueryClient();
   const [match, setMatch] = useState<MatchModel | null>(null);
+  // Одинаковое решение по одной карточке может прийти сразу из двух мест:
+  // человек начал свайп пальцем и тут же нажал кнопку, либо дважды тапнул на
+  // плохой связи. Сервер идемпотентен, но два HTTP-запроса всё равно создают
+  // лишнюю задержку/аналитику и могут показать два одинаковых ответа UI.
+  // Держим только НЕЗАВЕРШЁННЫЕ решения; после успеха или ошибки повтор снова
+  // разрешён. Направление входит в ключ, поэтому «нет» никогда не слипнется с
+  // «да» по той же карточке.
+  const inFlight = useRef(new Map<string, Promise<boolean>>());
 
   /** true — успешный отклик БЕЗ совпадения: список-вид покажет тост.
    *  При совпадении тоста нет: его заменяет экран «Взаимно!». */
-  async function swipe(item: Vacancy | Seeker, dir: SwipeDirection): Promise<boolean> {
+  async function runSwipe(item: Vacancy | Seeker, dir: SwipeDirection): Promise<boolean> {
     track("swipe", { dir });
     try {
       const res = await sendSwipe(item.id, isSeeker ? "vacancy" : "user", dir);
@@ -84,6 +92,21 @@ export function useSwipeAction(isSeeker: boolean) {
       );
       throw e;
     }
+  }
+
+  function swipe(item: Vacancy | Seeker, dir: SwipeDirection): Promise<boolean> {
+    const targetType = isSeeker ? "vacancy" : "user";
+    const key = `${targetType}:${item.id}:${dir}`;
+    const current = inFlight.current.get(key);
+    if (current) return current;
+
+    const run = runSwipe(item, dir);
+    inFlight.current.set(key, run);
+    const clear = () => {
+      if (inFlight.current.get(key) === run) inFlight.current.delete(key);
+    };
+    run.then(clear, clear);
+    return run;
   }
 
   return { swipe, match, setMatch };

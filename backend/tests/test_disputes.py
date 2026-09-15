@@ -8,7 +8,7 @@
 from datetime import date, timedelta
 
 from app.db import SessionLocal
-from app.models import Commission, Employer, Match, Report, User
+from app.models import Commission, Employer, Match, Message, Report, User
 from app.timeutil import local_today
 
 from .shifttime import age_shift
@@ -114,6 +114,33 @@ def test_closing_the_complaint_lets_the_shift_go_on(client):
         db.close()
 
 
+def test_operator_verdict_requires_non_blank_reason(client):
+    """Финальный вердикт без объяснения не должен менять спорную смену."""
+    emp_h, _, _, _, mid = _confirmed_shift(client, 850008, 850009)
+    age_shift(mid, days=1)
+    assert client.post(
+        f"/matches/{mid}/dispute",
+        headers=emp_h,
+        json={"note": "нужен разбор оператора"},
+    ).status_code == 200
+    admin_h = _admin(client)
+
+    missing = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show"},
+    )
+    assert missing.status_code == 422
+
+    blank = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show", "reason": "   "},
+    )
+    assert blank.status_code == 422
+    assert _match(mid).disputed is True
+
+
 def test_operator_verdict_still_wins(client):
     """Явный вердикт оператора не подменяется «оснований нет»."""
     emp_h, see_h, eid, sid, mid = _confirmed_shift(client, 850010, 850011)
@@ -121,13 +148,122 @@ def test_operator_verdict_still_wins(client):
     client.post(f"/matches/{mid}/dispute", headers=emp_h,
                 json={"note": "человек не вышел"})
     admin_h = _admin(client)
-    r = client.post(f"/matches/{mid}/resolve", headers=admin_h,
-                    json={"outcome": "no_show"})
+    r = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show", "reason": "подтверждена неявка"},
+    )
     assert r.status_code == 200, r.text
     m = _match(mid)
     assert m.disputed is False
     assert m.no_show is True
     assert m.status == "expired", "неявка — смены не было, комиссии нет"
+
+
+def test_operator_cannot_apply_verdict_without_an_open_dispute(client):
+    """Админская ручка не должна менять обычную смену одним ошибочным тапом."""
+    _, _, _, _, mid = _confirmed_shift(client, 850040, 850041)
+    admin_h = _admin(client)
+
+    response = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show", "reason": "ошибочный запрос"},
+    )
+
+    assert response.status_code == 409
+    m = _match(mid)
+    assert m.status == "confirmed"
+    assert m.no_show is False
+
+
+def test_completed_verdict_is_single_use_and_audited(client):
+    """Повтор вердикта не дублирует комиссию, сообщения или audit trail."""
+    emp_h, _, _, _, mid = _confirmed_shift(client, 850050, 850051)
+    age_shift(mid, days=1)
+    assert client.post(
+        f"/matches/{mid}/dispute",
+        headers=emp_h,
+        json={"note": "смена была, спорим о факте"},
+    ).status_code == 200
+    admin_h = _admin(client)
+
+    first = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "completed", "reason": "  проверены сообщения  "},
+    )
+    assert first.status_code == 200, first.text
+    second = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "completed", "reason": "повторный тап"},
+    )
+    assert second.status_code == 409
+
+    db = SessionLocal()
+    try:
+        assert db.query(Commission).filter(Commission.match_id == mid).count() == 1
+        assert db.query(Message).filter(
+            Message.match_id == mid,
+            Message.text == "Оператор закрыл спор: смена засчитана ✓",
+        ).count() == 1
+    finally:
+        db.close()
+
+    rows = client.get("/admin/audit", headers=admin_h).json()
+    verdicts = [
+        row for row in rows
+        if row["targetId"] == mid and row["action"] == "match.resolve.completed"
+    ]
+    assert len(verdicts) == 1
+    assert verdicts[0]["reason"] == "проверены сообщения"
+
+
+def test_no_show_verdict_is_single_use_and_audited(client):
+    """Неявка тоже одноразовая: без комиссии и повторного системного следа."""
+    emp_h, _, _, _, mid = _confirmed_shift(client, 850060, 850061)
+    age_shift(mid, days=1)
+    assert client.post(
+        f"/matches/{mid}/dispute",
+        headers=emp_h,
+        json={"note": "работник не пришёл"},
+    ).status_code == 200
+    admin_h = _admin(client)
+
+    first = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show", "reason": "подтверждено заведением"},
+    )
+    assert first.status_code == 200, first.text
+    second = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show", "reason": "повтор"},
+    )
+    assert second.status_code == 409
+
+    db = SessionLocal()
+    try:
+        assert db.query(Commission).filter(Commission.match_id == mid).count() == 0
+        assert db.query(Message).filter(
+            Message.match_id == mid,
+            Message.text == (
+                "Оператор закрыл спор: зафиксирована неявка. "
+                "Комиссия не начислена."
+            ),
+        ).count() == 1
+    finally:
+        db.close()
+
+    rows = client.get("/admin/audit", headers=admin_h).json()
+    verdicts = [
+        row for row in rows
+        if row["targetId"] == mid and row["action"] == "match.resolve.no_show"
+    ]
+    assert len(verdicts) == 1
+    assert verdicts[0]["reason"] == "подтверждено заведением"
 
 
 def test_worker_can_complain_after_the_shift_is_closed(client):

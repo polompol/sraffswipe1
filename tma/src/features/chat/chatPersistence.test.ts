@@ -1,99 +1,146 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  clearChatDraft,
-  clearChatRecoveryMemory,
-  markChatMessageFailed,
-  markChatMessageSending,
-  queueChatMessage,
-  readChatDraft,
-  restoreChatOutbox,
-  writeChatDraft,
-} from "./chatPersistence";
-import type { Message } from "@/types/domain";
 
-beforeEach(() => {
-  localStorage.clear();
-  clearChatRecoveryMemory();
-});
+async function api() {
+  return (await import("./chatPersistence")) as Record<string, any>;
+}
 
-describe("черновик чата", () => {
-  it("хранится отдельно для каждой смены и пустой текст удаляет ключ", () => {
-    writeChatDraft("match-1", "Буду к 10:00");
-    writeChatDraft("match-2", "Нужна форма?");
+const role = "seeker" as const;
+const userId = "u1";
 
-    expect(readChatDraft("match-1")).toBe("Буду к 10:00");
-    expect(readChatDraft("match-2")).toBe("Нужна форма?");
+function entry(id: string, matchId = "m1", text = `msg-${id}`) {
+  return {
+    clientMessageId: id,
+    matchId,
+    text,
+    createdAt: "2026-09-14T10:00:00Z",
+    status: "failed",
+    attempts: 1,
+    lastError: "network",
+  };
+}
 
-    clearChatDraft("match-1");
-    expect(readChatDraft("match-1")).toBe("");
-    expect(readChatDraft("match-2")).toBe("Нужна форма?");
+describe("chat recovery memory", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    const p = await api();
+    p.clearChatAccount("u1", "seeker");
+    p.clearChatAccount("u2", "seeker");
+    p.clearChatAccount("u1", "employer");
   });
 
-  it("не переносится между аккаунтами на одном устройстве", () => {
-    localStorage.setItem("ss_uid", "user-1");
-    writeChatDraft("match-1", "Личный черновик");
-    queueChatMessage(
-      "match-1",
-      "Неопределённая отправка",
-      "33333333-3333-4333-8333-333333333333",
-    );
+  it("stores independent drafts per match, account and role for this runtime", async () => {
+    const p = await api();
+    p.saveDraft(userId, role, "m1", "Первый");
+    p.saveDraft(userId, role, "m2", "Второй");
+    p.saveDraft("u2", role, "m1", "Чужой");
+    p.saveDraft(userId, "employer", "m1", "Другая роль");
 
-    localStorage.setItem("ss_uid", "user-2");
-    expect(readChatDraft("match-1")).toBe("");
-    expect(restoreChatOutbox("match-1")).toEqual([]);
-
-    localStorage.setItem("ss_uid", "user-1");
-    expect(readChatDraft("match-1")).toBe("Личный черновик");
-    expect(restoreChatOutbox("match-1")).toHaveLength(1);
+    expect(p.loadDraft(userId, role, "m1")).toBe("Первый");
+    expect(p.loadDraft(userId, role, "m2")).toBe("Второй");
+    expect(p.loadDraft("u2", role, "m1")).toBe("Чужой");
+    expect(p.loadDraft(userId, "employer", "m1")).toBe("Другая роль");
   });
 
-  it("никогда не пишет текст переписки в persistent browser storage", () => {
-    localStorage.setItem("ss_uid", "user-1");
-    writeChatDraft("match-1", "секретный текст черновика");
-    queueChatMessage(
-      "match-1",
-      "секретный текст отправки",
-      "44444444-4444-4444-8444-444444444444",
-    );
-
-    expect(localStorage.getItem("ss_chat_draft:user-1:match-1")).toBeNull();
-    expect(localStorage.getItem("ss_chat_outbox:user-1:match-1")).toBeNull();
-    expect(Object.values(localStorage).join(" ")).not.toContain("секретный текст");
-  });
-});
-
-describe("неопределённая отправка", () => {
-  it("retry использует тот же client_message_id", () => {
-    const id = "6f8142ee-cdc5-47fb-8c99-2da4d2fe0064";
-    queueChatMessage("match-1", "Буду к началу", id);
-    markChatMessageFailed("match-1", id);
-    const retry = markChatMessageSending("match-1", id);
-
-    expect(retry?.clientMessageId).toBe(id);
-    expect(retry?.text).toBe("Буду к началу");
-    expect(retry?.status).toBe("sending");
+  it("removes an empty draft instead of retaining dead runtime state", async () => {
+    const p = await api();
+    p.saveDraft(userId, role, "m1", "Текст");
+    p.saveDraft(userId, role, "m1", "");
+    expect(p.loadDraft(userId, role, "m1")).toBe("");
+    expect(p.loadChatState(userId, role).drafts.m1).toBeUndefined();
   });
 
-  it("не предлагает повтор уже подтверждённого сервером сообщения", () => {
-    const confirmedId = "11111111-1111-4111-8111-111111111111";
-    const unknownId = "22222222-2222-4222-8222-222222222222";
-    queueChatMessage("match-1", "Первое", confirmedId);
-    queueChatMessage("match-1", "Второе", unknownId);
+  it("upserts outbox by receipt and removes confirmed receipt", async () => {
+    const p = await api();
+    p.upsertOutbox(userId, role, entry("c1", "m1", "old"));
+    p.upsertOutbox(userId, role, { ...entry("c1", "m1", "new"), attempts: 2 });
+    expect(p.loadOutbox(userId, role)).toEqual([
+      expect.objectContaining({ clientMessageId: "c1", text: "new", attempts: 2 }),
+    ]);
 
-    const server: Message[] = [{
-      id: "server-1",
-      senderId: "me",
-      text: "Первое",
-      isSystem: false,
-      createdAt: "2026-09-14T18:00:00Z",
-      clientMessageId: confirmedId,
-    }];
+    p.removeOutbox(userId, role, "c1");
+    expect(p.loadOutbox(userId, role)).toEqual([]);
+  });
 
-    const restored = restoreChatOutbox("match-1", server);
+  it("filters outbox by active match", async () => {
+    const p = await api();
+    p.upsertOutbox(userId, role, entry("c1", "m1"));
+    p.upsertOutbox(userId, role, entry("c2", "m2"));
+    expect(p.loadOutbox(userId, role, "m2").map((x: any) => x.clientMessageId)).toEqual(["c2"]);
+  });
 
-    expect(restored).toHaveLength(1);
-    expect(restored[0].clientMessageId).toBe(unknownId);
-    expect(restored[0].status).toBe("failed");
+  it("caps outbox at the newest 100 entries", async () => {
+    const p = await api();
+    for (let i = 0; i < 105; i += 1) {
+      p.upsertOutbox(userId, role, entry(`c${i}`));
+    }
+    const rows = p.loadOutbox(userId, role);
+    expect(rows).toHaveLength(100);
+    expect(rows[0].clientMessageId).toBe("c5");
+    expect(rows[99].clientMessageId).toBe("c104");
+  });
+
+  it("sanitizes corrupt and oversized runtime values", async () => {
+    const p = await api();
+    p.saveChatState(userId, role, {
+      version: 1,
+      drafts: { m1: "x".repeat(2500), bad: 42 },
+      outbox: [
+        entry("ok", "m1", "y".repeat(2500)),
+        { clientMessageId: "bad", matchId: "m1", text: "x", status: "mystery" },
+      ],
+    } as any);
+
+    const state = p.loadChatState(userId, role);
+    expect(state.drafts.m1).toHaveLength(2000);
+    expect(state.drafts.bad).toBeUndefined();
+    expect(state.outbox).toHaveLength(1);
+    expect(state.outbox[0].text).toHaveLength(2000);
+    expect(state.outbox[0].clientMessageId).toBe("ok");
+  });
+
+  it("clears account runtime state without touching another account", async () => {
+    const p = await api();
+    p.saveDraft("u1", role, "m1", "Первый");
+    p.saveDraft("u2", role, "m1", "Второй");
+    p.clearChatAccount("u1", role);
+
+    expect(p.loadDraft("u1", role, "m1")).toBe("");
+    expect(p.loadDraft("u2", role, "m1")).toBe("Второй");
+  });
+
+  it("scrubs legacy ss_chat_v1 plaintext instead of restoring it", async () => {
+    const p = await api();
+    const key = p.chatStorageKey(userId, role);
+    localStorage.setItem(key, JSON.stringify({
+      version: 1,
+      drafts: { m1: "старый секрет" },
+      outbox: [entry("legacy", "m1", "старое сообщение")],
+    }));
+    sessionStorage.setItem(key, "старый session secret");
+
+    expect(p.loadChatState(userId, role)).toEqual({ version: 1, drafts: {}, outbox: [] });
+    expect(localStorage.getItem(key)).toBeNull();
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it("never writes chat plaintext to persistent browser storage", async () => {
+    const p = await api();
+    const draftSecret = "секретный текст черновика";
+    const outboxSecret = "секретный текст неопределённой отправки";
+
+    p.saveDraft(userId, role, "m-secret", draftSecret);
+    p.upsertOutbox(userId, role, entry("secret-id", "m-secret", outboxSecret));
+
+    expect(p.loadDraft(userId, role, "m-secret")).toBe(draftSecret);
+    expect(p.loadOutbox(userId, role, "m-secret")[0].text).toBe(outboxSecret);
+
+    const persistent = [
+      ...Object.values(localStorage),
+      ...Object.values(sessionStorage),
+    ].join(" ");
+    expect(persistent).not.toContain(draftSecret);
+    expect(persistent).not.toContain(outboxSecret);
   });
 });

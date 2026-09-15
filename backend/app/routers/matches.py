@@ -9,9 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy.orm import Session
 
+from ..admin_audit import record_admin_action
 from ..config import settings
 from ..conflicts import overlapping_shifts
 from ..db import get_db
+from ..match_lifecycle import allowed_match_actions
 from ..models import (
     Commission,
     Employer,
@@ -144,13 +146,28 @@ def mark_not_held(
         сказало заведение, а работник не отмечался — это неявка, она
         отражается в надёжности работника.
     """
-    m = db.get(Match, match_id)
+    # Arrival evidence and a "shift did not happen" claim mutate the
+    # same Match row. Serialize them so the second request always sees the
+    # first request's committed evidence instead of overwriting it.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Смена не найдена")
     is_employer = principal["id"] == m.employer_id and principal["role"] == "employer"
     is_seeker = principal["id"] == m.user_id and principal["role"] == "seeker"
     if not (is_employer or is_seeker):
         raise HTTPException(status_code=403, detail="Нет доступа к смене")
+
+    who = "employer" if is_employer else "seeker"
+    # A retry after the first request committed is a read of the committed
+    # outcome, not a second lifecycle mutation with duplicate side effects.
+    if m.not_held_by == who and (m.status == "expired" or m.disputed):
+        return _to_out(db, m, principal["role"])
+
     # И про ту, которую подтвердил только работник: за неё тоже начисляется
     # комиссия (см. settle_shifts), значит и выход из неё должен быть.
     if m.status not in ("confirmed", "matched"):
@@ -176,7 +193,6 @@ def mark_not_held(
                        "перестроиться.",
             )
 
-    who = "employer" if is_employer else "seeker"
     m.not_held_by = who
     m.cancel_reason = body.reason[:300] or m.cancel_reason
 
@@ -242,11 +258,30 @@ def mark_attendance(
     """Заведение подтверждает выход. `attended=true` — «человек пришёл» (сторона
     заведения во взаимном подтверждении). `attended=false` — «не вышел»: если
     работник уже отметился, это КОНФЛИКТ → спор оператору; иначе — неявка."""
-    m = db.get(Match, match_id)
+    # Serialize employer attendance against worker code check-in and
+    # not-held claims. The row is the transaction boundary for arrival truth.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["role"] != "employer" or principal["id"] != m.employer_id:
         raise HTTPException(status_code=403, detail="Только работодатель смены")
+
+    if body.attended and m.employer_checked_in:
+        return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
+    if (
+        not body.attended
+        and (
+            (m.status == "expired" and m.no_show and m.not_held_by == "employer")
+            or (m.disputed and m.seeker_checked_in)
+        )
+    ):
+        return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
+
     # Уже закрытую смену не трогаем: иначе attended=false переоткрывал бы спор
     # по completed-смене и спамил оператора ложными уведомлениями.
     if m.status != "confirmed":
@@ -316,6 +351,7 @@ def _to_out(
         employer_id=m.employer_id,
         vacancy_id=m.vacancy_id,
         status=m.status,
+        allowed_actions=allowed_match_actions(m, role, v),
         confirmed_by_seeker=m.confirmed_by_seeker,
         confirmed_by_employer=m.confirmed_by_employer,
         checkin_code=m.checkin_code if show_code else None,
@@ -397,13 +433,18 @@ def checkin(
     его назвал, заведение уже не сможет тихо записать смену в неявку: такое
     расхождение уходит к оператору.
     """
-    m = db.get(Match, match_id)
+    # The code is evidence that can conflict with attendance/not-held.
+    # Lock first so those three mutations have one authoritative order.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["role"] != "seeker" or principal["id"] != m.user_id:
         raise HTTPException(status_code=403, detail="Отметиться может только работник")
-    if m.status != "confirmed":
-        raise HTTPException(status_code=400, detail="Смена не подтверждена")
 
     by_code = bool(
         body.code
@@ -415,10 +456,39 @@ def checkin(
             status_code=400,
             detail="Неверный код. Попросите его у администратора заведения.",
         )
+
+    if m.seeker_checked_in and m.checkin_by_code:
+        return _to_out(db, m, principal["role"])
+
+    # A correct venue code may recover only an explicit no-show/not-held
+    # terminal state. Arbitrary expired/cancelled/completed matches stay closed.
+    recoverable_expired = (
+        m.status == "expired" and m.not_held_by in {"employer", "seeker"}
+    )
+    if m.status != "confirmed" and not recoverable_expired:
+        raise HTTPException(status_code=400, detail="Смена не подтверждена")
+
     m.seeker_checked_in = True
     m.checkin_by_code = True
-    sys_message(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")
-    maybe_complete(db, m)
+    if recoverable_expired:
+        # Preserve the earlier claim in not_held_by as audit evidence, but do
+        # not let it remain an automatic no-show once a valid code contradicts it.
+        m.no_show = False
+        m.status = "confirmed"
+        open_dispute(
+            db,
+            m,
+            "Правильный код прихода противоречит отметке, что смены не было.",
+        )
+        sys_message(
+            db,
+            m.id,
+            "Работник назвал правильный код после отметки о неявке. "
+            "Разбирает оператор StaffSwipe.",
+        )
+    else:
+        sys_message(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")
+        maybe_complete(db, m)
     db.commit()
     db.refresh(m)
     return _to_out(db, m, principal["role"])
@@ -437,23 +507,37 @@ def dispute(
 ):
     """«Пришёл/был, но не могу подтвердить» — эскалация к оператору. Доступна
     обеим сторонам мэтча. Создаёт жалобу-разбор и сигналит админам."""
-    m = db.get(Match, match_id)
+    # Serialize dispute creation on the match row. Two workers must not both
+    # observe disputed=False and create duplicate reports/messages/notifications.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
-    if principal["id"] not in (m.user_id, m.employer_id):
+    is_seeker = (
+        principal["role"] == "seeker" and principal["id"] == m.user_id
+    )
+    is_employer = (
+        principal["role"] == "employer" and principal["id"] == m.employer_id
+    )
+    if not (is_seeker or is_employer):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
-    # Повторный спор по той же смене не плодит жалобы/уведомления.
+    # Повторный спор по той же смене не плодит жалобы/уведомления. После
+    # row-lock конкурентный повтор дождётся первого commit и увидит True.
     if m.disputed:
         return _to_out(db, m, principal["role"])
     m.disputed = True
-    who = "работник" if principal["id"] == m.user_id else "заведение"
+    who = "работник" if is_seeker else "заведение"
     note = (body.note or "").strip()[:300]
     db.add(Report(
         reporter_id=principal["id"], target_type="match", target_id=m.id,
         reason="other", text=f"Спор по смене ({who}): {note}"[:1000],
     ))
     sys_message(db, m.id, "Открыт спор по смене — разбирает оператор StaffSwipe.")
-    other = m.employer_id if principal["id"] == m.user_id else m.user_id
+    other = m.employer_id if is_seeker else m.user_id
     notify_owner(db, other, "По вашей смене позвали оператора — он скоро напишет.")
     notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
     db.commit()
@@ -463,6 +547,7 @@ def dispute(
 
 class ResolveMatchIn(BaseModel):
     outcome: str  # "completed" | "no_show"
+    reason: Annotated[str, StringConstraints(max_length=1000)] = ""
 
 
 class HoursIn(BaseModel):
@@ -784,6 +869,8 @@ def decline_reschedule(
         raise HTTPException(status_code=403, detail="Только работник смены")
     if not m.reschedule_date:
         raise HTTPException(status_code=404, detail="Переноса не предлагали")
+    if m.status not in ("matched", "confirmed"):
+        raise HTTPException(status_code=409, detail="Смена уже закрыта")
     m.reschedule_date = ""
     m.reschedule_start = None
     m.reschedule_end = None
@@ -826,10 +913,24 @@ def cancel_shift(
     сторона получает уведомление сразу, а надёжность профиля страдает только
     при ПОЗДНЕЙ отмене — когда заменить человека заведение уже не успевает.
     """
-    m = db.get(Match, match_id)
+    # Cancellation changes availability and emits notifications, so one match
+    # row is the transaction boundary. A concurrent retry must observe the first
+    # cancellation before deciding whether it can mutate anything.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
-    if principal["id"] not in (m.user_id, m.employer_id):
+    is_seeker = (
+        principal["role"] == "seeker" and principal["id"] == m.user_id
+    )
+    is_employer = (
+        principal["role"] == "employer" and principal["id"] == m.employer_id
+    )
+    if not (is_seeker or is_employer):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
     if m.status in ("completed", "cancelled"):
         raise HTTPException(
@@ -843,7 +944,7 @@ def cancel_shift(
                    "Напишите в чат или откройте спор.",
         )
 
-    who = "seeker" if principal["id"] == m.user_id else "employer"
+    who = "seeker" if is_seeker else "employer"
     reason = (body.reason.strip() if body else "")[:200]
 
     # Поздняя отмена — та, после которой заведение уже не успеет найти замену.
@@ -901,9 +1002,37 @@ def resolve_match(
     иначе спор мог бы висеть вечно, а неявка мошенника не засчитывалась бы."""
     if not _is_admin(db, principal):
         raise HTTPException(status_code=403, detail="Только для оператора")
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="Укажите причину решения по спору")
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if body.outcome not in {"completed", "no_show"}:
+        raise HTTPException(status_code=400, detail="outcome: completed|no_show")
+    if not m.disputed:
+        raise HTTPException(
+            status_code=409,
+            detail="Спор уже закрыт или не был открыт",
+        )
+
+    # БД, а не ORM-кэш, решает, кто первым закрыл спор. Два воркера могут
+    # одновременно прочитать disputed=True; conditional UPDATE пропустит
+    # только одного. Если дальнейший вердикт упадёт, тот же transaction
+    # откатит и claim, поэтому спор не потеряется.
+    claimed = (
+        db.query(Match)
+        .filter(Match.id == match_id, Match.disputed.is_(True))
+        .update({Match.disputed: False}, synchronize_session=False)
+    )
+    if claimed != 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Спор уже закрыт или не был открыт",
+        )
+    # synchronize_session=False намеренно не трогает stale identity map.
+    # Синхронизируем локальный объект явно, чтобы последующий flush не смог
+    # вернуть disputed=True обратно в базу.
     m.disputed = False
     if body.outcome == "completed":
         m.status = "completed"
@@ -912,7 +1041,7 @@ def resolve_match(
         m.employer_checked_in = True
         accrue_commission(db, m)
         sys_message(db, m.id, "Оператор закрыл спор: смена засчитана ✓")
-    elif body.outcome == "no_show":
+    else:
         m.no_show = True  # засчитывается в надёжность работника
         # Статус обязателен: смена, оставшаяся «подтверждённой», ночью
         # попадала под общий расчёт — он ставил completed, СНИМАЛ неявку и
@@ -922,8 +1051,15 @@ def resolve_match(
         m.not_held_by = "employer"
         sys_message(db, m.id, "Оператор закрыл спор: зафиксирована неявка. "
                        "Комиссия не начислена.")
-    else:
-        raise HTTPException(status_code=400, detail="outcome: completed|no_show")
+
+    record_admin_action(
+        db,
+        actor_id=principal["id"],
+        action=f"match.resolve.{body.outcome}",
+        target_type="match",
+        target_id=m.id,
+        reason=reason,
+    )
     db.commit()
     db.refresh(m)
     return _to_out(db, m, principal["role"])
@@ -940,13 +1076,43 @@ def confirm(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
-    m = db.get(Match, match_id)
+    # Serialize both participants on the same match row. Without a row lock,
+    # simultaneous seeker/employer confirms could each read both flags as false,
+    # persist their own flag, and leave the final status stuck at `matched`.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
-    # Подтверждать может только участник мэтча.
-    if principal["id"] not in (m.user_id, m.employer_id):
+
+    # Authorization is a role+identity pair, not merely "one of these IDs".
+    # This prevents a token carrying the wrong role from crossing sides.
+    is_seeker = (
+        principal["role"] == "seeker" and principal["id"] == m.user_id
+    )
+    is_employer = (
+        principal["role"] == "employer" and principal["id"] == m.employer_id
+    )
+    if not (is_seeker or is_employer):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
-    if principal["role"] == "seeker":
+    if m.status in {"cancelled", "completed", "expired"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Эта смена уже закрыта — подтверждать её нельзя",
+        )
+
+    # Repeated taps/retries by the same side are an idempotent no-op. In
+    # particular, do not resend the employer notification while waiting for
+    # the second participant.
+    if (is_seeker and m.confirmed_by_seeker) or (
+        is_employer and m.confirmed_by_employer
+    ):
+        return _to_out(db, m, principal["role"])
+
+    if is_seeker:
         # Пересечение по времени: предупреждаем, но не запрещаем. Человек в
         # двух местах не будет, и одно заведение останется без работника —
         # но бывает и так, что первую смену отменили, а статус ещё не

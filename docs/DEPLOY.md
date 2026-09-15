@@ -1,115 +1,78 @@
-# Запуск StaffSwipe в прод (VPS + Docker)
+# StaffSwipe — production deploy & operations runbook
 
-Пошаговый runbook. Считаем, что у тебя уже есть **токен бота** (@BotFather) и
-**домен**. Осталось: сервер, секреты, деплой, подключение Mini App, проверка.
-Ориентировочно **30–60 минут**.
+Этот документ описывает запуск текущего production-стека StaffSwipe на одном VPS через `docker-compose.prod.yml` и отдельно отмечает проверки, которые нельзя заменить GitHub CI.
 
-Весь стек поднимается одной командой: Caddy (авто-HTTPS) + FastAPI + бот +
-PostgreSQL/PostGIS + собранный Mini App. Всё на одном домене, всё по HTTPS
-(требование Telegram Mini Apps).
+## 1. Что поднимается
 
----
+Production compose включает:
 
-## 0. Что понадобится
+- Caddy — HTTPS и reverse proxy;
+- FastAPI API;
+- Telegram bot;
+- Telegram Mini App (собранная статика);
+- PostgreSQL/PostGIS;
+- Redis;
+- отдельный scheduler-процесс.
 
-- Токен бота из @BotFather — **есть**.
-- Домен (или поддомен), напр. `app.tvoy-domen.ru` — **есть**.
-- VPS с Ubuntu 24.04 (подойдёт и 22.04) и публичным IP. 2 vCPU / 2 ГБ RAM хватит на пилот.
-  Подойдёт Timeweb, Selectel, Beget, Hetzner (~300–600 ₽/мес).
+Caddy проксирует `https://ДОМЕН/api/*` в FastAPI со снятием префикса `/api`, а остальной трафик отдаёт Mini App.
 
----
+## 2. Что нужно до запуска
 
-## 1. Домен → сервер (DNS)
+Нужны VPS с публичным IP, домен/поддомен с A-записью на этот IP, Telegram bot token и production-секреты. Для публичного запуска также нужны реальные реквизиты/контакты в `docs/legal/`, рабочая поддержка и один числовой Telegram ID владельца админки.
 
-В панели регистратора домена создай **A-запись**:
-
-```
-app.tvoy-domen.ru   →   <IP твоего VPS>
-```
-
-Проверить (с любого компьютера), что запись разошлась:
-
-```
-ping app.tvoy-domen.ru      # должен отвечать IP сервера
-```
-
-DNS может обновляться до нескольких часов, но обычно 5–15 минут.
-
----
-
-## 2. Подготовить сервер
-
-Зайти на сервер по SSH и поставить Docker:
+На сервере:
 
 ```sh
-ssh root@<IP сервера>
-
-curl -fsSL https://get.docker.com | sh          # Docker + compose-плагин
+ssh root@<IP>
+curl -fsSL https://get.docker.com | sh
+ufw allow 22
+ufw allow 80
+ufw allow 443
 ```
 
-Открыть порты (если включён фаервол ufw):
+Не включайте firewall до разрешения собственного SSH-порта.
 
-```sh
-ufw allow 22 && ufw allow 80 && ufw allow 443
-```
-
-Порт 22 — это твой собственный вход на сервер. Открывать его нужно
-**первым**: включив фаервол и забыв про него, доступ к серверу теряешь ты
-сам, и вернуть его можно будет только через панель хостинга.
-
----
-
-## 3. Забрать код
+## 3. Получить код
 
 ```sh
 git clone https://github.com/polompol/sraffswipe1.git
 cd sraffswipe1
 ```
 
-Всё нужное лежит в основной ветке (`main`), переключаться никуда не надо.
-Убедитесь, что поднялись службы `redis` и `scheduler`: **без планировщика
-смены не закрываются сами и комиссия не начисляется вообще**, и никто об
-этом не сообщит.
+Для production используйте только конкретный проверенный release SHA/ветку. Не считайте старый зелёный CI доказательством для нового коммита.
 
----
-
-## 4. Секреты и .env
-
-Сгенерировать случайные секреты:
+## 4. Production `.env`
 
 ```sh
 bash scripts/gen-secrets.sh
-```
-
-Скопировать шаблон и вписать значения:
-
-```sh
 cp .env.example .env
 nano .env
 ```
 
-Заполнить как минимум:
+Минимально обязательные значения:
 
-| Переменная            | Что вписать                                            |
-|-----------------------|--------------------------------------------------------|
-| `DOMAIN`              | `app.tvoy-domen.ru` (без https://)                     |
-| `TELEGRAM_BOT_TOKEN`  | токен из @BotFather                                    |
-| `BOT_USERNAME`        | имя бота без @ (напр. `staffswipe_bot`)                |
-| `POSTGRES_PASSWORD`   | из gen-secrets.sh                                      |
-| `JWT_SECRET`          | из gen-secrets.sh                                      |
-| `INTERNAL_API_SECRET` | из gen-secrets.sh                                      |
-| `ADMIN_TG_IDS`        | твой Telegram-id (узнать: напиши боту **@userinfobot**). Без него админ-панель не откроется НИКОМУ, и разбирать споры по сменам будет некому. Второй оператор — через запятую |
+```text
+DOMAIN=
+TELEGRAM_BOT_TOKEN=
+BOT_USERNAME=
+POSTGRES_PASSWORD=
+JWT_SECRET=
+INTERNAL_API_SECRET=
+ADMIN_TG_IDS=
+```
 
-Юридические ссылки (`VITE_OFFER_URL`, `VITE_PRIVACY_URL`) оставь **пустыми**:
-страницы собираются из `docs/legal/` при сборке приложения и открываются
-рядом с ним (`.../legal/offer.html`, `.../legal/privacy.html`). Заполнять их
-нужно, только если ты решишь держать документы на своём сайте. А вот **вписать
-реквизиты вместо прочерков `___` в самих файлах `docs/legal/` перед публичным
-запуском обязательно** (152-ФЗ, оферта).
+`ADMIN_TG_IDS` в production — один положительный числовой Telegram ID владельца. Не храните токены или другие секреты в Git, Mini App или обычной переписке.
 
-> ⚠️ Файл `.env` содержит секреты — он уже в `.gitignore`, не коммить его.
+Интеграции подключаются отдельными production-значениями:
 
----
+- `YOOKASSA_*` — карточные пополнения/возвраты;
+- `S3_*` + `UPLOAD_ORIGIN` — загрузка фотографий;
+- `DADATA_TOKEN` — проверка реквизитов;
+- `SENTRY_DSN` — сбор ошибок;
+- `VITE_SUPPORT_URL` — поддержка;
+- `ORG_*` — реквизиты документов.
+
+Точный список и комментарии находятся в `.env.example`.
 
 ## 5. Запуск
 
@@ -117,149 +80,159 @@ nano .env
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Первый раз собирает образы и берёт TLS-сертификат — 3–5 минут. Проверить:
+Проверить сервисы:
 
 ```sh
-docker compose -f docker-compose.prod.yml ps          # все сервисы Up
-curl -I https://app.tvoy-domen.ru                     # 200/301, валидный HTTPS
-curl https://app.tvoy-domen.ru/api/health             # {"status":"ok"} или похожее
+docker compose -f docker-compose.prod.yml ps
 ```
 
-Логи, если что-то не так:
+Для диагностики:
 
 ```sh
 docker compose -f docker-compose.prod.yml logs -f api
-docker compose -f docker-compose.prod.yml logs -f caddy   # проблемы с сертификатом
+docker compose -f docker-compose.prod.yml logs -f scheduler
+docker compose -f docker-compose.prod.yml logs -f bot
+docker compose -f docker-compose.prod.yml logs -f caddy
 ```
 
----
+FastAPI при production-конфигурации работает с `DEV_MODE=false` и строгой Telegram auth. Миграции применяются тем же Alembic-путём, который проверяется в Backend CI.
 
-## 6. Проверить кнопку в боте
+## 6. Health endpoints — не путать
 
-Кнопку «Смены» слева от поля ввода и список команд бот выставляет сам при
-запуске — в @BotFather настраивать ничего не нужно. Напиши боту `/start`,
-нажми кнопку: приложение должно открыться внутри Telegram.
-
-Если кнопки нет — не поднялся контейнер бота:
-`docker compose -f docker-compose.prod.yml logs bot`. Запасной вариант —
-поставить её руками: @BotFather → `/mybots` → бот → Bot Settings → Menu
-Button → Configure menu button, адрес `https://app.tvoy-domen.ru`, текст
-`Смены`.
-
-(Опционально) `/newapp` — создать именованное Mini App с тем же адресом,
-иконкой и описанием, чтобы работали прямые ссылки `t.me/<bot>/<app>`.
-
----
-
-## 7. Смоук-тест (5 минут)
-
-Внутри Telegram открой Mini App и пройди:
-
-- [ ] Онбординг → регистрация как **соискатель**.
-- [ ] Лента смен грузится (пока пусто — это норма, смен ещё нет).
-- [ ] Профиль открывается, виден процент заполненности.
-- [ ] Регистрация второго аккаунта как **заведение** → создать тестовую смену.
-- [ ] Соискателем свайпнуть эту смену вправо → у заведения появляется отклик.
-- [ ] Оба подтвердили → открылся чат, сообщения ходят (WebSocket).
-- [ ] В профиле внизу видна строка **«Админ-панель»** — значит
-      `ADMIN_TG_IDS` вписан верно и споры будет кому разбирать.
-
-Если всё прошло — **ты в проде**. Дальше — заводить реальные заведения.
-
----
-
-## 8. Обновления
+Через публичный домен endpoints доступны с `/api`:
 
 ```sh
-cd ~/sraffswipe1
-git pull
-docker compose -f docker-compose.prod.yml up -d --build
+curl -fsS https://ДОМЕН/api/health
+curl -fsS https://ДОМЕН/api/health/ready
+curl -fsS https://ДОМЕН/api/health/ops
 ```
 
-Миграции БД прогоняются автоматически при старте API.
+Семантика:
 
----
+- `/health` — только liveness API-процесса;
+- `/health/ready` — API + PostgreSQL readiness. Именно его использует Docker healthcheck API;
+- `/health/ops` — operational health: PostgreSQL, свежий Redis probe и heartbeat scheduler.
 
-## 9. Бэкапы — настроить в первый же день
+Scheduler считается stale, если heartbeat старше **180 секунд**. Отсутствующий/stale heartbeat или недоступный настроенный Redis дают `/health/ops` HTTP 503, но **не должны автоматически перезапускать API**.
 
-Весь бизнес живёт в одном контейнере Postgres на одном сервере: мэтчи,
-переписка, балансы заведений и начисленная комиссия. Умер диск — долги
-заведений не восстановить ничем. Это самый дешёвый способ потерять всё.
+Для внешнего alerting рекомендуется проверять `/api/health/ops`. Docker должен оставаться на `/health/ready`.
 
-Проверить, что дамп снимается:
+Если `/health/ready` = 200, а `/health/ops` = 503:
+
+1. посмотреть `docker compose -f docker-compose.prod.yml logs --tail=200 scheduler`;
+2. проверить Sentry, если задан `SENTRY_DSN`;
+3. проверить `redis` и `db` в `docker compose ... ps`;
+4. не перезапускать API вслепую — сначала определить компонент из `components` ответа `/health/ops`.
+
+Operational endpoint не должен возвращать DSN, пароли, stack trace, Telegram ID или платёжные данные.
+
+## 7. Telegram Mini App smoke — обязательно на физических устройствах
+
+После HTTPS deploy настройте Menu Button/Mini App URL у бота и проверьте минимум:
+
+- iOS: открытие, `initData`, safe area, BackButton, клавиатура чата, возврат из внешней страницы, повтор запроса при плохой сети;
+- Android: тот же набор;
+- обе роли: регистрация, лента, свайп/отклик, match, подтверждение смены, чат, код прихода, завершение/спор;
+- плохая сеть: повтор state-changing запроса не должен создавать дубль сообщения/действия.
+
+Browser/Playwright тесты этого не заменяют.
+
+## 8. YooKassa test-environment smoke — до реальных денег
+
+До включения реального магазина отдельно пройти тестовый контур:
+
+1. создание пополнения;
+2. возврат пользователя;
+3. webhook успешного платежа;
+4. повтор webhook;
+5. ровно одно зачисление баланса;
+6. refund;
+7. повтор/неопределённый ответ refund;
+8. reconciliation pending refund/payment.
+
+GitHub CI проверяет кодовые инварианты, но не подтверждает доступность или настройки конкретного аккаунта YooKassa.
+
+## 9. Backups
+
+Production backup создаётся существующим скриптом:
 
 ```sh
-cd sraffswipe1
 bash scripts/backup.sh
 ```
 
-Скрипт кладёт сжатый дамп в `/var/backups/staffswipe`, проверяет, что архив
-читается и в нём есть таблицы (пустой бэкап хуже отсутствия бэкапа — он даёт
-ложное спокойствие), и удаляет копии старше 14 дней.
+Формат — SQL `pg_dump --clean --if-exists`, gzip и integrity check. Копия на том же VPS не является достаточной резервной копией: настройте `RCLONE_REMOTE`/S3/другое внешнее хранилище и отдельно проверьте, что файлы реально появляются и сохраняются по retention-политике.
 
-Поставить на автомат — каждую ночь в 4:00:
+Пример nightly cron:
+
+```cron
+0 4 * * * cd /root/sraffswipe1 && RCLONE_REMOTE=<remote>:staffswipe bash scripts/backup.sh >> /var/log/staffswipe-backup.log 2>&1
+```
+
+### Проверка восстановления
+
+В репозитории есть `scripts/verify-backup-restore.sh`. Он предназначен для CI/тестового PostgreSQL и сам создаёт две disposable базы, выполняет миграции, dump → gzip → restore и проверяет core schema + sentinel data. Он также убеждается, что повреждённый gzip отвергается.
+
+**Не направляйте этот скрипт на production database.**
+
+Для production disaster-recovery периодически делайте rehearsal на staging/копии инфраструктуры: скачайте внешний backup, восстановите его в **новую пустую тестовую базу**, выполните sanity queries и только после этого считайте backup пригодным. Не проверяйте restore уничтожением единственной production-базы.
+
+## 10. Обновление
+
+Перед обновлением сохраните backup и зафиксируйте deploy SHA:
 
 ```sh
-crontab -e
+cd ~/sraffswipe1
+bash scripts/backup.sh
+git fetch --all --prune
+git checkout <verified-sha-or-release>
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Добавить строку (путь замени на свой, если клонировал не в `/root`):
-
-```
-0 4 * * * cd /root/sraffswipe1 && bash scripts/backup.sh >> /var/log/staffswipe-backup.log 2>&1
-```
-
-Проверить через сутки: `ls -lh /var/backups/staffswipe`.
-
-**Копия вне сервера.** Бэкап на том же диске не спасает от гибели самого
-сервера. Поставь `rclone`, подключи любое облако (Яндекс.Диск, S3) и укажи
-`RCLONE_REMOTE` — скрипт сам будет отправлять копию наружу:
-
-```
-0 4 * * * cd /root/sraffswipe1 && RCLONE_REMOTE=yadisk:staffswipe bash scripts/backup.sh >> /var/log/staffswipe-backup.log 2>&1
-```
-
-**Восстановление.** Процедуру проверяли по-настоящему, а не на бумаге: на
-базу с закрытой сменой, перепиской и начисленной комиссией сняли дамп, базу
-удалили целиком, восстановили из архива. Вернулось всё — 19 таблиц, русские
-названия, статус смены, код прихода и долг заведения 320 ₽. После этого тем
-же Telegram-аккаунтом вошли в приложение: смена на месте, счёт на месте, в
-старую переписку пишется, новые смены создаются.
-
-Проверьте и вы, до дня аварии, — на копии сервера:
+После обновления:
 
 ```sh
-docker compose -f docker-compose.prod.yml stop api bot scheduler
-zcat /var/backups/staffswipe/staffswipe_2026-08-07_0400.sql.gz \
-  | docker compose -f docker-compose.prod.yml exec -T db psql -U staffswipe staffswipe
-docker compose -f docker-compose.prod.yml start api bot scheduler
+docker compose -f docker-compose.prod.yml ps
+curl -fsS https://ДОМЕН/api/health/ready
+curl -fsS https://ДОМЕН/api/health/ops
 ```
 
----
+Затем повторите короткий Telegram smoke.
 
-## Частые проблемы
+## 11. Repository release gate
 
-- **Сертификат не выдаётся** → проверь, что A-запись указывает на этот сервер и
-  порты 80/443 открыты. Смотри `logs -f caddy`.
-- **502 на /api** → API ещё поднимается или упал на проверке конфига; смотри
-  `logs -f api` (частая причина — не заданы секреты при `DEV_MODE=false`).
-- **Кнопка в боте не открывает приложение** → в @BotFather проверь URL Menu
-  Button (ровно `https://ДОМЕН`, с https, без слэша на конце обязательно нет).
-- **Сменил домен** → пересобери tma (`--build`): адрес API «запечён» в бандл.
+PR должен иметь один агрегированный check **Repository Release Gate**. Он ждёт результаты одного и того же head SHA:
 
----
+- TMA CI;
+- Backend CI, включая PostgreSQL и backup→restore verification;
+- E2E;
+- Security.
 
-## Что НЕ входит в этот запуск (осознанно)
+Gate fail-closed: missing, failed, cancelled или timed-out source run не считается зелёным. Он не перезапускает и не дублирует сами suites.
 
-- **Приём комиссии картой (ЮKassa)** — подключается отдельно и НЕ требует
-  ИП/ООО: касса доступна самозанятому (см. `docs/LAUNCH.md`, раздел про
-  ЮKassa). Пока ключи `YOOKASSA_*` пустые, баланс заведения пополняет
-  оператор в админке, приняв перевод. Оплата самой смены в любом случае идёт
-  напрямую заведение ↔ работник — через приложение она не проходит никогда.
-- **Загрузка фото (S3)** — без ключей `S3_*` загрузка фото отдаёт 503, остальное
-  работает. Подключи Yandex Object Storage, когда понадобится.
-  Не забудь `UPLOAD_ORIGIN` — без него браузер молча зарежет отправку файла.
-- **Несколько воркеров API** — по умолчанию `WEB_CONCURRENCY=1`. Redis при
-  этом поднимается всегда (он в docker-compose.prod.yml), и общая память для
-  чата и счётчиков частоты уже есть — поднять число воркеров можно в любой
-  момент, отдельной подготовки это не требует.
+Даже зелёный Repository Release Gate **не означает production launch автоматически**. Внешние gates остаются отдельными:
+
+- physical iOS Telegram smoke;
+- physical Android Telegram smoke;
+- YooKassa test-environment smoke;
+- production DNS/HTTPS;
+- реальные внешние backups/retention;
+- production provider credentials и юридические данные.
+
+## 12. Частые проблемы
+
+- `502 /api` — смотрите `logs api`; частые причины: миграция/конфиг/secrets.
+- HTTPS не выпускается — DNS A-record и порты 80/443, затем `logs caddy`.
+- Mini App не открывается — проверьте HTTPS URL Menu Button и `logs bot`.
+- `/health/ready` 503 — PostgreSQL/API readiness.
+- `/health/ops` 503 при `/health/ready` 200 — scheduler/Redis operational incident; смотрите `components` + scheduler logs/Sentry.
+- фото не загружаются — проверьте `S3_*`, `UPLOAD_ORIGIN` и CSP.
+- карточные пополнения не работают — проверьте `YOOKASSA_*`, webhook URL/secret и provider test smoke.
+
+## 13. Критерий запуска
+
+Production можно считать подготовленным только после совпадения двух групп доказательств:
+
+1. текущий release SHA имеет зелёный Repository Release Gate;
+2. внешние gates выше пройдены на реальной production/test инфраструктуре и физических Telegram клиентах.
+
+Не подменяйте вторую группу браузерными тестами или старым CI.

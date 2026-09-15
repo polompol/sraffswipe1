@@ -108,4 +108,21 @@ describe("таблицы стилей", () => {
       expect(count, `${media}: правил внутри`).toBeLessThan(40);
     }
   });
+
+  it("prefers-reduced-motion keeps animated UI effectively instant", () => {
+    const css = read("../index.css");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(css).toContain("animation-duration: 0.01ms !important");
+    expect(css).toContain("transition-duration: 0.01ms !important");
+  });
+
+  it("safe-area tokens follow TMA.js viewport CSS variables", () => {
+    const css = read("./theme.css");
+    expect(css).toContain("--tg-viewport-safe-area-inset-top");
+    expect(css).toContain("--tg-viewport-safe-area-inset-bottom");
+    expect(css).toContain("--tg-viewport-content-safe-area-inset-top");
+    expect(css).toContain("--tg-viewport-content-safe-area-inset-bottom");
+    expect(css).toContain("env(safe-area-inset-top)");
+    expect(css).toContain("env(safe-area-inset-bottom)");
+  });
 });

@@ -264,12 +264,20 @@ def test_admin_block_user_and_vacancy(client):
         "end_time": 1080, "rate": 350, "city": "Москва",
     }).json()
     # Снять вакансию → исчезает из ленты.
-    bv = client.post(f"/admin/vacancies/{vac['id']}/block", headers=ah)
+    bv = client.post(
+        f"/admin/vacancies/{vac['id']}/block",
+        headers=ah,
+        json={"reason": "тестовая блокировка смены"},
+    )
     assert bv.status_code == 200
     feed_ids = {v["id"] for v in client.get("/vacancies").json()}
     assert vac["id"] not in feed_ids
     # Заблокировать работодателя → больше не может войти.
-    assert client.post(f"/admin/users/{eid}/block", headers=ah).status_code == 200
+    assert client.post(
+        f"/admin/users/{eid}/block",
+        headers=ah,
+        json={"reason": "тестовая блокировка пользователя"},
+    ).status_code == 200
     blocked_login = client.post(
         "/auth/telegram", json={"init_data": "", "role": "employer"}
     )
@@ -286,7 +294,11 @@ def test_blocked_user_denied_with_existing_token(client):
     eh = {"Authorization": f"Bearer {emp.json()['access_token']}"}
     # До бана работодатель действует.
     assert client.get("/me", headers=eh).status_code == 200
-    client.post(f"/admin/users/{eid}/block", headers=ah)
+    client.post(
+        f"/admin/users/{eid}/block",
+        headers=ah,
+        json={"reason": "немедленная блокировка активной сессии"},
+    )
     # После бана тот же токен получает 403 на любом защищённом эндпоинте.
     assert client.get("/me", headers=eh).status_code == 403
     assert client.post("/vacancies", headers=eh, json={
@@ -399,7 +411,11 @@ def test_admin_unblock(client):
     # админ не «забанил сам себя» — теперь бан действует на каждом запросе).
     e = client.post("/auth/telegram", json={"init_data": "", "role": "employer"})
     sid = e.json()["user_id"]
-    client.post(f"/admin/users/{sid}/block", headers=ah)
+    client.post(
+        f"/admin/users/{sid}/block",
+        headers=ah,
+        json={"reason": "проверка разблокировки"},
+    )
     blocked = client.get("/admin/blocked", headers=ah).json()
     assert any(b["id"] == sid for b in blocked)
     assert client.post(f"/admin/users/{sid}/unblock", headers=ah).status_code == 200

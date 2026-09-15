@@ -4,8 +4,9 @@ on:
   push:
     branches: ["**"]
     paths: ["tma/**", ".github/workflows/tma.yml"]
+  # Release-gate contract: every PR head must have fresh TMA evidence even
+  # when the commit itself only changes backend/ops/docs files.
   pull_request:
-    paths: ["tma/**", ".github/workflows/tma.yml"]
 
 jobs:
   build:

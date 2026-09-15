@@ -10,7 +10,10 @@ import {
   markNotHeld,
   shiftActUrl,
 } from "@/api/endpoints";
+import { useBackend } from "@/api/client";
 import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
+import { hasMatchAction } from "./matchActions";
+import { useMatchActionRunner } from "./useMatchActionRunner";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
@@ -115,6 +118,7 @@ export function MatchesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
+  const actionRunner = useMatchActionRunner();
   const [params, setParams] = useSearchParams();
   const workerId = role === "employer" ? params.get("worker") : null;
   const [view, setView] = useState<"all" | "current" | "history">("all");
@@ -130,11 +134,13 @@ export function MatchesPage() {
   // Подтверждение выхода закрывает смену сразу, не дожидаясь расчёта.
   // Отрицательный путь живёт отдельно — в «Смена не состоялась».
   async function mark(matchId: string, attended: boolean) {
-    haptic(attended ? "success" : "warning");
     try {
-      await markAttendance(matchId, attended);
-      toast(attended ? "Отметили: человек вышел ✓" : "Отмечено: не вышел", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "attendance", async () => {
+        haptic(attended ? "success" : "warning");
+        await markAttendance(matchId, attended);
+        toast(attended ? "Отметили: человек вышел ✓" : "Отмечено: не вышел", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       toast("Не отметилось — проверьте связь и нажмите ещё раз", "error");
     }
@@ -144,11 +150,13 @@ export function MatchesPage() {
     const code = (codes[matchId] ?? "").trim();
     if (code.length < 6) return;
     try {
-      await checkinShift(matchId, { code });
-      haptic("success");
-      toast("Вы отметились на смене ✓", "success");
-      setCodes((c) => ({ ...c, [matchId]: "" }));
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "checkin", async () => {
+        await checkinShift(matchId, { code });
+        haptic("success");
+        toast("Вы отметились на смене ✓", "success");
+        setCodes((c) => ({ ...c, [matchId]: "" }));
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       haptic("error");
       toast("Код не подошёл — проверьте цифры у администратора", "error");
@@ -175,11 +183,13 @@ export function MatchesPage() {
       "Заведение не рассчиталось за смену? Оператор свяжется с обеими сторонами и разберётся.",
       "Пожаловаться",
     ))) return;
-    haptic("warning");
     try {
-      await disputeShift(matchId, "Не заплатили за смену");
-      toast("Жалоба у оператора — он скоро напишет", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "dispute", async () => {
+        haptic("warning");
+        await disputeShift(matchId, "Не заплатили за смену");
+        toast("Жалоба у оператора — он скоро напишет", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       toast("Жалоба не ушла — попробуйте ещё раз", "error");
     }
@@ -190,11 +200,13 @@ export function MatchesPage() {
       "Позвать оператора по этой смене? Он свяжется с обеими сторонами.",
       "Позвать оператора",
     ))) return;
-    haptic("warning");
     try {
-      await disputeShift(matchId);
-      toast("Оператор получил заявку — скоро напишет", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "dispute", async () => {
+        haptic("warning");
+        await disputeShift(matchId);
+        toast("Оператор получил заявку — скоро напишет", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       toast("Не получилось позвать оператора — попробуйте ещё раз", "error");
     }
@@ -209,11 +221,13 @@ export function MatchesPage() {
       "Смена не состоялась",
     );
     if (!ok) return;
-    haptic("warning");
     try {
-      await markNotHeld(matchId);
-      toast("Отмечено: смена не состоялась", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "not_held", async () => {
+        haptic("warning");
+        await markNotHeld(matchId);
+        toast("Отмечено: смена не состоялась", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch (e) {
       haptic("error");
       toast(apiError(e, "Не получилось отметить — попробуйте ещё раз"), "error");
@@ -256,10 +270,23 @@ export function MatchesPage() {
         {visibleMatches?.map((m) => {
           const started = shiftStarted(m);
           const live = m.status === "confirmed" && !m.disputed;
-          // Позвать оператора можно на любом этапе живой смены: беда бывает
-          // и до неё («требуют залог за форму»). А «смена не состоялась» —
-          // только после окончания, это решается внутри самой шторки.
-          const hasTrouble = live || (role === "seeker" && canReportNoPay(m));
+          // На живом backend разрешение на state-changing CTA приходит с
+          // сервера. Локальное время остаётся только для поясняющего текста.
+          const canAttendance = useBackend
+            ? hasMatchAction(m, "attendance")
+            : live && role === "employer" && started && !m.employerCheckedIn;
+          const canCheckin = useBackend
+            ? hasMatchAction(m, "checkin")
+            : live && role === "seeker" && started && !m.seekerCheckedIn;
+          const canNotHeld = useBackend
+            ? hasMatchAction(m, "not_held")
+            : live && shiftEnded(m);
+          const canDispute = useBackend ? hasMatchAction(m, "dispute") : live;
+          const canNoPay =
+            role === "seeker"
+            && canReportNoPay(m)
+            && (!useBackend || hasMatchAction(m, "dispute"));
+          const hasTrouble = canNotHeld || canDispute || canNoPay;
           return (
             <div key={m.id} className="card">
               {/* Настоящая кнопка, а не div с onClick: переход в чат теперь
@@ -311,7 +338,15 @@ export function MatchesPage() {
               </button>
 
               <StatusLine m={m} />
-              {m.status === "matched" && <div style={{ marginTop: 12 }}><Button onClick={() => nav(`/chat/${m.id}`)}>Обсудить и подтвердить</Button></div>}
+              {m.status === "matched" && (
+                <div style={{ marginTop: 12 }}>
+                  <Button onClick={() => nav(`/chat/${m.id}`)}>
+                    {useBackend && !hasMatchAction(m, "confirm")
+                      ? "Открыть чат"
+                      : "Обсудить и подтвердить"}
+                  </Button>
+                </div>
+              )}
 
               {!!m.shiftPay && m.shiftPay > 0 && (
                 // Сумма отбита так же, как остальные блоки карточки: на 6
@@ -333,9 +368,9 @@ export function MatchesPage() {
               {/* Заведение: код и закрытие смены — только когда смена началась.
                   До этого дня показывать код и кнопку «человек пришёл» незачем:
                   человек ещё не пришёл, а кнопка провоцирует нажать заранее. */}
-              {live && role === "employer" && started && (
+              {role === "employer" && (useBackend ? canAttendance || !!m.employerCheckedIn : live && started) && (
                 <>
-                  {m.checkinCode && !m.employerCheckedIn && (
+                  {m.checkinCode && !m.employerCheckedIn && (!useBackend || canAttendance) && (
                     <div
                       style={{
                         marginTop: 12,
@@ -364,20 +399,24 @@ export function MatchesPage() {
                     <div className="muted" style={{ marginTop: 10 }}>
                       Вы подтвердили выход ✓
                     </div>
-                  ) : (
+                  ) : canAttendance ? (
                     <div style={{ marginTop: 12 }}>
-                      <Button onClick={() => mark(m.id, true)}>
+                      <Button
+                        disabled={actionRunner.isPending(m.id, "attendance")}
+                        onClick={() => mark(m.id, true)}
+                      >
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <IconCheck size={16} /> Подтвердить выход
+                          <IconCheck size={16} />
+                          {actionRunner.isPending(m.id, "attendance") ? "Отмечаем…" : "Подтвердить выход"}
                         </span>
                       </Button>
                     </div>
-                  )}
+                  ) : null}
                 </>
               )}
 
               {/* Работник: поле кода — тоже только в день смены. */}
-              {live && role === "seeker" && started && (
+              {role === "seeker" && (useBackend ? canCheckin || !!m.seekerCheckedIn : live && started) && (
                 m.seekerCheckedIn ? (
                   <div className="muted" style={{ marginTop: 10 }}>
                     Код принят ✓ Теперь видно, что вы были на смене.
@@ -410,10 +449,10 @@ export function MatchesPage() {
                       />
                       <Button
                         block={false}
-                        disabled={(codes[m.id] ?? "").length < 6}
+                        disabled={(codes[m.id] ?? "").length < 6 || actionRunner.isPending(m.id, "checkin")}
                         onClick={() => doCheckin(m.id)}
                       >
-                        Отметиться
+                        {actionRunner.isPending(m.id, "checkin") ? "Отмечаем…" : "Отметиться"}
                       </Button>
                     </div>
                   </div>
@@ -468,7 +507,7 @@ export function MatchesPage() {
             {/* Только после окончания смены: заявить «не состоялась» раньше —
                 значит отправить человека работать по отменённой смене. До
                 начала для отказа есть отмена в чате. */}
-            {troubleFor.status === "confirmed" && !troubleFor.disputed && shiftEnded(troubleFor) && (
+            {(useBackend ? hasMatchAction(troubleFor, "not_held") : troubleFor.status === "confirmed" && !troubleFor.disputed && shiftEnded(troubleFor)) && (
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -480,7 +519,7 @@ export function MatchesPage() {
                 Смена не состоялась
               </Button>
             )}
-            {troubleFor.status === "confirmed" && !troubleFor.disputed && (
+            {(useBackend ? hasMatchAction(troubleFor, "dispute") : troubleFor.status === "confirmed" && !troubleFor.disputed) && (
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -492,7 +531,7 @@ export function MatchesPage() {
                 Позвать оператора
               </Button>
             )}
-            {role === "seeker" && canReportNoPay(troubleFor) && (
+            {role === "seeker" && canReportNoPay(troubleFor) && (!useBackend || hasMatchAction(troubleFor, "dispute")) && (
               <Button
                 variant="danger"
                 onClick={() => {
@@ -510,9 +549,11 @@ export function MatchesPage() {
                 кнопку, которой там нет. */}
             <div className="muted" style={{ fontSize: "var(--text-sm)", lineHeight: 1.5 }}>
               Оператор разберётся по переписке и коду прихода.
-              {troubleFor.status === "confirmed"
-                && !troubleFor.disputed
-                && shiftEnded(troubleFor)
+              {(useBackend
+                ? hasMatchAction(troubleFor, "not_held")
+                : troubleFor.status === "confirmed"
+                  && !troubleFor.disputed
+                  && shiftEnded(troubleFor))
                 ? " Если смены не было — отметьте это, комиссию не возьмём."
                 : ""}
             </div>

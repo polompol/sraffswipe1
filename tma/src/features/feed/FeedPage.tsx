@@ -17,6 +17,8 @@ import { SwipeDeck } from "./SwipeDeck";
 import { useFeedFilters, toggleTodayFilter } from "./useFeedFilters";
 import { useShiftAlerts } from "./useShiftAlerts";
 import { useSwipeAction } from "./useSwipeAction";
+import { remainingFeedItems } from "./feedExhaustion";
+import { employerFeedState } from "./employerFeedGate";
 import { FeedHeader } from "./FeedHeader";
 import { FeedEmpty } from "./FeedEmpty";
 import { LS } from "@/lib/storage";
@@ -51,7 +53,7 @@ export function FeedPage() {
   const qc = useQueryClient();
   // Свайп и его последствия — отдельным хуком (useSwipeAction).
   const { swipe: handleSwipe, match, setMatch } = useSwipeAction(isSeeker);
-  const [empty, setEmpty] = useState(false);
+  const [exhaustedIds, setExhaustedIds] = useState<Set<string>>(() => new Set());
   // Перевёрнута ли карточка. Кнопки под колодой лежат поверх неё и живут вне
   // колоды, а их подписи белые — на светлой изнанке они исчезали.
   const [backOpen, setBackOpen] = useState(false);
@@ -66,8 +68,8 @@ export function FeedPage() {
 
   function applyFilters(f: FeedFilters) {
     feed.apply(f);
-    // Колода начинает набор заново — «карточки кончились» больше не в силе.
-    setEmpty(false);
+    // Новые условия — новый набор: прошлые просмотренные ID больше не скрываем.
+    setExhaustedIds(new Set());
   }
 
   // Пустая лента на старте — не тупик: превращаем в подписку на уведомления.
@@ -97,6 +99,12 @@ export function FeedPage() {
     queryKey: ["feed", role, feedFilters],
     queryFn: () => fetchFeed(role, feedFilters),
   });
+  // Запоминаем именно ID уже полностью просмотренного набора, а не вечный
+  // boolean «пусто». Если фоновый refetch добавил новую смену/кандидата, его
+  // ID не был просмотрен — карточка появляется сразу без сброса фильтров.
+  const visibleData = data
+    ? remainingFeedItems<Vacancy | Seeker>(data, exhaustedIds)
+    : undefined;
 
   // Первый чип — город и сколько нашлось: «Москва · 12».
   //
@@ -106,7 +114,7 @@ export function FeedPage() {
   // ленту по городу самого человека (у заведения — по его городу, у
   // соискателя — по профилю и радиусу). «Все города» было бы неправдой.
   const cityChipValue = filters.city || "Рядом";
-  const foundCount = typeof data?.length === "number" ? data.length : undefined;
+  const foundCount = typeof visibleData?.length === "number" ? visibleData.length : undefined;
 
   /** Снять один фильтр, не трогая остальные. */
   function clearFilter(key: keyof FeedFilters) {
@@ -203,12 +211,30 @@ export function FeedPage() {
 
   // Заведению без единой вакансии мэтч физически невозможен (мэтч ищется среди
   // его смен). Лайкать кандидатов впустую — тупик, поэтому ведём разместить смену.
-  const { data: myVacs } = useQuery({
+  const {
+    data: myVacs,
+    isLoading: myVacsLoading,
+    isError: myVacsError,
+    refetch: refetchMyVacs,
+  } = useQuery({
     queryKey: ["my-vacancies"],
     queryFn: fetchMyVacancies,
     enabled: !isSeeker,
   });
-  const employerNoVacancy = !isSeeker && myVacs != null && myVacs.length === 0;
+  const employerGate = employerFeedState(
+    isSeeker, myVacs, myVacsLoading, myVacsError,
+  );
+  const employerNoVacancy = employerGate === "needs_vacancy";
+  const feedReady = employerGate === "ready";
+  const showFeedError = employerGate === "error"
+    || (employerGate !== "loading" && isError);
+  const showFeedLoading = !showFeedError
+    && (isLoading || employerGate === "loading");
+
+  function retryFeed() {
+    void refetch();
+    if (!isSeeker) void refetchMyVacs();
+  }
 
   /** Отклик прямо из шторки «Детали смены».
    *
@@ -221,8 +247,17 @@ export function FeedPage() {
   // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
   // см. `.page.feed-deck` в index.css.
   const deckMode =
-    !isLoading && !isError && !!data && !empty && data.length > 0
+    feedReady && !showFeedLoading && !showFeedError
+    && !!visibleData && visibleData.length > 0
     && !(isSeeker && view === "list");
+
+  function exhaustCurrentFeed() {
+    setExhaustedIds((current) => {
+      const next = new Set(current);
+      for (const item of data ?? []) next.add(item.id);
+      return next;
+    });
+  }
 
   return (
     <div
@@ -283,10 +318,11 @@ export function FeedPage() {
         </div>
       )}
 
-      {isLoading && <SkeletonCard />}
-      {isError && <ErrorBox onRetry={() => refetch()} />}
+      {showFeedLoading && <SkeletonCard />}
+      {showFeedError && <ErrorBox onRetry={retryFeed} />}
 
-      {!isLoading && !isError && data && (empty || data.length === 0) && (
+      {feedReady && !showFeedLoading && !showFeedError
+        && visibleData && visibleData.length === 0 && (
         <FeedEmpty
           isSeeker={isSeeker}
           city={filters.city}
@@ -297,15 +333,17 @@ export function FeedPage() {
         />
       )}
 
-      {!isLoading && !isError && data && !empty && data.length > 0 && isSeeker && view === "list" && (
-        <VacancyList items={data as Vacancy[]} onAct={handleSwipe} />
+      {feedReady && !showFeedLoading && !showFeedError
+        && visibleData && visibleData.length > 0 && isSeeker && view === "list" && (
+        <VacancyList items={visibleData as Vacancy[]} onAct={handleSwipe} />
       )}
 
-      {!isLoading && !isError && data && !empty && data.length > 0 && !(isSeeker && view === "list") && (
+      {feedReady && !showFeedLoading && !showFeedError
+        && visibleData && visibleData.length > 0 && !(isSeeker && view === "list") && (
         <>
           {isSeeker ? (
             <SwipeDeck<Vacancy>
-              items={data as Vacancy[]}
+              items={visibleData as Vacancy[]}
               keyOf={(v) => v.id}
               renderCard={(v, c) => <VacancyCardContent v={v} onDetails={c.open} top={c.top} />}
               onSwipe={handleSwipe}
@@ -315,12 +353,12 @@ export function FeedPage() {
                   <ShiftDetailsBody v={v} />
                 </CardBack>
               )}
-              onEmpty={() => setEmpty(true)}
+              onEmpty={exhaustCurrentFeed}
               controllerRef={(fn) => (controller.current = fn)}
             />
           ) : (
             <SwipeDeck<Seeker>
-              items={data as Seeker[]}
+              items={visibleData as Seeker[]}
               keyOf={(s) => s.id}
               renderCard={(person, c) => <SeekerCardContent s={person} onDetails={c.open} top={c.top} />}
               onSwipe={handleSwipe}
@@ -337,7 +375,7 @@ export function FeedPage() {
                   <CandidateDetailsBody s={person} />
                 </CardBack>
               )}
-              onEmpty={() => setEmpty(true)}
+              onEmpty={exhaustCurrentFeed}
               controllerRef={(fn) => (controller.current = fn)}
             />
           )}
