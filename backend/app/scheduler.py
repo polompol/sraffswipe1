@@ -15,13 +15,14 @@
 """
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal
 from .models import JobRun
+from .service_health import ServiceHeartbeat, utcnow_naive
 from .timeutil import business_tz, local_today
 
 _log = logging.getLogger("staffswipe.scheduler")
@@ -99,6 +100,61 @@ def _mark_ran(db: Session, name: str, day: str) -> None:
         db.rollback()
 
 
+def _normalise_heartbeat_time(now: datetime | None) -> datetime:
+    if now is None:
+        return utcnow_naive()
+    if now.tzinfo is not None:
+        return now.astimezone(UTC).replace(tzinfo=None)
+    return now
+
+
+def _write_heartbeat(now: datetime | None = None) -> bool:
+    """Persist scheduler liveness without making heartbeat a job dependency.
+
+    The upsert is atomic on both databases StaffSwipe supports. If two
+    scheduler containers are started accidentally, they update one row rather
+    than racing on an insert. Failure is observable in logs/Sentry but never
+    stops reminders, settlement, or reconciliation from running.
+    """
+    stamp = _normalise_heartbeat_time(now)
+    db = SessionLocal()
+    try:
+        dialect = db.get_bind().dialect.name
+        values = {"service": "scheduler", "updated_at": stamp}
+        if dialect == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert
+
+            stmt = insert(ServiceHeartbeat).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[ServiceHeartbeat.service],
+                set_={"updated_at": stamp},
+            )
+            db.execute(stmt)
+        elif dialect == "sqlite":
+            from sqlalchemy.dialects.sqlite import insert
+
+            stmt = insert(ServiceHeartbeat).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[ServiceHeartbeat.service],
+                set_={"updated_at": stamp},
+            )
+            db.execute(stmt)
+        else:  # pragma: no cover - production/test dialects are covered above
+            row = db.get(ServiceHeartbeat, "scheduler")
+            if row is None:
+                db.add(ServiceHeartbeat(**values))
+            else:
+                row.updated_at = stamp
+        db.commit()
+        return True
+    except Exception:  # noqa: BLE001 — heartbeat must never kill scheduler
+        db.rollback()
+        _log.exception("не удалось записать heartbeat планировщика")
+        return False
+    finally:
+        db.close()
+
+
 def run_due(now: datetime | None = None) -> list[tuple[str, int]]:
     """Выполнить задачи, время которых наступило. Возвращает [(задача, N)]."""
     now = now or datetime.now(business_tz())
@@ -153,6 +209,9 @@ def main() -> None:  # pragma: no cover — вечный цикл
     _init_sentry()
     _log.info("планировщик запущен, часовой пояс: %s", business_tz())
     while True:
+        # Heartbeat ставим в начале итерации. Если run_due() зависнет, метка
+        # перестанет обновляться и /health/ops увидит именно эту деградацию.
+        _write_heartbeat()
         try:
             run_due()
         except Exception:  # noqa: BLE001 — планировщик не имеет права умереть
