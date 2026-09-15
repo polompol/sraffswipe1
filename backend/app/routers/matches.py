@@ -161,6 +161,13 @@ def mark_not_held(
     is_seeker = principal["id"] == m.user_id and principal["role"] == "seeker"
     if not (is_employer or is_seeker):
         raise HTTPException(status_code=403, detail="Нет доступа к смене")
+
+    who = "employer" if is_employer else "seeker"
+    # A retry after the first request committed is a read of the committed
+    # outcome, not a second lifecycle mutation with duplicate side effects.
+    if m.not_held_by == who and (m.status == "expired" or m.disputed):
+        return _to_out(db, m, principal["role"])
+
     # И про ту, которую подтвердил только работник: за неё тоже начисляется
     # комиссия (см. settle_shifts), значит и выход из неё должен быть.
     if m.status not in ("confirmed", "matched"):
@@ -186,7 +193,6 @@ def mark_not_held(
                        "перестроиться.",
             )
 
-    who = "employer" if is_employer else "seeker"
     m.not_held_by = who
     m.cancel_reason = body.reason[:300] or m.cancel_reason
 
@@ -264,6 +270,18 @@ def mark_attendance(
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["role"] != "employer" or principal["id"] != m.employer_id:
         raise HTTPException(status_code=403, detail="Только работодатель смены")
+
+    if body.attended and m.employer_checked_in:
+        return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
+    if (
+        not body.attended
+        and (
+            (m.status == "expired" and m.no_show and m.not_held_by == "employer")
+            or (m.disputed and m.seeker_checked_in)
+        )
+    ):
+        return {"ok": True, "noShow": m.no_show, "disputed": m.disputed}
+
     # Уже закрытую смену не трогаем: иначе attended=false переоткрывал бы спор
     # по completed-смене и спамил оператора ложными уведомлениями.
     if m.status != "confirmed":
@@ -428,14 +446,6 @@ def checkin(
     if principal["role"] != "seeker" or principal["id"] != m.user_id:
         raise HTTPException(status_code=403, detail="Отметиться может только работник")
 
-    # A correct venue code may recover only an explicit no-show/not-held
-    # terminal state. Arbitrary expired/cancelled/completed matches stay closed.
-    recoverable_expired = (
-        m.status == "expired" and m.not_held_by in {"employer", "seeker"}
-    )
-    if m.status != "confirmed" and not recoverable_expired:
-        raise HTTPException(status_code=400, detail="Смена не подтверждена")
-
     by_code = bool(
         body.code
         and m.checkin_code
@@ -446,6 +456,17 @@ def checkin(
             status_code=400,
             detail="Неверный код. Попросите его у администратора заведения.",
         )
+
+    if m.seeker_checked_in and m.checkin_by_code:
+        return _to_out(db, m, principal["role"])
+
+    # A correct venue code may recover only an explicit no-show/not-held
+    # terminal state. Arbitrary expired/cancelled/completed matches stay closed.
+    recoverable_expired = (
+        m.status == "expired" and m.not_held_by in {"employer", "seeker"}
+    )
+    if m.status != "confirmed" and not recoverable_expired:
+        raise HTTPException(status_code=400, detail="Смена не подтверждена")
 
     m.seeker_checked_in = True
     m.checkin_by_code = True
