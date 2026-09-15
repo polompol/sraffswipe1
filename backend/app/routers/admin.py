@@ -497,7 +497,7 @@ def _other_role(db: Session, target):
 @router.post("/users/{user_id}/block")
 def block_user(
     user_id: str,
-    body: AdminReasonIn | None = None,
+    body: AdminReasonIn,
     db: Session = Depends(get_db),
     admin: dict = Depends(require_admin),
 ):
@@ -505,6 +505,9 @@ def block_user(
 
     Блокируем обе роли этого Telegram-аккаунта — см. `_other_role`.
     """
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="Укажите причину блокировки")
     target = db.get(User, user_id) or db.get(Employer, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -526,7 +529,7 @@ def block_user(
         action="user.block",
         target_type="user",
         target_id=user_id,
-        reason=body.reason if body else "",
+        reason=reason,
     )
     db.commit()
     return {"ok": True, "blocked": True, "alsoBlocked": also.id if also else None}
@@ -535,11 +538,14 @@ def block_user(
 @router.post("/vacancies/{vacancy_id}/block")
 def block_vacancy(
     vacancy_id: str,
-    body: AdminReasonIn | None = None,
+    body: AdminReasonIn,
     db: Session = Depends(get_db),
     admin: dict = Depends(require_admin),
 ):
     """Снять вакансию (фейк/обман) — она исчезает из ленты."""
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="Укажите причину снятия смены")
     v = db.get(Vacancy, vacancy_id)
     if v is None:
         raise HTTPException(status_code=404, detail="Вакансия не найдена")
@@ -551,7 +557,7 @@ def block_vacancy(
         action="vacancy.block",
         target_type="vacancy",
         target_id=vacancy_id,
-        reason=body.reason if body else "",
+        reason=reason,
     )
     db.commit()
     return {"ok": True, "blocked": True}
@@ -664,7 +670,7 @@ class PurchaseOut(BaseModel):
 
 @router.get("/purchases", response_model=list[PurchaseOut])
 def list_purchases(
-    db: Session = Depends(get_db), _admin: dict = Depends(require_admin)
+    db: Session = Depends(get_db), _admin: dict = Depends(require_admin),
 ):
     """Журнал платежей — чтобы видеть, что и кому возвращать."""
     rows = (
