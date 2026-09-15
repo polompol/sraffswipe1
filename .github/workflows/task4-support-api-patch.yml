@@ -1,0 +1,193 @@
+name: Apply Task 4 support API patch
+
+on:
+  pull_request:
+    branches:
+      - codex/staffswipe-release-candidate
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'codex/staffswipe-production-readiness'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+          fetch-depth: 0
+
+      - name: Patch support endpoint and mock contracts
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, got {count}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          support_api = r'''
+export type SupportTopic = "shift" | "payment" | "account" | "safety" | "other";
+export type SupportCaseStatus = "open" | "answered" | "closed";
+
+export interface SupportCase {
+  id: string;
+  number: string;
+  topic: SupportTopic;
+  text: string;
+  status: SupportCaseStatus;
+  adminReply: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminSupportCase extends SupportCase {
+  ownerId: string;
+  ownerRole: string;
+  ownerInfo: string;
+}
+
+export async function createSupportCase(
+  topic: SupportTopic,
+  text: string,
+): Promise<SupportCase> {
+  if (!USE_BACKEND) return mock.createSupportCase(topic, text);
+  const { data } = await api.post<SupportCase>("/support/cases", { topic, text });
+  return data;
+}
+
+export async function fetchSupportCases(): Promise<SupportCase[]> {
+  if (!USE_BACKEND) return mock.fetchSupportCases();
+  const { data } = await api.get<SupportCase[]>("/support/cases");
+  return data;
+}
+
+export async function fetchAdminSupport(
+  status: "open" | "all" = "open",
+): Promise<AdminSupportCase[]> {
+  if (!USE_BACKEND) return mock.fetchAdminSupport(status);
+  const { data } = await api.get<AdminSupportCase[]>("/admin/support", {
+    params: { status },
+  });
+  return data;
+}
+
+export async function replySupportCase(
+  id: string,
+  reply: string,
+): Promise<AdminSupportCase> {
+  if (!USE_BACKEND) return mock.replySupportCase(id, reply);
+  const { data } = await api.post<AdminSupportCase>(
+    `/admin/support/${id}/reply`,
+    { reply },
+  );
+  return data;
+}
+
+export async function closeSupportCase(
+  id: string,
+  reply = "",
+): Promise<AdminSupportCase> {
+  if (!USE_BACKEND) return mock.closeSupportCase(id, reply);
+  const { data } = await api.post<AdminSupportCase>(
+    `/admin/support/${id}/close`,
+    reply ? { reply } : {},
+  );
+  return data;
+}
+
+'''
+          replace_once(
+              "tma/src/api/endpoints.ts",
+              "export interface AddressSuggestion {",
+              support_api + "export interface AddressSuggestion {",
+          )
+
+          replace_once(
+              "tma/src/api/mock.ts",
+              '''  ReferralInfo,\n  SavedSearch,\n  SwipeResult,\n  VacancyInput,\n  VerifyResult,\n} from "./endpoints";''',
+              '''  AdminSupportCase,\n  ReferralInfo,\n  SavedSearch,\n  SupportCase,\n  SupportTopic,\n  SwipeResult,\n  VacancyInput,\n  VerifyResult,\n} from "./endpoints";''',
+          )
+          replace_once(
+              "tma/src/api/mock.ts",
+              '''const uid = () => Math.random().toString(36).slice(2, 10);\n''',
+              '''const uid = () => Math.random().toString(36).slice(2, 10);\n\nconst supportCases: AdminSupportCase[] = [];\n''',
+          )
+
+          support_mock = r'''
+export function createSupportCase(topic: SupportTopic, text: string): Promise<SupportCase> {
+  const now = new Date().toISOString();
+  const id = uid();
+  const row: AdminSupportCase = {
+    id,
+    number: `SS-${id.slice(0, 8).toUpperCase()}`,
+    ownerId: "me",
+    ownerRole: "seeker",
+    ownerInfo: "Демо-пользователь",
+    topic,
+    text: text.trim(),
+    status: "open",
+    adminReply: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  supportCases.unshift(row);
+  return Promise.resolve({ ...row });
+}
+
+export function fetchSupportCases(): Promise<SupportCase[]> {
+  return Promise.resolve(supportCases.map((row) => ({ ...row })));
+}
+
+export function fetchAdminSupport(
+  status: "open" | "all" = "open",
+): Promise<AdminSupportCase[]> {
+  const rows = status === "open"
+    ? supportCases.filter((row) => row.status !== "closed")
+    : supportCases;
+  return Promise.resolve(rows.map((row) => ({ ...row })));
+}
+
+export function replySupportCase(id: string, reply: string): Promise<AdminSupportCase> {
+  const row = supportCases.find((item) => item.id === id);
+  if (!row) return Promise.reject(new Error("Обращение не найдено"));
+  row.adminReply = reply.trim();
+  row.status = "answered";
+  row.updatedAt = new Date().toISOString();
+  return Promise.resolve({ ...row });
+}
+
+export function closeSupportCase(id: string, reply = ""): Promise<AdminSupportCase> {
+  const row = supportCases.find((item) => item.id === id);
+  if (!row) return Promise.reject(new Error("Обращение не найдено"));
+  const finalReply = reply.trim();
+  if (finalReply) row.adminReply = finalReply;
+  row.status = "closed";
+  row.updatedAt = new Date().toISOString();
+  return Promise.resolve({ ...row });
+}
+
+'''
+          replace_once(
+              "tma/src/api/mock.ts",
+              "export function resolveReport(id: string): Promise<void> {",
+              support_mock + "export function resolveReport(id: string): Promise<void> {",
+          )
+          PY
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/task4-support-api-patch.yml
+          git add tma/src/api/endpoints.ts tma/src/api/mock.ts
+          git diff --cached --check
+          git commit -m "feat(tma): add support case API contracts"
+          git push origin HEAD:codex/staffswipe-production-readiness
