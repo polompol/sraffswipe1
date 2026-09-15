@@ -43,6 +43,14 @@ const OUTBOX_ERRORS = new Set<OutboxError>([
   "integrity",
 ]);
 
+/**
+ * Chat plaintext is sensitive. Recovery state lives only for the lifetime of
+ * the current Mini App JavaScript context; it is never written to
+ * localStorage/sessionStorage. The server history remains the durable source
+ * of truth for messages that were confirmed by the backend.
+ */
+const runtimeStates = new Map<string, PersistedChatStateV1>();
+
 function emptyState(): PersistedChatStateV1 {
   return { version: 1, drafts: {}, outbox: [] };
 }
@@ -109,36 +117,72 @@ function sanitizeState(value: unknown): PersistedChatStateV1 {
   return { version: 1, drafts, outbox };
 }
 
-/** Chat persistence is isolated by both account id and active role. */
+function cloneState(state: PersistedChatStateV1): PersistedChatStateV1 {
+  return {
+    version: 1,
+    drafts: { ...state.drafts },
+    outbox: state.outbox.map((row) => ({ ...row })),
+  };
+}
+
+function runtimeKey(userId: string, role: AppRole): string {
+  return `${role}:${userId}`;
+}
+
+/** Legacy key kept only so interim builds can scrub plaintext they wrote. */
 export function chatStorageKey(userId: string, role: AppRole): string {
   return `${CHAT_STORAGE_PREFIX}:${role}:${userId}`;
 }
 
-export function loadChatState(userId: string, role: AppRole): PersistedChatStateV1 {
-  try {
-    const raw = localStorage.getItem(chatStorageKey(userId, role));
-    if (!raw) return emptyState();
-    return sanitizeState(JSON.parse(raw));
-  } catch {
-    return emptyState();
+function removePersistentKey(key: string): void {
+  for (const storage of [
+    typeof localStorage === "undefined" ? null : localStorage,
+    typeof sessionStorage === "undefined" ? null : sessionStorage,
+  ]) {
+    try {
+      storage?.removeItem(key);
+    } catch {
+      // Restricted Telegram/private storage must never break chat.
+    }
   }
 }
 
-/** Returns false when the WebView denies localStorage writes. */
+function purgeLegacyPersistentChatPlaintext(): void {
+  for (const storage of [
+    typeof localStorage === "undefined" ? null : localStorage,
+    typeof sessionStorage === "undefined" ? null : sessionStorage,
+  ]) {
+    if (!storage) continue;
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
+        if (key?.startsWith(`${CHAT_STORAGE_PREFIX}:`)) keys.push(key);
+      }
+      for (const key of keys) storage.removeItem(key);
+    } catch {
+      // Best-effort cleanup only; memory recovery still works.
+    }
+  }
+}
+
+purgeLegacyPersistentChatPlaintext();
+
+export function loadChatState(userId: string, role: AppRole): PersistedChatStateV1 {
+  removePersistentKey(chatStorageKey(userId, role));
+  const state = runtimeStates.get(runtimeKey(userId, role));
+  return state ? cloneState(state) : emptyState();
+}
+
+/** Runtime memory cannot fail because browser persistent storage is not used. */
 export function saveChatState(
   userId: string,
   role: AppRole,
   state: PersistedChatStateV1,
 ): boolean {
-  try {
-    localStorage.setItem(
-      chatStorageKey(userId, role),
-      JSON.stringify(sanitizeState(state)),
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  removePersistentKey(chatStorageKey(userId, role));
+  runtimeStates.set(runtimeKey(userId, role), sanitizeState(state));
+  return true;
 }
 
 export function saveDraft(
@@ -200,11 +244,8 @@ export function loadOutbox(
   return matchId ? rows.filter((row) => row.matchId === matchId) : rows;
 }
 
-/** Remove only the selected account/role chat state. */
+/** Remove only the selected account/role runtime state and any legacy key. */
 export function clearChatAccount(userId: string, role: AppRole): void {
-  try {
-    localStorage.removeItem(chatStorageKey(userId, role));
-  } catch {
-    // Restricted Telegram/private storage must never make logout fail.
-  }
+  runtimeStates.delete(runtimeKey(userId, role));
+  removePersistentKey(chatStorageKey(userId, role));
 }
