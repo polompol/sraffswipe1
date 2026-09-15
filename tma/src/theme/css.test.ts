@@ -108,4 +108,11 @@ describe("таблицы стилей", () => {
       expect(count, `${media}: правил внутри`).toBeLessThan(40);
     }
   });
+
+  it("prefers-reduced-motion keeps animated UI effectively instant", () => {
+    const css = read("../index.css");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(css).toContain("animation-duration: 0.01ms !important");
+    expect(css).toContain("transition-duration: 0.01ms !important");
+  });
 });
