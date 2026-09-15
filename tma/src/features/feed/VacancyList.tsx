@@ -29,13 +29,18 @@ export function VacancyList({
 }: {
   items: Vacancy[];
   // Возвращает true, если по отклику стоит показать тост «Отклик отправлен»
-  // (успех и НЕ мэтч — при мэтче всплывает оверлей, тост не нужен). При ошибке
-  // или мэтче — ничего/false, чтобы не показать ложный успех до ответа сервера.
+  // (успех и НЕ мэтч — при мэтче всплывает оверлей, тост не нужен). Любой
+  // resolved результат означает, что сервер принял решение; ошибка должна
+  // отклонить Promise, чтобы строка осталась и действие можно было повторить.
   onAct: (v: Vacancy, dir: SwipeDirection) => void | boolean | Promise<void | boolean>;
   hideSkip?: boolean; // в избранном «Пропустить» бессмысленна — прячем
 }) {
   const [reportId, setReportId] = useState<string | null>(null);
   const [moreFor, setMoreFor] = useState<Vacancy | null>(null);
+  // Успешно обработанную строку убираем сразу, не дожидаясь фонового refetch.
+  // Иначе человек видел уже отправленный отклик и мог нажать его снова после
+  // того, как общий Button снимал свой временный single-flight lock.
+  const [settledIds, setSettledIds] = useState<Set<string>>(() => new Set());
   const qc = useQueryClient();
   const { data: favIds } = useQuery({ queryKey: ["fav-ids"], queryFn: listFavoriteIds });
   const saved = new Set(favIds ?? []);
@@ -58,11 +63,29 @@ export function VacancyList({
     }
   }
 
+  async function act(v: Vacancy, dir: SwipeDirection) {
+    try {
+      const showSuccess = await onAct(v, dir);
+      setSettledIds((current) => {
+        const next = new Set(current);
+        next.add(v.id);
+        return next;
+      });
+      if (dir === "like" && showSuccess) {
+        toast("Отклик отправлен", "success");
+      }
+    } catch {
+      // Сообщение об ошибке показывает вызывающий слой: он знает точную
+      // причину сервера. Здесь важно только НЕ убирать строку, чтобы человек
+      // мог повторить действие после восстановления связи/исправления причины.
+    }
+  }
+
   return (
     // Нулевая нижняя граница колонки не даёт длинному названию распирать
     // всю карточку на узком экране с крупным шрифтом.
     <div className="stagger stack stack-lg" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-      {items.map((v) => (
+      {items.filter((v) => !settledIds.has(v.id)).map((v) => (
         <div key={v.id} className="card fade-up">
           <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
             <Avatar size={64} src={v.interiorPhotoUrl} name={v.companyName || "Смена"} />
@@ -129,18 +152,14 @@ export function VacancyList({
               <Button
                 variant="ghost"
                 style={{ minHeight: 44, flex: "1 1 40%" }}
-                onClick={async () => {
-                  await onAct(v, "dislike");
-                }}
+                onClick={() => act(v, "dislike")}
               >
                 Пропустить
               </Button>
             )}
             <Button
               style={{ minHeight: 44, flex: "1 1 40%" }}
-              onClick={async () => {
-                if (await onAct(v, "like")) toast("Отклик отправлен", "success");
-              }}
+              onClick={() => act(v, "like")}
             >
               Откликнуться
             </Button>
