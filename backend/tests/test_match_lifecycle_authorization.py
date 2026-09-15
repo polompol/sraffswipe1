@@ -8,9 +8,9 @@ have to re-implement status rules and then discover mismatches after a tap.
 import pytest
 from fastapi import HTTPException
 
+import app.routers.matches as matches_router
 from app.db import SessionLocal
 from app.models import Match
-import app.routers.matches as matches_router
 
 
 def _auth(client, role: str):
