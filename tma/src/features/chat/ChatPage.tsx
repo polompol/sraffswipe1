@@ -29,6 +29,7 @@ import { useChatOutbox } from "./useChatOutbox";
 import { ChatConnectionState, type ChatConnection } from "./ChatConnectionState";
 import { MessageComposer } from "./MessageComposer";
 import { MessageList } from "./MessageList";
+import { hasMatchAction } from "@/features/matches/matchActions";
 import { EmptyState } from "@/components/EmptyState";
 import { IconBack, IconWarning, IconCheck, IconChat, IconMore } from "@/components/Icons";
 
@@ -196,23 +197,34 @@ export function ChatPage() {
     : !!srvMatch?.confirmedBySeeker;
   const bothConfirmed =
     !!srvMatch && srvMatch.confirmedBySeeker && srvMatch.confirmedByEmployer;
-  // Смена ещё «живая»: не отменена и не закрыта сама собой.
+  // На живом backend разрешения state-changing действий принадлежат серверу.
+  // Локальные status/time правила остаются только для mock/demo, чтобы демо
+  // работало без сервера и при этом production никогда не угадывал доступ.
   const alive =
     !!srvMatch && !["cancelled", "expired", "completed"].includes(srvMatch.status);
-  // Смена ещё не началась — по отметкам И ПО ВРЕМЕНИ. Только по отметкам было
-  // мало: сервер теперь отказывает в отмене и переносе начавшейся смены (это
-  // была универсальная кнопка «не платить»), а приложение об этом не знало и
-  // показывало кнопки, которые отвечали ошибкой.
   const notStarted =
     !!srvMatch
     && !srvMatch.seekerCheckedIn
     && !srvMatch.employerCheckedIn
     && !shiftStarted(srvMatch);
-  const canCancel = alive && notStarted;
-  const canMove = role === "employer" && alive && notStarted;
-  // Уточнить часы можно только в первые сутки после смены.
-  const canSetHours =
-    role === "employer" && alive && !!srvMatch && shiftEnded(srvMatch);
+  const canConfirm = !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "confirm")
+    : !iConfirmed && alive);
+  const canCancel = !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "cancel")
+    : alive && notStarted);
+  const canMove = role === "employer" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "propose_reschedule")
+    : alive && notStarted);
+  const canSetHours = role === "employer" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "set_hours")
+    : alive && shiftEnded(srvMatch));
+  const canAcceptMove = role === "seeker" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "accept_reschedule")
+    : !!srvMatch.rescheduleDate);
+  const canDeclineMove = role === "seeker" && !!srvMatch && (useBackend
+    ? hasMatchAction(srvMatch, "decline_reschedule")
+    : !!srvMatch.rescheduleDate);
   const canAct = canCancel || canMove || canSetHours;
 
 
@@ -492,9 +504,10 @@ export function ChatPage() {
         {/* Подтверждение смены — главное действие экрана, поэтому primary.
             После подтверждения гасим до secondary: это уже статус, а не CTA. */}
         <div style={{ marginBottom: 8 }}>
+          {(!useBackend || canConfirm || iConfirmed) && (
           <Button
             variant={iConfirmed ? "secondary" : "primary"}
-            disabled={iConfirmed}
+            disabled={useBackend ? !canConfirm : iConfirmed}
             onClick={() => doConfirm()}
           >
             <span className="inline">
@@ -510,6 +523,7 @@ export function ChatPage() {
                   : "Подтвердить смену"}
             </span>
           </Button>
+          )}
           {/* Одна дверь вместо ряда кнопок. Уточнить часы, перенести и
               отменить нужны редко — но когда нужны, их ищут именно тут.
               Пять кнопок в ряд превращали чат в панель управления. */}
@@ -525,7 +539,7 @@ export function ChatPage() {
 
           {/* Работнику: заведение предложило другой день — надо ответить.
               Это не пряталось бы в меню: тут ждут ответа именно от него. */}
-          {role === "seeker" && srvMatch?.rescheduleDate && (
+          {role === "seeker" && srvMatch?.rescheduleDate && (canAcceptMove || canDeclineMove) && (
             <div
               className="card"
               style={{ marginTop: 8, borderColor: "var(--gold)" }}
@@ -539,10 +553,14 @@ export function ChatPage() {
                   ` · ${fmtTime(srvMatch.rescheduleStart)}–${fmtTime(srvMatch.rescheduleEnd ?? 0)}`}
               </p>
               <div className="row" style={{ gap: 8 }}>
-                <Button onClick={() => answerMove(true)}>Подходит</Button>
-                <Button variant="ghost" onClick={() => answerMove(false)}>
-                  Не смогу
-                </Button>
+                {canAcceptMove && (
+                  <Button onClick={() => answerMove(true)}>Подходит</Button>
+                )}
+                {canDeclineMove && (
+                  <Button variant="ghost" onClick={() => answerMove(false)}>
+                    Не смогу
+                  </Button>
+                )}
               </div>
             </div>
           )}

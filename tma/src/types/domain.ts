@@ -207,12 +207,27 @@ export interface Vacancy {
   employerPaysOnTime?: boolean;
 }
 
+export type MatchAction =
+  | "confirm"
+  | "cancel"
+  | "propose_reschedule"
+  | "accept_reschedule"
+  | "decline_reschedule"
+  | "checkin"
+  | "attendance"
+  | "not_held"
+  | "set_hours"
+  | "dispute";
+
 export interface MatchModel {
   id: string;
   userId?: string;
   employerId: string;
   vacancyId: string;
   status: MatchStatus;
+  /** Server-owned capabilities for state-changing shift actions. Missing means
+   * fail closed on a live backend; demo mode keeps its explicit legacy rules. */
+  allowedActions?: MatchAction[];
   confirmedBySeeker: boolean;
   confirmedByEmployer: boolean;
   companyName?: string;
