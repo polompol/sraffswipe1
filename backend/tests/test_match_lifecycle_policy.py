@@ -99,6 +99,19 @@ def test_disputed_and_cancelled_matches_fail_closed():
     ) == []
 
 
+def test_terminal_matches_never_reopen_confirmation():
+    now = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
+
+    for status in ("completed", "expired", "cancelled"):
+        seeker = set(
+            allowed_match_actions(_match(status=status), "seeker", _vacancy(), now=now)
+        )
+        employer = set(
+            allowed_match_actions(_match(status=status), "employer", _vacancy(), now=now)
+        )
+        assert "confirm" not in seeker | employer
+
+
 def test_bad_shift_time_never_unlocks_time_sensitive_actions():
     now = datetime(2026, 1, 1, 6, 0, tzinfo=UTC)
     actions = set(
