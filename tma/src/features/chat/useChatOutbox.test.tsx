@@ -5,7 +5,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/api/client";
 import type { Message } from "@/types/domain";
-import { loadOutbox } from "./chatPersistence";
+import { clearChatAccount, loadOutbox } from "./chatPersistence";
 
 const RECEIPT = "11111111-1111-4111-8111-111111111111";
 const RECEIPT_2 = "22222222-2222-4222-8222-222222222222";
@@ -37,7 +37,11 @@ function httpError(status: number) {
 }
 
 describe("chat outbox", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    clearChatAccount("u1", "seeker");
+  });
 
   it("creates one receipt and removes the entry after success", async () => {
     const send = vi.fn().mockResolvedValue(confirmed());
