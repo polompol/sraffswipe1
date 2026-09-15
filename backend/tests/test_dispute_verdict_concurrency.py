@@ -45,8 +45,13 @@ def test_two_stale_admin_sessions_cannot_apply_opposite_verdicts(client, make_ma
     db_first = SessionLocal()
     db_second = SessionLocal()
     try:
-        assert db_first.get(Match, match_id).disputed is True
-        assert db_second.get(Match, match_id).disputed is True
+        # Держим обе ссылки живыми. SQLAlchemy identity map использует weakref:
+        # без локальной ссылки объект мог исчезнуть и второй Session.get()
+        # перечитывал уже свежее disputed=False, маскируя реальную гонку.
+        first_seen = db_first.get(Match, match_id)
+        stale_second = db_second.get(Match, match_id)
+        assert first_seen.disputed is True
+        assert stale_second.disputed is True
 
         first = resolve_match(
             match_id,
@@ -55,6 +60,7 @@ def test_two_stale_admin_sessions_cannot_apply_opposite_verdicts(client, make_ma
             principal,
         )
         assert first.status == "completed"
+        assert stale_second.disputed is True, "вторая сессия действительно устарела"
 
         with pytest.raises(HTTPException) as exc:
             resolve_match(
