@@ -1,0 +1,99 @@
+name: Repository Release Gate
+
+on:
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  aggregate:
+    name: Repository Release Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Wait for canonical checks on this exact head SHA
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const required = ["TMA CI", "Backend CI", "E2E", "Security"];
+            const sha = context.payload.pull_request?.head?.sha || context.sha;
+            const { owner, repo } = context.repo;
+            const deadline = Date.now() + 35 * 60 * 1000;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            let previousSnapshot = "";
+
+            core.info(`Release gate head SHA: ${sha}`);
+
+            while (Date.now() < deadline) {
+              const response = await github.rest.actions.listWorkflowRunsForRepo({
+                owner,
+                repo,
+                head_sha: sha,
+                event: "pull_request",
+                per_page: 100,
+              });
+
+              const selected = {};
+              for (const name of required) {
+                selected[name] = response.data.workflow_runs
+                  .filter((run) => run.name === name && run.head_sha === sha)
+                  .sort((a, b) => b.run_number - a.run_number)[0] || null;
+              }
+
+              const snapshot = required.map((name) => {
+                const run = selected[name];
+                if (!run) return `${name}=missing`;
+                return `${name}=${run.status}/${run.conclusion || "pending"}#${run.run_number}`;
+              }).join(" | ");
+
+              if (snapshot !== previousSnapshot) {
+                core.info(snapshot);
+                previousSnapshot = snapshot;
+              }
+
+              for (const name of required) {
+                const run = selected[name];
+                if (run?.status === "completed" && run.conclusion !== "success") {
+                  core.setFailed(
+                    `${name} for ${sha} finished with ${run.conclusion || "unknown"}: ${run.html_url}`
+                  );
+                  return;
+                }
+              }
+
+              const allGreen = required.every((name) => {
+                const run = selected[name];
+                return run?.status === "completed" && run.conclusion === "success";
+              });
+
+              if (allGreen) {
+                core.info(`All canonical repository checks are green for ${sha}.`);
+                return;
+              }
+
+              await sleep(10000);
+            }
+
+            core.setFailed(
+              `Timed out waiting for canonical repository checks on ${sha}. Last state: ${previousSnapshot}`
+            );
+
+      - name: Record external release gates
+        if: always()
+        shell: bash
+        run: |
+          cat <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          ## Repository release evidence
+
+          This check only aggregates automated repository evidence for one exact PR head SHA.
+
+          External production gates are **not** auto-passed here and remain `PENDING` until separately verified:
+
+          - Telegram Mini App smoke on a physical iOS device;
+          - Telegram Mini App smoke on a physical Android device;
+          - YooKassa test-environment payment/webhook/topup/refund/reconciliation smoke;
+          - production domain/HTTPS configuration;
+          - off-server backup destination and retention verification.
+          EOF
