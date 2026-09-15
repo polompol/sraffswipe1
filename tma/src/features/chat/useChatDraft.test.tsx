@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadDraft, saveDraft } from "./chatPersistence";
+import { clearChatAccount, loadDraft, saveDraft } from "./chatPersistence";
 
 describe("chat draft", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
+    clearChatAccount("u1", "seeker");
     vi.useFakeTimers();
   });
 
