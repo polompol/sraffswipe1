@@ -82,7 +82,10 @@ def test_two_stale_admin_sessions_cannot_apply_opposite_verdicts(client, make_ma
         assert db.query(Commission).filter(Commission.match_id == match_id).count() == 1
         assert (
             db.query(AdminActionLog)
-            .filter(AdminActionLog.target_type == "match", AdminActionLog.target_id == match_id)
+            .filter(
+                AdminActionLog.target_type == "match",
+                AdminActionLog.target_id == match_id,
+            )
             .count()
             == 1
         )
