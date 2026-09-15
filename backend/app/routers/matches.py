@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..conflicts import overlapping_shifts
 from ..db import get_db
+from ..match_lifecycle import allowed_match_actions
 from ..models import (
     Commission,
     Employer,
@@ -316,6 +317,7 @@ def _to_out(
         employer_id=m.employer_id,
         vacancy_id=m.vacancy_id,
         status=m.status,
+        allowed_actions=allowed_match_actions(m, role, v),
         confirmed_by_seeker=m.confirmed_by_seeker,
         confirmed_by_employer=m.confirmed_by_employer,
         checkin_code=m.checkin_code if show_code else None,
@@ -784,6 +786,8 @@ def decline_reschedule(
         raise HTTPException(status_code=403, detail="Только работник смены")
     if not m.reschedule_date:
         raise HTTPException(status_code=404, detail="Переноса не предлагали")
+    if m.status not in ("matched", "confirmed"):
+        raise HTTPException(status_code=409, detail="Смена уже закрыта")
     m.reschedule_date = ""
     m.reschedule_start = None
     m.reschedule_end = None
@@ -946,6 +950,11 @@ def confirm(
     # Подтверждать может только участник мэтча.
     if principal["id"] not in (m.user_id, m.employer_id):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
+    if m.status in {"cancelled", "completed", "expired"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Эта смена уже закрыта — подтверждать её нельзя",
+        )
     if principal["role"] == "seeker":
         # Пересечение по времени: предупреждаем, но не запрещаем. Человек в
         # двух местах не будет, и одно заведение останется без работника —
