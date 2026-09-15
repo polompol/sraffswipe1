@@ -98,7 +98,8 @@ def test_stranger_cannot_report_foreign_match(client):
 
     # В insecure-тестах один tg_id переиспользуется. Уводим участника на
     # другой Telegram-id, чтобы следующий вход создал действительно чужого
-    # пользователя, как в IDOR-тестах чата.
+    # пользователя, как в IDOR-тестах чата. Этот тест специально остаётся в
+    # общем backend matrix: защита должна быть одинаковой на SQLite/PostgreSQL.
     db = SessionLocal()
     try:
         for user in db.query(User).all():
