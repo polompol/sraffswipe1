@@ -169,7 +169,10 @@ def test_concurrent_checkin_and_attendance_no_show_never_settle_silently(
         finally:
             session.close()
 
-    threads = [threading.Thread(target=worker_checkin), threading.Thread(target=employer_no_show)]
+    threads = [
+        threading.Thread(target=worker_checkin),
+        threading.Thread(target=employer_no_show),
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -218,7 +221,10 @@ def test_concurrent_checkin_and_not_held_never_settle_silently(client, make_matc
         finally:
             session.close()
 
-    threads = [threading.Thread(target=worker_checkin), threading.Thread(target=employer_not_held)]
+    threads = [
+        threading.Thread(target=worker_checkin),
+        threading.Thread(target=employer_not_held),
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
