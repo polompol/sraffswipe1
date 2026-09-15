@@ -8,13 +8,14 @@
 но с тем же префиксом: снаружи админка осталась одним разделом.
 """
 
-from datetime import UTC, date
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..admin_audit import AdminActionLog, record_admin_action
 from ..config import settings
 from ..db import get_db
 from ..models import (
@@ -53,6 +54,52 @@ def require_admin(
     if not _is_admin(db, principal):
         raise HTTPException(status_code=403, detail="Только для администратора")
     return principal
+
+
+class AdminReasonIn(BaseModel):
+    reason: str = Field(default="", max_length=1000)
+
+
+class AdminAuditOut(BaseModel):
+    id: str
+    actorId: str
+    action: str
+    targetType: str
+    targetId: str
+    reason: str
+    createdAt: datetime
+
+
+@router.get("/audit", response_model=list[AdminAuditOut])
+def admin_audit(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(require_admin),
+):
+    """Последние операторские изменения — только для операторов.
+
+    Журнал append-only на уровне API: ручек изменения/удаления здесь нет.
+    Выдачу ограничиваем, чтобы админка не превращалась в выгрузку всей БД.
+    """
+    safe_limit = max(1, min(limit, 200))
+    rows = (
+        db.query(AdminActionLog)
+        .order_by(AdminActionLog.created_at.desc(), AdminActionLog.id.desc())
+        .limit(safe_limit)
+        .all()
+    )
+    return [
+        AdminAuditOut(
+            id=row.id,
+            actorId=row.actor_id,
+            action=row.action,
+            targetType=row.target_type,
+            targetId=row.target_id,
+            reason=row.reason,
+            createdAt=row.created_at,
+        )
+        for row in rows
+    ]
 
 
 class Overview(BaseModel):
@@ -425,8 +472,9 @@ def _other_role(db: Session, target):
 @router.post("/users/{user_id}/block")
 def block_user(
     user_id: str,
+    body: AdminReasonIn | None = None,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     """Заблокировать соискателя или работодателя (бан мошенника).
 
@@ -447,6 +495,14 @@ def block_user(
             ).all():
                 v.status = "blocked"
         _resolve_reports_for(db, who.id)
+    record_admin_action(
+        db,
+        actor_id=admin["id"],
+        action="user.block",
+        target_type="user",
+        target_id=user_id,
+        reason=body.reason if body else "",
+    )
     db.commit()
     return {"ok": True, "blocked": True, "alsoBlocked": also.id if also else None}
 
