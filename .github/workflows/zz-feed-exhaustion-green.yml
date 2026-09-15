@@ -1,0 +1,71 @@
+name: Feed exhaustion green patch
+on: push
+permissions:
+  contents: write
+jobs:
+  patch-and-verify:
+    if: github.actor != 'staffswipe-ci'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tma/package-lock.json
+      - name: Apply identity-based feed exhaustion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tma/src/features/feed/FeedPage.tsx')
+          s = p.read_text()
+          def rep(old, new):
+              global s
+              if old not in s:
+                  raise SystemExit(f'anchor not found: {old[:100]!r}')
+              s = s.replace(old, new, 1)
+
+          rep('import { useSwipeAction } from "./useSwipeAction";\n',
+              'import { useSwipeAction } from "./useSwipeAction";\nimport { remainingFeedItems } from "./feedExhaustion";\n')
+          rep('  const [empty, setEmpty] = useState(false);\n',
+              '  const [exhaustedIds, setExhaustedIds] = useState<Set<string>>(() => new Set());\n')
+          rep('    // Колода начинает набор заново — «карточки кончились» больше не в силе.\n    setEmpty(false);\n',
+              '    // Новые условия — новый набор: прошлые просмотренные ID больше не скрываем.\n    setExhaustedIds(new Set());\n')
+          rep('  const { data, isLoading, isError, refetch } = useQuery({\n    queryKey: ["feed", role, feedFilters],\n    queryFn: () => fetchFeed(role, feedFilters),\n  });\n',
+              '  const { data, isLoading, isError, refetch } = useQuery({\n    queryKey: ["feed", role, feedFilters],\n    queryFn: () => fetchFeed(role, feedFilters),\n  });\n  // Запоминаем именно ID уже полностью просмотренного набора, а не вечный\n  // boolean «пусто». Если фоновый refetch добавил новую смену/кандидата, его\n  // ID не был просмотрен — карточка появляется сразу без сброса фильтров.\n  const visibleData = data\n    ? remainingFeedItems<Vacancy | Seeker>(data, exhaustedIds)\n    : undefined;\n')
+          rep('  const foundCount = typeof data?.length === "number" ? data.length : undefined;\n',
+              '  const foundCount = typeof visibleData?.length === "number" ? visibleData.length : undefined;\n')
+          rep('  const deckMode =\n    !isLoading && !isError && !!data && !empty && data.length > 0\n    && !(isSeeker && view === "list");\n',
+              '  const deckMode =\n    !isLoading && !isError && !!visibleData && visibleData.length > 0\n    && !(isSeeker && view === "list");\n\n  function exhaustCurrentFeed() {\n    setExhaustedIds((current) => {\n      const next = new Set(current);\n      for (const item of data ?? []) next.add(item.id);\n      return next;\n    });\n  }\n')
+          rep('      {!isLoading && !isError && data && (empty || data.length === 0) && (\n',
+              '      {!isLoading && !isError && visibleData && visibleData.length === 0 && (\n')
+          rep('      {!isLoading && !isError && data && !empty && data.length > 0 && isSeeker && view === "list" && (\n        <VacancyList items={data as Vacancy[]} onAct={handleSwipe} />\n      )}\n',
+              '      {!isLoading && !isError && visibleData && visibleData.length > 0 && isSeeker && view === "list" && (\n        <VacancyList items={visibleData as Vacancy[]} onAct={handleSwipe} />\n      )}\n')
+          rep('      {!isLoading && !isError && data && !empty && data.length > 0 && !(isSeeker && view === "list") && (\n',
+              '      {!isLoading && !isError && visibleData && visibleData.length > 0 && !(isSeeker && view === "list") && (\n')
+          rep('              items={data as Vacancy[]}\n', '              items={visibleData as Vacancy[]}\n')
+          rep('              onEmpty={() => setEmpty(true)}\n', '              onEmpty={exhaustCurrentFeed}\n')
+          rep('              items={data as Seeker[]}\n', '              items={visibleData as Seeker[]}\n')
+          rep('              onEmpty={() => setEmpty(true)}\n', '              onEmpty={exhaustCurrentFeed}\n')
+          p.write_text(s)
+          PY
+      - name: Install TMA dependencies
+        working-directory: tma
+        run: npm ci
+      - name: Verify TMA GREEN
+        working-directory: tma
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+      - name: Commit verified patch and remove helper workflow
+        run: |
+          rm .github/workflows/zz-feed-exhaustion-green.yml
+          git config user.name staffswipe-ci
+          git config user.email staffswipe-ci@users.noreply.github.com
+          git add tma/src/features/feed/FeedPage.tsx tma/src/features/feed/feedExhaustion.ts tma/src/features/feed/feedExhaustion.test.ts .github/workflows/zz-feed-exhaustion-green.yml
+          git commit -m "fix: surface new items after feed exhaustion"
+          git push origin HEAD:codex/staffswipe-production-readiness
