@@ -1,4 +1,4 @@
-name: Refresh generated texts
+name: Refresh generated texts retry
 
 on:
   push:
@@ -21,12 +21,18 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/bot/requirements.txt
       - name: Regenerate from source
         run: python3 scripts/texts.py --write
-      - name: Verify official catalogue contract
+      - name: Install standard backend test dependencies
         run: |
-          python -m pip install pytest
-          pytest -q backend/tests/test_texts_catalogue.py
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/bot/requirements.txt pytest pypdf fakeredis moto
+      - name: Verify official catalogue contract
+        run: pytest -q backend/tests/test_texts_catalogue.py
       - name: Commit catalogue and remove helper
         run: |
           rm -f .github/workflows/zz-texts-refresh.yml
