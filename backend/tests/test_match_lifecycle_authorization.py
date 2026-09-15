@@ -20,7 +20,7 @@ def _auth(client, role: str):
 
 @pytest.mark.parametrize("terminal_status", ["cancelled", "completed", "expired"])
 def test_confirm_cannot_mutate_terminal_match(client, make_match, terminal_status):
-    employer_h, employer_id = _auth(client, "employer")
+    _, employer_id = _auth(client, "employer")
     seeker_h, seeker_id = _auth(client, "seeker")
     match_id = make_match(
         employer_id,
@@ -45,7 +45,7 @@ def test_confirm_cannot_mutate_terminal_match(client, make_match, terminal_statu
 
 
 def test_stale_reschedule_cannot_be_declined_after_match_is_terminal(client, make_match):
-    employer_h, employer_id = _auth(client, "employer")
+    _, employer_id = _auth(client, "employer")
     seeker_h, seeker_id = _auth(client, "seeker")
     match_id = make_match(
         employer_id,
@@ -70,7 +70,7 @@ def test_stale_reschedule_cannot_be_declined_after_match_is_terminal(client, mak
 
 
 def test_match_response_exposes_server_allowed_actions(client, make_match):
-    employer_h, employer_id = _auth(client, "employer")
+    _, employer_id = _auth(client, "employer")
     seeker_h, seeker_id = _auth(client, "seeker")
     match_id = make_match(
         employer_id,
@@ -89,7 +89,7 @@ def test_match_response_exposes_server_allowed_actions(client, make_match):
 
 
 def test_terminal_match_does_not_advertise_forward_actions(client, make_match):
-    employer_h, employer_id = _auth(client, "employer")
+    _, employer_id = _auth(client, "employer")
     seeker_h, seeker_id = _auth(client, "seeker")
     match_id = make_match(
         employer_id,
