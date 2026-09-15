@@ -44,7 +44,9 @@ def test_confirm_cannot_mutate_terminal_match(client, make_match, terminal_statu
         db.close()
 
 
-def test_stale_reschedule_cannot_be_declined_after_match_is_terminal(client, make_match):
+def test_stale_reschedule_cannot_be_declined_after_match_is_terminal(
+    client, make_match
+):
     _, employer_id = _auth(client, "employer")
     seeker_h, seeker_id = _auth(client, "seeker")
     match_id = make_match(
