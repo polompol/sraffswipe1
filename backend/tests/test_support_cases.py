@@ -1,4 +1,7 @@
 """Отслеживаемые обращения в поддержку: владелец видит только свои кейсы."""
+from app.db import SessionLocal
+from app.models import User
+from app.security import create_token
 
 
 def _auth(client, role="seeker"):
@@ -6,6 +9,23 @@ def _auth(client, role="seeker"):
     assert r.status_code == 200
     body = r.json()
     return {"Authorization": f"Bearer {body['access_token']}"}, body["user_id"]
+
+
+def _ordinary_user() -> tuple[str, dict[str, str]]:
+    db = SessionLocal()
+    try:
+        user = User(
+            tg_id=992001,
+            phone="tg:992001",
+            name="Пользователь поддержки",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        token = create_token(user.id, "seeker", version=user.token_version)
+        return user.id, {"Authorization": f"Bearer {token}"}
+    finally:
+        db.close()
 
 
 def test_user_creates_and_lists_own_support_case(client):
@@ -107,3 +127,107 @@ def test_support_case_rate_limit(client):
         json={"topic": "other", "text": "Шестое обращение за одну минуту"},
     )
     assert limited.status_code == 429
+
+
+def test_admin_support_queue_is_private_and_reply_is_audited(client):
+    owner_id, owner_h = _ordinary_user()
+    created = client.post(
+        "/support/cases",
+        headers=owner_h,
+        json={"topic": "payment", "text": "Не понимаю статус комиссии по смене"},
+    )
+    assert created.status_code == 201
+    case_id = created.json()["id"]
+
+    admin_h, admin_id = _auth(client, "seeker")
+
+    denied = client.get("/admin/support", headers=owner_h)
+    assert denied.status_code == 403
+    denied_reply = client.post(
+        f"/admin/support/{case_id}/reply",
+        headers=owner_h,
+        json={"reply": "Попытка чужого ответа"},
+    )
+    assert denied_reply.status_code == 403
+
+    queue = client.get("/admin/support?status=open", headers=admin_h)
+    assert queue.status_code == 200
+    row = next(x for x in queue.json() if x["id"] == case_id)
+    assert row["number"] == created.json()["number"]
+    assert row["ownerId"] == owner_id
+    assert row["ownerRole"] == "seeker"
+    assert row["topic"] == "payment"
+    assert row["status"] == "open"
+
+    replied = client.post(
+        f"/admin/support/{case_id}/reply",
+        headers=admin_h,
+        json={"reply": "  Комиссия начисляется только после закрытой смены.  "},
+    )
+    assert replied.status_code == 200
+    assert replied.json()["status"] == "answered"
+    assert replied.json()["adminReply"] == "Комиссия начисляется только после закрытой смены."
+
+    mine = client.get("/support/cases", headers=owner_h).json()
+    user_row = next(x for x in mine if x["id"] == case_id)
+    assert user_row["status"] == "answered"
+    assert user_row["adminReply"] == "Комиссия начисляется только после закрытой смены."
+
+    audit = client.get("/admin/audit", headers=admin_h)
+    assert audit.status_code == 200
+    audit_row = next(
+        x for x in audit.json()
+        if x["action"] == "support.reply" and x["targetId"] == case_id
+    )
+    assert audit_row["actorId"] == admin_id
+    assert audit_row["targetType"] == "support_case"
+    assert audit_row["reason"] == "Комиссия начисляется только после закрытой смены."
+
+
+def test_admin_closes_support_case_and_open_queue_excludes_it(client):
+    _, owner_h = _ordinary_user()
+    created = client.post(
+        "/support/cases",
+        headers=owner_h,
+        json={"topic": "account", "text": "Нужно понять, как исправить данные профиля"},
+    )
+    assert created.status_code == 201
+    case_id = created.json()["id"]
+    admin_h, _ = _auth(client, "seeker")
+
+    denied = client.post(
+        f"/admin/support/{case_id}/close",
+        headers=owner_h,
+        json={"reply": "Не должен закрыться"},
+    )
+    assert denied.status_code == 403
+
+    closed = client.post(
+        f"/admin/support/{case_id}/close",
+        headers=admin_h,
+        json={"reply": "  Вопрос решён, данные можно изменить в настройках.  "},
+    )
+    assert closed.status_code == 200
+    assert closed.json()["status"] == "closed"
+    assert closed.json()["adminReply"] == "Вопрос решён, данные можно изменить в настройках."
+
+    open_rows = client.get("/admin/support?status=open", headers=admin_h)
+    assert open_rows.status_code == 200
+    assert case_id not in {x["id"] for x in open_rows.json()}
+
+    all_rows = client.get("/admin/support?status=all", headers=admin_h)
+    assert all_rows.status_code == 200
+    assert case_id in {x["id"] for x in all_rows.json()}
+
+    mine = client.get("/support/cases", headers=owner_h).json()
+    row = next(x for x in mine if x["id"] == case_id)
+    assert row["status"] == "closed"
+    assert row["adminReply"] == "Вопрос решён, данные можно изменить в настройках."
+
+    audit = client.get("/admin/audit", headers=admin_h).json()
+    audit_row = next(
+        x for x in audit
+        if x["action"] == "support.close" and x["targetId"] == case_id
+    )
+    assert audit_row["targetType"] == "support_case"
+    assert audit_row["reason"] == "Вопрос решён, данные можно изменить в настройках."
