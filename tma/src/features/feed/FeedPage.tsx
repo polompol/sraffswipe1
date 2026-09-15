@@ -18,6 +18,7 @@ import { useFeedFilters, toggleTodayFilter } from "./useFeedFilters";
 import { useShiftAlerts } from "./useShiftAlerts";
 import { useSwipeAction } from "./useSwipeAction";
 import { remainingFeedItems } from "./feedExhaustion";
+import { employerFeedState } from "./employerFeedGate";
 import { FeedHeader } from "./FeedHeader";
 import { FeedEmpty } from "./FeedEmpty";
 import { LS } from "@/lib/storage";
@@ -210,12 +211,30 @@ export function FeedPage() {
 
   // Заведению без единой вакансии мэтч физически невозможен (мэтч ищется среди
   // его смен). Лайкать кандидатов впустую — тупик, поэтому ведём разместить смену.
-  const { data: myVacs } = useQuery({
+  const {
+    data: myVacs,
+    isLoading: myVacsLoading,
+    isError: myVacsError,
+    refetch: refetchMyVacs,
+  } = useQuery({
     queryKey: ["my-vacancies"],
     queryFn: fetchMyVacancies,
     enabled: !isSeeker,
   });
-  const employerNoVacancy = !isSeeker && myVacs != null && myVacs.length === 0;
+  const employerGate = employerFeedState(
+    isSeeker, myVacs, myVacsLoading, myVacsError,
+  );
+  const employerNoVacancy = employerGate === "needs_vacancy";
+  const feedReady = employerGate === "ready";
+  const showFeedError = employerGate === "error"
+    || (employerGate !== "loading" && isError);
+  const showFeedLoading = !showFeedError
+    && (isLoading || employerGate === "loading");
+
+  function retryFeed() {
+    void refetch();
+    if (!isSeeker) void refetchMyVacs();
+  }
 
   /** Отклик прямо из шторки «Детали смены».
    *
@@ -228,7 +247,8 @@ export function FeedPage() {
   // занимает всё, что осталось от экрана. Поэтому у него отдельный класс —
   // см. `.page.feed-deck` в index.css.
   const deckMode =
-    !isLoading && !isError && !!visibleData && visibleData.length > 0
+    feedReady && !showFeedLoading && !showFeedError
+    && !!visibleData && visibleData.length > 0
     && !(isSeeker && view === "list");
 
   function exhaustCurrentFeed() {
@@ -298,10 +318,11 @@ export function FeedPage() {
         </div>
       )}
 
-      {isLoading && <SkeletonCard />}
-      {isError && <ErrorBox onRetry={() => refetch()} />}
+      {showFeedLoading && <SkeletonCard />}
+      {showFeedError && <ErrorBox onRetry={retryFeed} />}
 
-      {!isLoading && !isError && visibleData && visibleData.length === 0 && (
+      {feedReady && !showFeedLoading && !showFeedError
+        && visibleData && visibleData.length === 0 && (
         <FeedEmpty
           isSeeker={isSeeker}
           city={filters.city}
@@ -312,11 +333,13 @@ export function FeedPage() {
         />
       )}
 
-      {!isLoading && !isError && visibleData && visibleData.length > 0 && isSeeker && view === "list" && (
+      {feedReady && !showFeedLoading && !showFeedError
+        && visibleData && visibleData.length > 0 && isSeeker && view === "list" && (
         <VacancyList items={visibleData as Vacancy[]} onAct={handleSwipe} />
       )}
 
-      {!isLoading && !isError && visibleData && visibleData.length > 0 && !(isSeeker && view === "list") && (
+      {feedReady && !showFeedLoading && !showFeedError
+        && visibleData && visibleData.length > 0 && !(isSeeker && view === "list") && (
         <>
           {isSeeker ? (
             <SwipeDeck<Vacancy>
