@@ -40,7 +40,11 @@ export function FavoritesPage() {
       return true; // успех → VacancyList покажет тост «Отклик отправлен»
     } catch (e) {
       toast(apiError(e, "Отклик не ушёл. Попробуйте ещё раз"), "error");
-      return false;
+      // VacancyList удаляет строку после любого resolved результата: true —
+      // обычный успешный отклик, false — успешный мэтч без отдельного тоста.
+      // Ошибка поэтому обязана оставаться rejected, иначе временный network
+      // failure выглядел бы как принятое решение и избранная смена исчезала.
+      throw e;
     }
   }
 
