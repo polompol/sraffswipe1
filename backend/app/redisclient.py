@@ -27,6 +27,40 @@ def enabled() -> bool:
     return bool(settings.redis_url)
 
 
+def health_probe() -> str:
+    """Fresh Redis health check for operational monitoring.
+
+    This deliberately does not reuse or mutate the cached application clients:
+    a cached first-success result must not make `/health/ops` claim that Redis
+    is still healthy after it has gone away. Runtime fallback semantics remain
+    unchanged.
+    """
+    if not enabled():
+        return "disabled"
+
+    client = None
+    try:
+        import redis
+
+        client = redis.Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_timeout=0.5,
+            socket_connect_timeout=0.5,
+        )
+        client.ping()
+        return "ok"
+    except Exception:  # noqa: BLE001 — health endpoint needs status, not traceback
+        _log.warning("операционная проверка Redis не прошла")
+        return "unavailable"
+    finally:
+        if client is not None:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001 — closing probe is best effort
+                pass
+
+
 def sync_client():
     """Клиент для обычных (не-async) ручек: счётчики частоты.
 
