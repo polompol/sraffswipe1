@@ -15,6 +15,7 @@ from .routers import (
     acts,
     admin,
     admin_accounts,
+    admin_support,
     analytics,
     auth,
     billing,
@@ -125,6 +126,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 def _cors_origins() -> list[str]:
     explicit = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
     if explicit:
@@ -172,8 +174,12 @@ async def unhandled_error(request: Request, exc: Exception):
     # где номер генерировался, и в теле ответа всегда стояло «-» — спросить у
     # человека было нечего.
     rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
-    logger.exception("Необработанная ошибка rid=%s %s %s", rid, request.method,
-                     request.url.path)
+    logger.exception(
+        "Необработанная ошибка rid=%s %s %s",
+        rid,
+        request.method,
+        request.url.path,
+    )
     return JSONResponse(
         status_code=500,
         content={"detail": "Внутренняя ошибка сервера", "request_id": rid},
@@ -206,6 +212,7 @@ async def request_logger(request: Request, call_next):
     )
     return response
 
+
 app.include_router(auth.router)
 app.include_router(telegram_auth.router)
 app.include_router(vacancies.router)
@@ -226,6 +233,7 @@ app.include_router(employer.router)
 app.include_router(uploads.router)
 app.include_router(analytics.router)
 app.include_router(admin.router)
+app.include_router(admin_support.router)
 # Вторая половина админки: люди, деньги, аккаунты. Префикс тот же.
 app.include_router(admin_accounts.router)
 app.include_router(favorites.router)
