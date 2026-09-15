@@ -1,0 +1,67 @@
+name: Apply Task 3 lint fix
+
+on:
+  pull_request:
+    branches:
+      - codex/staffswipe-release-candidate
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.head_ref == 'codex/staffswipe-production-readiness'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+          fetch-depth: 0
+      - name: Fix proven Ruff E501 failures
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/tests/test_features.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  '    assert client.post(f"/matches/{match_id}/resolve", headers=_hdr(outsider),\n'
+                  '                       json={"outcome": "no_show", "reason": "проверка полномочий"}).status_code == 403\n',
+                  '    assert (\n'
+                  '        client.post(\n'
+                  '            f"/matches/{match_id}/resolve",\n'
+                  '            headers=_hdr(outsider),\n'
+                  '            json={"outcome": "no_show", "reason": "проверка полномочий"},\n'
+                  '        ).status_code\n'
+                  '        == 403\n'
+                  '    )\n',
+              ),
+              (
+                  '    r = client.post(f"/matches/{match_id}/resolve", headers=ah,\n'
+                  '                    json={"outcome": "completed", "reason": "оператор подтвердил выход"})\n',
+                  '    r = client.post(\n'
+                  '        f"/matches/{match_id}/resolve",\n'
+                  '        headers=ah,\n'
+                  '        json={"outcome": "completed", "reason": "оператор подтвердил выход"},\n'
+                  '    )\n',
+              ),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one exact Ruff target, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit fix and remove runner
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/task3-lint-fix.yml
+          git add backend/tests/test_features.py
+          git diff --cached --check
+          git commit -m "fix: satisfy backend lint after reason hardening"
+          git push origin HEAD:codex/staffswipe-production-readiness
