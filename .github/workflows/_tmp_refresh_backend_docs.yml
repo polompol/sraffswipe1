@@ -23,14 +23,14 @@ jobs:
           python -m pip install ruff
           cd backend
           ruff check tests/test_match_lifecycle_authorization.py --fix
-          python3 scripts/texts.py --write
           cd ..
-      - name: Commit verified generated changes and remove temporary workflow
+          python3 scripts/texts.py --write
+      - name: Commit generated checks and remove temporary workflow
         run: |
           rm .github/workflows/_tmp_refresh_backend_docs.yml
           git config user.name 'staffswipe-ci'
           git config user.email 'staffswipe-ci@users.noreply.github.com'
-          git add backend/tests/test_match_lifecycle_authorization.py backend/docs/ТЕКСТЫ.md .github/workflows/_tmp_refresh_backend_docs.yml
+          git add backend/tests/test_match_lifecycle_authorization.py docs/ТЕКСТЫ.md .github/workflows/_tmp_refresh_backend_docs.yml
           git diff --cached --quiet && exit 0
           git commit -m 'chore(lifecycle): refresh backend generated checks'
           git push origin HEAD:codex/staffswipe-production-readiness
