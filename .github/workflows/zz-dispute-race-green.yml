@@ -1,4 +1,4 @@
-name: Dispute verdict race GREEN
+name: Dispute verdict race GREEN retry
 
 on:
   push:
