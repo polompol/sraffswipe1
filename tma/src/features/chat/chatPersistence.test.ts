@@ -20,30 +20,35 @@ function entry(id: string, matchId = "m1", text = `msg-${id}`) {
   };
 }
 
-describe("chat persistence", () => {
-  beforeEach(() => {
+describe("chat recovery memory", () => {
+  beforeEach(async () => {
     localStorage.clear();
     sessionStorage.clear();
+    const p = await api();
+    p.clearChatAccount("u1", "seeker");
+    p.clearChatAccount("u2", "seeker");
+    p.clearChatAccount("u1", "employer");
   });
 
-  it("stores independent drafts per match and account", async () => {
+  it("stores independent drafts per match, account and role for this runtime", async () => {
     const p = await api();
     p.saveDraft(userId, role, "m1", "Первый");
     p.saveDraft(userId, role, "m2", "Второй");
     p.saveDraft("u2", role, "m1", "Чужой");
+    p.saveDraft(userId, "employer", "m1", "Другая роль");
 
     expect(p.loadDraft(userId, role, "m1")).toBe("Первый");
     expect(p.loadDraft(userId, role, "m2")).toBe("Второй");
     expect(p.loadDraft("u2", role, "m1")).toBe("Чужой");
+    expect(p.loadDraft(userId, "employer", "m1")).toBe("Другая роль");
   });
 
-  it("removes an empty draft instead of keeping dead keys", async () => {
+  it("removes an empty draft instead of retaining dead runtime state", async () => {
     const p = await api();
     p.saveDraft(userId, role, "m1", "Текст");
     p.saveDraft(userId, role, "m1", "");
     expect(p.loadDraft(userId, role, "m1")).toBe("");
-    const raw = JSON.parse(localStorage.getItem(p.chatStorageKey(userId, role))!);
-    expect(raw.drafts.m1).toBeUndefined();
+    expect(p.loadChatState(userId, role).drafts.m1).toBeUndefined();
   });
 
   it("upserts outbox by receipt and removes confirmed receipt", async () => {
@@ -76,17 +81,16 @@ describe("chat persistence", () => {
     expect(rows[99].clientMessageId).toBe("c104");
   });
 
-  it("sanitizes corrupt/oversized persisted values", async () => {
+  it("sanitizes corrupt and oversized runtime values", async () => {
     const p = await api();
-    const key = p.chatStorageKey(userId, role);
-    localStorage.setItem(key, JSON.stringify({
+    p.saveChatState(userId, role, {
       version: 1,
       drafts: { m1: "x".repeat(2500), bad: 42 },
       outbox: [
         entry("ok", "m1", "y".repeat(2500)),
         { clientMessageId: "bad", matchId: "m1", text: "x", status: "mystery" },
       ],
-    }));
+    } as any);
 
     const state = p.loadChatState(userId, role);
     expect(state.drafts.m1).toHaveLength(2000);
@@ -96,10 +100,29 @@ describe("chat persistence", () => {
     expect(state.outbox[0].clientMessageId).toBe("ok");
   });
 
-  it("recovers from invalid JSON without throwing", async () => {
+  it("clears account runtime state without touching another account", async () => {
     const p = await api();
-    localStorage.setItem(p.chatStorageKey(userId, role), "{broken");
+    p.saveDraft("u1", role, "m1", "Первый");
+    p.saveDraft("u2", role, "m1", "Второй");
+    p.clearChatAccount("u1", role);
+
+    expect(p.loadDraft("u1", role, "m1")).toBe("");
+    expect(p.loadDraft("u2", role, "m1")).toBe("Второй");
+  });
+
+  it("scrubs legacy ss_chat_v1 plaintext instead of restoring it", async () => {
+    const p = await api();
+    const key = p.chatStorageKey(userId, role);
+    localStorage.setItem(key, JSON.stringify({
+      version: 1,
+      drafts: { m1: "старый секрет" },
+      outbox: [entry("legacy", "m1", "старое сообщение")],
+    }));
+    sessionStorage.setItem(key, "старый session secret");
+
     expect(p.loadChatState(userId, role)).toEqual({ version: 1, drafts: {}, outbox: [] });
+    expect(localStorage.getItem(key)).toBeNull();
+    expect(sessionStorage.getItem(key)).toBeNull();
   });
 
   it("never writes chat plaintext to persistent browser storage", async () => {
