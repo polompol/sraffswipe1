@@ -1025,21 +1025,22 @@ export async function adminCreditWallet(
 export async function resolveMatch(
   matchId: string,
   outcome: "completed" | "no_show",
+  reason: string,
 ): Promise<void> {
   if (!USE_BACKEND) return mock.resolveMatch(matchId, outcome);
-  await api.post(`/matches/${matchId}/resolve`, { outcome });
+  await api.post(`/matches/${matchId}/resolve`, { outcome, reason });
 }
 
 /** Заблокировать пользователя (соискателя/работодателя). */
-export async function blockUser(userId: string): Promise<void> {
+export async function blockUser(userId: string, reason: string): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport("");
-  await api.post(`/admin/users/${userId}/block`, {});
+  await api.post(`/admin/users/${userId}/block`, { reason });
 }
 
 /** Снять вакансию (фейк/обман) с публикации. */
-export async function blockVacancy(vacancyId: string): Promise<void> {
+export async function blockVacancy(vacancyId: string, reason: string): Promise<void> {
   if (!USE_BACKEND) return mock.resolveReport("");
-  await api.post(`/admin/vacancies/${vacancyId}/block`, {});
+  await api.post(`/admin/vacancies/${vacancyId}/block`, { reason });
 }
 
 export async function unblockUser(userId: string): Promise<void> {

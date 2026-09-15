@@ -126,7 +126,7 @@ def test_no_show_verdict_survives_the_nightly_run(client):
     client.post(f"/matches/{mid}/dispute", headers=seeker_h, json={"note": "был"})
     admin_h, _ = _auth(client, "seeker")  # conftest: tg_id=0 — админ
     r = client.post(f"/matches/{mid}/resolve", headers=admin_h,
-                    json={"outcome": "no_show"})
+                    json={"outcome": "no_show", "reason": "оператор подтвердил неявку"})
     assert r.status_code == 200
 
     from app.digest import settle_shifts

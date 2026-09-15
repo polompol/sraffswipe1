@@ -49,6 +49,7 @@ test("оператор проходит все четыре вкладки", asy
   // показывается только когда есть кого разблокировать.
   await request.post(`${API_URL}/admin/users/${seeker.id}/block`, {
     headers: auth(admin),
+    data: { reason: "E2E: проверка блокировки" },
   });
 
   const { context, page } = await openApp(browser, admin);

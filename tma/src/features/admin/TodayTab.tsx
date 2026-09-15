@@ -22,6 +22,7 @@ import {
 import { Loading } from "@/components/States";
 import { toast } from "@/components/Toast";
 import { Button } from "@/components/Button";
+import { Sheet } from "@/components/Sheet";
 import { plural } from "@/lib/format";
 import { IconCheck, IconWarning } from "@/components/Icons";
 import {
@@ -42,6 +43,16 @@ const PERIODS: { id: string; label: string; days: number }[] = [
   { id: "week", label: "7 дней", days: 7 },
   { id: "all", label: "Всё время", days: 0 },
 ];
+
+type PendingAdminAction =
+  | { kind: "block-user"; targetId: string }
+  | { kind: "block-vacancy"; targetId: string }
+  | {
+      kind: "resolve-match";
+      reportId: string;
+      matchId: string;
+      outcome: "completed" | "no_show";
+    };
 
 function SchedulerHealth() {
   const jobs = useQuery({ queryKey: ["admin-jobs"], queryFn: fetchJobsHealth });
@@ -94,6 +105,9 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
   const [period, setPeriod] = useState("week");
   // Черновики ответов заявителю — по одному на жалобу.
   const [replies, setReplies] = useState<Record<string, string>>({});
+  const [pendingAction, setPendingAction] = useState<PendingAdminAction | null>(null);
+  const [actionReason, setActionReason] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
   const refresh = useAdminRefresh();
   const { busyJob, runJob } = useJobRunner();
 
@@ -147,20 +161,54 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
     },
   ];
 
-  async function resolveDispute(
-    reportId: string,
-    matchId: string,
-    outcome: "completed" | "no_show",
-  ) {
-    const ok = await act(
-      async () => {
-        await resolveMatch(matchId, outcome);
-        await resolveReport(reportId);
-      },
-      outcome === "completed" ? "Смена засчитана" : "Зафиксирована неявка",
-      "Не удалось закрыть спор",
-    );
-    if (ok) refresh();
+  function openAdminAction(action: PendingAdminAction) {
+    setActionReason("");
+    setPendingAction(action);
+  }
+
+  function closeAdminAction() {
+    if (actionBusy) return;
+    setPendingAction(null);
+    setActionReason("");
+  }
+
+  async function confirmAdminAction() {
+    const action = pendingAction;
+    const reason = actionReason.trim();
+    if (!action || !reason || actionBusy) return;
+
+    setActionBusy(true);
+    try {
+      let ok = false;
+      if (action.kind === "block-user") {
+        ok = await act(
+          () => blockUser(action.targetId, reason),
+          "Пользователь заблокирован",
+          "Не удалось заблокировать",
+        );
+      } else if (action.kind === "block-vacancy") {
+        ok = await act(
+          () => blockVacancy(action.targetId, reason),
+          "Смена снята с публикации",
+          "Не удалось снять смену",
+        );
+      } else {
+        ok = await act(
+          async () => {
+            await resolveMatch(action.matchId, action.outcome, reason);
+            await resolveReport(action.reportId);
+          },
+          action.outcome === "completed" ? "Смена засчитана" : "Зафиксирована неявка",
+          "Не удалось закрыть спор",
+        );
+      }
+      if (!ok) return;
+      setPendingAction(null);
+      setActionReason("");
+      refresh();
+    } finally {
+      setActionBusy(false);
+    }
   }
 
   async function resolve(id: string) {
@@ -188,15 +236,6 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
     toast(`Всего предупреждений у нарушителя: ${total}`, "success");
     setReplies((m) => ({ ...m, [id]: "" }));
     refresh();
-  }
-
-  async function blockTarget(type: string, targetId: string) {
-    const ok = await act(
-      () => (type === "vacancy" ? blockVacancy(targetId) : blockUser(targetId)),
-      type === "vacancy" ? "Смена снята с публикации" : "Пользователь заблокирован",
-      "Не удалось заблокировать",
-    );
-    if (ok) refresh();
   }
 
   return (
@@ -312,14 +351,14 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
                     длины и в каждой жалобе переносились по-своему. */}
                 <div style={{ display: "grid", gap: 8 }}>
                   {r.targetType === "vacancy" && (
-                    <Button variant="danger" onClick={() => blockTarget("vacancy", r.targetId)}>
+                    <Button variant="danger" onClick={() => openAdminAction({ kind: "block-vacancy", targetId: r.targetId })}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <IconWarning size={16} /> Снять смену
                       </span>
                     </Button>
                   )}
                   {r.targetType === "user" && (
-                    <Button variant="danger" onClick={() => blockTarget("user", r.targetId)}>
+                    <Button variant="danger" onClick={() => openAdminAction({ kind: "block-user", targetId: r.targetId })}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <IconWarning size={16} /> Заблокировать
                       </span>
@@ -327,14 +366,14 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
                   )}
                   {r.targetType === "match" && (
                     <>
-                      <Button onClick={() => resolveDispute(r.id, r.targetId, "completed")}>
+                      <Button onClick={() => openAdminAction({ kind: "resolve-match", reportId: r.id, matchId: r.targetId, outcome: "completed" })}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <IconCheck size={16} /> Засчитать смену
                         </span>
                       </Button>
                       <Button
                         variant="secondary"
-                        onClick={() => resolveDispute(r.id, r.targetId, "no_show")}
+                        onClick={() => openAdminAction({ kind: "resolve-match", reportId: r.id, matchId: r.targetId, outcome: "no_show" })}
                       >
                         Зафиксировать неявку
                       </Button>
@@ -356,6 +395,59 @@ export function TodayTab({ ov }: { ov: { isLoading: boolean; data?: AdminOvervie
           </div>
         ))}
       </div>
+
+      {pendingAction && (
+        <Sheet
+          title={
+            pendingAction.kind === "block-user"
+              ? "Заблокировать пользователя?"
+              : pendingAction.kind === "block-vacancy"
+                ? "Снять смену?"
+                : pendingAction.outcome === "completed"
+                  ? "Засчитать смену?"
+                  : "Зафиксировать неявку?"
+          }
+          onClose={closeAdminAction}
+          footer={
+            <div className="stack">
+              <Button
+                variant="danger"
+                loading={actionBusy}
+                disabled={!actionReason.trim()}
+                onClick={confirmAdminAction}
+              >
+                {pendingAction.kind === "block-user"
+                  ? "Заблокировать"
+                  : pendingAction.kind === "block-vacancy"
+                    ? "Снять смену"
+                    : pendingAction.outcome === "completed"
+                      ? "Засчитать"
+                      : "Зафиксировать"}
+              </Button>
+              <Button variant="ghost" disabled={actionBusy} onClick={closeAdminAction}>
+                Отмена
+              </Button>
+            </div>
+          }
+        >
+          <p className="muted" style={{ marginTop: 0 }}>
+            Причина обязательна и сохранится в журнале действий оператора.
+          </p>
+          <label htmlFor="admin-action-reason" style={{ display: "block", marginBottom: 6 }}>
+            Причина
+          </label>
+          <textarea
+            id="admin-action-reason"
+            className="input"
+            value={actionReason}
+            maxLength={1000}
+            rows={4}
+            disabled={actionBusy}
+            onChange={(e) => setActionReason(e.target.value)}
+            style={{ width: "100%", resize: "vertical" }}
+          />
+        </Sheet>
+      )}
     </>
   );
 }

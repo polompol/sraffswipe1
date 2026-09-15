@@ -52,7 +52,9 @@ def test_blocked_vacancy_stops_working_everywhere(client):
     # Оператор блокирует смену.
     ah, _ = _auth(client)  # conftest: tg_id=0 = админ
     assert client.post(
-        f"/admin/vacancies/{vac['id']}/block", headers=ah
+        f"/admin/vacancies/{vac['id']}/block",
+        headers=ah,
+        json={"reason": "подозрительная смена"},
     ).status_code == 200
 
     # Из избранного пропала, откликнуться нельзя.

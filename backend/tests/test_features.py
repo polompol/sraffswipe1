@@ -687,9 +687,9 @@ def test_operator_resolves_dispute_no_show(client):
     outsider = client.post("/auth/verify", json={
         "phone": "+79990001122", "code": code, "role": "seeker"}).json()["access_token"]
     assert client.post(f"/matches/{match_id}/resolve", headers=_hdr(outsider),
-                       json={"outcome": "no_show"}).status_code == 403
+                       json={"outcome": "no_show", "reason": "проверка полномочий"}).status_code == 403
     r = client.post(f"/matches/{match_id}/resolve", headers=ah,
-                    json={"outcome": "no_show"})
+                    json={"outcome": "no_show", "reason": "оператор подтвердил неявку"})
     assert r.status_code == 200 and r.json()["disputed"] is False
     assert client.get("/admin/commissions", headers=ah).json() == []
 
@@ -701,7 +701,7 @@ def test_operator_resolves_dispute_completed_accrues(client):
     client.post(f"/matches/{match_id}/dispute", headers=_hdr(seeker_token),
                 json={"note": "спор"})
     r = client.post(f"/matches/{match_id}/resolve", headers=ah,
-                    json={"outcome": "completed"})
+                    json={"outcome": "completed", "reason": "оператор подтвердил выход"})
     assert r.status_code == 200 and r.json()["status"] == "completed"
     rows = client.get("/admin/commissions", headers=ah).json()
     assert rows and rows[0]["amountRub"] == 280

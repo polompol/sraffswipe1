@@ -378,8 +378,11 @@ def test_ban_follows_the_person_and_not_the_role(client):
     _set_tg(sid, 667001)          # тот же человек, вторая роль
 
     admin_h, _ = _auth(client, "employer")   # оператор: tg_id=0 из ADMIN_TG_IDS
-    assert client.post(f"/admin/users/{eid}/block",
-                       headers=admin_h).status_code == 200
+    assert client.post(
+        f"/admin/users/{eid}/block",
+        headers=admin_h,
+        json={"reason": "тест переноса бана между ролями"},
+    ).status_code == 200
 
     db = SessionLocal()
     try:
@@ -415,8 +418,11 @@ def test_ban_holds_even_if_the_second_role_did_not_exist_yet(client):
     see_h, sid = _auth(client, "seeker")
     _set_tg(sid, 668001)
     admin_h, _ = _auth(client, "employer")     # оператор: tg_id=0
-    assert client.post(f"/admin/users/{sid}/block",
-                       headers=admin_h).status_code == 200
+    assert client.post(
+        f"/admin/users/{sid}/block",
+        headers=admin_h,
+        json={"reason": "тест запрета обхода через вторую роль"},
+    ).status_code == 200
 
     # Тем же Telegram — но другой ролью, которой ещё не существует.
     import json
