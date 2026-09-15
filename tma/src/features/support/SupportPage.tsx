@@ -216,7 +216,14 @@ export function SupportPage() {
           {cases.isError && (
             <div className="card" role="alert">
               <p className="muted">Не удалось загрузить обращения.</p>
-              <Button variant="secondary" onClick={() => cases.refetch()}>Повторить</Button>
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  await cases.refetch();
+                }}
+              >
+                Повторить
+              </Button>
             </div>
           )}
           {!cases.isLoading && !cases.isError && (cases.data?.length ?? 0) === 0 && (
