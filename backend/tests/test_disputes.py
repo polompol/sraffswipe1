@@ -114,6 +114,33 @@ def test_closing_the_complaint_lets_the_shift_go_on(client):
         db.close()
 
 
+def test_operator_verdict_requires_non_blank_reason(client):
+    """Финальный вердикт без объяснения не должен менять спорную смену."""
+    emp_h, _, _, _, mid = _confirmed_shift(client, 850008, 850009)
+    age_shift(mid, days=1)
+    assert client.post(
+        f"/matches/{mid}/dispute",
+        headers=emp_h,
+        json={"note": "нужен разбор оператора"},
+    ).status_code == 200
+    admin_h = _admin(client)
+
+    missing = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show"},
+    )
+    assert missing.status_code == 422
+
+    blank = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show", "reason": "   "},
+    )
+    assert blank.status_code == 422
+    assert _match(mid).disputed is True
+
+
 def test_operator_verdict_still_wins(client):
     """Явный вердикт оператора не подменяется «оснований нет»."""
     emp_h, see_h, eid, sid, mid = _confirmed_shift(client, 850010, 850011)
@@ -121,8 +148,11 @@ def test_operator_verdict_still_wins(client):
     client.post(f"/matches/{mid}/dispute", headers=emp_h,
                 json={"note": "человек не вышел"})
     admin_h = _admin(client)
-    r = client.post(f"/matches/{mid}/resolve", headers=admin_h,
-                    json={"outcome": "no_show"})
+    r = client.post(
+        f"/matches/{mid}/resolve",
+        headers=admin_h,
+        json={"outcome": "no_show", "reason": "подтверждена неявка"},
+    )
     assert r.status_code == 200, r.text
     m = _match(mid)
     assert m.disputed is False
@@ -161,7 +191,7 @@ def test_completed_verdict_is_single_use_and_audited(client):
     first = client.post(
         f"/matches/{mid}/resolve",
         headers=admin_h,
-        json={"outcome": "completed", "reason": "проверены сообщения"},
+        json={"outcome": "completed", "reason": "  проверены сообщения  "},
     )
     assert first.status_code == 200, first.text
     second = client.post(
