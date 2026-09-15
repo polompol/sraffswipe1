@@ -440,23 +440,37 @@ def dispute(
 ):
     """«Пришёл/был, но не могу подтвердить» — эскалация к оператору. Доступна
     обеим сторонам мэтча. Создаёт жалобу-разбор и сигналит админам."""
-    m = db.get(Match, match_id)
+    # Serialize dispute creation on the match row. Two workers must not both
+    # observe disputed=False and create duplicate reports/messages/notifications.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
-    if principal["id"] not in (m.user_id, m.employer_id):
+    is_seeker = (
+        principal["role"] == "seeker" and principal["id"] == m.user_id
+    )
+    is_employer = (
+        principal["role"] == "employer" and principal["id"] == m.employer_id
+    )
+    if not (is_seeker or is_employer):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
-    # Повторный спор по той же смене не плодит жалобы/уведомления.
+    # Повторный спор по той же смене не плодит жалобы/уведомления. После
+    # row-lock конкурентный повтор дождётся первого commit и увидит True.
     if m.disputed:
         return _to_out(db, m, principal["role"])
     m.disputed = True
-    who = "работник" if principal["id"] == m.user_id else "заведение"
+    who = "работник" if is_seeker else "заведение"
     note = (body.note or "").strip()[:300]
     db.add(Report(
         reporter_id=principal["id"], target_type="match", target_id=m.id,
         reason="other", text=f"Спор по смене ({who}): {note}"[:1000],
     ))
     sys_message(db, m.id, "Открыт спор по смене — разбирает оператор StaffSwipe.")
-    other = m.employer_id if principal["id"] == m.user_id else m.user_id
+    other = m.employer_id if is_seeker else m.user_id
     notify_owner(db, other, "По вашей смене позвали оператора — он скоро напишет.")
     notify_admins(f"⚠️ Спор по смене {m.id[:8]} ({who}): {note}. Админ-панель.")
     db.commit()
@@ -832,10 +846,24 @@ def cancel_shift(
     сторона получает уведомление сразу, а надёжность профиля страдает только
     при ПОЗДНЕЙ отмене — когда заменить человека заведение уже не успевает.
     """
-    m = db.get(Match, match_id)
+    # Cancellation changes availability and emits notifications, so one match
+    # row is the transaction boundary. A concurrent retry must observe the first
+    # cancellation before deciding whether it can mutate anything.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
-    if principal["id"] not in (m.user_id, m.employer_id):
+    is_seeker = (
+        principal["role"] == "seeker" and principal["id"] == m.user_id
+    )
+    is_employer = (
+        principal["role"] == "employer" and principal["id"] == m.employer_id
+    )
+    if not (is_seeker or is_employer):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
     if m.status in ("completed", "cancelled"):
         raise HTTPException(
@@ -849,7 +877,7 @@ def cancel_shift(
                    "Напишите в чат или откройте спор.",
         )
 
-    who = "seeker" if principal["id"] == m.user_id else "employer"
+    who = "seeker" if is_seeker else "employer"
     reason = (body.reason.strip() if body else "")[:200]
 
     # Поздняя отмена — та, после которой заведение уже не успеет найти замену.
