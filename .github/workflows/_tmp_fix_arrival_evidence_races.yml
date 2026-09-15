@@ -1,0 +1,103 @@
+name: Temporary fix arrival evidence races
+
+on:
+  push:
+    branches:
+      - codex/staffswipe-production-readiness
+    paths:
+      - .github/workflows/_tmp_fix_arrival_evidence_races.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: staffswipe_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      STAFFSWIPE_TEST_DB: postgresql+psycopg://postgres:postgres@localhost:5432/staffswipe_test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/bot/requirements.txt
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r bot/requirements.txt ruff pytest pypdf fakeredis moto
+      - name: Serialize arrival evidence mutations
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("backend/app/routers/matches.py")
+          text = path.read_text()
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {count}")
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              '''    m = db.get(Match, match_id)\n    if m is None:\n        raise HTTPException(status_code=404, detail="Смена не найдена")\n    is_employer = principal["id"] == m.employer_id and principal["role"] == "employer"\n''',
+              '''    # Arrival evidence and a "shift did not happen" claim mutate the\n    # same Match row. Serialize them so the second request always sees the\n    # first request's committed evidence instead of overwriting it.\n    m = (\n        db.query(Match)\n        .filter(Match.id == match_id)\n        .with_for_update()\n        .one_or_none()\n    )\n    if m is None:\n        raise HTTPException(status_code=404, detail="Смена не найдена")\n    is_employer = principal["id"] == m.employer_id and principal["role"] == "employer"\n''',
+              "mark_not_held lock",
+          )
+
+          replace_once(
+              '''    m = db.get(Match, match_id)\n    if m is None:\n        raise HTTPException(status_code=404, detail="Мэтч не найден")\n    if principal["role"] != "employer" or principal["id"] != m.employer_id:\n        raise HTTPException(status_code=403, detail="Только работодатель смены")\n    # Уже закрытую смену не трогаем: иначе attended=false переоткрывал бы спор\n''',
+              '''    # Serialize employer attendance against worker code check-in and\n    # not-held claims. The row is the transaction boundary for arrival truth.\n    m = (\n        db.query(Match)\n        .filter(Match.id == match_id)\n        .with_for_update()\n        .one_or_none()\n    )\n    if m is None:\n        raise HTTPException(status_code=404, detail="Мэтч не найден")\n    if principal["role"] != "employer" or principal["id"] != m.employer_id:\n        raise HTTPException(status_code=403, detail="Только работодатель смены")\n    # Уже закрытую смену не трогаем: иначе attended=false переоткрывал бы спор\n''',
+              "mark_attendance lock",
+          )
+
+          replace_once(
+              '''    m = db.get(Match, match_id)\n    if m is None:\n        raise HTTPException(status_code=404, detail="Мэтч не найден")\n    if principal["role"] != "seeker" or principal["id"] != m.user_id:\n        raise HTTPException(status_code=403, detail="Отметиться может только работник")\n    if m.status != "confirmed":\n        raise HTTPException(status_code=400, detail="Смена не подтверждена")\n\n    by_code = bool(\n        body.code\n        and m.checkin_code\n        and secure_equals(body.code.strip(), m.checkin_code)\n    )\n    if not by_code:\n        raise HTTPException(\n            status_code=400,\n            detail="Неверный код. Попросите его у администратора заведения.",\n        )\n    m.seeker_checked_in = True\n    m.checkin_by_code = True\n    sys_message(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")\n    maybe_complete(db, m)\n    db.commit()\n    db.refresh(m)\n    return _to_out(db, m, principal["role"])\n''',
+              '''    # The code is evidence that can conflict with attendance/not-held.\n    # Lock first so those three mutations have one authoritative order.\n    m = (\n        db.query(Match)\n        .filter(Match.id == match_id)\n        .with_for_update()\n        .one_or_none()\n    )\n    if m is None:\n        raise HTTPException(status_code=404, detail="Мэтч не найден")\n    if principal["role"] != "seeker" or principal["id"] != m.user_id:\n        raise HTTPException(status_code=403, detail="Отметиться может только работник")\n\n    # A correct venue code may recover only an explicit no-show/not-held\n    # terminal state. Arbitrary expired/cancelled/completed matches stay closed.\n    recoverable_expired = (\n        m.status == "expired" and m.not_held_by in {"employer", "seeker"}\n    )\n    if m.status != "confirmed" and not recoverable_expired:\n        raise HTTPException(status_code=400, detail="Смена не подтверждена")\n\n    by_code = bool(\n        body.code\n        and m.checkin_code\n        and secure_equals(body.code.strip(), m.checkin_code)\n    )\n    if not by_code:\n        raise HTTPException(\n            status_code=400,\n            detail="Неверный код. Попросите его у администратора заведения.",\n        )\n\n    m.seeker_checked_in = True\n    m.checkin_by_code = True\n    if recoverable_expired:\n        # Preserve the earlier claim in not_held_by as audit evidence, but do\n        # not let it remain an automatic no-show once a valid code contradicts it.\n        m.no_show = False\n        m.status = "confirmed"\n        open_dispute(\n            db,\n            m,\n            "Правильный код прихода противоречит отметке, что смены не было.",\n        )\n        sys_message(\n            db,\n            m.id,\n            "Работник назвал правильный код после отметки о неявке. "\n            "Разбирает оператор StaffSwipe.",\n        )\n    else:\n        sys_message(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")\n        maybe_complete(db, m)\n    db.commit()\n    db.refresh(m)\n    return _to_out(db, m, principal["role"])\n''',
+              "checkin recovery",
+          )
+
+          path.write_text(text)
+          PY
+      - name: Refresh generated text catalog
+        run: python3 scripts/texts.py --write
+      - name: Verify focused lifecycle invariants
+        working-directory: backend
+        run: |
+          ruff check app/routers/matches.py tests/test_match_arrival_evidence_races.py
+          pytest -q \
+            tests/test_match_arrival_evidence_races.py \
+            tests/test_abandoned_shifts.py \
+            tests/test_match_lifecycle_authorization.py \
+            tests/test_match_lifecycle_mutation_races.py \
+            tests/test_disputes.py \
+            tests/test_e2e_flows.py
+      - name: Commit verified fix and remove temporary workflow
+        run: |
+          rm .github/workflows/_tmp_fix_arrival_evidence_races.yml
+          git config user.name staffswipe-ci
+          git config user.email staffswipe-ci@users.noreply.github.com
+          git add backend/app/routers/matches.py docs/ТЕКСТЫ.md .github/workflows/_tmp_fix_arrival_evidence_races.yml
+          git commit -m "fix(lifecycle): preserve arrival evidence across no-show races"
+          git push origin HEAD:codex/staffswipe-production-readiness
