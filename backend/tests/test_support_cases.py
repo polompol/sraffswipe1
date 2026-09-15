@@ -69,7 +69,7 @@ def test_support_cases_are_scoped_by_current_role(client):
     assert [x["id"] for x in employer_rows] == [second.json()["id"]]
 
 
-def test_support_case_validation_and_rate_limit(client):
+def test_support_case_validation(client):
     headers, _ = _auth(client, "seeker")
 
     bad_topic = client.post(
@@ -85,6 +85,13 @@ def test_support_case_validation_and_rate_limit(client):
         json={"topic": "other", "text": "ой"},
     )
     assert too_short.status_code == 422
+
+
+def test_support_case_rate_limit(client):
+    # Отдельный тест даёт чистый rate-limit bucket. Невалидные попытки из
+    # validation-теста тоже считаются лимитером — это намеренная защита от
+    # спама и её нельзя ослаблять ради теста.
+    headers, _ = _auth(client, "seeker")
 
     for i in range(5):
         ok = client.post(
