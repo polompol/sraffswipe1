@@ -20,7 +20,7 @@ const vacancy: Vacancy = {
   startTime: 600,
   endTime: 1080,
   rate: 400,
-  rateType: "hour",
+  rateType: "perHour",
   description: "",
   requireMedBook: false,
   requireExperience: false,
@@ -56,7 +56,7 @@ describe("VacancyList pending actions", () => {
     fireEvent.click(like);
 
     expect(onAct).toHaveBeenCalledTimes(1);
-    expect(like).toBeDisabled();
+    expect((like as HTMLButtonElement).disabled).toBe(true);
 
     await act(async () => pending.resolve(true));
     await waitFor(() =>
