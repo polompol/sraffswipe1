@@ -21,19 +21,18 @@ jobs:
       - name: Execute guarded patch body
         shell: bash
         run: |
-          python3 -m pip install --quiet pyyaml
           python3 - <<'PY'
           from pathlib import Path
           import subprocess
-          import yaml
+          import textwrap
 
-          workflow = yaml.safe_load(Path('.github/workflows/task3-patch.yml').read_text(encoding='utf-8'))
-          step = next(
-              item
-              for item in workflow['jobs']['apply']['steps']
-              if item.get('name') == 'Apply guarded contract and UX fixes'
-          )
-          subprocess.run(['bash', '-euo', 'pipefail', '-c', step['run']], check=True)
+          raw = Path('.github/workflows/task3-patch.yml').read_text(encoding='utf-8')
+          start = "      - name: Apply guarded contract and UX fixes\n        shell: bash\n        run: |\n"
+          end = "\n      - name: Commit guarded patch and remove runner\n"
+          if raw.count(start) != 1 or raw.count(end) != 1:
+              raise SystemExit('guarded patch markers are not unique')
+          body = raw.split(start, 1)[1].split(end, 1)[0]
+          subprocess.run(['bash', '-euo', 'pipefail', '-c', textwrap.dedent(body)], check=True)
           PY
 
       - name: Commit guarded patch and remove temporary runners
