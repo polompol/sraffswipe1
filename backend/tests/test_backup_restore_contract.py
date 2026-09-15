@@ -6,8 +6,6 @@ SQL+gzip backup format.
 """
 
 from pathlib import Path
-
-
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "verify-backup-restore.sh"
 
 
