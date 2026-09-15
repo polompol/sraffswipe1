@@ -70,7 +70,7 @@ function asMessageBody(data: unknown): { text: string; client_message_id: string
 }
 
 test.describe("восстановление чата", () => {
-  test("сетевой сбой → reload → повтор с той же квитанцией и одной записью", async ({
+  test("сетевой сбой → failed живёт только до reload и plaintext не сохраняется", async ({
     browser,
     request,
   }) => {
@@ -80,7 +80,6 @@ test.describe("восстановление чата", () => {
       920_100,
     );
     const attempts: string[] = [];
-    let failFirst = true;
 
     await page.route(`**/matches/${matchId}/messages`, async (route) => {
       if (route.request().method() !== "POST") {
@@ -89,30 +88,36 @@ test.describe("восстановление чата", () => {
       }
       const body = asMessageBody(route.request().postDataJSON());
       attempts.push(body.client_message_id);
-      if (failFirst) {
-        failFirst = false;
-        await route.abort("failed");
-        return;
-      }
-      await route.continue();
+      await route.abort("failed");
     });
 
     await page.goto(`/#/chat/${matchId}`);
-    await page.getByLabel("Текст сообщения").fill("Сообщение переживёт перезагрузку");
+    await page.getByLabel("Текст сообщения").fill("Сообщение не должно пережить перезагрузку");
     await page.getByRole("button", { name: "Отправить" }).click();
 
     await expect(page.getByText("Не отправилось")).toBeVisible();
-    await expect(page.locator(".bubble.mine", { hasText: "переживёт" })).toHaveCount(1);
+    await expect(page.locator(".bubble.mine", { hasText: "не должно пережить" })).toHaveCount(1);
     expect(attempts).toHaveLength(1);
 
-    await page.reload();
-    await expect
-      .poll(() => attempts.length, { message: "outbox повторил отправку после reload" })
-      .toBe(2);
-    expect(attempts[1]).toBe(attempts[0]);
+    // Неподтверждённый текст и outbox содержат чувствительный plaintext.
+    // Они могут помогать только пока жив текущий JS-контекст Mini App и не
+    // должны попадать ни в localStorage, ни в sessionStorage.
+    const persistentChatKeys = await page.evaluate(() => [
+      ...Object.keys(localStorage),
+      ...Object.keys(sessionStorage),
+    ].filter((key) => key.startsWith("ss_chat_v1:")));
+    expect(persistentChatKeys).toEqual([]);
 
-    await expect(page.locator(".bubble.mine", { hasText: "переживёт" })).toHaveCount(1);
+    await page.reload();
+    await page.waitForTimeout(750);
+
+    // Hard reload уничтожает runtime-only recovery state: приложение не имеет
+    // права автоматически повторять POST, если для этого пришлось бы хранить
+    // plaintext на устройстве.
+    expect(attempts).toHaveLength(1);
+    await expect(page.locator(".bubble.mine", { hasText: "не должно пережить" })).toHaveCount(0);
     await expect(page.getByText("Не отправилось")).toHaveCount(0);
+    await expect(page.getByLabel("Текст сообщения")).toHaveValue("");
 
     const history = await request.get(`${API_URL}/matches/${matchId}/messages`, {
       headers: auth(seeker),
@@ -121,7 +126,7 @@ test.describe("восстановление чата", () => {
       client_message_id?: string;
       text: string;
     }>;
-    expect(rows.filter((row) => row.client_message_id === attempts[0])).toHaveLength(1);
+    expect(rows.filter((row) => row.client_message_id === attempts[0])).toHaveLength(0);
 
     await context.close();
   });
