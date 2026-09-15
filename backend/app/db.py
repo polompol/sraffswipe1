@@ -46,6 +46,13 @@ class Base(DeclarativeBase):
     pass
 
 
+# Operational models live outside the large marketplace models module, but
+# must still be registered in the same metadata for SQLite create_all and the
+# migration-vs-model parity tests. Import only after Base exists: the module
+# imports Base back from here.
+from . import service_health as _service_health  # noqa: E402,F401
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
