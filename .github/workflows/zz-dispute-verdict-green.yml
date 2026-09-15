@@ -1,0 +1,72 @@
+name: Dispute verdict GREEN
+
+on:
+  push:
+    branches:
+      - codex/staffswipe-production-readiness
+    paths:
+      - .github/workflows/zz-dispute-verdict-green.yml
+
+permissions:
+  contents: write
+
+jobs:
+  green:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Apply bounded dispute verdict patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("backend/app/routers/matches.py")
+          text = path.read_text()
+
+          old = "from ..config import settings\n"
+          new = "from ..admin_audit import record_admin_action\nfrom ..config import settings\n"
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''class ResolveMatchIn(BaseModel):\n    outcome: str  # "completed" | "no_show"\n'''
+          new = '''class ResolveMatchIn(BaseModel):\n    outcome: str  # "completed" | "no_show"\n    reason: Annotated[str, StringConstraints(max_length=1000)] = ""\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''@router.post("/{match_id}/resolve", response_model=MatchOut)\ndef resolve_match(\n    match_id: str,\n    body: ResolveMatchIn,\n    db: Session = Depends(get_db),\n    principal: dict = Depends(current_principal),\n):\n    """Оператор закрывает спор по смене: засчитать смену (completed + комиссия)\n    ИЛИ зафиксировать неявку (no_show, бьёт по надёжности). Только админ —\n    иначе спор мог бы висеть вечно, а неявка мошенника не засчитывалась бы."""\n    if not _is_admin(db, principal):\n        raise HTTPException(status_code=403, detail="Только для оператора")\n    m = db.get(Match, match_id)\n    if m is None:\n        raise HTTPException(status_code=404, detail="Мэтч не найден")\n    m.disputed = False\n    if body.outcome == "completed":\n        m.status = "completed"\n        m.no_show = False\n        m.seeker_checked_in = True\n        m.employer_checked_in = True\n        accrue_commission(db, m)\n        sys_message(db, m.id, "Оператор закрыл спор: смена засчитана ✓")\n    elif body.outcome == "no_show":\n        m.no_show = True  # засчитывается в надёжность работника\n        # Статус обязателен: смена, оставшаяся «подтверждённой», ночью\n        # попадала под общий расчёт — он ставил completed, СНИМАЛ неявку и\n        # начислял комиссию. То есть заведение, ВЫИГРАВШЕЕ спор, получало\n        # счёт за смену, которой не было, а с работника снималась неявка.\n        m.status = "expired"\n        m.not_held_by = "employer"\n        sys_message(db, m.id, "Оператор закрыл спор: зафиксирована неявка. "\n                       "Комиссия не начислена.")\n    else:\n        raise HTTPException(status_code=400, detail="outcome: completed|no_show")\n    db.commit()\n    db.refresh(m)\n    return _to_out(db, m, principal["role"])\n'''
+          new = '''@router.post("/{match_id}/resolve", response_model=MatchOut)\ndef resolve_match(\n    match_id: str,\n    body: ResolveMatchIn,\n    db: Session = Depends(get_db),\n    principal: dict = Depends(current_principal),\n):\n    """Оператор закрывает спор по смене: засчитать смену (completed + комиссия)\n    ИЛИ зафиксировать неявку (no_show, бьёт по надёжности). Только админ —\n    иначе спор мог бы висеть вечно, а неявка мошенника не засчитывалась бы."""\n    if not _is_admin(db, principal):\n        raise HTTPException(status_code=403, detail="Только для оператора")\n    m = db.get(Match, match_id)\n    if m is None:\n        raise HTTPException(status_code=404, detail="Мэтч не найден")\n    if not m.disputed:\n        raise HTTPException(\n            status_code=409,\n            detail="Спор уже закрыт или не был открыт",\n        )\n    if body.outcome not in {"completed", "no_show"}:\n        raise HTTPException(status_code=400, detail="outcome: completed|no_show")\n\n    m.disputed = False\n    if body.outcome == "completed":\n        m.status = "completed"\n        m.no_show = False\n        m.seeker_checked_in = True\n        m.employer_checked_in = True\n        accrue_commission(db, m)\n        sys_message(db, m.id, "Оператор закрыл спор: смена засчитана ✓")\n    else:\n        m.no_show = True  # засчитывается в надёжность работника\n        # Статус обязателен: смена, оставшаяся «подтверждённой», ночью\n        # попадала под общий расчёт — он ставил completed, СНИМАЛ неявку и\n        # начислял комиссию. То есть заведение, ВЫИГРАВШЕЕ спор, получало\n        # счёт за смену, которой не было, а с работника снималась неявка.\n        m.status = "expired"\n        m.not_held_by = "employer"\n        sys_message(db, m.id, "Оператор закрыл спор: зафиксирована неявка. "\n                       "Комиссия не начислена.")\n\n    record_admin_action(\n        db,\n        actor_id=principal["id"],\n        action=f"match.resolve.{body.outcome}",\n        target_type="match",\n        target_id=m.id,\n        reason=body.reason,\n    )\n    db.commit()\n    db.refresh(m)\n    return _to_out(db, m, principal["role"])\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt pytest ruff
+      - name: Verify patch scope
+        run: |
+          git diff -- backend/app/routers/matches.py
+          test "$(git diff --numstat -- backend/app/routers/matches.py | awk '{print $1+$2}')" -lt 80
+      - name: Lint
+        working-directory: backend
+        run: ruff check app/routers/matches.py tests/test_disputes.py
+      - name: Targeted GREEN
+        working-directory: backend
+        run: pytest -q tests/test_disputes.py
+      - name: Commit verified patch and remove helper workflows
+        run: |
+          rm -f .github/workflows/zz-dispute-verdict-red.yml
+          rm -f .github/workflows/zz-dispute-verdict-green.yml
+          git config user.name "staffswipe-ci"
+          git config user.email "staffswipe-ci@users.noreply.github.com"
+          git add backend/app/routers/matches.py .github/workflows/zz-dispute-verdict-red.yml .github/workflows/zz-dispute-verdict-green.yml
+          git commit -m "fix: make dispute verdicts single-use and audited"
+          git push origin HEAD:codex/staffswipe-production-readiness
