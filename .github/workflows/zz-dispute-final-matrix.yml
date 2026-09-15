@@ -1,4 +1,4 @@
-name: Dispute verdict final matrix
+name: Dispute verdict final matrix rerun
 
 on:
   push:
