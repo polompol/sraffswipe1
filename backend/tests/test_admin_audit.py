@@ -38,7 +38,7 @@ def test_admin_block_is_audited_and_audit_is_admin_only(client):
     changed = client.post(
         f"/admin/users/{victim_id}/block",
         headers=admin_h,
-        json={"reason": "подозрение на мошенничество"},
+        json={"reason": "  подозрение на мошенничество  "},
     )
     assert changed.status_code == 200
 
@@ -54,6 +54,21 @@ def test_admin_block_is_audited_and_audit_is_admin_only(client):
     assert row["targetType"] == "user"
     assert row["reason"] == "подозрение на мошенничество"
     assert row["createdAt"]
+
+
+def test_dangerous_block_actions_require_non_blank_reason(client):
+    """Бан/снятие смены нельзя провести случайным тапом без объяснения."""
+    admin_h, _ = _admin_auth(client)
+
+    for path in (
+        "/admin/users/does-not-exist/block",
+        "/admin/vacancies/does-not-exist/block",
+    ):
+        missing = client.post(path, headers=admin_h)
+        assert missing.status_code == 422
+
+        blank = client.post(path, headers=admin_h, json={"reason": "   "})
+        assert blank.status_code == 422
 
 
 def test_all_moderation_state_changes_are_audited(client):
@@ -130,13 +145,17 @@ def test_all_moderation_state_changes_are_audited(client):
         json={"verified": False},
     ).status_code == 200
     assert client.post(
-        f"/admin/users/{victim_id}/block", headers=admin_h
+        f"/admin/users/{victim_id}/block",
+        headers=admin_h,
+        json={"reason": "подтверждённое нарушение"},
     ).status_code == 200
     assert client.post(
         f"/admin/users/{victim_id}/unblock", headers=admin_h
     ).status_code == 200
     assert client.post(
-        f"/admin/vacancies/{vacancy_id}/block", headers=admin_h
+        f"/admin/vacancies/{vacancy_id}/block",
+        headers=admin_h,
+        json={"reason": "вакансия нарушает правила"},
     ).status_code == 200
     assert client.post(
         f"/admin/vacancies/{vacancy_id}/unblock", headers=admin_h
