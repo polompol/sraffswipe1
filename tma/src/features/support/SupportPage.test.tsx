@@ -16,7 +16,7 @@ const api = vi.hoisted(() => ({
   list: vi.fn(),
 }));
 
-vi.mock("@/api/endpoints", () => ({
+vi.mock("@/api/support", () => ({
   createSupportCase: api.create,
   fetchSupportCases: api.list,
 }));
