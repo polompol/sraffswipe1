@@ -1,186 +1,24 @@
 name: Apply Task 4 support API patch
 
 on:
-  pull_request:
+  push:
     branches:
-      - codex/staffswipe-release-candidate
+      - codex/staffswipe-production-readiness
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.head_ref == 'codex/staffswipe-production-readiness'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: codex/staffswipe-production-readiness
           fetch-depth: 0
-
-      - name: Patch support endpoint and mock contracts
+      - name: Apply guarded patch
         shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              p = Path(path)
-              text = p.read_text(encoding="utf-8")
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected exactly one match, got {count}")
-              p.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-          support_api = r'''
-export type SupportTopic = "shift" | "payment" | "account" | "safety" | "other";
-export type SupportCaseStatus = "open" | "answered" | "closed";
-
-export interface SupportCase {
-  id: string;
-  number: string;
-  topic: SupportTopic;
-  text: string;
-  status: SupportCaseStatus;
-  adminReply: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AdminSupportCase extends SupportCase {
-  ownerId: string;
-  ownerRole: string;
-  ownerInfo: string;
-}
-
-export async function createSupportCase(
-  topic: SupportTopic,
-  text: string,
-): Promise<SupportCase> {
-  if (!USE_BACKEND) return mock.createSupportCase(topic, text);
-  const { data } = await api.post<SupportCase>("/support/cases", { topic, text });
-  return data;
-}
-
-export async function fetchSupportCases(): Promise<SupportCase[]> {
-  if (!USE_BACKEND) return mock.fetchSupportCases();
-  const { data } = await api.get<SupportCase[]>("/support/cases");
-  return data;
-}
-
-export async function fetchAdminSupport(
-  status: "open" | "all" = "open",
-): Promise<AdminSupportCase[]> {
-  if (!USE_BACKEND) return mock.fetchAdminSupport(status);
-  const { data } = await api.get<AdminSupportCase[]>("/admin/support", {
-    params: { status },
-  });
-  return data;
-}
-
-export async function replySupportCase(
-  id: string,
-  reply: string,
-): Promise<AdminSupportCase> {
-  if (!USE_BACKEND) return mock.replySupportCase(id, reply);
-  const { data } = await api.post<AdminSupportCase>(
-    `/admin/support/${id}/reply`,
-    { reply },
-  );
-  return data;
-}
-
-export async function closeSupportCase(
-  id: string,
-  reply = "",
-): Promise<AdminSupportCase> {
-  if (!USE_BACKEND) return mock.closeSupportCase(id, reply);
-  const { data } = await api.post<AdminSupportCase>(
-    `/admin/support/${id}/close`,
-    reply ? { reply } : {},
-  );
-  return data;
-}
-
-'''
-          replace_once(
-              "tma/src/api/endpoints.ts",
-              "export interface AddressSuggestion {",
-              support_api + "export interface AddressSuggestion {",
-          )
-
-          replace_once(
-              "tma/src/api/mock.ts",
-              '''  ReferralInfo,\n  SavedSearch,\n  SwipeResult,\n  VacancyInput,\n  VerifyResult,\n} from "./endpoints";''',
-              '''  AdminSupportCase,\n  ReferralInfo,\n  SavedSearch,\n  SupportCase,\n  SupportTopic,\n  SwipeResult,\n  VacancyInput,\n  VerifyResult,\n} from "./endpoints";''',
-          )
-          replace_once(
-              "tma/src/api/mock.ts",
-              '''const uid = () => Math.random().toString(36).slice(2, 10);\n''',
-              '''const uid = () => Math.random().toString(36).slice(2, 10);\n\nconst supportCases: AdminSupportCase[] = [];\n''',
-          )
-
-          support_mock = r'''
-export function createSupportCase(topic: SupportTopic, text: string): Promise<SupportCase> {
-  const now = new Date().toISOString();
-  const id = uid();
-  const row: AdminSupportCase = {
-    id,
-    number: `SS-${id.slice(0, 8).toUpperCase()}`,
-    ownerId: "me",
-    ownerRole: "seeker",
-    ownerInfo: "Демо-пользователь",
-    topic,
-    text: text.trim(),
-    status: "open",
-    adminReply: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  supportCases.unshift(row);
-  return Promise.resolve({ ...row });
-}
-
-export function fetchSupportCases(): Promise<SupportCase[]> {
-  return Promise.resolve(supportCases.map((row) => ({ ...row })));
-}
-
-export function fetchAdminSupport(
-  status: "open" | "all" = "open",
-): Promise<AdminSupportCase[]> {
-  const rows = status === "open"
-    ? supportCases.filter((row) => row.status !== "closed")
-    : supportCases;
-  return Promise.resolve(rows.map((row) => ({ ...row })));
-}
-
-export function replySupportCase(id: string, reply: string): Promise<AdminSupportCase> {
-  const row = supportCases.find((item) => item.id === id);
-  if (!row) return Promise.reject(new Error("Обращение не найдено"));
-  row.adminReply = reply.trim();
-  row.status = "answered";
-  row.updatedAt = new Date().toISOString();
-  return Promise.resolve({ ...row });
-}
-
-export function closeSupportCase(id: string, reply = ""): Promise<AdminSupportCase> {
-  const row = supportCases.find((item) => item.id === id);
-  if (!row) return Promise.reject(new Error("Обращение не найдено"));
-  const finalReply = reply.trim();
-  if (finalReply) row.adminReply = finalReply;
-  row.status = "closed";
-  row.updatedAt = new Date().toISOString();
-  return Promise.resolve({ ...row });
-}
-
-'''
-          replace_once(
-              "tma/src/api/mock.ts",
-              "export function resolveReport(id: string): Promise<void> {",
-              support_mock + "export function resolveReport(id: string): Promise<void> {",
-          )
-          PY
-
+        run: echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpkZWYgcmVwbGFjZV9vbmNlKHBhdGg6IHN0ciwgb2xkOiBzdHIsIG5ldzogc3RyKSAtPiBOb25lOgogICAgcCA9IFBhdGgocGF0aCkKICAgIHRleHQgPSBwLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQogICAgY291bnQgPSB0ZXh0LmNvdW50KG9sZCkKICAgIGlmIGNvdW50ICE9IDE6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdChmIntwYXRofTogZXhwZWN0ZWQgZXhhY3RseSBvbmUgbWF0Y2gsIGdvdCB7Y291bnR9IikKICAgIHAud3JpdGVfdGV4dCh0ZXh0LnJlcGxhY2Uob2xkLCBuZXcsIDEpLCBlbmNvZGluZz0idXRmLTgiKQoKc3VwcG9ydF9hcGkgPSAnJycKZXhwb3J0IHR5cGUgU3VwcG9ydFRvcGljID0gInNoaWZ0IiB8ICJwYXltZW50IiB8ICJhY2NvdW50IiB8ICJzYWZldHkiIHwgIm90aGVyIjsKZXhwb3J0IHR5cGUgU3VwcG9ydENhc2VTdGF0dXMgPSAib3BlbiIgfCAiYW5zd2VyZWQiIHwgImNsb3NlZCI7CgpleHBvcnQgaW50ZXJmYWNlIFN1cHBvcnRDYXNlIHsKICBpZDogc3RyaW5nOwogIG51bWJlcjogc3RyaW5nOwogIHRvcGljOiBTdXBwb3J0VG9waWM7CiAgdGV4dDogc3RyaW5nOwogIHN0YXR1czogU3VwcG9ydENhc2VTdGF0dXM7CiAgYWRtaW5SZXBseTogc3RyaW5nIHwgbnVsbDsKICBjcmVhdGVkQXQ6IHN0cmluZzsKICB1cGRhdGVkQXQ6IHN0cmluZzsKfQoKZXhwb3J0IGludGVyZmFjZSBBZG1pblN1cHBvcnRDYXNlIGV4dGVuZHMgU3VwcG9ydENhc2UgewogIG93bmVySWQ6IHN0cmluZzsKICBvd25lclJvbGU6IHN0cmluZzsKICBvd25lckluZm86IHN0cmluZzsKfQoKZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGNyZWF0ZVN1cHBvcnRDYXNlKAogIHRvcGljOiBTdXBwb3J0VG9waWMsCiAgdGV4dDogc3RyaW5nLAopOiBQcm9taXNlPFN1cHBvcnRDYXNlPiB7CiAgaWYgKCFVU0VfQkFDS0VORCkgcmV0dXJuIG1vY2suY3JlYXRlU3VwcG9ydENhc2UodG9waWMsIHRleHQpOwogIGNvbnN0IHsgZGF0YSB9ID0gYXdhaXQgYXBpLnBvc3Q8U3VwcG9ydENhc2U+KCIvc3VwcG9ydC9jYXNlcyIsIHsgdG9waWMsIHRleHQgfSk7CiAgcmV0dXJuIGRhdGE7Cn0KCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBmZXRjaFN1cHBvcnRDYXNlcygpOiBQcm9taXNlPFN1cHBvcnRDYXNlW10+IHsKICBpZiAoIVVTRV9CQUNLRU5EKSByZXR1cm4gbW9jay5mZXRjaFN1cHBvcnRDYXNlcygpOwogIGNvbnN0IHsgZGF0YSB9ID0gYXdhaXQgYXBpLmdldDxTdXBwb3J0Q2FzZVtdPigiL3N1cHBvcnQvY2FzZXMiKTsKICByZXR1cm4gZGF0YTsKfQoKZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGZldGNoQWRtaW5TdXBwb3J0KAogIHN0YXR1czogIm9wZW4iIHwgImFsbCIgPSAib3BlbiIsCik6IFByb21pc2U8QWRtaW5TdXBwb3J0Q2FzZVtdPiB7CiAgaWYgKCFVU0VfQkFDS0VORCkgcmV0dXJuIG1vY2suZmV0Y2hBZG1pblN1cHBvcnQoc3RhdHVzKTsKICBjb25zdCB7IGRhdGEgfSA9IGF3YWl0IGFwaS5nZXQ8QWRtaW5TdXBwb3J0Q2FzZVtdPigiL2FkbWluL3N1cHBvcnQiLCB7CiAgICBwYXJhbXM6IHsgc3RhdHVzIH0sCiAgfSk7CiAgcmV0dXJuIGRhdGE7Cn0KCmV4cG9ydCBhc3luYyBmdW5jdGlvbiByZXBseVN1cHBvcnRDYXNlKAogIGlkOiBzdHJpbmcsCiAgcmVwbHk6IHN0cmluZywKKTogUHJvbWlzZTxBZG1pblN1cHBvcnRDYXNlPiB7CiAgaWYgKCFVU0VfQkFDS0VORCkgcmV0dXJuIG1vY2sucmVwbHlTdXBwb3J0Q2FzZShpZCwgcmVwbHkpOwogIGNvbnN0IHsgZGF0YSB9ID0gYXdhaXQgYXBpLnBvc3Q8QWRtaW5TdXBwb3J0Q2FzZT4oCiAgICBgL2FkbWluL3N1cHBvcnQvJHtpZH0vcmVwbHlgLAogICAgeyByZXBseSB9LAogICk7CiAgcmV0dXJuIGRhdGE7Cn0KCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBjbG9zZVN1cHBvcnRDYXNlKAogIGlkOiBzdHJpbmcsCiAgcmVwbHkgPSAiIiwKKTogUHJvbWlzZTxBZG1pblN1cHBvcnRDYXNlPiB7CiAgaWYgKCFVU0VfQkFDS0VORCkgcmV0dXJuIG1vY2suY2xvc2VTdXBwb3J0Q2FzZShpZCwgcmVwbHkpOwogIGNvbnN0IHsgZGF0YSB9ID0gYXdhaXQgYXBpLnBvc3Q8QWRtaW5TdXBwb3J0Q2FzZT4oCiAgICBgL2FkbWluL3N1cHBvcnQvJHtpZH0vY2xvc2VgLAogICAgcmVwbHkgPyB7IHJlcGx5IH0gOiB7fSwKICApOwogIHJldHVybiBkYXRhOwp9CgonJycKcmVwbGFjZV9vbmNlKAogICAgInRtYS9zcmMvYXBpL2VuZHBvaW50cy50cyIsCiAgICAiZXhwb3J0IGludGVyZmFjZSBBZGRyZXNzU3VnZ2VzdGlvbiB7IiwKICAgIHN1cHBvcnRfYXBpICsgImV4cG9ydCBpbnRlcmZhY2UgQWRkcmVzc1N1Z2dlc3Rpb24geyIsCikKCnJlcGxhY2Vfb25jZSgKICAgICJ0bWEvc3JjL2FwaS9tb2NrLnRzIiwKICAgICcnJyAgUmVmZXJyYWxJbmZvLAogIFNhdmVkU2VhcmNoLAogIFN3aXBlUmVzdWx0LAogIFZhY2FuY3lJbnB1dCwKICBWZXJpZnlSZXN1bHQsCn0gZnJvbSAiLi9lbmRwb2ludHMiOycnJywKICAgICcnJyAgQWRtaW5TdXBwb3J0Q2FzZSwKICBSZWZlcnJhbEluZm8sCiAgU2F2ZWRTZWFyY2gsCiAgU3VwcG9ydENhc2UsCiAgU3VwcG9ydFRvcGljLAogIFN3aXBlUmVzdWx0LAogIFZhY2FuY3lJbnB1dCwKICBWZXJpZnlSZXN1bHQsCn0gZnJvbSAiLi9lbmRwb2ludHMiOycnJywKKQpyZXBsYWNlX29uY2UoCiAgICAidG1hL3NyYy9hcGkvbW9jay50cyIsCiAgICAnY29uc3QgdWlkID0gKCkgPT4gTWF0aC5yYW5kb20oKS50b1N0cmluZygzNikuc2xpY2UoMiwgMTApO1xcbicsCiAgICAnY29uc3QgdWlkID0gKCkgPT4gTWF0aC5yYW5kb20oKS50b1N0cmluZygzNikuc2xpY2UoMiwgMTApO1xcblxcbmNvbnN0IHN1cHBvcnRDYXNlczogQWRtaW5TdXBwb3J0Q2FzZVtdID0gW107XFxuJywKKQoKc3VwcG9ydF9tb2NrID0gJycnCmV4cG9ydCBmdW5jdGlvbiBjcmVhdGVTdXBwb3J0Q2FzZSh0b3BpYzogU3VwcG9ydFRvcGljLCB0ZXh0OiBzdHJpbmcpOiBQcm9taXNlPFN1cHBvcnRDYXNlPiB7CiAgY29uc3Qgbm93ID0gbmV3IERhdGUoKS50b0lTT1N0cmluZygpOwogIGNvbnN0IGlkID0gdWlkKCk7CiAgY29uc3Qgcm93OiBBZG1pblN1cHBvcnRDYXNlID0gewogICAgaWQsCiAgICBudW1iZXI6IGBTUy0ke2lkLnNsaWNlKDAsIDgpLnRvVXBwZXJDYXNlKCl9YCwKICAgIG93bmVySWQ6ICJtZSIsCiAgICBvd25lclJvbGU6ICJzZWVrZXIiLAogICAgb3duZXJJbmZvOiAi0JTQtdC80L4t0L/QvtC70YzQt9C+0LLQsNGC0LXQu9GMIiwKICAgIHRvcGljLAogICAgdGV4dDogdGV4dC50cmltKCksCiAgICBzdGF0dXM6ICJvcGVuIiwKICAgIGFkbWluUmVwbHk6IG51bGwsCiAgICBjcmVhdGVkQXQ6IG5vdywKICAgIHVwZGF0ZWRBdDogbm93LAogIH07CiAgc3VwcG9ydENhc2VzLnVuc2hpZnQocm93KTsKICByZXR1cm4gUHJvbWlzZS5yZXNvbHZlKHsgLi4ucm93IH0pOwp9CgpleHBvcnQgZnVuY3Rpb24gZmV0Y2hTdXBwb3J0Q2FzZXMoKTogUHJvbWlzZTxTdXBwb3J0Q2FzZVtdPiB7CiAgcmV0dXJuIFByb21pc2UucmVzb2x2ZShzdXBwb3J0Q2FzZXMubWFwKChyb3cpID0+ICh7IC4uLnJvdyB9KSkpOwp9CgpleHBvcnQgZnVuY3Rpb24gZmV0Y2hBZG1pblN1cHBvcnQoCiAgc3RhdHVzOiAib3BlbiIgfCAiYWxsIiA9ICJvcGVuIiwKKTogUHJvbWlzZTxBZG1pblN1cHBvcnRDYXNlW10+IHsKICBjb25zdCByb3dzID0KICAgIHN0YXR1cyA9PT0gIm9wZW4iCiAgICAgID8gc3VwcG9ydENhc2VzLmZpbHRlcigocm93KSA9PiByb3cuc3RhdHVzICE9PSAiY2xvc2VkIikKICAgICAgOiBzdXBwb3J0Q2FzZXM7CiAgcmV0dXJuIFByb21pc2UucmVzb2x2ZShyb3dzLm1hcCgocm93KSA9PiAoeyAuLi5yb3cgfSkpKTsKfQoKZXhwb3J0IGZ1bmN0aW9uIHJlcGx5U3VwcG9ydENhc2UoCiAgaWQ6IHN0cmluZywKICByZXBseTogc3RyaW5nLAopOiBQcm9taXNlPEFkbWluU3VwcG9ydENhc2U+IHsKICBjb25zdCByb3cgPSBzdXBwb3J0Q2FzZXMuZmluZCgoaXRlbSkgPT4gaXRlbS5pZCA9PT0gaWQpOwogIGlmICghcm93KSByZXR1cm4gUHJvbWlzZS5yZWplY3QobmV3IEVycm9yKCLQntCx0YDQsNGJ0LXQvdC40LUg0L3QtSDQvdCw0LnQtNC10L3QviIpKTsKICByb3cuYWRtaW5SZXBseSA9IHJlcGx5LnRyaW0oKTsKICByb3cuc3RhdHVzID0gImFuc3dlcmVkIjsKICByb3cudXBkYXRlZEF0ID0gbmV3IERhdGUoKS50b0lTT1N0cmluZygpOwogIHJldHVybiBQcm9taXNlLnJlc29sdmUoeyAuLi5yb3cgfSk7Cn0KCmV4cG9ydCBmdW5jdGlvbiBjbG9zZVN1cHBvcnRDYXNlKAogIGlkOiBzdHJpbmcsCiAgcmVwbHkgPSAiIiwKKTogUHJvbWlzZTxBZG1pblN1cHBvcnRDYXNlPiB7CiAgY29uc3Qgcm93ID0gc3VwcG9ydENhc2VzLmZpbmQoKGl0ZW0pID0+IGl0ZW0uaWQgPT09IGlkKTsKICBpZiAoIXJvdykgcmV0dXJuIFByb21pc2UucmVqZWN0KG5ldyBFcnJvcigi0J7QsdGA0LDRidC10L3QuNC1INC90LUg0L3QsNC50LTQtdC90L4iKSk7CiAgY29uc3QgZmluYWxSZXBseSA9IHJlcGx5LnRyaW0oKTsKICBpZiAoZmluYWxSZXBseSkgcm93LmFkbWluUmVwbHkgPSBmaW5hbFJlcGx5OwogIHJvdy5zdGF0dXMgPSAiY2xvc2VkIjsKICByb3cudXBkYXRlZEF0ID0gbmV3IERhdGUoKS50b0lTT1N0cmluZygpOwogIHJldHVybiBQcm9taXNlLnJlc29sdmUoeyAuLi5yb3cgfSk7Cn0KCicnJwpyZXBsYWNlX29uY2UoCiAgICAidG1hL3NyYy9hcGkvbW9jay50cyIsCiAgICAiZXhwb3J0IGZ1bmN0aW9uIHJlc29sdmVSZXBvcnQoaWQ6IHN0cmluZyk6IFByb21pc2U8dm9pZD4geyIsCiAgICBzdXBwb3J0X21vY2sgKyAiZXhwb3J0IGZ1bmN0aW9uIHJlc29sdmVSZXBvcnQoaWQ6IHN0cmluZyk6IFByb21pc2U8dm9pZD4geyIsCik=' | base64 -d | python3
       - name: Commit patch and remove temporary workflow
         shell: bash
         run: |
