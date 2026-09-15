@@ -1,0 +1,37 @@
+name: Regenerate texts catalogue
+
+on:
+  push:
+    branches:
+      - codex/staffswipe-production-readiness
+    paths:
+      - .github/workflows/zz-regenerate-texts.yml
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Regenerate catalogue
+        run: python3 scripts/texts.py --write
+      - name: Verify generator is stable
+        run: |
+          python3 scripts/texts.py > /tmp/texts.md
+          diff -u docs/ТЕКСТЫ.md /tmp/texts.md
+      - name: Commit generated catalogue and remove helper
+        run: |
+          rm .github/workflows/zz-regenerate-texts.yml
+          git config user.name "staffswipe-ci"
+          git config user.email "staffswipe-ci@users.noreply.github.com"
+          git add docs/ТЕКСТЫ.md .github/workflows/zz-regenerate-texts.yml
+          git commit -m "docs: refresh generated texts catalogue"
+          git push origin HEAD:codex/staffswipe-production-readiness
