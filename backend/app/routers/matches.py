@@ -146,7 +146,15 @@ def mark_not_held(
         сказало заведение, а работник не отмечался — это неявка, она
         отражается в надёжности работника.
     """
-    m = db.get(Match, match_id)
+    # Arrival evidence and a "shift did not happen" claim mutate the
+    # same Match row. Serialize them so the second request always sees the
+    # first request's committed evidence instead of overwriting it.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Смена не найдена")
     is_employer = principal["id"] == m.employer_id and principal["role"] == "employer"
@@ -244,7 +252,14 @@ def mark_attendance(
     """Заведение подтверждает выход. `attended=true` — «человек пришёл» (сторона
     заведения во взаимном подтверждении). `attended=false` — «не вышел»: если
     работник уже отметился, это КОНФЛИКТ → спор оператору; иначе — неявка."""
-    m = db.get(Match, match_id)
+    # Serialize employer attendance against worker code check-in and
+    # not-held claims. The row is the transaction boundary for arrival truth.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["role"] != "employer" or principal["id"] != m.employer_id:
@@ -400,12 +415,25 @@ def checkin(
     его назвал, заведение уже не сможет тихо записать смену в неявку: такое
     расхождение уходит к оператору.
     """
-    m = db.get(Match, match_id)
+    # The code is evidence that can conflict with attendance/not-held.
+    # Lock first so those three mutations have one authoritative order.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
     if principal["role"] != "seeker" or principal["id"] != m.user_id:
         raise HTTPException(status_code=403, detail="Отметиться может только работник")
-    if m.status != "confirmed":
+
+    # A correct venue code may recover only an explicit no-show/not-held
+    # terminal state. Arbitrary expired/cancelled/completed matches stay closed.
+    recoverable_expired = (
+        m.status == "expired" and m.not_held_by in {"employer", "seeker"}
+    )
+    if m.status != "confirmed" and not recoverable_expired:
         raise HTTPException(status_code=400, detail="Смена не подтверждена")
 
     by_code = bool(
@@ -418,10 +446,28 @@ def checkin(
             status_code=400,
             detail="Неверный код. Попросите его у администратора заведения.",
         )
+
     m.seeker_checked_in = True
     m.checkin_by_code = True
-    sys_message(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")
-    maybe_complete(db, m)
+    if recoverable_expired:
+        # Preserve the earlier claim in not_held_by as audit evidence, but do
+        # not let it remain an automatic no-show once a valid code contradicts it.
+        m.no_show = False
+        m.status = "confirmed"
+        open_dispute(
+            db,
+            m,
+            "Правильный код прихода противоречит отметке, что смены не было.",
+        )
+        sys_message(
+            db,
+            m.id,
+            "Работник назвал правильный код после отметки о неявке. "
+            "Разбирает оператор StaffSwipe.",
+        )
+    else:
+        sys_message(db, m.id, "Работник назвал код заведения ✓ Он был на месте.")
+        maybe_complete(db, m)
     db.commit()
     db.refresh(m)
     return _to_out(db, m, principal["role"])
