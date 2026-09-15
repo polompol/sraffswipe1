@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { hasMatchAction, hasAnyMatchAction } from "./matchActions";
+import { describe, expect, it, vi } from "vitest";
+import { createMatchActionLock, hasMatchAction, hasAnyMatchAction } from "./matchActions";
 import type { MatchModel } from "@/types/domain";
 
 function match(allowedActions?: MatchModel["allowedActions"]): MatchModel {
@@ -38,5 +38,56 @@ describe("server-owned match actions", () => {
     expect(m.status).toBe("confirmed");
     expect(hasMatchAction(m, "checkin")).toBe(false);
     expect(hasMatchAction(m, "cancel")).toBe(false);
+  });
+});
+
+describe("lifecycle action lock", () => {
+  it("runs only one mutation for two rapid taps on the same match action", async () => {
+    const lock = createMatchActionLock();
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const mutate = vi.fn(() => pending);
+
+    const first = lock.run("m1", "confirm", mutate);
+    const second = lock.run("m1", "confirm", mutate);
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(lock.isPending("m1", "confirm")).toBe(true);
+    await expect(second).resolves.toBe(false);
+
+    release();
+    await expect(first).resolves.toBe(true);
+    expect(lock.isPending("m1", "confirm")).toBe(false);
+  });
+
+  it("releases the action after an error so a deliberate retry can run", async () => {
+    const lock = createMatchActionLock();
+    const mutate = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(lock.run("m1", "checkin", mutate)).rejects.toThrow("offline");
+    expect(lock.isPending("m1", "checkin")).toBe(false);
+
+    await expect(lock.run("m1", "checkin", mutate)).resolves.toBe(true);
+    expect(mutate).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not block a different action or another match", async () => {
+    const lock = createMatchActionLock();
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const first = lock.run("m1", "confirm", () => pending);
+    await expect(lock.run("m1", "cancel", async () => undefined)).resolves.toBe(true);
+    await expect(lock.run("m2", "confirm", async () => undefined)).resolves.toBe(true);
+
+    release();
+    await expect(first).resolves.toBe(true);
   });
 });
