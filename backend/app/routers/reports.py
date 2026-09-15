@@ -43,7 +43,19 @@ def create_report(
     principal: dict = Depends(current_principal),
 ):
     """Принять жалобу. Модерация — вручную на пилоте (потом админ-панель)."""
-    if not _target_exists(db, body.target_type, body.target_id):
+    if body.target_type == "match":
+        # Матч содержит приватный контекст конкретной смены/чата. Одного знания
+        # UUID недостаточно: жалобу по нему может создать только один из двух
+        # участников. Иначе посторонний аккаунт способен заспамить операторов
+        # делами по чужим сменам и подтвердить существование чужого match_id.
+        from ..models import Match
+
+        match = db.get(Match, body.target_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="Цель жалобы не найдена")
+        if principal["id"] not in {match.user_id, match.employer_id}:
+            raise HTTPException(status_code=403, detail="Нет доступа к этой смене")
+    elif not _target_exists(db, body.target_type, body.target_id):
         raise HTTPException(status_code=404, detail="Цель жалобы не найдена")
 
     # На себя не жалуемся — это только мусор в очереди оператора.
