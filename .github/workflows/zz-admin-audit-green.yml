@@ -1,5 +1,6 @@
 name: Admin audit GREEN
 
+# Retry after the migration import-order lint defect was corrected.
 on:
   push:
     branches:
