@@ -107,7 +107,9 @@ def test_terminal_matches_never_reopen_confirmation():
             allowed_match_actions(_match(status=status), "seeker", _vacancy(), now=now)
         )
         employer = set(
-            allowed_match_actions(_match(status=status), "employer", _vacancy(), now=now)
+            allowed_match_actions(
+                _match(status=status), "employer", _vacancy(), now=now
+            )
         )
         assert "confirm" not in seeker | employer
 
