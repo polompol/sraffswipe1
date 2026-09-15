@@ -1,18 +1,26 @@
 // @vitest-environment jsdom
 /**
- * Потеря входа должна выключать вход ЦЕЛИКОМ и не оставлять локальную
- * переписку предыдущего аккаунта доступной следующему пользователю устройства.
+ * Потеря входа должна выключать вход ЦЕЛИКОМ и не оставлять runtime-переписку
+ * предыдущего аккаунта доступной следующему пользователю устройства.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { getToken } from "@/api/client";
 import { LS } from "@/lib/storage";
+import {
+  clearChatAccount,
+  loadDraft,
+  loadOutbox,
+  saveDraft,
+  upsertOutbox,
+} from "@/features/chat/chatPersistence";
 import { useSession } from "./session";
-
-const chatKey = (role: string, userId: string) => `ss_chat_v1:${role}:${userId}`;
 
 describe("потеря входа", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
+    clearChatAccount("u1", "seeker");
+    clearChatAccount("e2", "employer");
     useSession.setState({ authenticated: false, role: null, userId: null });
     useSession.getState().setAuth("t0k3n", "seeker", "u1");
   });
@@ -30,39 +38,36 @@ describe("потеря входа", () => {
   });
 
   it("logout удаляет черновики и outbox текущего аккаунта", () => {
-    localStorage.setItem(chatKey("seeker", "u1"), JSON.stringify({
-      version: 1,
-      drafts: { m1: "Сообщение не должно остаться" },
-      outbox: [{ clientMessageId: "c1", matchId: "m1", text: "Черновик" }],
-    }));
+    saveDraft("u1", "seeker", "m1", "Сообщение не должно остаться");
+    upsertOutbox("u1", "seeker", {
+      clientMessageId: "c1",
+      matchId: "m1",
+      text: "Черновик",
+      createdAt: "2026-09-14T10:00:00Z",
+      status: "failed",
+      attempts: 1,
+      lastError: "network",
+    });
 
     useSession.getState().logout();
 
-    expect(localStorage.getItem(chatKey("seeker", "u1"))).toBeNull();
+    expect(loadDraft("u1", "seeker", "m1")).toBe("");
+    expect(loadOutbox("u1", "seeker", "m1")).toEqual([]);
   });
 
-  it("смена аккаунта очищает локальный чат предыдущей личности", () => {
-    localStorage.setItem(chatKey("seeker", "u1"), JSON.stringify({
-      version: 1,
-      drafts: { m1: "Личный текст первого аккаунта" },
-      outbox: [],
-    }));
+  it("смена аккаунта очищает runtime-чат предыдущей личности", () => {
+    saveDraft("u1", "seeker", "m1", "Личный текст первого аккаунта");
 
     useSession.getState().setAuth("new-token", "employer", "e2");
 
-    expect(localStorage.getItem(chatKey("seeker", "u1"))).toBeNull();
+    expect(loadDraft("u1", "seeker", "m1")).toBe("");
   });
 
-  it("обновление токена того же аккаунта не стирает его черновик", () => {
-    const key = chatKey("seeker", "u1");
-    localStorage.setItem(key, JSON.stringify({
-      version: 1,
-      drafts: { m1: "Продолжить позже" },
-      outbox: [],
-    }));
+  it("обновление токена того же аккаунта не стирает его runtime-черновик", () => {
+    saveDraft("u1", "seeker", "m1", "Продолжить позже");
 
     useSession.getState().setAuth("refreshed-token", "seeker", "u1");
 
-    expect(localStorage.getItem(key)).not.toBeNull();
+    expect(loadDraft("u1", "seeker", "m1")).toBe("Продолжить позже");
   });
 });
