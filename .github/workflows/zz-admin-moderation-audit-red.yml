@@ -1,0 +1,26 @@
+name: Moderation audit RED
+
+on:
+  push:
+    branches:
+      - codex/staffswipe-production-readiness
+    paths:
+      - .github/workflows/zz-admin-moderation-audit-red.yml
+
+jobs:
+  red:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install targeted dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt pytest
+      - name: Run moderation audit contract
+        working-directory: backend
+        run: pytest -q tests/test_admin_audit.py
