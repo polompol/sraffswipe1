@@ -29,6 +29,7 @@ from .routers import (
     reports,
     saved_searches,
     social,
+    support,
     swipes,
     telegram_auth,
     uploads,
@@ -219,6 +220,7 @@ app.include_router(billing.router)
 app.include_router(social.router)
 app.include_router(saved_searches.router)
 app.include_router(reports.router)
+app.include_router(support.router)
 app.include_router(dadata.router)
 app.include_router(employer.router)
 app.include_router(uploads.router)
