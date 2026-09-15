@@ -1002,6 +1002,9 @@ def resolve_match(
     иначе спор мог бы висеть вечно, а неявка мошенника не засчитывалась бы."""
     if not _is_admin(db, principal):
         raise HTTPException(status_code=403, detail="Только для оператора")
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="Укажите причину решения по спору")
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
@@ -1055,7 +1058,7 @@ def resolve_match(
         action=f"match.resolve.{body.outcome}",
         target_type="match",
         target_id=m.id,
-        reason=body.reason,
+        reason=reason,
     )
     db.commit()
     db.refresh(m)
