@@ -1,0 +1,112 @@
+name: Admin audit GREEN
+
+on:
+  push:
+    branches:
+      - codex/staffswipe-production-readiness
+    paths:
+      - .github/workflows/zz-admin-audit-green.yml
+
+permissions:
+  contents: write
+
+jobs:
+  green:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: staffswipe_audit_green
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: codex/staffswipe-production-readiness
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Apply bounded admin audit patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("backend/app/routers/admin.py")
+          text = path.read_text()
+
+          old = "from datetime import UTC, date\n"
+          new = "from datetime import UTC, date, datetime\n"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "from pydantic import BaseModel\n"
+          new = "from pydantic import BaseModel, Field\n"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "from ..config import settings\n"
+          new = (
+              "from ..admin_audit import AdminActionLog, record_admin_action\n"
+              "from ..config import settings\n"
+          )
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          anchor = '''def require_admin(\n    db: Session = Depends(get_db),\n    principal: dict = Depends(current_principal),\n) -> dict:\n    if not _is_admin(db, principal):\n        raise HTTPException(status_code=403, detail="Только для администратора")\n    return principal\n\n\n'''
+          insertion = anchor + '''class AdminReasonIn(BaseModel):\n    reason: str = Field(default="", max_length=1000)\n\n\nclass AdminAuditOut(BaseModel):\n    id: str\n    actorId: str\n    action: str\n    targetType: str\n    targetId: str\n    reason: str\n    createdAt: datetime\n\n\n@router.get("/audit", response_model=list[AdminAuditOut])\ndef admin_audit(\n    limit: int = 100,\n    db: Session = Depends(get_db),\n    _admin: dict = Depends(require_admin),\n):\n    """Последние операторские изменения — только для операторов.\n\n    Журнал append-only на уровне API: ручек изменения/удаления здесь нет.\n    Выдачу ограничиваем, чтобы админка не превращалась в выгрузку всей БД.\n    """\n    safe_limit = max(1, min(limit, 200))\n    rows = (\n        db.query(AdminActionLog)\n        .order_by(AdminActionLog.created_at.desc(), AdminActionLog.id.desc())\n        .limit(safe_limit)\n        .all()\n    )\n    return [\n        AdminAuditOut(\n            id=row.id,\n            actorId=row.actor_id,\n            action=row.action,\n            targetType=row.target_type,\n            targetId=row.target_id,\n            reason=row.reason,\n            createdAt=row.created_at,\n        )\n        for row in rows\n    ]\n\n\n'''
+          assert anchor in text
+          text = text.replace(anchor, insertion, 1)
+
+          old = '''def block_user(\n    user_id: str,\n    db: Session = Depends(get_db),\n    _admin: dict = Depends(require_admin),\n):\n'''
+          new = '''def block_user(\n    user_id: str,\n    body: AdminReasonIn | None = None,\n    db: Session = Depends(get_db),\n    admin: dict = Depends(require_admin),\n):\n'''
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '''        _resolve_reports_for(db, who.id)\n    db.commit()\n    return {"ok": True, "blocked": True, "alsoBlocked": also.id if also else None}\n'''
+          new = '''        _resolve_reports_for(db, who.id)\n    record_admin_action(\n        db,\n        actor_id=admin["id"],\n        action="user.block",\n        target_type="user",\n        target_id=user_id,\n        reason=body.reason if body else "",\n    )\n    db.commit()\n    return {"ok": True, "blocked": True, "alsoBlocked": also.id if also else None}\n'''
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt pytest ruff
+      - name: Lint patched backend
+        working-directory: backend
+        run: ruff check app/admin_audit.py app/routers/admin.py tests/test_admin_audit.py migrations/versions/b7e2d4f6a8c1_admin_action_logs.py
+      - name: Targeted SQLite GREEN
+        working-directory: backend
+        run: pytest -q tests/test_admin_audit.py
+      - name: Verify PostgreSQL migration upgrade downgrade upgrade
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/staffswipe_audit_green
+          DEV_MODE: "true"
+          ALLOW_INSECURE_TELEGRAM_AUTH: "true"
+          INTERNAL_API_SECRET: test-internal-secret
+        run: |
+          python -m alembic upgrade head
+          test "$(python -m alembic heads | awk '{print $1}')" = "b7e2d4f6a8c1"
+          python -m alembic downgrade a4d9c2e1f7b6
+          python -m alembic upgrade head
+      - name: Commit verified patch and remove helper workflows
+        run: |
+          rm -f .github/workflows/zz-admin-audit-red.yml
+          rm -f .github/workflows/zz-admin-audit-green.yml
+          git config user.name "staffswipe-ci"
+          git config user.email "staffswipe-ci@users.noreply.github.com"
+          git add backend/app/routers/admin.py .github/workflows/zz-admin-audit-red.yml .github/workflows/zz-admin-audit-green.yml
+          git commit -m "feat: audit admin user blocks atomically"
+          git push origin HEAD:codex/staffswipe-production-readiness
