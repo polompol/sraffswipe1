@@ -325,7 +325,7 @@ def resolve_report(
     report_id: str,
     body: ResolveIn | None = None,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     rep = db.get(Report, report_id)
     if rep is None:
@@ -350,6 +350,14 @@ def resolve_report(
                 text="Оператор разобрал спор: оснований не нашлось, "
                      "смена идёт своим чередом.",
             ))
+    record_admin_action(
+        db,
+        actor_id=admin["id"],
+        action="report.resolve",
+        target_type="report",
+        target_id=report_id,
+        reason=body.reply if body else "",
+    )
     db.commit()
     # Если админ написал ответ — доставляем заявителю (чтобы человек видел, что
     # его услышали). Без bot-токена notify_owner — no-op.
@@ -378,7 +386,7 @@ def warn_report(
     report_id: str,
     body: WarnIn | None = None,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     """Мягкая мера между «закрыть» и «бан»: +1 предупреждение нарушителю и
     уведомление ему в бота. Жалоба закрывается."""
@@ -393,6 +401,14 @@ def warn_report(
         raise HTTPException(status_code=404, detail="Нарушитель не найден")
     target.warnings += 1
     rep.status = "reviewed"
+    record_admin_action(
+        db,
+        actor_id=admin["id"],
+        action="report.warn",
+        target_type="report",
+        target_id=report_id,
+        reason=body.note if body else "",
+    )
     db.commit()
     note = (body.note.strip() if body else "") or "нарушение правил сервиса"
     notify_owner(
@@ -413,6 +429,7 @@ def _resolve_reports_for(db: Session, target_id: str) -> None:
 
 class VerifyEmployerIn(BaseModel):
     verified: bool = True
+    reason: str = Field(default="", max_length=1000)
 
 
 @router.post("/employers/{employer_id}/verify")
@@ -420,7 +437,7 @@ def set_employer_verified(
     employer_id: str,
     body: VerifyEmployerIn,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     """Поставить или снять заведению бейдж «Проверено».
 
@@ -438,6 +455,14 @@ def set_employer_verified(
     if emp is None:
         raise HTTPException(status_code=404, detail="Заведение не найдено")
     emp.verified = bool(body.verified)
+    record_admin_action(
+        db,
+        actor_id=admin["id"],
+        action="employer.verify" if emp.verified else "employer.unverify",
+        target_type="employer",
+        target_id=employer_id,
+        reason=body.reason,
+    )
     db.commit()
     if emp.verified:
         notify_owner(
@@ -510,8 +535,9 @@ def block_user(
 @router.post("/vacancies/{vacancy_id}/block")
 def block_vacancy(
     vacancy_id: str,
+    body: AdminReasonIn | None = None,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     """Снять вакансию (фейк/обман) — она исчезает из ленты."""
     v = db.get(Vacancy, vacancy_id)
@@ -519,6 +545,14 @@ def block_vacancy(
         raise HTTPException(status_code=404, detail="Вакансия не найдена")
     v.status = "blocked"
     _resolve_reports_for(db, vacancy_id)
+    record_admin_action(
+        db,
+        actor_id=admin["id"],
+        action="vacancy.block",
+        target_type="vacancy",
+        target_id=vacancy_id,
+        reason=body.reason if body else "",
+    )
     db.commit()
     return {"ok": True, "blocked": True}
 
@@ -526,8 +560,9 @@ def block_vacancy(
 @router.post("/users/{user_id}/unblock")
 def unblock_user(
     user_id: str,
+    body: AdminReasonIn | None = None,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     """Снять блокировку с пользователя (отмена ошибочного бана).
 
@@ -556,6 +591,14 @@ def unblock_user(
             )
             .update({Vacancy.status: "active"}, synchronize_session=False)
         )
+    record_admin_action(
+        db,
+        actor_id=admin["id"],
+        action="user.unblock",
+        target_type="user",
+        target_id=user_id,
+        reason=body.reason if body else "",
+    )
     db.commit()
     return {"ok": True, "blocked": False, "restoredVacancies": int(restored)}
 
@@ -563,14 +606,23 @@ def unblock_user(
 @router.post("/vacancies/{vacancy_id}/unblock")
 def unblock_vacancy(
     vacancy_id: str,
+    body: AdminReasonIn | None = None,
     db: Session = Depends(get_db),
-    _admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_admin),
 ):
     """Вернуть вакансию в ленту."""
     v = db.get(Vacancy, vacancy_id)
     if v is None:
         raise HTTPException(status_code=404, detail="Вакансия не найдена")
     v.status = "active"
+    record_admin_action(
+        db,
+        actor_id=admin["id"],
+        action="vacancy.unblock",
+        target_type="vacancy",
+        target_id=vacancy_id,
+        reason=body.reason if body else "",
+    )
     db.commit()
     return {"ok": True, "blocked": False}
 
