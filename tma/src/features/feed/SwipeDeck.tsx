@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSprings, animated, to, type SpringValue } from "@react-spring/web";
 import { useDrag } from "@use-gesture/react";
 import type { SwipeDirection } from "@/types/domain";
-import { haptic } from "@/telegram/sdk";
+import { haptic, showBackButton } from "@/telegram/sdk";
 import { LS } from "@/lib/storage";
 
 interface Props<T> {
@@ -89,6 +89,13 @@ export function SwipeDeck<T>(props: Props<T>) {
   useEffect(() => {
     onFlipChange?.(flipped !== null);
   }, [flipped, onFlipChange]);
+  // Изнанка — временное состояние поверх ленты. Telegram BackButton должен
+  // сначала вернуть ту же карточку лицом, а не увести человека со страницы.
+  // Общий back-stack сам отдаст приоритет шторке, если она откроется поверх.
+  useEffect(() => {
+    if (flipped === null) return;
+    return showBackButton(() => setFlipped(null));
+  }, [flipped]);
   const deckKey = items.map((it) => keyOf(it)).join("|");
   const lastDeck = useRef(deckKey);
   // Каждый набор имеет своё поколение, даже при переходе A → B → A.
