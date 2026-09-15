@@ -1,29 +1,19 @@
-/** Админ-панель — рабочее место оператора.
- *
- *  Четыре раздела вместо одной простыни на шесть экранов прокрутки. Разбивка
- *  не по сущностям базы, а по вопросу, с которым оператор сюда пришёл:
- *  «что горит сегодня», «что с деньгами», «разобраться с человеком»,
- *  «откуда идут люди».
- *
- *  Здесь остались только шапка и переключатель. Каждая вкладка живёт в своём
- *  файле и сама забирает свои данные: файл на тысячу триста строк держал в
- *  одной голове восемь запросов и полтора десятка обработчиков, а правка в
- *  одном углу задевала три других. Заодно исчезли пометки `enabled: tab ===`
- *  у запросов — вкладка просто не существует, пока её не открыли.
- */
+/** Админ-панель — рабочее место оператора. */
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { fetchAdminOverview } from "@/api/endpoints";
+
 import { ApiError } from "@/api/client";
-import { ErrorBox, SkeletonList } from "@/components/States";
-import { PageHeader } from "@/components/PageHeader";
-import { showBackButton } from "@/telegram/sdk";
+import { fetchAdminOverview } from "@/api/endpoints";
 import { IconShield } from "@/components/Icons";
-import { TodayTab } from "./TodayTab";
+import { PageHeader } from "@/components/PageHeader";
+import { ErrorBox, SkeletonList } from "@/components/States";
+import { showBackButton } from "@/telegram/sdk";
+import { GrowthTab } from "./GrowthTab";
 import { MoneyTab } from "./MoneyTab";
 import { PeopleTab } from "./PeopleTab";
-import { GrowthTab } from "./GrowthTab";
+import { SupportQueue } from "./SupportQueue";
+import { TodayTab } from "./TodayTab";
 
 const TABS = [
   { id: "today", label: "Сегодня" },
@@ -39,29 +29,41 @@ export function AdminPage() {
   const [tab, setTab] = useState<TabId>("today");
   useEffect(() => showBackButton(() => nav(-1)), [nav]);
 
-  // Сводка нужна и самой панели (счётчик открытых жалоб на вкладке), поэтому
-  // живёт здесь, а не внутри вкладки «Сегодня».
-  const ov = useQuery({ queryKey: ["admin-overview"], queryFn: fetchAdminOverview });
+  const ov = useQuery({
+    queryKey: ["admin-overview"],
+    queryFn: fetchAdminOverview,
+  });
 
-  // Не загружаем рабочие разделы, пока сервер не подтвердил доступ.
   if (ov.isPending) {
-    return <div className="page"><PageHeader title="Админ-панель" />
-      {ov.fetchStatus === "paused"
-        ? <ErrorBox text="Нет соединения. Панель откроется после восстановления связи." />
-        : <SkeletonList />}
-    </div>;
+    return (
+      <div className="page">
+        <PageHeader title="Админ-панель" />
+        {ov.fetchStatus === "paused" ? (
+          <ErrorBox text="Нет соединения. Панель откроется после восстановления связи." />
+        ) : (
+          <SkeletonList />
+        )}
+      </div>
+    );
   }
 
   if (ov.isError) {
-    const denied = ov.error instanceof ApiError && ov.error.response?.status === 403;
+    const denied =
+      ov.error instanceof ApiError && ov.error.response?.status === 403;
     return (
       <div className="page">
         <PageHeader title="Админ-панель" />
         {denied ? (
-          <div className="card muted row" style={{ justifyContent: "center", gap: 8 }} role="alert">
+          <div
+            className="card muted row"
+            style={{ justifyContent: "center", gap: 8 }}
+            role="alert"
+          >
             <IconShield size={18} /> Доступ только для администратора
           </div>
-        ) : <ErrorBox onRetry={() => ov.refetch()} />}
+        ) : (
+          <ErrorBox onRetry={() => ov.refetch()} />
+        )}
       </div>
     );
   }
@@ -71,11 +73,6 @@ export function AdminPage() {
   return (
     <div className="page">
       <PageHeader title="Админ-панель" />
-
-      {/* Вкладки: одна строка, всегда видно, где ты и где горит. */}
-      {/* Ряд прокручиваемый, а не сетка в четыре равные доли: на узком
-          экране (320px, iPhone SE) четвёртая вкладка не помещалась и
-          обрезалась краем экрана — «Рост» был не виден и не нажимался. */}
       <div
         style={{
           display: "flex",
@@ -85,19 +82,16 @@ export function AdminPage() {
           paddingBottom: 2,
         }}
       >
-        {TABS.map((t) => (
+        {TABS.map((item) => (
           <button
-            key={t.id}
-            // Не ToggleChip: это вкладка, а не переключатель — у неё
-            // aria-current и счётчик внутри. Но цвета те же и берутся из тех
-            // же классов, чтобы «выбранное» везде выглядело одинаково.
-            className={`tag ${tab === t.id ? "tag-gold-fill" : "tag-nav"}`}
+            key={item.id}
+            className={`tag ${tab === item.id ? "tag-gold-fill" : "tag-nav"}`}
             style={{ flex: "1 0 auto" }}
-            aria-current={tab === t.id ? "page" : undefined}
-            onClick={() => setTab(t.id)}
+            aria-current={tab === item.id ? "page" : undefined}
+            onClick={() => setTab(item.id)}
           >
-            <span style={{ whiteSpace: "nowrap" }}>{t.label}</span>
-            {t.id === "today" && openCount > 0 && (
+            <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>
+            {item.id === "today" && openCount > 0 && (
               <span
                 aria-label={`открытых жалоб: ${openCount}`}
                 style={{
@@ -110,8 +104,10 @@ export function AdminPage() {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: tab === t.id ? "var(--on-brand)" : "var(--gold-fill)",
-                  color: tab === t.id ? "var(--gold-fill)" : "var(--on-brand)",
+                  background:
+                    tab === item.id ? "var(--on-brand)" : "var(--gold-fill)",
+                  color:
+                    tab === item.id ? "var(--gold-fill)" : "var(--on-brand)",
                 }}
               >
                 {openCount}
@@ -121,7 +117,12 @@ export function AdminPage() {
         ))}
       </div>
 
-      {tab === "today" && <TodayTab ov={ov} />}
+      {tab === "today" && (
+        <>
+          <SupportQueue />
+          <TodayTab ov={ov} />
+        </>
+      )}
       {tab === "money" && <MoneyTab />}
       {tab === "people" && <PeopleTab />}
       {tab === "growth" && <GrowthTab />}
