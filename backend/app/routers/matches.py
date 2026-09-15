@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy.orm import Session
 
+from ..admin_audit import record_admin_action
 from ..config import settings
 from ..conflicts import overlapping_shifts
 from ..db import get_db
@@ -465,6 +466,7 @@ def dispute(
 
 class ResolveMatchIn(BaseModel):
     outcome: str  # "completed" | "no_show"
+    reason: Annotated[str, StringConstraints(max_length=1000)] = ""
 
 
 class HoursIn(BaseModel):
@@ -908,6 +910,14 @@ def resolve_match(
     m = db.get(Match, match_id)
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
+    if not m.disputed:
+        raise HTTPException(
+            status_code=409,
+            detail="Спор уже закрыт или не был открыт",
+        )
+    if body.outcome not in {"completed", "no_show"}:
+        raise HTTPException(status_code=400, detail="outcome: completed|no_show")
+
     m.disputed = False
     if body.outcome == "completed":
         m.status = "completed"
@@ -916,7 +926,7 @@ def resolve_match(
         m.employer_checked_in = True
         accrue_commission(db, m)
         sys_message(db, m.id, "Оператор закрыл спор: смена засчитана ✓")
-    elif body.outcome == "no_show":
+    else:
         m.no_show = True  # засчитывается в надёжность работника
         # Статус обязателен: смена, оставшаяся «подтверждённой», ночью
         # попадала под общий расчёт — он ставил completed, СНИМАЛ неявку и
@@ -926,8 +936,15 @@ def resolve_match(
         m.not_held_by = "employer"
         sys_message(db, m.id, "Оператор закрыл спор: зафиксирована неявка. "
                        "Комиссия не начислена.")
-    else:
-        raise HTTPException(status_code=400, detail="outcome: completed|no_show")
+
+    record_admin_action(
+        db,
+        actor_id=principal["id"],
+        action=f"match.resolve.{body.outcome}",
+        target_type="match",
+        target_id=m.id,
+        reason=body.reason,
+    )
     db.commit()
     db.refresh(m)
     return _to_out(db, m, principal["role"])
