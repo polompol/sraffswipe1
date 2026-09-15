@@ -13,6 +13,7 @@ import {
 import { useBackend } from "@/api/client";
 import { STAFF_ROLE_LABELS, type MatchModel } from "@/types/domain";
 import { hasMatchAction } from "./matchActions";
+import { useMatchActionRunner } from "./useMatchActionRunner";
 import { useSession } from "@/store/session";
 import { ErrorBox, SkeletonList } from "@/components/States";
 import { EmptyState } from "@/components/EmptyState";
@@ -117,6 +118,7 @@ export function MatchesPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const role = useSession((s) => s.role);
+  const actionRunner = useMatchActionRunner();
   const [params, setParams] = useSearchParams();
   const workerId = role === "employer" ? params.get("worker") : null;
   const [view, setView] = useState<"all" | "current" | "history">("all");
@@ -132,11 +134,13 @@ export function MatchesPage() {
   // Подтверждение выхода закрывает смену сразу, не дожидаясь расчёта.
   // Отрицательный путь живёт отдельно — в «Смена не состоялась».
   async function mark(matchId: string, attended: boolean) {
-    haptic(attended ? "success" : "warning");
     try {
-      await markAttendance(matchId, attended);
-      toast(attended ? "Отметили: человек вышел ✓" : "Отмечено: не вышел", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "attendance", async () => {
+        haptic(attended ? "success" : "warning");
+        await markAttendance(matchId, attended);
+        toast(attended ? "Отметили: человек вышел ✓" : "Отмечено: не вышел", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       toast("Не отметилось — проверьте связь и нажмите ещё раз", "error");
     }
@@ -146,11 +150,13 @@ export function MatchesPage() {
     const code = (codes[matchId] ?? "").trim();
     if (code.length < 6) return;
     try {
-      await checkinShift(matchId, { code });
-      haptic("success");
-      toast("Вы отметились на смене ✓", "success");
-      setCodes((c) => ({ ...c, [matchId]: "" }));
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "checkin", async () => {
+        await checkinShift(matchId, { code });
+        haptic("success");
+        toast("Вы отметились на смене ✓", "success");
+        setCodes((c) => ({ ...c, [matchId]: "" }));
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       haptic("error");
       toast("Код не подошёл — проверьте цифры у администратора", "error");
@@ -177,11 +183,13 @@ export function MatchesPage() {
       "Заведение не рассчиталось за смену? Оператор свяжется с обеими сторонами и разберётся.",
       "Пожаловаться",
     ))) return;
-    haptic("warning");
     try {
-      await disputeShift(matchId, "Не заплатили за смену");
-      toast("Жалоба у оператора — он скоро напишет", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "dispute", async () => {
+        haptic("warning");
+        await disputeShift(matchId, "Не заплатили за смену");
+        toast("Жалоба у оператора — он скоро напишет", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       toast("Жалоба не ушла — попробуйте ещё раз", "error");
     }
@@ -192,11 +200,13 @@ export function MatchesPage() {
       "Позвать оператора по этой смене? Он свяжется с обеими сторонами.",
       "Позвать оператора",
     ))) return;
-    haptic("warning");
     try {
-      await disputeShift(matchId);
-      toast("Оператор получил заявку — скоро напишет", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "dispute", async () => {
+        haptic("warning");
+        await disputeShift(matchId);
+        toast("Оператор получил заявку — скоро напишет", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch {
       toast("Не получилось позвать оператора — попробуйте ещё раз", "error");
     }
@@ -211,11 +221,13 @@ export function MatchesPage() {
       "Смена не состоялась",
     );
     if (!ok) return;
-    haptic("warning");
     try {
-      await markNotHeld(matchId);
-      toast("Отмечено: смена не состоялась", "success");
-      qc.invalidateQueries({ queryKey: ["matches"] });
+      await actionRunner.run(matchId, "not_held", async () => {
+        haptic("warning");
+        await markNotHeld(matchId);
+        toast("Отмечено: смена не состоялась", "success");
+        qc.invalidateQueries({ queryKey: ["matches"] });
+      });
     } catch (e) {
       haptic("error");
       toast(apiError(e, "Не получилось отметить — попробуйте ещё раз"), "error");
@@ -389,9 +401,13 @@ export function MatchesPage() {
                     </div>
                   ) : canAttendance ? (
                     <div style={{ marginTop: 12 }}>
-                      <Button onClick={() => mark(m.id, true)}>
+                      <Button
+                        disabled={actionRunner.isPending(m.id, "attendance")}
+                        onClick={() => mark(m.id, true)}
+                      >
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <IconCheck size={16} /> Подтвердить выход
+                          <IconCheck size={16} />
+                          {actionRunner.isPending(m.id, "attendance") ? "Отмечаем…" : "Подтвердить выход"}
                         </span>
                       </Button>
                     </div>
@@ -433,10 +449,10 @@ export function MatchesPage() {
                       />
                       <Button
                         block={false}
-                        disabled={(codes[m.id] ?? "").length < 6}
+                        disabled={(codes[m.id] ?? "").length < 6 || actionRunner.isPending(m.id, "checkin")}
                         onClick={() => doCheckin(m.id)}
                       >
-                        Отметиться
+                        {actionRunner.isPending(m.id, "checkin") ? "Отмечаем…" : "Отметиться"}
                       </Button>
                     </div>
                   </div>
