@@ -4,6 +4,7 @@ import re
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -274,3 +275,72 @@ def ready():
     finally:
         db.close()
     return {"status": "ok", "db": "ok"}
+
+
+OPS_SCHEDULER_STALE_SECONDS = 180
+
+
+@app.api_route("/health/ops", methods=["GET", "HEAD"], tags=["meta"])
+def operational_health():
+    """Operational status beyond request-serving readiness.
+
+    This endpoint is for alerting/diagnostics, not Docker restarts. It reports
+    only bounded component states: no DSNs, connection strings, exception
+    text, Telegram identifiers, or payment data leave the server.
+    """
+    from sqlalchemy import text
+
+    from .db import SessionLocal
+    from .redisclient import health_probe
+    from .service_health import ServiceHeartbeat
+
+    components: dict[str, str] = {
+        "db": "unavailable",
+        "redis": "unavailable",
+        "scheduler": "unknown",
+    }
+    heartbeat_at = None
+
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        components["db"] = "ok"
+        heartbeat = db.get(ServiceHeartbeat, "scheduler")
+        if heartbeat is not None:
+            heartbeat_at = heartbeat.updated_at
+    except Exception:  # noqa: BLE001 — raw dependency error stays in logs
+        logger.exception("операционная проверка: база не отвечает")
+    finally:
+        db.close()
+
+    components["redis"] = health_probe()
+
+    age_seconds: int | None = None
+    if components["db"] == "ok":
+        if heartbeat_at is None:
+            components["scheduler"] = "missing"
+        else:
+            if heartbeat_at.tzinfo is None:
+                heartbeat_utc = heartbeat_at.replace(tzinfo=UTC)
+            else:
+                heartbeat_utc = heartbeat_at.astimezone(UTC)
+            age_seconds = max(
+                0, int((datetime.now(UTC) - heartbeat_utc).total_seconds())
+            )
+            components["scheduler"] = (
+                "ok" if age_seconds <= OPS_SCHEDULER_STALE_SECONDS else "stale"
+            )
+
+    healthy = (
+        components["db"] == "ok"
+        and components["redis"] in {"ok", "disabled"}
+        and components["scheduler"] == "ok"
+    )
+    content = {
+        "status": "ok" if healthy else "unavailable",
+        "components": components,
+        "schedulerAgeSeconds": age_seconds,
+    }
+    if healthy:
+        return content
+    return JSONResponse(status_code=503, content=content)
