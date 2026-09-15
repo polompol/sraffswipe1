@@ -1,0 +1,48 @@
+name: Apply Task 3 patch on PR
+
+on:
+  pull_request:
+    branches:
+      - codex/staffswipe-release-candidate
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'codex/staffswipe-production-readiness'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/staffswipe-production-readiness
+          fetch-depth: 0
+
+      - name: Execute guarded patch body
+        shell: bash
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import yaml
+
+          workflow = yaml.safe_load(Path('.github/workflows/task3-patch.yml').read_text(encoding='utf-8'))
+          step = next(
+              item
+              for item in workflow['jobs']['apply']['steps']
+              if item.get('name') == 'Apply guarded contract and UX fixes'
+          )
+          subprocess.run(['bash', '-euo', 'pipefail', '-c', step['run']], check=True)
+          PY
+
+      - name: Commit guarded patch and remove temporary runners
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/task3-patch.yml .github/workflows/task3-pr-bridge.yml
+          git add backend/tests tma/src/api/endpoints.ts tma/src/features/admin/TodayTab.tsx e2e/tests/admin.spec.ts docs/ТЕКСТЫ.md
+          git diff --cached --check
+          git commit -m "fix: complete destructive admin action hardening"
+          git push origin HEAD:codex/staffswipe-production-readiness
