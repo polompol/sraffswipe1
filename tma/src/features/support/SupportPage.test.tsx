@@ -128,6 +128,8 @@ it("renders the operator reply in My cases", async () => {
   show();
 
   const myCases = await screen.findByRole("region", { name: "Мои обращения" });
-  expect(within(myCases).getByText("SS-FFEEDDCC")).toBeTruthy();
-  expect(within(myCases).getByText("Платёж найден, баланс обновлён.")).toBeTruthy();
+  expect(await within(myCases).findByText("SS-FFEEDDCC")).toBeTruthy();
+  expect(
+    await within(myCases).findByText("Платёж найден, баланс обновлён."),
+  ).toBeTruthy();
 });
