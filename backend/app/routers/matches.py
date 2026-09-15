@@ -978,18 +978,43 @@ def confirm(
     db: Session = Depends(get_db),
     principal: dict = Depends(current_principal),
 ):
-    m = db.get(Match, match_id)
+    # Serialize both participants on the same match row. Without a row lock,
+    # simultaneous seeker/employer confirms could each read both flags as false,
+    # persist their own flag, and leave the final status stuck at `matched`.
+    m = (
+        db.query(Match)
+        .filter(Match.id == match_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if m is None:
         raise HTTPException(status_code=404, detail="Мэтч не найден")
-    # Подтверждать может только участник мэтча.
-    if principal["id"] not in (m.user_id, m.employer_id):
+
+    # Authorization is a role+identity pair, not merely "one of these IDs".
+    # This prevents a token carrying the wrong role from crossing sides.
+    is_seeker = (
+        principal["role"] == "seeker" and principal["id"] == m.user_id
+    )
+    is_employer = (
+        principal["role"] == "employer" and principal["id"] == m.employer_id
+    )
+    if not (is_seeker or is_employer):
         raise HTTPException(status_code=403, detail="Нет доступа к мэтчу")
     if m.status in {"cancelled", "completed", "expired"}:
         raise HTTPException(
             status_code=409,
             detail="Эта смена уже закрыта — подтверждать её нельзя",
         )
-    if principal["role"] == "seeker":
+
+    # Repeated taps/retries by the same side are an idempotent no-op. In
+    # particular, do not resend the employer notification while waiting for
+    # the second participant.
+    if (is_seeker and m.confirmed_by_seeker) or (
+        is_employer and m.confirmed_by_employer
+    ):
+        return _to_out(db, m, principal["role"])
+
+    if is_seeker:
         # Пересечение по времени: предупреждаем, но не запрещаем. Человек в
         # двух местах не будет, и одно заведение останется без работника —
         # но бывает и так, что первую смену отменили, а статус ещё не
