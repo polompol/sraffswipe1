@@ -21,7 +21,10 @@ function entry(id: string, matchId = "m1", text = `msg-${id}`) {
 }
 
 describe("chat persistence", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   it("stores independent drafts per match and account", async () => {
     const p = await api();
@@ -97,5 +100,24 @@ describe("chat persistence", () => {
     const p = await api();
     localStorage.setItem(p.chatStorageKey(userId, role), "{broken");
     expect(p.loadChatState(userId, role)).toEqual({ version: 1, drafts: {}, outbox: [] });
+  });
+
+  it("never writes chat plaintext to persistent browser storage", async () => {
+    const p = await api();
+    const draftSecret = "секретный текст черновика";
+    const outboxSecret = "секретный текст неопределённой отправки";
+
+    p.saveDraft(userId, role, "m-secret", draftSecret);
+    p.upsertOutbox(userId, role, entry("secret-id", "m-secret", outboxSecret));
+
+    expect(p.loadDraft(userId, role, "m-secret")).toBe(draftSecret);
+    expect(p.loadOutbox(userId, role, "m-secret")[0].text).toBe(outboxSecret);
+
+    const persistent = [
+      ...Object.values(localStorage),
+      ...Object.values(sessionStorage),
+    ].join(" ");
+    expect(persistent).not.toContain(draftSecret);
+    expect(persistent).not.toContain(outboxSecret);
   });
 });
